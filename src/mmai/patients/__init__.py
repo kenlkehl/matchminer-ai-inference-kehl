@@ -10,7 +10,9 @@ from .tagging import tag_patient_notes
 
 def summarize_patients(*args: object, **kwargs: object) -> None:
     """Phase-level patient summarization (stub)."""
-    raise NotImplementedError("Patient phase summarization not implemented in skeleton.")
+    raise NotImplementedError(
+        "Patient phase summarization not implemented in skeleton."
+    )
 
 
 __all__ = [

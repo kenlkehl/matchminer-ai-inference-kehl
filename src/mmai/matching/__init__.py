@@ -14,12 +14,16 @@ def generate_candidate_matches(*args: object, **kwargs: object) -> None:
 
 def reasonable_match_check(*args: object, **kwargs: object) -> None:
     """Phase-level reasonable match check (stub)."""
-    raise NotImplementedError("Reasonable match check phase not implemented in skeleton.")
+    raise NotImplementedError(
+        "Reasonable match check phase not implemented in skeleton."
+    )
 
 
 def exclusion_criteria_check(*args: object, **kwargs: object) -> None:
     """Phase-level exclusion criteria check (stub)."""
-    raise NotImplementedError("Exclusion criteria check phase not implemented in skeleton.")
+    raise NotImplementedError(
+        "Exclusion criteria check phase not implemented in skeleton."
+    )
 
 
 __all__ = [
