@@ -3,6 +3,6 @@
 from __future__ import annotations
 
 
-def embed_for_matching(*args: object, **kwargs: object) -> None:
-    """Embed trials and patients for matching (stub)."""
-    raise NotImplementedError("Embedding not implemented in skeleton.")
+def run_embedding_step(*args: object, **kwargs: object) -> None:
+    """Run embeddings for trials and patients (stub)."""
+    raise NotImplementedError("Embedding step not implemented in skeleton.")

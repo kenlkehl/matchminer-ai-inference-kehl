@@ -3,6 +3,6 @@
 from __future__ import annotations
 
 
-def exclusion_criteria_check(*args: object, **kwargs: object) -> None:
+def run_exclusion_check(*args: object, **kwargs: object) -> None:
     """Check exclusion criteria for matches (stub)."""
-    raise NotImplementedError("Exclusion criteria check not implemented in skeleton.")
+    raise NotImplementedError("Exclusion check not implemented in skeleton.")

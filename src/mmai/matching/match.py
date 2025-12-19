@@ -3,6 +3,6 @@
 from __future__ import annotations
 
 
-def generate_candidate_matches(*args: object, **kwargs: object) -> None:
+def run_candidate_generation(*args: object, **kwargs: object) -> None:
     """Generate candidate matches (stub)."""
-    raise NotImplementedError("Candidate matching not implemented in skeleton.")
+    raise NotImplementedError("Candidate generation not implemented in skeleton.")
