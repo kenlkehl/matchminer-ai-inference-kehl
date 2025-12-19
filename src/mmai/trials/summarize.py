@@ -3,6 +3,6 @@
 from __future__ import annotations
 
 
-def summarize_trials(*args: object, **kwargs: object) -> None:
-    """Summarize trials (stub)."""
-    raise NotImplementedError("Trial summarization not implemented in skeleton.")
+def run_llm_summarization(*args: object, **kwargs: object) -> None:
+    """Run LLM-based trial summarization (stub)."""
+    raise NotImplementedError("Trial LLM summarization not implemented in skeleton.")

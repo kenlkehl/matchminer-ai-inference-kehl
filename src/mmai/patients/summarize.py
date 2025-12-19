@@ -3,6 +3,6 @@
 from __future__ import annotations
 
 
-def summarize_patients(*args: object, **kwargs: object) -> None:
-    """Summarize patients (stub)."""
-    raise NotImplementedError("Patient summarization not implemented in skeleton.")
+def run_llm_summarization(*args: object, **kwargs: object) -> None:
+    """Run LLM-based patient summarization (stub)."""
+    raise NotImplementedError("Patient LLM summarization not implemented in skeleton.")
