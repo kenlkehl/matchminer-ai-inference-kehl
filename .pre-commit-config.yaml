@@ -8,3 +8,18 @@ repos:
     rev: v1.11.2
     hooks:
       - id: mypy
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/trufflesecurity/trufflehog
+    rev: v3.92.4
+    hooks:
+      - id: trufflehog
+        args: ["--only-verified"]
