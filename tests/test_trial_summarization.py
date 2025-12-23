@@ -33,14 +33,13 @@ def test_get_filled_trial_prompt_includes_trial_text():
 
 def test_run_llm_summarization_returns_metadata(monkeypatch):
     mock_backend = MagicMock()
-    mock_backend.get_llm.return_value = (
-        MagicMock(),
-        {"model_name": "model", "model_sha": "sha"},
-    )
     monkeypatch.setattr("mmai.trials.summarize.get_backend", lambda name: mock_backend)
 
     mock_summarize = MagicMock()
-    mock_summarize.return_value = ["SUM0"]
+    mock_summarize.return_value = (
+        ["SUM0"],
+        {"model_name": "model", "model_sha": "sha"},
+    )
     monkeypatch.setattr(
         "mmai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
     )
