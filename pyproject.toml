@@ -26,6 +26,10 @@ dev = [
   "mypy>=1.10",
   "types-PyYAML"
 ]
+vllm = [
+  "vllm>=0.6.3",
+  "huggingface_hub>=0.24.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
