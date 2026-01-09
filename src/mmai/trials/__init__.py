@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from mmai.config import MMAIConfig
@@ -67,12 +68,16 @@ def summarize_trials(
     from .postprocess import postprocess_trial_summaries
     from .summarize import run_llm_summarization
 
+    logger = logging.getLogger(__name__)
     resolved_config = config or load_default_preset()
     if not isinstance(resolved_config, MMAIConfig):
         raise TypeError("config must be an MMAIConfig instance or None.")
 
+    logger.info("Starting trial summarization for %d trials.", len(trials))
     trials_with_summaries, metadata = run_llm_summarization(trials, resolved_config)
+    logger.info("Completed LLM summarization. Beginning postprocessing.")
     result = postprocess_trial_summaries(trials_with_summaries, resolved_config)
+    logger.info("Postprocessing complete. Produced %d rows.", len(result))
     if return_metadata:
         return result, metadata
     return result
