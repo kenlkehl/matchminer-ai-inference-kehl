@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -65,10 +64,9 @@ def flatten_trial_to_spaces(
             continue
 
         trial_row = trials_with_summaries.iloc[i]
-        frame = pd.DataFrame(
-            np.repeat(
-                trial_row.to_frame().T.reset_index(drop=True), len(cohorts), axis=0
-            )
+        frame = pd.concat(
+            [trial_row.to_frame().T] * len(cohorts),
+            ignore_index=True,
         )
         frame["clinical_space_summary"] = cohorts
         frame["clinical_space_number"] = frame.index + 1
