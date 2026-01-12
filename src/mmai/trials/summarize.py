@@ -18,14 +18,10 @@ def summarize_trials_multi_cohort(
     trial_texts: list[str],
     backend: Any,
     *,
-    model_name: str,
-    max_model_len: int,
-    tensor_parallel_size: int,
-    gpu_memory_utilization: float,
+    trial_config: dict[str, Any],
     sampling_params: dict[str, Any],
     primer_filename: str,
     question_filename: str,
-    model_metadata_cache_dir: str | None,
 ) -> tuple[list[str], dict[str, Any]]:
     """Summarize trials using the configured backend."""
     messages_list = [
@@ -36,12 +32,8 @@ def summarize_trials_multi_cohort(
         tuple[list[str], dict[str, Any]],
         backend.generate_from_messages(
             messages_list=messages_list,
-            model_name=model_name,
-            max_model_len=max_model_len,
-            tensor_parallel_size=tensor_parallel_size,
-            gpu_memory_utilization=gpu_memory_utilization,
+            trial_config=trial_config,
             sampling_params=sampling_params,
-            model_metadata_cache_dir=model_metadata_cache_dir,
         ),
     )
 
@@ -63,14 +55,10 @@ def run_llm_summarization(
     trial_summaries, model_metadata = summarize_trials_multi_cohort(
         trials_with_summaries["trial_text"].tolist(),
         backend,
-        model_name=trial_config["model_name"],
-        max_model_len=trial_config["max_model_len"],
-        tensor_parallel_size=trial_config["tensor_parallel_size"],
-        gpu_memory_utilization=trial_config["gpu_memory_utilization"],
+        trial_config=trial_config,
         sampling_params=sampling_params,
         primer_filename=primer_filename,
         question_filename=question_filename,
-        model_metadata_cache_dir=trial_config.get("model_metadata_cache_dir"),
     )
 
     trials_with_summaries["space_reasoning_and_output"] = trial_summaries

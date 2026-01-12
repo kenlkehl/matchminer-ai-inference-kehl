@@ -54,18 +54,21 @@ class LocalBackend:
         self,
         *,
         messages_list: list[list[dict[str, str]]],
-        model_name: str,
-        max_model_len: int,
-        tensor_parallel_size: int,
-        gpu_memory_utilization: float,
+        trial_config: Dict[str, Any],
         sampling_params: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any]]:
         from vllm import LLM, SamplingParams
 
+        model_name = trial_config["model_name"]
+        max_model_len = trial_config["max_model_len"]
+        tensor_parallel_size = trial_config["tensor_parallel_size"]
+        gpu_memory_utilization = trial_config["gpu_memory_utilization"]
+
         model_metadata = get_model_metadata(
             model_name,
-            cache_dir=model_metadata_cache_dir,
+            cache_dir=model_metadata_cache_dir
+            or trial_config.get("model_metadata_cache_dir"),
         )
         llm = LLM(
             model=model_name,

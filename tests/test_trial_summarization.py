@@ -38,7 +38,7 @@ def test_run_llm_summarization_returns_metadata(monkeypatch):
     mock_summarize = MagicMock()
     mock_summarize.return_value = (
         ["SUM0"],
-        {"model_name": "model", "model_sha": "sha"},
+        {"model_sha": "sha"},
     )
     monkeypatch.setattr(
         "mmai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
