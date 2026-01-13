@@ -96,35 +96,25 @@ class LocalBackend:
         )
         return [response.outputs[0].text for response in responses], model_metadata
 
-    def get_llm(
+
+@dataclass
+class RemoteBackend:
+    """Remote vLLM HTTP backend (stub)."""
+
+    def generate_from_messages(
         self,
         *,
-        model_name: str,
-        max_model_len: int,
-        tensor_parallel_size: int,
-        gpu_memory_utilization: float,
-        sampling_params: Dict[str, Any] | None = None,
+        messages_list: list[list[dict[str, str]]],
+        trial_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
-    ) -> Tuple[Any, Dict[str, Any]]:
-        from vllm import LLM
-
-        model_metadata = get_model_metadata(
-            model_name,
-            cache_dir=model_metadata_cache_dir,
-        )
-        return (
-            LLM(
-                model=model_name,
-                tensor_parallel_size=tensor_parallel_size,
-                max_model_len=max_model_len,
-                gpu_memory_utilization=gpu_memory_utilization,
-            ),
-            model_metadata,
-        )
+    ) -> Tuple[list[str], Dict[str, Any]]:
+        raise NotImplementedError("Remote backend is not implemented yet.")
 
 
-def get_backend(name: str) -> LocalBackend:
+def get_backend(name: str) -> LocalBackend | RemoteBackend:
     """Return a backend by name."""
     if name == "local":
         return LocalBackend()
+    if name == "remote":
+        return RemoteBackend()
     raise ValueError(f"Unsupported backend: {name}")
