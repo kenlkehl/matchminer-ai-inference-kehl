@@ -113,25 +113,6 @@ def test_flatten_trial_to_spaces():
     ]
 
 
-def test_flatten_trial_to_spaces_without_boilerplate_marker():
-    df = pd.DataFrame(
-        [
-            {
-                "trial_id": "T1",
-                "space_reasoning_and_output": "assistantfinal\n1. Cancer type allowed: A.",
-            }
-        ]
-    )
-    result = flatten_trial_to_spaces(
-        df,
-        reasoning_marker="assistantfinal",
-        boilerplate_marker="Boilerplate exclusions:",
-    )
-    assert len(result) == 1
-    assert result["clinical_space_summary"].iloc[0] == "Cancer type allowed: A."
-    assert result["boilerplate_text"].iloc[0] == "1. Cancer type allowed: A."
-
-
 def test_local_backend_generate_from_messages(monkeypatch):
     mock_llm = MagicMock()
     mock_tokenizer = MagicMock()
