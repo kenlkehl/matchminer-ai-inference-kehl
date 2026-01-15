@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock
-
 import pandas as pd
 
 from mmai.config import MMAIConfig
@@ -199,3 +198,44 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
     result = summarize_trials(trials, config=config)
     assert "trial_text" in result.columns
     assert "space_reasoning_and_output" in result.columns
+
+
+def test_summarize_trials_lightweight_integration(monkeypatch):
+    """Run summarize_trials end-to-end with a mocked llm call (backend.generate_llm_outputs)."""
+
+    captured_messages = {}
+
+    class MockBackend:
+        def generate_llm_outputs(self, *, messages_list, trial_config):
+            captured_messages["messages_list"] = messages_list
+            return (
+                [
+                    "assistantfinal\n"
+                    "1. Cancer type allowed: A.\n"
+                    "Boilerplate exclusions:\n"
+                    "Uncontrolled brain metastases."
+                ],
+                {"model_sha": "sha"},
+            )
+
+    monkeypatch.setattr("mmai.trials.summarize.get_backend", lambda name: MockBackend())
+
+    trials = pd.DataFrame(
+        [
+            {
+                "trial_id": "T1",
+                "trial_title": "Title",
+                "brief_summary": "Brief",
+                "eligibility_criteria": "Criteria",
+            }
+        ]
+    )
+
+    result = summarize_trials(trials)
+    assert len(result) == 1
+    assert result["clinical_space_summary"].iloc[0] == "Cancer type allowed: A."
+    assert captured_messages["messages_list"][0][1]["role"] == "user"
+    assert (
+        "Here is a clinical trial document"
+        in captured_messages["messages_list"][0][1]["content"]
+    )
