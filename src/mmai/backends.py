@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, cast
 
 
 def _default_metadata_cache_dir() -> str:
@@ -62,7 +62,7 @@ class LocalBackend:
         max_model_len = trial_config["max_model_len"]
         tensor_parallel_size = trial_config["tensor_parallel_size"]
         gpu_memory_utilization = trial_config["gpu_memory_utilization"]
-        sampling_params = dict(trial_config.get("sampling_params", {}))
+        sampling_params = dict(trial_config["sampling_params"])
 
         model_metadata = get_model_metadata(
             model_name,
@@ -94,6 +94,29 @@ class LocalBackend:
         )
         return [response.outputs[0].text for response in responses], model_metadata
 
+    def tag_excerpts(
+        self,
+        excerpts: list[str],
+        *,
+        tagger_config: Dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Tag note excerpts using a local text classification pipeline."""
+        from transformers import AutoTokenizer, pipeline
+
+        weights_path_or_model_name = tagger_config["model_name"]
+        device = tagger_config["device"]
+        tokenizer = AutoTokenizer.from_pretrained(weights_path_or_model_name)
+        tagger_pipeline = pipeline(
+            "text-classification",
+            weights_path_or_model_name,
+            tokenizer=tokenizer,
+            truncation=True,
+            padding="max_length",
+            max_length=128,
+            device=device,
+        )
+        return cast(list[dict[str, Any]], tagger_pipeline(excerpts))
+
 
 @dataclass
 class RemoteBackend:
@@ -105,6 +128,14 @@ class RemoteBackend:
         messages_list: list[list[dict[str, str]]],
         trial_config: Dict[str, Any],
     ) -> Tuple[list[str], Dict[str, Any]]:
+        raise NotImplementedError("Remote backend is not implemented yet.")
+
+    def tag_excerpts(
+        self,
+        excerpts: list[str],
+        *,
+        tagger_config: Dict[str, Any],
+    ) -> list[dict[str, Any]]:
         raise NotImplementedError("Remote backend is not implemented yet.")
 
 
