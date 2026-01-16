@@ -18,6 +18,7 @@ class MMAIConfig:
     debug_mode: bool
     backend: str
     trial: dict[str, Any]
+    patient: dict[str, Any]
 
 
 def _load_preset_data(name: str) -> dict[str, Any]:
@@ -37,6 +38,7 @@ def load_preset(name: str) -> MMAIConfig:
         debug_mode=bool(data.get("debug_mode", False)),
         backend=str(data.get("backend", "local")),
         trial=dict(data.get("trial", {})),
+        patient=dict(data.get("patient", {})),
     )
 
 
