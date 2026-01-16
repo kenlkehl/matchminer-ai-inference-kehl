@@ -131,24 +131,6 @@ def extract_relevant_text_from_patient(
     )
 
 
-def _validate_tagger_config(patient_config: dict) -> dict:
-    if "tagger" not in patient_config:
-        raise ValueError("patient config is missing required key: tagger")
-    tagger_config = dict(patient_config["tagger"])
-    required_keys = [
-        "model_name",
-        "device",
-        "positive_tag_cutoff",
-        "negative_tag_cutoff",
-    ]
-    missing = [key for key in required_keys if key not in tagger_config]
-    if missing:
-        raise ValueError(
-            "patient tagger config is missing required keys: " + ", ".join(missing)
-        )
-    return tagger_config
-
-
 def extract_relevant_sentences(
     df: pd.DataFrame,
     *,
@@ -156,7 +138,7 @@ def extract_relevant_sentences(
 ) -> pd.DataFrame:
     """Extract relevant sentences from patient notes."""
     patient_config = dict(config.patient)
-    tagger_config = _validate_tagger_config(patient_config)
+    tagger_config = dict(patient_config["tagger"])
     backend = get_backend(config.backend)
     df = df.copy()
     df = df[df["note_text"].notna()]
