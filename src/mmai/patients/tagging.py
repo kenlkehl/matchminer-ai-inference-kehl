@@ -8,6 +8,7 @@ from typing import Any, TYPE_CHECKING
 import pandas as pd
 
 from mmai.backends import get_backend
+from mmai.config import MMAIConfig, load_default_preset
 
 if TYPE_CHECKING:
     from mmai.config import MMAIConfig
@@ -134,12 +135,40 @@ def extract_relevant_text_from_patient(
 def extract_relevant_sentences(
     df: pd.DataFrame,
     *,
-    config: MMAIConfig,
+    config: MMAIConfig | None = None,
 ) -> pd.DataFrame:
-    """Extract relevant sentences from patient notes."""
-    patient_config = dict(config.patient)
+    """
+    Extract relevant sentences from longitudinal patient notes.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Note-level input. One row per note.
+
+        Expected columns
+        ----------------
+        patient_id : str
+            Unique patient identifier.
+        note_text : str
+            Full note text.
+        note_type : str
+            Type of note (clinical_note, pathology_report, etc.).
+        note_date : str or datetime
+            Date of the note.
+
+    Returns
+    -------
+    pd.DataFrame
+        Patient-level DataFrame. One row per patient, with a concatenated
+        `patient_long_text` field containing relevant excerpts.
+    """
+    resolved_config = config or load_default_preset()
+    if not isinstance(resolved_config, MMAIConfig):
+        raise TypeError("config must be an MMAIConfig instance or None.")
+
+    patient_config = dict(resolved_config.patient)
     tagger_config = dict(patient_config["tagger"])
-    backend = get_backend(config.backend)
+    backend = get_backend(resolved_config.backend)
     df = df.copy()
     df = df[df["note_text"].notna()]
     df.loc[:, "note_text"] = df["note_text"].astype(str)
