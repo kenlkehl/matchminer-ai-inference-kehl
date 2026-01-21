@@ -110,6 +110,7 @@ def test_extract_relevant_text_from_patient_empty_excerpts(monkeypatch):
 
     result, metadata = extract_relevant_text_from_patient(
         note_rows,
+        patient_id="P1",
         backend=MagicMock(),
         tagger_config={"model_name": "tagger"},
         model_metadata_cache_dir=None,
@@ -288,3 +289,55 @@ def test_extract_relevant_sentences_lightweight_integration(monkeypatch):
     assert "patient_long_text" in result.columns
     assert captured["excerpts"] == ["Alpha", "Beta."]
     assert metadata["model_metadata"]["model_name"] == "tagger"
+
+
+def test_extract_relevant_sentences_preserves_patient_ids(monkeypatch):
+    """Ensure patient_ids are preserved from group keys in the output."""
+
+    class MockBackend:
+        def tag_excerpts(
+            self, excerpts, *, tagger_config, model_metadata_cache_dir=None
+        ):
+            return (
+                [{"label": "POSITIVE", "score": 0.9} for _ in excerpts],
+                {"model_name": "tagger"},
+            )
+
+    monkeypatch.setattr("mmai.patients.tagging.get_backend", lambda name: MockBackend())
+
+    notes = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "note_text": "Alpha.",
+                "note_type": "clinical_note",
+                "note_date": "2024-01-01",
+            },
+            {
+                "patient_id": "P2",
+                "note_text": "Beta.",
+                "note_type": "clinical_note",
+                "note_date": "2024-01-02",
+            },
+        ]
+    )
+
+    config = MMAIConfig(
+        preset_name="default",
+        debug_mode=False,
+        backend="local",
+        trial={},
+        patient={
+            "tagger": {
+                "model_name": "tagger",
+                "device": "cpu",
+                "positive_tag_cutoff": 0.1,
+                "negative_tag_cutoff": 0.9,
+            }
+        },
+        model_metadata_cache_dir=None,
+        raw={"version": 0},
+    )
+
+    result, _ = extract_relevant_sentences(notes, config=config)
+    assert set(result["patient_id"].tolist()) == {"P1", "P2"}

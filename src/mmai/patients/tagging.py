@@ -108,6 +108,7 @@ def _extract_relevant_text_from_notes(
 
 def extract_relevant_text_from_patient(
     note_rows: pd.DataFrame,
+    patient_id: str,
     backend: Any,
     *,
     tagger_config: dict,
@@ -123,7 +124,7 @@ def extract_relevant_text_from_patient(
     )
     if len(excerpts_frame) > 0:
         return _extract_relevant_text_from_notes(
-            patient_id=note_rows["patient_id"].iloc[0],
+            patient_id=patient_id,
             excerpts_frame=excerpts_frame,
             backend=backend,
             tagger_config=tagger_config,
@@ -132,7 +133,7 @@ def extract_relevant_text_from_patient(
     return (
         pd.Series(
             {
-                "patient_id": note_rows["patient_id"].iloc[0],
+                "patient_id": patient_id,
                 "patient_long_text": "",
             }
         ),
@@ -182,16 +183,20 @@ def extract_relevant_sentences(
     df["note_text"] = df["note_text"].astype(str)
     df["note_date"] = pd.to_datetime(df["note_date"])
 
-    grouped = df.groupby("patient_id").apply(
-        extract_relevant_text_from_patient,
-        backend=backend,
-        tagger_config=tagger_config,
-        model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-    )
-    result_df = grouped.apply(lambda item: item[0]).reset_index(drop=True)
+    results = [
+        extract_relevant_text_from_patient(
+            group,
+            patient_id=patient_id,
+            backend=backend,
+            tagger_config=tagger_config,
+            model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+        )
+        for patient_id, group in df.groupby("patient_id")
+    ]
+    result_df = pd.DataFrame([item[0] for item in results]).reset_index(drop=True)
     metadata = {
         "config_snapshot": resolved_config.raw,
-        "model_metadata": grouped.iloc[0][1] if len(grouped) else {},
+        "model_metadata": results[0][1] if results else {},
     }
     return result_df, metadata
 
