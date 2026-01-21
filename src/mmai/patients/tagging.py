@@ -179,8 +179,8 @@ def extract_relevant_sentences(
     backend = get_backend(resolved_config.backend)
     df = df.copy()
     df = df[df["note_text"].notna()]
-    df.loc[:, "note_text"] = df["note_text"].astype(str)
-    df.loc[:, "note_date"] = pd.to_datetime(df["note_date"])
+    df["note_text"] = df["note_text"].astype(str)
+    df["note_date"] = pd.to_datetime(df["note_date"])
 
     grouped = df.groupby("patient_id").apply(
         extract_relevant_text_from_patient,
