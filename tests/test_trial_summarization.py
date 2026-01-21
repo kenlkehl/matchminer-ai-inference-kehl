@@ -214,7 +214,9 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
     captured_messages = {}
 
     class MockBackend:
-        def generate_llm_outputs(self, *, messages_list, trial_config):
+        def generate_llm_outputs(
+            self, *, messages_list, trial_config, model_metadata_cache_dir=None
+        ):
             captured_messages["messages_list"] = messages_list
             return (
                 [
