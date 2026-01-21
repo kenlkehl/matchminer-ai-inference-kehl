@@ -15,12 +15,12 @@ if TYPE_CHECKING:
 
 
 def split_sentences_and_dedup_notes(
-    patient_frame: pd.DataFrame,
+    note_rows: pd.DataFrame,
 ) -> pd.DataFrame:
     """Split reports into sentence chunks and remove duplicates."""
     chunk_frames: list[pd.DataFrame] = []
-    for i in range(0, patient_frame.shape[0]):
-        rpt_text: str = re.sub("\n|\r", " ", patient_frame.iloc[i]["note_text"].strip())
+    for i in range(0, note_rows.shape[0]):
+        rpt_text: str = re.sub("\n|\r", " ", note_rows.iloc[i]["note_text"].strip())
         rpt_text = re.sub(r"\s+", " ", rpt_text)
         rpt_text = re.sub("\\. ", "<excerpt break>", rpt_text)
         chunks = pd.Series(rpt_text.split("<excerpt break>")).str.strip()
@@ -29,8 +29,8 @@ def split_sentences_and_dedup_notes(
         if len(chunks):
             chunk_frame = pd.DataFrame(
                 {
-                    "note_date": patient_frame.iloc[i]["note_date"],
-                    "note_type": patient_frame.iloc[i]["note_type"],
+                    "note_date": note_rows.iloc[i]["note_date"],
+                    "note_type": note_rows.iloc[i]["note_type"],
                     "excerpt": chunks,
                 }
             )
@@ -45,33 +45,33 @@ def split_sentences_and_dedup_notes(
 
 def _format_relevant_text(
     patient_id: str,
-    notes_frame: pd.DataFrame,
+    excerpts_frame: pd.DataFrame,
 ) -> pd.Series:
-    notes_frame = (
-        notes_frame.groupby(["note_date", "note_type"])["excerpt"]
+    excerpts_frame = (
+        excerpts_frame.groupby(["note_date", "note_type"])["excerpt"]
         .agg(". ".join)
         .reset_index()
     )
-    notes_frame = notes_frame[notes_frame["excerpt"].fillna("") != ""]
-    notes_frame["date_text"] = (
-        notes_frame["note_date"].astype(str)
+    excerpts_frame = excerpts_frame[excerpts_frame["excerpt"].fillna("") != ""]
+    excerpts_frame["date_text"] = (
+        excerpts_frame["note_date"].astype(str)
         + " "
-        + notes_frame["note_type"]
+        + excerpts_frame["note_type"]
         + " "
-        + notes_frame["excerpt"]
+        + excerpts_frame["excerpt"]
     )
 
     return pd.Series(
         {
             "patient_id": patient_id,
-            "patient_long_text": "\n".join(notes_frame["date_text"].tolist()),
+            "patient_long_text": "\n".join(excerpts_frame["date_text"].tolist()),
         }
     )
 
 
 def _extract_relevant_text_from_notes(
     patient_id: str,
-    notes_frame: pd.DataFrame,
+    excerpts_frame: pd.DataFrame,
     backend: Any,
     *,
     tagger_config: dict,
@@ -79,54 +79,52 @@ def _extract_relevant_text_from_notes(
     negative_tag_cutoff = float(tagger_config["negative_tag_cutoff"])
     positive_tag_cutoff = float(tagger_config["positive_tag_cutoff"])
     predictions = backend.tag_excerpts(
-        notes_frame["excerpt"].tolist(),
+        excerpts_frame["excerpt"].tolist(),
         tagger_config=tagger_config,
     )
     predictions_frame = pd.DataFrame(predictions)
-    notes_frame = notes_frame.copy()
-    notes_frame.loc[:, ["label", "score"]] = predictions_frame[["label", "score"]]
+    excerpts_frame = excerpts_frame.copy()
+    excerpts_frame.loc[:, ["label", "score"]] = predictions_frame[["label", "score"]]
 
-    negative_condition = (notes_frame["label"] == "NEGATIVE") & (
-        notes_frame["score"] < negative_tag_cutoff
+    negative_condition = (excerpts_frame["label"] == "NEGATIVE") & (
+        excerpts_frame["score"] < negative_tag_cutoff
     )
-    positive_condition = (notes_frame["label"] == "POSITIVE") & (
-        notes_frame["score"] > positive_tag_cutoff
+    positive_condition = (excerpts_frame["label"] == "POSITIVE") & (
+        excerpts_frame["score"] > positive_tag_cutoff
     )
 
-    notes_frame = notes_frame[negative_condition | positive_condition].copy()
+    excerpts_frame = excerpts_frame[negative_condition | positive_condition].copy()
 
     return _format_relevant_text(
         patient_id=patient_id,
-        notes_frame=notes_frame,
+        excerpts_frame=excerpts_frame,
     )
 
 
 def extract_relevant_text_from_patient(
-    patient_frame_original: pd.DataFrame,
+    note_rows: pd.DataFrame,
     backend: Any,
     *,
     tagger_config: dict,
 ) -> pd.Series:
     """Extract relevant snippets for a single patient."""
-    patient_frame = patient_frame_original.copy()
-    patient_frame["note_date"] = pd.to_datetime(patient_frame["note_date"])
-    patient_frame = patient_frame.sort_values(
-        by=["note_date", "note_text"]
-    ).reset_index()
+    note_rows = note_rows.copy()
+    note_rows["note_date"] = pd.to_datetime(note_rows["note_date"])
+    note_rows = note_rows.sort_values(by=["note_date", "note_text"]).reset_index()
 
-    notes_frame = split_sentences_and_dedup_notes(
-        patient_frame,
+    excerpts_frame = split_sentences_and_dedup_notes(
+        note_rows,
     )
-    if len(notes_frame) > 0:
+    if len(excerpts_frame) > 0:
         return _extract_relevant_text_from_notes(
-            patient_id=patient_frame["patient_id"].iloc[0],
-            notes_frame=notes_frame,
+            patient_id=note_rows["patient_id"].iloc[0],
+            excerpts_frame=excerpts_frame,
             backend=backend,
             tagger_config=tagger_config,
         )
     return pd.Series(
         {
-            "patient_id": patient_frame["patient_id"].iloc[0],
+            "patient_id": note_rows["patient_id"].iloc[0],
             "patient_long_text": "",
         }
     )
