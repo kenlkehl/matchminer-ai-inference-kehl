@@ -19,6 +19,7 @@ class MMAIConfig:
     backend: str
     trial: dict[str, Any]
     patient: dict[str, Any]
+    raw: dict[str, Any]
 
 
 def _load_preset_data(name: str) -> dict[str, Any]:
@@ -39,6 +40,7 @@ def load_preset(name: str) -> MMAIConfig:
         backend=str(data.get("backend", "local")),
         trial=dict(data.get("trial", {})),
         patient=dict(data.get("patient", {})),
+        raw=data,
     )
 
 

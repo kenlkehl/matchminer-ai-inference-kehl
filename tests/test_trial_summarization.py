@@ -187,6 +187,8 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
             "reasoning_marker": "assistantfinal",
             "boilerplate_marker": "Boilerplate exclusions:",
         },
+        patient={},
+        raw={},
     )
 
     trials = pd.DataFrame(
