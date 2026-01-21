@@ -116,7 +116,10 @@ class LocalBackend:
             max_length=128,
             device=device,
         )
-        model_metadata = get_model_metadata(weights_path_or_model_name)
+        model_metadata = get_model_metadata(
+            weights_path_or_model_name,
+            cache_dir=tagger_config.get("model_metadata_cache_dir"),
+        )
         return (
             cast(list[dict[str, Any]], tagger_pipeline(excerpts)),
             model_metadata,
