@@ -15,7 +15,9 @@ repos:
     hooks:
       - id: check-added-large-files
       - id: end-of-file-fixer
+        exclude: ^examples/data/
       - id: trailing-whitespace
+        exclude: ^examples/data/
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.4
     hooks:
