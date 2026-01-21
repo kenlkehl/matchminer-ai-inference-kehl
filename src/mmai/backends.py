@@ -56,6 +56,7 @@ class LocalBackend:
         *,
         messages_list: list[list[dict[str, str]]],
         trial_config: Dict[str, Any],
+        model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any]]:
         from vllm import LLM, SamplingParams
 
@@ -67,7 +68,7 @@ class LocalBackend:
 
         model_metadata = get_model_metadata(
             model_name,
-            cache_dir=trial_config.get("model_metadata_cache_dir"),
+            cache_dir=model_metadata_cache_dir,
         )
         llm = LLM(
             model=model_name,
@@ -100,6 +101,7 @@ class LocalBackend:
         excerpts: list[str],
         *,
         tagger_config: Dict[str, Any],
+        model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
         """Tag note excerpts using a local text classification pipeline."""
         from transformers import AutoTokenizer, pipeline
@@ -118,7 +120,8 @@ class LocalBackend:
         )
         model_metadata = get_model_metadata(
             weights_path_or_model_name,
-            cache_dir=tagger_config.get("model_metadata_cache_dir"),
+            cache_dir=model_metadata_cache_dir
+            or tagger_config.get("model_metadata_cache_dir"),
         )
         return (
             cast(list[dict[str, Any]], tagger_pipeline(excerpts)),
@@ -135,6 +138,7 @@ class RemoteBackend:
         *,
         messages_list: list[list[dict[str, str]]],
         trial_config: Dict[str, Any],
+        model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any]]:
         raise NotImplementedError("Remote backend is not implemented yet.")
 
@@ -143,6 +147,7 @@ class RemoteBackend:
         excerpts: list[str],
         *,
         tagger_config: Dict[str, Any],
+        model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
         raise NotImplementedError("Remote backend is not implemented yet.")
 
