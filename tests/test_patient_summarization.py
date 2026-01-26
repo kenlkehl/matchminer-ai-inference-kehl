@@ -171,13 +171,13 @@ def test_summarize_patients_joins_metadata(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "mmai.patients.__init__.extract_relevant_sentences",
+        "mmai.patients.extract_relevant_sentences",
         MagicMock(
             return_value=(relevant_df, {"model_metadata": {"model_name": "tag"}})
         ),
     )
     monkeypatch.setattr(
-        "mmai.patients.__init__.summarize_from_relevant_sentences",
+        "mmai.patients.summarize_from_relevant_sentences",
         MagicMock(
             return_value=(summaries_df, {"model_metadata": {"model_name": "summ"}})
         ),
@@ -226,13 +226,13 @@ def test_summarize_patients_includes_debug_columns(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "mmai.patients.__init__.extract_relevant_sentences",
+        "mmai.patients.extract_relevant_sentences",
         MagicMock(
             return_value=(relevant_df, {"model_metadata": {"model_name": "tag"}})
         ),
     )
     monkeypatch.setattr(
-        "mmai.patients.__init__.summarize_from_relevant_sentences",
+        "mmai.patients.summarize_from_relevant_sentences",
         MagicMock(
             return_value=(summaries_df, {"model_metadata": {"model_name": "summ"}})
         ),
@@ -284,11 +284,9 @@ def test_summarize_patients_lightweight_integration(monkeypatch):
     mock_summarize = MagicMock(
         return_value=(summaries_df, {"model_metadata": {"model_name": "summ"}})
     )
+    monkeypatch.setattr("mmai.patients.extract_relevant_sentences", mock_extract)
     monkeypatch.setattr(
-        "mmai.patients.__init__.extract_relevant_sentences", mock_extract
-    )
-    monkeypatch.setattr(
-        "mmai.patients.__init__.summarize_from_relevant_sentences", mock_summarize
+        "mmai.patients.summarize_from_relevant_sentences", mock_summarize
     )
 
     config = MMAIConfig(
