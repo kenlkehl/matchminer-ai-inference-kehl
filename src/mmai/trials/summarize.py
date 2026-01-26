@@ -43,9 +43,9 @@ def run_llm_summarization(
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Run LLM-based trial summarization."""
     trial_config = dict(config.trial)
-    prompt_files = dict(trial_config.get("prompt_files", {}))
-    primer_filename = prompt_files.get("primer", "trial.user.primer.txt")
-    question_filename = prompt_files.get("question", "trial.user.question.txt")
+    prompt_files = dict(trial_config["prompt_files"])
+    primer_filename = prompt_files["primer"]
+    question_filename = prompt_files["question"]
 
     backend = get_backend(config.backend)
 

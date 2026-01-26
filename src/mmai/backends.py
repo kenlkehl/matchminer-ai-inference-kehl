@@ -120,8 +120,7 @@ class LocalBackend:
         )
         model_metadata = get_model_metadata(
             weights_path_or_model_name,
-            cache_dir=model_metadata_cache_dir
-            or tagger_config.get("model_metadata_cache_dir"),
+            cache_dir=model_metadata_cache_dir,
         )
         return (
             cast(list[dict[str, Any]], tagger_pipeline(excerpts)),
