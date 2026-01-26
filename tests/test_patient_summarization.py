@@ -5,7 +5,7 @@ import pandas as pd
 from mmai.backends import LocalBackend
 from mmai.config import MMAIConfig
 from mmai.patients import summarize_from_relevant_sentences, summarize_patients
-from mmai.patients.postprocess import parse_boilerplate
+from mmai.patients.postprocess import clean_bad_data, parse_boilerplate
 
 
 def test_summarize_from_relevant_sentences_filters_empty_and_returns_metadata(
@@ -114,6 +114,22 @@ def test_parse_boilerplate_splits_summary_and_exclusions():
     assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
     assert parsed.loc[0, "general_exclusion_criteria_evidence"] == "No CNS mets."
     assert parsed.loc[1, "general_exclusion_criteria_evidence"] == "Cancer only."
+
+
+def test_clean_bad_data_filters_invalid_summaries():
+    """Drop rows with empty or invalid patient summaries."""
+    df = pd.DataFrame(
+        [
+            {"cancer_history_summary": "No evidence of malignancy"},
+            {"cancer_history_summary": "No primary identified"},
+            {"cancer_history_summary": "No information"},
+            {"cancer_history_summary": "Valid summary"},
+        ]
+    )
+
+    cleaned = clean_bad_data(df)
+
+    assert cleaned["cancer_history_summary"].tolist() == ["Valid summary"]
 
 
 def test_local_backend_truncate_texts_splits_long_inputs(monkeypatch):
