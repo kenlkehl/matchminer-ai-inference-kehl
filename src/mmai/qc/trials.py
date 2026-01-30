@@ -78,6 +78,12 @@ def trial_qc_report(
     )
 
     metrics: list[dict[str, object]] = []
+    total_trials = (
+        int(trial_inputs["trial_id"].nunique())
+        if trial_inputs is not None and "trial_id" in trial_inputs.columns
+        else int(spaces["trial_id"].nunique())
+    )
+    total_spaces = int(len(spaces))
 
     # Trials missing summaries (no rows) or blank summaries.
     missing_summary_ids: set[str] = set()
@@ -93,6 +99,9 @@ def trial_qc_report(
         {
             "metric": "trials_missing_summaries",
             "value": len(missing_summary_ids),
+            "percent": (len(missing_summary_ids) / total_trials * 100)
+            if total_trials
+            else 0.0,
             "ids": sorted(missing_summary_ids),
         }
     )
@@ -104,6 +113,7 @@ def trial_qc_report(
             {
                 "metric": "spaces_per_trial_min",
                 "value": int(spaces_per_trial.min()) if len(spaces_per_trial) else 0,
+                "percent": None,
                 "ids": [],
             },
             {
@@ -111,11 +121,13 @@ def trial_qc_report(
                 "value": float(spaces_per_trial.median())
                 if len(spaces_per_trial)
                 else 0.0,
+                "percent": None,
                 "ids": [],
             },
             {
                 "metric": "spaces_per_trial_max",
                 "value": int(spaces_per_trial.max()) if len(spaces_per_trial) else 0,
+                "percent": None,
                 "ids": [],
             },
         ]
@@ -141,28 +153,33 @@ def trial_qc_report(
         {
             "metric": "trials_with_non_distinct_spaces",
             "value": len(non_distinct_ids),
+            "percent": (len(non_distinct_ids) / total_trials * 100)
+            if total_trials
+            else 0.0,
             "ids": non_distinct_ids,
         }
     )
 
-    # Missing expected keywords.
-    keyword_missing_ids: list[str] = []
-    for _, row in spaces.iterrows():
-        summary = row["clinical_space_summary"]
-        missing_keywords = [
-            keyword for keyword in expected_keywords if keyword not in summary
+    # Missing expected keywords (per keyword).
+    for keyword in expected_keywords:
+        missing_spaces = spaces.loc[
+            ~spaces["clinical_space_summary"].str.contains(keyword, regex=False)
         ]
-        if missing_keywords:
-            keyword_missing_ids.append(
-                row["space_trial_id"] if "space_trial_id" in row else row["trial_id"]
-            )
-    metrics.append(
-        {
-            "metric": "spaces_missing_expected_keywords",
-            "value": len(keyword_missing_ids),
-            "ids": sorted(set(keyword_missing_ids)),
-        }
-    )
+        ids = (
+            missing_spaces["space_trial_id"]
+            if "space_trial_id" in missing_spaces.columns
+            else missing_spaces["trial_id"]
+        )
+        metrics.append(
+            {
+                "metric": f"spaces_missing_keyword:{keyword}",
+                "value": len(missing_spaces),
+                "percent": (len(missing_spaces) / total_spaces * 100)
+                if total_spaces
+                else 0.0,
+                "ids": sorted(ids.astype(str).tolist()),
+            }
+        )
 
     # Missing boilerplate exclusions.
     boilerplate_missing = spaces[
@@ -172,6 +189,9 @@ def trial_qc_report(
         {
             "metric": "trials_missing_boilerplate_exclusions",
             "value": boilerplate_missing["trial_id"].nunique(),
+            "percent": (boilerplate_missing["trial_id"].nunique() / total_trials * 100)
+            if total_trials
+            else 0.0,
             "ids": sorted(boilerplate_missing["trial_id"].unique().tolist()),
         }
     )
@@ -182,6 +202,7 @@ def trial_qc_report(
         {
             "metric": "spaces_excessive_length",
             "value": len(excessive),
+            "percent": (len(excessive) / total_spaces * 100) if total_spaces else 0.0,
             "ids": sorted(
                 excessive.get("space_trial_id", excessive["trial_id"])
                 .astype(str)
