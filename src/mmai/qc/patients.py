@@ -8,6 +8,8 @@ import pandas as pd
 
 
 DEFAULT_KEYWORDS = [
+    "Age",
+    "Sex",
     "Cancer type",
     "Histology",
     "Current extent",
