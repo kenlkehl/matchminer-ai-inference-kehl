@@ -31,7 +31,7 @@ def _normalize_series(series: pd.Series) -> pd.Series:
 def trial_qc_report(
     trial_spaces: pd.DataFrame,
     *,
-    trial_inputs: pd.DataFrame | None = None,
+    trial_inputs: pd.DataFrame,
     expected_keywords: list[str] | None = None,
     max_space_length: int = 2000,
 ) -> pd.DataFrame:
@@ -44,9 +44,9 @@ def trial_qc_report(
         Output from summarize_trials, one row per trial space.
         Required columns: trial_id, clinical_space_number,
         clinical_space_summary, general_exclusion_criteria.
-    trial_inputs : pd.DataFrame, optional
-        Original trial input table with trial_id column. If provided,
-        used to detect trials with zero spaces.
+    trial_inputs : pd.DataFrame
+        Original trial input table with trial_id column. Used to detect
+        trials with zero spaces.
     expected_keywords : list[str], optional
         Keywords expected in each clinical_space_summary.
     max_space_length : int
@@ -78,11 +78,9 @@ def trial_qc_report(
     )
 
     metrics: list[dict[str, object]] = []
-    total_trials = (
-        int(trial_inputs["trial_id"].nunique())
-        if trial_inputs is not None and "trial_id" in trial_inputs.columns
-        else int(spaces["trial_id"].nunique())
-    )
+    if "trial_id" not in trial_inputs.columns:
+        raise ValueError("trial_inputs must include trial_id")
+    total_trials = int(trial_inputs["trial_id"].nunique())
     total_spaces = int(len(spaces))
 
     # Trials missing summaries (no rows) or blank summaries.
@@ -91,10 +89,9 @@ def trial_qc_report(
         spaces.loc[spaces["clinical_space_summary"].str.strip() == "", "trial_id"]
     )
     missing_summary_ids.update(blank_summary_ids)
-    if trial_inputs is not None and "trial_id" in trial_inputs.columns:
-        input_ids = set(trial_inputs["trial_id"].astype(str))
-        output_ids = set(spaces["trial_id"].astype(str))
-        missing_summary_ids.update(input_ids - output_ids)
+    input_ids = set(trial_inputs["trial_id"].astype(str))
+    output_ids = set(spaces["trial_id"].astype(str))
+    missing_summary_ids.update(input_ids - output_ids)
     metrics.append(
         {
             "metric": "trials_missing_summaries",
