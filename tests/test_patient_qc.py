@@ -4,6 +4,7 @@ from mmai.qc.patients import patient_qc_report
 
 
 def test_patient_qc_report_metrics():
+    """Validate patient QC metrics for missing summaries, boilerplate, and keywords."""
     tagged = pd.DataFrame(
         [
             {"patient_id": "P1", "patient_long_text": "notes"},

@@ -4,6 +4,7 @@ from mmai.qc.trials import trial_qc_report
 
 
 def test_trial_qc_report_metrics():
+    """Validate trial QC metrics for missing summaries, duplicates, and boilerplate gaps."""
     trial_source = pd.DataFrame(
         [
             {"trial_id": "T1"},
