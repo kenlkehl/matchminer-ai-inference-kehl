@@ -1,4 +1,4 @@
-"""QC helpers for trial summarization outputs."""
+"""Internal QC helpers for trial summarization outputs."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def trial_qc_report(
     trial_spaces: pd.DataFrame,
     *,
     trial_source: pd.DataFrame,
+    unfiltered_spaces: pd.DataFrame,
     expected_keywords: list[str] | None = None,
     max_space_length: int = 2000,
 ) -> pd.DataFrame:
@@ -47,6 +48,8 @@ def trial_qc_report(
     trial_source : pd.DataFrame
         Original trial input table with trial_id column. Used to detect
         trials with zero spaces.
+    unfiltered_spaces : pd.DataFrame
+        Trial-space table prior to keyword filtering, used for keyword checks.
     expected_keywords : list[str], optional
         Keywords expected in each clinical_space_summary.
     max_space_length : int
@@ -69,6 +72,8 @@ def trial_qc_report(
     missing = [col for col in required if col not in spaces.columns]
     if missing:
         raise ValueError(f"trial_spaces is missing columns: {', '.join(missing)}")
+    if "trial_id" not in trial_source.columns:
+        raise ValueError("trial_source must include trial_id")
 
     spaces["clinical_space_summary"] = _normalize_series(
         spaces["clinical_space_summary"]
@@ -78,8 +83,6 @@ def trial_qc_report(
     )
 
     metrics: list[dict[str, object]] = []
-    if "trial_id" not in trial_source.columns:
-        raise ValueError("trial_source must include trial_id")
     total_trials = int(trial_source["trial_id"].nunique())
     total_spaces = int(len(spaces))
 
@@ -158,9 +161,15 @@ def trial_qc_report(
     )
 
     # Missing expected keywords (per keyword).
+    keyword_spaces = unfiltered_spaces.copy()
+    if "clinical_space_summary" not in keyword_spaces.columns:
+        raise ValueError("keyword_source must include clinical_space_summary")
+    keyword_spaces["clinical_space_summary"] = _normalize_series(
+        keyword_spaces["clinical_space_summary"]
+    )
     for keyword in expected_keywords:
-        missing_spaces = spaces.loc[
-            ~spaces["clinical_space_summary"].str.contains(keyword, regex=False)
+        missing_spaces = keyword_spaces.loc[
+            ~keyword_spaces["clinical_space_summary"].str.contains(keyword, regex=False)
         ]
         ids = (
             missing_spaces["space_trial_id"]
