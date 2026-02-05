@@ -10,9 +10,9 @@ import pandas as pd
 DEFAULT_KEYWORDS = [
     "Age",
     "Sex",
-    "Cancer type allowed",
-    "Histology allowed",
-    "Cancer burden allowed",
+    "Cancer type",
+    "Histology",
+    "Cancer burden",
     "Prior treatment required",
     "Prior treatment excluded",
     "Biomarkers required",
