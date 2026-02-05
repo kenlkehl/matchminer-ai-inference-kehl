@@ -11,21 +11,6 @@ if TYPE_CHECKING:
     import pandas as pd
 
 
-def _build_trial_qc(
-    trial_spaces: pd.DataFrame,
-    *,
-    trial_source: pd.DataFrame,
-    unfiltered_spaces: pd.DataFrame,
-) -> pd.DataFrame:
-    from mmai._qc.trials import trial_qc_report
-
-    return trial_qc_report(
-        trial_spaces,
-        trial_source=trial_source,
-        unfiltered_spaces=unfiltered_spaces,
-    )
-
-
 def summarize_trials(
     trials: pd.DataFrame,
     *,
@@ -135,15 +120,16 @@ def summarize_trials(
         result = postprocess_trial_summaries(trials_with_summaries, resolved_config)
     logger.info("Postprocessing complete. Produced %d rows.", len(result))
     # Build QC report only when requested.
-    qc_report = (
-        _build_trial_qc(
+    if return_qc:
+        from mmai._qc.trials import trial_qc_report
+
+        qc_report = trial_qc_report(
             result,
             trial_source=trials,
             unfiltered_spaces=unfiltered_spaces,
         )
-        if return_qc
-        else None
-    )
+    else:
+        qc_report = None
     if return_metadata:
         # Optionally return metadata, and append QC when requested.
         metadata_payload = {
