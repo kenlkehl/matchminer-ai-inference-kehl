@@ -18,6 +18,53 @@ DEFAULT_KEYWORDS = [
 ]
 
 
+def tagger_qc_report(
+    tagged_notes: pd.DataFrame,
+    *,
+    patient_note_source: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Build a QC report for the tagging step.
+
+    Parameters
+    ----------
+    tagged_notes : pd.DataFrame
+        Output from extract_relevant_sentences with patient_id and patient_long_text.
+    patient_note_source : pd.DataFrame
+        Original patient notes table with patient_id column.
+
+    Returns
+    -------
+    pd.DataFrame
+        A QC report with metric name, value, and optional ids.
+    """
+    if "patient_id" not in patient_note_source.columns:
+        raise ValueError("patient_note_source must include patient_id")
+    if "patient_id" not in tagged_notes.columns:
+        raise ValueError("tagged_notes must include patient_id")
+    if "patient_long_text" not in tagged_notes.columns:
+        raise ValueError("tagged_notes must include patient_long_text")
+
+    tagged = tagged_notes.copy()
+    tagged["patient_long_text"] = _normalize_series(tagged["patient_long_text"])
+    total_patients = int(patient_note_source["patient_id"].nunique())
+
+    no_tagged_ids = set(
+        tagged.loc[tagged["patient_long_text"].str.strip() == "", "patient_id"]
+    )
+    metrics = [
+        {
+            "metric": "patients_with_no_tagged_notes",
+            "value": len(no_tagged_ids),
+            "percent": (len(no_tagged_ids) / total_patients * 100)
+            if total_patients
+            else 0.0,
+            "ids": sorted(no_tagged_ids),
+        }
+    ]
+    return pd.DataFrame(metrics)
+
+
 def _as_list(value: Iterable[str]) -> list[str]:
     return list(value)
 

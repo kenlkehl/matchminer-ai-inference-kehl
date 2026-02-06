@@ -205,7 +205,7 @@ def extract_relevant_sentences(
         "model_metadata": results[0][1] if results else {},
     }
     if return_qc:
-        from mmai._qc.tagging import tagger_qc_report
+        from mmai._qc.patients import tagger_qc_report
 
         qc_report = tagger_qc_report(
             tagged_notes=result_df,
