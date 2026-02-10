@@ -18,6 +18,8 @@ Returned by `summarize_from_relevant_sentences(..., return_qc=True)`.
 - `patients_dropped_noninformative_summary`: summaries dropped by
   `clean_bad_data` because they match non-informative patterns (e.g.,
   "no information", "no malignancy").
+- `patients_truncated_llm_response`: summaries where the LLM stopped due to
+  max token length.
 - `patients_exclusion_criteria_not_extracted`: summary text equals the
   exclusion criteria text, implying exclusions were not separated.
 - `patients_missing_keyword:<keyword>`: summaries missing an expected keyword.
@@ -35,6 +37,8 @@ Returned by `summarize_trials(..., return_qc=True)`.
 
 - `trials_missing_in_output`: trials present in the input but not represented
   in the output after summarization/postprocessing.
+- `trials_truncated_llm_response`: trials where the LLM stopped due to max
+  token length.
 - `spaces_per_trial_min|median|max`: min/median/max number of spaces per trial.
 - `trials_with_non_distinct_spaces`: trials with duplicate space numbers or
   duplicate space text.
