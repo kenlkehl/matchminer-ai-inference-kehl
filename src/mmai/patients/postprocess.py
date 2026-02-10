@@ -72,4 +72,5 @@ def postprocess_patient_summaries(
             ],
             errors="ignore",
         )
+    cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
     return (cleaned, dropped_ids) if return_qc_data else cleaned

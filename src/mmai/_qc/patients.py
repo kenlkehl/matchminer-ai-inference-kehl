@@ -133,6 +133,7 @@ def patient_qc_report(
     summaries["general_exclusion_criteria_evidence"] = _normalize_series(
         summaries["general_exclusion_criteria_evidence"]
     )
+    summaries["finish_reason"] = _normalize_series(summaries["finish_reason"])
 
     metrics: list[dict[str, object]] = []
     total_patients = int(patient_note_source["patient_id"].nunique())
@@ -181,6 +182,18 @@ def patient_qc_report(
             if total_patients
             else 0.0,
             "ids": sorted(noninformative_summary_drop_ids),
+        }
+    )
+
+    length_ids = summaries.loc[summaries["finish_reason"] == "length", "patient_id"]
+    metrics.append(
+        {
+            "metric": "patients_truncated_llm_response",
+            "value": int(length_ids.nunique()),
+            "percent": (int(length_ids.nunique()) / total_patients * 100)
+            if total_patients
+            else 0.0,
+            "ids": sorted(length_ids.astype(str).unique().tolist()),
         }
     )
 
@@ -282,6 +295,7 @@ def patient_summary_qc_report(
     summaries["general_exclusion_criteria_evidence"] = _normalize_series(
         summaries["general_exclusion_criteria_evidence"]
     )
+    summaries["finish_reason"] = _normalize_series(summaries["finish_reason"])
 
     metrics: list[dict[str, object]] = []
     total_patients = int(summaries["patient_id"].nunique())
@@ -294,6 +308,18 @@ def patient_summary_qc_report(
             if total_patients
             else 0.0,
             "ids": sorted(noninformative_summary_drop_ids),
+        }
+    )
+
+    length_ids = summaries.loc[summaries["finish_reason"] == "length", "patient_id"]
+    metrics.append(
+        {
+            "metric": "patients_truncated_llm_response",
+            "value": int(length_ids.nunique()),
+            "percent": (int(length_ids.nunique()) / total_patients * 100)
+            if total_patients
+            else 0.0,
+            "ids": sorted(length_ids.astype(str).unique().tolist()),
         }
     )
 

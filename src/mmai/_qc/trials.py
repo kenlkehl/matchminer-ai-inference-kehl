@@ -95,6 +95,7 @@ def trial_qc_report(
         spaces["general_exclusion_criteria"]
     )
     spaces = _ensure_space_trial_id(spaces)
+    spaces["finish_reason"] = _normalize_series(spaces["finish_reason"])
 
     metrics: list[dict[str, object]] = []
     total_trials = int(trial_source["trial_id"].nunique())
@@ -117,6 +118,20 @@ def trial_qc_report(
             if total_trials
             else 0.0,
             "ids": sorted(missing_summary_ids),
+        }
+    )
+
+    length_ids = unfiltered_spaces.loc[
+        unfiltered_spaces["finish_reason"] == "length", "trial_id"
+    ]
+    metrics.append(
+        {
+            "metric": "trials_truncated_llm_response",
+            "value": int(length_ids.nunique()),
+            "percent": (int(length_ids.nunique()) / total_trials * 100)
+            if total_trials
+            else 0.0,
+            "ids": sorted(length_ids.astype(str).unique().tolist()),
         }
     )
 
