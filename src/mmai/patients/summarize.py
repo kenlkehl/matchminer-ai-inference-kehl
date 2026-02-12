@@ -78,11 +78,14 @@ def summarize_from_relevant_sentences(
         llm_config=patient_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
     )
+    finish_reason_by_patient = pd.Series(
+        finish_reasons,
+        index=df["patient_id"].astype(str).tolist(),
+    )
 
     df["original_patient_summary"] = summaries
-    df["finish_reason"] = finish_reasons
     if return_qc:
-        df, dropped_ids, finish_reasons = postprocess_patient_summaries(
+        df, dropped_ids = postprocess_patient_summaries(
             df, resolved_config, return_qc_data=True
         )
     else:
@@ -98,7 +101,7 @@ def summarize_from_relevant_sentences(
         qc_report = patient_summary_qc_report(
             df,
             noninformative_summary_drop_ids=dropped_ids or [],
-            finish_reasons=finish_reasons,
+            finish_reasons=finish_reason_by_patient,
         )
         return df, metadata, qc_report
     return df, metadata

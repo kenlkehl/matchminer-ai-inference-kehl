@@ -217,6 +217,7 @@ def patient_summary_qc_report(
     if finish_reasons is None:
         raise ValueError("finish_reasons is required for patient_summary_qc_report")
     finish_series = _normalize_series(pd.Series(finish_reasons))
+    total_generated = int(len(finish_series))
 
     metrics: list[dict[str, object]] = []
     total_patients = int(summaries["patient_id"].nunique())
@@ -232,13 +233,13 @@ def patient_summary_qc_report(
         }
     )
 
-    length_ids = summaries.loc[finish_series == "length", "patient_id"]
+    length_ids = finish_series[finish_series == "length"].index.to_series()
     metrics.append(
         {
             "metric": "patients_truncated_llm_response",
             "value": int(length_ids.nunique()),
-            "percent": (int(length_ids.nunique()) / total_patients * 100)
-            if total_patients
+            "percent": (int(length_ids.nunique()) / total_generated * 100)
+            if total_generated
             else 0.0,
             "ids": sorted(length_ids.astype(str).unique().tolist()),
         }

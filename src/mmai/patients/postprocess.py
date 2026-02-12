@@ -53,7 +53,7 @@ def postprocess_patient_summaries(
     config: MMAIConfig,
     *,
     return_qc_data: bool = False,
-) -> pd.DataFrame | tuple[pd.DataFrame, list[str], pd.Series]:
+) -> pd.DataFrame | tuple[pd.DataFrame, list[str]]:
     """Postprocess patient summaries into clean outputs."""
     patient_config = dict(config.patient)
     reasoning_marker = patient_config["reasoning_marker"]
@@ -73,8 +73,7 @@ def postprocess_patient_summaries(
             errors="ignore",
         )
     if return_qc_data:
-        finish_reason = cleaned.get("finish_reason", pd.Series(dtype=object))
         cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
-        return cleaned, dropped_ids, finish_reason
+        return cleaned, dropped_ids
     cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
     return cleaned

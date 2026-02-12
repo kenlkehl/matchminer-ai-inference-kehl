@@ -36,33 +36,35 @@ def test_patient_summary_qc_report_metrics():
                 "patient_id": "P1",
                 "cancer_history_summary": "Cancer type: Lung. Histology: NSCLC.",
                 "general_exclusion_criteria_evidence": "None",
-                "finish_reason": "stop",
             },
             {
                 "patient_id": "P2",
                 "cancer_history_summary": "",
                 "general_exclusion_criteria_evidence": "None",
-                "finish_reason": "length",
             },
             {
                 "patient_id": "P3",
                 "cancer_history_summary": "Cancer type: Breast.",
                 "general_exclusion_criteria_evidence": "Cancer type: Breast.",
-                "finish_reason": "stop",
             },
         ]
+    )
+    finish_reasons = pd.Series(
+        ["stop", "length", "stop"],
+        index=summaries["patient_id"].astype(str),
     )
 
     report = patient_summary_qc_report(
         summaries,
         noninformative_summary_drop_ids=["P2"],
-        finish_reasons=summaries["finish_reason"],
+        finish_reasons=finish_reasons,
         expected_keywords=["Cancer type", "Histology"],
         max_summary_length=40,
     ).set_index("metric")
 
     assert report.loc["patients_dropped_noninformative_summary", "value"] == 1
     assert report.loc["patients_truncated_llm_response", "value"] == 1
+    assert report.loc["patients_truncated_llm_response", "ids"] == ["P2"]
     assert report.loc["patients_exclusion_criteria_not_extracted", "value"] == 1
     assert report.loc["patients_missing_keyword:Histology", "value"] == 2
 
@@ -82,27 +84,28 @@ def test_patient_qc_report_metrics():
                 "patient_id": "P1",
                 "cancer_history_summary": "Cancer type: Lung. Histology: NSCLC.",
                 "general_exclusion_criteria_evidence": "None",
-                "finish_reason": "stop",
             },
             {
                 "patient_id": "P2",
                 "cancer_history_summary": "",
                 "general_exclusion_criteria_evidence": "None",
-                "finish_reason": "length",
             },
             {
                 "patient_id": "P3",
                 "cancer_history_summary": "Cancer type: Breast.",
                 "general_exclusion_criteria_evidence": "Cancer type: Breast.",
-                "finish_reason": "stop",
             },
         ]
+    )
+    finish_reasons = pd.Series(
+        ["stop", "length", "stop"],
+        index=summaries["patient_id"].astype(str),
     )
 
     summary_report = patient_summary_qc_report(
         summaries,
         noninformative_summary_drop_ids=["P2"],
-        finish_reasons=summaries["finish_reason"],
+        finish_reasons=finish_reasons,
         expected_keywords=["Cancer type", "Histology"],
         max_summary_length=40,
     )
@@ -124,6 +127,7 @@ def test_patient_qc_report_metrics():
     assert report.loc["patients_missing_summaries", "value"] == 1
     assert report.loc["patients_dropped_noninformative_summary", "value"] == 1
     assert report.loc["patients_dropped_noninformative_summary", "ids"] == ["P2"]
+    assert report.loc["patients_truncated_llm_response", "ids"] == ["P2"]
     assert report.loc["patients_exclusion_criteria_not_extracted", "value"] == 1
     assert report.loc["patients_missing_keyword:Histology", "value"] == 2
     assert report.loc["patient_summaries_excessive_length", "value"] >= 0

@@ -32,6 +32,18 @@ Returned by `summarize_patients(..., return_qc=True)`.
 - `patients_missing_summaries`: patients in the input notes who are missing
   from the final summaries output.
 
+### Patient percent denominators
+- Source-level metrics use unique patients in `patient_note_source` as the
+  denominator (for example, `patients_with_no_tagged_notes`,
+  `patients_missing_summaries`).
+- Most summary-level metrics use unique patients in the summary table passed
+  into `patient_summary_qc_report` as the denominator (for example,
+  `patients_dropped_noninformative_summary`,
+  `patients_missing_keyword:<keyword>`).
+- `patients_truncated_llm_response` uses the number of generated summaries
+  (`len(finish_reasons)`) as the denominator, since truncation is a generation
+  event measured from model finish reasons.
+
 ## Trial summarization QC
 Returned by `summarize_trials(..., return_qc=True)`.
 
