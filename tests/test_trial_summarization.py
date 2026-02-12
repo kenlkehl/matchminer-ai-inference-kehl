@@ -61,11 +61,13 @@ def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
         ]
     )
 
-    df, metadata = run_llm_summarization(trials, default_config)
+    df, metadata, finish_reasons = run_llm_summarization(trials, default_config)
     assert df["space_reasoning_and_output"].iloc[0] == "SUM0"
     assert "trial_text" in df.columns
     assert metadata["config_snapshot"]["trial"]["model_name"] == "model"
     assert metadata["model_metadata"]["model_sha"] == "sha"
+    assert finish_reasons.index.tolist() == ["T1"]
+    assert finish_reasons.tolist() == ["stop"]
 
 
 def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
@@ -100,9 +102,11 @@ def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
         ]
     )
 
-    df, _ = run_llm_summarization(trials, default_config)
+    df, _, finish_reasons = run_llm_summarization(trials, default_config)
     assert df["trial_id"].tolist() == ["T1", "T2"]
     assert df["space_reasoning_and_output"].tolist() == ["SUM0", "SUM1"]
+    assert finish_reasons.index.tolist() == ["T1", "T2"]
+    assert finish_reasons.tolist() == ["stop", "stop"]
 
 
 def test_flatten_trial_to_spaces(
@@ -180,7 +184,7 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
                 }
             ]
         )
-        return df, {"model_sha": "sha"}
+        return df, {"model_sha": "sha"}, pd.Series(["stop"], index=["T1"])
 
     monkeypatch.setattr(
         "mmai.trials.summarize.run_llm_summarization", mock_run_llm_summarization
