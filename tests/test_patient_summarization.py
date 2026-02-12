@@ -259,16 +259,43 @@ def test_summarize_patients_joins_metadata(monkeypatch):
         ]
     )
 
+    tagger_qc = pd.DataFrame(
+        [
+            {
+                "metric": "patients_with_no_tagged_notes",
+                "value": 1,
+                "percent": 50.0,
+                "ids": ["P2"],
+            }
+        ]
+    )
     monkeypatch.setattr(
         "mmai.patients.extract_relevant_sentences",
         MagicMock(
-            return_value=(relevant_df, {"model_metadata": {"model_name": "tag"}})
+            return_value=(
+                relevant_df,
+                {"model_metadata": {"model_name": "tag"}},
+                tagger_qc,
+            )
         ),
     )
     monkeypatch.setattr(
         "mmai.patients.summarize_from_relevant_sentences",
         MagicMock(
-            return_value=(summaries_df, {"model_metadata": {"model_name": "summ"}})
+            return_value=(
+                summaries_df,
+                {"model_metadata": {"model_name": "summ"}},
+                pd.DataFrame(
+                    [
+                        {
+                            "metric": "patients_dropped_noninformative_summary",
+                            "value": 0,
+                            "percent": 0.0,
+                            "ids": [],
+                        }
+                    ]
+                ),
+            )
         ),
     )
 
@@ -325,10 +352,24 @@ def test_summarize_patients_returns_qc_report(monkeypatch):
         ]
     )
 
+    tagger_qc = pd.DataFrame(
+        [
+            {
+                "metric": "patients_with_no_tagged_notes",
+                "value": 0,
+                "percent": 0.0,
+                "ids": [],
+            }
+        ]
+    )
     monkeypatch.setattr(
         "mmai.patients.extract_relevant_sentences",
         MagicMock(
-            return_value=(relevant_df, {"model_metadata": {"model_name": "tag"}})
+            return_value=(
+                relevant_df,
+                {"model_metadata": {"model_name": "tag"}},
+                tagger_qc,
+            )
         ),
     )
     qc_report = pd.DataFrame(
@@ -390,20 +431,50 @@ def test_summarize_patients_includes_debug_columns(monkeypatch):
                 "patient_id": "P1",
                 "patient_long_text": "Long text",
                 "original_patient_summary": "assistantfinal\nSummary",
+                "cancer_history_summary": "Summary",
+                "general_exclusion_criteria_evidence": "None",
             }
         ]
     )
 
+    tagger_qc = pd.DataFrame(
+        [
+            {
+                "metric": "patients_with_no_tagged_notes",
+                "value": 0,
+                "percent": 0.0,
+                "ids": [],
+            }
+        ]
+    )
     monkeypatch.setattr(
         "mmai.patients.extract_relevant_sentences",
         MagicMock(
-            return_value=(relevant_df, {"model_metadata": {"model_name": "tag"}})
+            return_value=(
+                relevant_df,
+                {"model_metadata": {"model_name": "tag"}},
+                tagger_qc,
+            )
         ),
+    )
+    summary_qc = pd.DataFrame(
+        [
+            {
+                "metric": "patients_dropped_noninformative_summary",
+                "value": 0,
+                "percent": 0.0,
+                "ids": [],
+            }
+        ]
     )
     monkeypatch.setattr(
         "mmai.patients.summarize_from_relevant_sentences",
         MagicMock(
-            return_value=(summaries_df, {"model_metadata": {"model_name": "summ"}})
+            return_value=(
+                summaries_df,
+                {"model_metadata": {"model_name": "summ"}},
+                summary_qc,
+            )
         ),
     )
 
@@ -448,10 +519,36 @@ def test_summarize_patients_lightweight_integration(monkeypatch):
     )
 
     mock_extract = MagicMock(
-        return_value=(relevant_df, {"model_metadata": {"model_name": "tag"}})
+        return_value=(
+            relevant_df,
+            {"model_metadata": {"model_name": "tag"}},
+            pd.DataFrame(
+                [
+                    {
+                        "metric": "patients_with_no_tagged_notes",
+                        "value": 0,
+                        "percent": 0.0,
+                        "ids": [],
+                    }
+                ]
+            ),
+        )
     )
     mock_summarize = MagicMock(
-        return_value=(summaries_df, {"model_metadata": {"model_name": "summ"}})
+        return_value=(
+            summaries_df,
+            {"model_metadata": {"model_name": "summ"}},
+            pd.DataFrame(
+                [
+                    {
+                        "metric": "patients_dropped_noninformative_summary",
+                        "value": 0,
+                        "percent": 0.0,
+                        "ids": [],
+                    }
+                ]
+            ),
+        )
     )
     monkeypatch.setattr("mmai.patients.extract_relevant_sentences", mock_extract)
     monkeypatch.setattr(
