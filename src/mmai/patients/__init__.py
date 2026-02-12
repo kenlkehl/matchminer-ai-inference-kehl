@@ -105,51 +105,34 @@ def summarize_patients(
         )
 
     logger.info("Extracting relevant patient sentences from %d notes.", len(notes))
-    relevant_sentences, tagger_metadata = cast(
-        tuple[pd.DataFrame, dict],
+    relevant_sentences, tagger_metadata, tagger_qc = cast(
+        tuple[pd.DataFrame, dict, pd.DataFrame],
         extract_relevant_sentences(
             notes,
             config=resolved_config,
-            return_qc=False,
+            return_qc=True,
         ),
     )
     logger.info("Extracted relevant text for %d patients.", len(relevant_sentences))
 
-    qc_report = None
-    if return_qc:
-        # Summary-only QC is built inside the summarization helper.
-        summaries, metadata, summary_qc = cast(
-            tuple[pd.DataFrame, dict, pd.DataFrame],
-            summarize_from_relevant_sentences(
-                relevant_sentences,
-                config=resolved_config,
-                return_qc=True,
-            ),
-        )
-    else:
-        summaries, metadata = cast(
-            tuple[pd.DataFrame, dict],
-            summarize_from_relevant_sentences(
-                relevant_sentences,
-                config=resolved_config,
-                return_qc=False,
-            ),
-        )
+    summaries, metadata, summary_qc = cast(
+        tuple[pd.DataFrame, dict, pd.DataFrame],
+        summarize_from_relevant_sentences(
+            relevant_sentences,
+            config=resolved_config,
+            return_qc=True,
+        ),
+    )
     logger.info("Patient summarization complete. Produced %d rows.", len(summaries))
-    if return_qc:
-        # Build the full QC report using original notes, tagged notes, and summary QC.
-        report_index = summary_qc.set_index("metric")
-        dropped_ids = report_index.loc["patients_dropped_noninformative_summary", "ids"]
-        from mmai._qc.patients import patient_qc_report
+    # Build the full QC report using original notes, tagged notes, and summary QC.
+    from mmai._qc.patients import patient_qc_report
 
-        qc_report = patient_qc_report(
-            summaries,
-            patient_note_source=notes,
-            tagged_notes=relevant_sentences,
-            noninformative_summary_drop_ids=list(dropped_ids),
-        )
-    else:
-        qc_report = None
+    qc_report = patient_qc_report(
+        summaries,
+        patient_note_source=notes,
+        summary_qc_report=summary_qc,
+        tagger_qc_report=tagger_qc,
+    )
     if return_metadata:
         metadata_payload = {
             "config_snapshot": resolved_config.raw,
