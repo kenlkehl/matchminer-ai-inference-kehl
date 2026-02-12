@@ -106,7 +106,9 @@ def summarize_trials(
         )
 
     logger.info("Starting trial summarization for %d trials.", len(trials))
-    trials_with_summaries, metadata = run_llm_summarization(trials, resolved_config)
+    trials_with_summaries, metadata, finish_reasons = run_llm_summarization(
+        trials, resolved_config
+    )
     logger.info("Completed LLM summarization. Beginning postprocessing.")
     if return_qc:
         # Capture unfiltered spaces for QC before keyword filtering.
@@ -127,6 +129,7 @@ def summarize_trials(
             result,
             trial_source=trials,
             unfiltered_spaces=unfiltered_spaces,
+            finish_reasons=finish_reasons,
         )
     else:
         qc_report = None

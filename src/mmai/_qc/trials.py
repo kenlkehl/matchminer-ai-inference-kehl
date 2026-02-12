@@ -46,6 +46,7 @@ def trial_qc_report(
     *,
     trial_source: pd.DataFrame,
     unfiltered_spaces: pd.DataFrame,
+    finish_reasons: pd.Series | list[str] | None,
     expected_keywords: list[str] | None = None,
     max_space_length: int = 2000,
 ) -> pd.DataFrame:
@@ -63,6 +64,9 @@ def trial_qc_report(
         trials with zero spaces.
     unfiltered_spaces : pd.DataFrame
         Trial-space table prior to keyword filtering, used for keyword checks.
+    finish_reasons : pd.Series | list[str] | None
+        Finish reasons from trial-level generation. Expected to be indexed
+        by trial_id so truncated-response IDs map to trials.
     expected_keywords : list[str], optional
         Keywords expected in each clinical_space_summary.
     max_space_length : int
@@ -95,7 +99,10 @@ def trial_qc_report(
         spaces["general_exclusion_criteria"]
     )
     spaces = _ensure_space_trial_id(spaces)
-    spaces["finish_reason"] = _normalize_series(spaces["finish_reason"])
+    if finish_reasons is None:
+        raise ValueError("finish_reasons is required for trial_qc_report")
+    finish_series = _normalize_series(pd.Series(finish_reasons))
+    total_generated = int(len(finish_series))
 
     metrics: list[dict[str, object]] = []
     total_trials = int(trial_source["trial_id"].nunique())
@@ -121,15 +128,13 @@ def trial_qc_report(
         }
     )
 
-    length_ids = unfiltered_spaces.loc[
-        unfiltered_spaces["finish_reason"] == "length", "trial_id"
-    ]
+    length_ids = finish_series[finish_series == "length"].index.to_series()
     metrics.append(
         {
             "metric": "trials_truncated_llm_response",
             "value": int(length_ids.nunique()),
-            "percent": (int(length_ids.nunique()) / total_trials * 100)
-            if total_trials
+            "percent": (int(length_ids.nunique()) / total_generated * 100)
+            if total_generated
             else 0.0,
             "ids": sorted(length_ids.astype(str).unique().tolist()),
         }

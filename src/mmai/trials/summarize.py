@@ -40,7 +40,7 @@ def summarize_trials_multi_cohort(
 
 def run_llm_summarization(
     trials_to_process: pd.DataFrame, config: MMAIConfig
-) -> tuple[pd.DataFrame, dict[str, Any]]:
+) -> tuple[pd.DataFrame, dict[str, Any], pd.Series]:
     """Run LLM-based trial summarization."""
     trial_config = dict(config.trial)
     prompt_files = dict(trial_config["prompt_files"])
@@ -61,9 +61,12 @@ def run_llm_summarization(
     )
 
     trials_with_summaries["space_reasoning_and_output"] = trial_summaries
-    trials_with_summaries["finish_reason"] = finish_reasons
+    finish_reason_by_trial = pd.Series(
+        finish_reasons,
+        index=trials_with_summaries["trial_id"].astype(str).tolist(),
+    )
     metadata = {
         "config_snapshot": {"trial": trial_config},
         "model_metadata": model_metadata,
     }
-    return trials_with_summaries, metadata
+    return trials_with_summaries, metadata, finish_reason_by_trial

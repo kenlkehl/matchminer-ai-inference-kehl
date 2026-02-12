@@ -45,11 +45,16 @@ def test_trial_qc_report_metrics():
             },
         ]
     )
+    finish_reasons = pd.Series(
+        ["stop", "length"],
+        index=["T1", "T2"],
+    )
 
     report = trial_qc_report(
         trial_spaces,
         trial_source=trial_source,
         unfiltered_spaces=trial_spaces,
+        finish_reasons=finish_reasons,
         max_space_length=50,
     ).set_index("metric")
 
