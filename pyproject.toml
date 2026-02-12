@@ -30,6 +30,7 @@ local = [
   "vllm>=0.6.3",
   "huggingface_hub>=0.24.0",
   "transformers>=4.44.0",
+  "sentence-transformers>=3.0.0",
 ]
 
 [tool.setuptools]
