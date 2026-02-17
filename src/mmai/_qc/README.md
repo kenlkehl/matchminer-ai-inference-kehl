@@ -24,6 +24,8 @@ Returned by `summarize_from_relevant_sentences(..., return_qc=True)`.
   exclusion criteria text, implying exclusions were not separated.
 - `patients_missing_keyword:<keyword>`: summaries missing an expected keyword.
 - `patient_summaries_excessive_length`: summaries above the length threshold.
+- `patients_exceed_embedding_token_limit`: summaries whose embedding-tokenized
+  length exceeds `max_embedding_input_tokens` (default `2500`).
 
 ### Full QC
 Returned by `summarize_patients(..., return_qc=True)`.
@@ -43,6 +45,8 @@ Returned by `summarize_patients(..., return_qc=True)`.
 - `patients_truncated_llm_response` uses the number of generated summaries
   (`len(finish_reasons)`) as the denominator, since truncation is a generation
   event measured from model finish reasons.
+- `patients_exceed_embedding_token_limit` uses unique patients in the summary
+  table as the denominator.
 
 ## Trial summarization QC
 Returned by `summarize_trials(..., return_qc=True)`.
@@ -60,6 +64,8 @@ Returned by `summarize_trials(..., return_qc=True)`.
 - `trials_exclusion_criteria_not_extracted`: trials with missing/empty
   general exclusion criteria in the final output.
 - `spaces_excessive_length`: spaces whose text exceeds the length threshold.
+- `spaces_exceed_embedding_token_limit`: spaces whose embedding-tokenized
+  length exceeds `max_embedding_input_tokens` (default `2500`).
 
 ### Trial percent denominators
 - Trial-level metrics use unique trials in `trial_source` as the denominator
@@ -71,4 +77,5 @@ Returned by `summarize_trials(..., return_qc=True)`.
 - Space-level metrics use the number of rows in the final `trial_spaces` table
   as the denominator (for example,
   `spaces_dropped_missing_keyword:<keyword>`,
-  `spaces_excessive_length`).
+  `spaces_excessive_length`,
+  `spaces_exceed_embedding_token_limit`).
