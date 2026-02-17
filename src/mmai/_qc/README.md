@@ -48,8 +48,7 @@ Returned by `summarize_trials(..., return_qc=True)`.
 - `trials_missing_in_output`: trials present in the input but not represented
   in the output after summarization/postprocessing.
 - `trials_truncated_llm_response`: trials where the LLM stopped due to max
-  token length (from the separate trial-level `finish_reasons` series indexed
-  by `trial_id`).
+  token length.
 - `spaces_per_trial_min|median|max`: min/median/max number of spaces per trial.
 - `trials_with_non_distinct_spaces`: trials with duplicate space numbers or
   duplicate space text.
@@ -65,8 +64,8 @@ Returned by `summarize_trials(..., return_qc=True)`.
   (for example, `trials_missing_in_output`,
   `trials_with_non_distinct_spaces`,
   `trials_exclusion_criteria_not_extracted`).
-- `trials_truncated_llm_response` uses the number of generated trial summaries
-  (`len(finish_reasons)`) as the denominator.
+- `trials_truncated_llm_response` is calculated as a percent of trials that
+  reached the summarization step.
 - Space-level metrics use the number of rows in the final `trial_spaces` table
   as the denominator (for example,
   `spaces_dropped_missing_keyword:<keyword>`,

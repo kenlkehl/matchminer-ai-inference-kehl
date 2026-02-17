@@ -106,7 +106,7 @@ def summarize_trials(
         )
 
     logger.info("Starting trial summarization for %d trials.", len(trials))
-    trials_with_summaries, metadata, finish_reasons = run_llm_summarization(
+    trials_with_summaries, metadata, truncated_llm_qc_artifact = run_llm_summarization(
         trials, resolved_config
     )
     logger.info("Completed LLM summarization. Beginning postprocessing.")
@@ -129,7 +129,7 @@ def summarize_trials(
             result,
             trial_source=trials,
             unfiltered_spaces=unfiltered_spaces,
-            finish_reasons=finish_reasons,
+            truncated_llm_qc_artifact=truncated_llm_qc_artifact,
             config=resolved_config,
         )
     else:

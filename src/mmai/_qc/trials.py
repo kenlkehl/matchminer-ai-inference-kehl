@@ -33,6 +33,64 @@ def _normalize_series(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str)
 
 
+def build_qc_artifact(
+    *,
+    metric: str,
+    ids: list[str],
+    denominator: int,
+    numerator: int | None = None,
+) -> dict[str, object]:
+    """Build a standardized QC artifact dictionary."""
+    normalized_ids = sorted({str(item) for item in ids})
+    value = int(numerator) if numerator is not None else len(normalized_ids)
+    return {
+        "metric": metric,
+        "numerator": value,
+        "denominator": int(denominator),
+        "ids": normalized_ids,
+    }
+
+
+def qc_artifact_to_report_row(artifact: dict[str, object]) -> dict[str, object]:
+    """Convert a standardized QC artifact into a report row."""
+    metric_obj = artifact.get("metric", "")
+    metric = str(metric_obj) if metric_obj is not None else ""
+    ids_obj = artifact.get("ids", [])
+    ids = sorted(str(item) for item in ids_obj) if isinstance(ids_obj, list) else []
+    numerator_obj = artifact.get("numerator", len(ids))
+    numerator = (
+        int(numerator_obj) if isinstance(numerator_obj, (int, float)) else len(ids)
+    )
+    denominator_obj = artifact.get("denominator", 0)
+    denominator = (
+        int(denominator_obj) if isinstance(denominator_obj, (int, float)) else 0
+    )
+    return {
+        "metric": metric,
+        "value": numerator,
+        "percent": (numerator / denominator * 100) if denominator else 0.0,
+        "ids": ids,
+    }
+
+
+def build_truncated_response_qc_artifact(
+    trial_ids: list[str], finish_reasons: list[str]
+) -> dict[str, object]:
+    """Build QC artifact for trial summaries truncated with finish_reason='length'."""
+    length_ids = list(
+        {
+            trial_id
+            for trial_id, reason in zip(trial_ids, finish_reasons, strict=False)
+            if str(reason) == "length"
+        }
+    )
+    return build_qc_artifact(
+        metric="trials_truncated_llm_response",
+        ids=length_ids,
+        denominator=len(trial_ids),
+    )
+
+
 def _ensure_space_trial_id(spaces: pd.DataFrame) -> pd.DataFrame:
     if "space_trial_id" in spaces.columns:
         return spaces
@@ -51,7 +109,7 @@ def trial_qc_report(
     *,
     trial_source: pd.DataFrame,
     unfiltered_spaces: pd.DataFrame,
-    finish_reasons: pd.Series | list[str] | None,
+    truncated_llm_qc_artifact: dict[str, object],
     config: MMAIConfig | None = None,
     max_embedding_input_tokens: int = 2500,
     expected_keywords: list[str] | None = None,
@@ -70,9 +128,9 @@ def trial_qc_report(
         trials with zero spaces.
     unfiltered_spaces : pd.DataFrame
         Trial-space table prior to keyword filtering, used for keyword checks.
-    finish_reasons : pd.Series | list[str] | None
-        Finish reasons from trial-level generation. Expected to be indexed
-        by trial_id so truncated-response IDs map to trials.
+    truncated_llm_qc_artifact : dict[str, object]
+        QC artifact for trials truncated due to finish_reason='length' with
+        metric, numerator, denominator, and ids.
     config : MMAIConfig | None, optional
         Config used to resolve backend and embedding settings when token counts
         are computed inside this QC function.
@@ -108,10 +166,6 @@ def trial_qc_report(
         spaces["general_exclusion_criteria"]
     )
     spaces = _ensure_space_trial_id(spaces)
-    if finish_reasons is None:
-        raise ValueError("finish_reasons is required for trial_qc_report")
-    finish_series = _normalize_series(pd.Series(finish_reasons))
-    total_generated = int(len(finish_series))
 
     metrics: list[dict[str, object]] = []
     total_trials = int(trial_source["trial_id"].nunique())
@@ -137,17 +191,7 @@ def trial_qc_report(
         }
     )
 
-    length_ids = finish_series[finish_series == "length"].index.to_series()
-    metrics.append(
-        {
-            "metric": "trials_truncated_llm_response",
-            "value": int(length_ids.nunique()),
-            "percent": (int(length_ids.nunique()) / total_generated * 100)
-            if total_generated
-            else 0.0,
-            "ids": sorted(length_ids.astype(str).unique().tolist()),
-        }
-    )
+    metrics.append(qc_artifact_to_report_row(truncated_llm_qc_artifact))
 
     if config is not None and config.embedding:
         backend = get_backend(config.backend)

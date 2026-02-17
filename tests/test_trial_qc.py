@@ -46,10 +46,12 @@ def test_trial_qc_report_metrics(monkeypatch):
             },
         ]
     )
-    finish_reasons = pd.Series(
-        ["stop", "length"],
-        index=["T1", "T2"],
-    )
+    truncated_llm_qc_artifact = {
+        "metric": "trials_truncated_llm_response",
+        "numerator": 1,
+        "denominator": 2,
+        "ids": ["T2"],
+    }
     monkeypatch.setattr(
         "mmai._qc.trials.get_backend",
         lambda _: type(
@@ -79,7 +81,7 @@ def test_trial_qc_report_metrics(monkeypatch):
         trial_spaces,
         trial_source=trial_source,
         unfiltered_spaces=trial_spaces,
-        finish_reasons=finish_reasons,
+        truncated_llm_qc_artifact=truncated_llm_qc_artifact,
         config=config,
         max_embedding_input_tokens=2500,
     ).set_index("metric")
