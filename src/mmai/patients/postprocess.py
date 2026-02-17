@@ -33,19 +33,31 @@ def parse_boilerplate(
     return df
 
 
-def clean_bad_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove rows with empty or obviously invalid patient summaries."""
-    df = df.copy()
-    df = df.dropna(subset=["cancer_history_summary"])
-    df = df[
-        ~df.cancer_history_summary.str.contains(
+def clean_bad_data(
+    df: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    """Remove rows with empty/non-informative summaries and return QC artifact data."""
+    source = df.copy()
+    source = source.dropna(subset=["cancer_history_summary"])
+    source = source[
+        ~source.cancer_history_summary.str.contains(
             r"No cancer|no cancer|No primary|No evidence of malignancy",
             case=False,
             na=False,
         )
     ]
-    df = df[~df.cancer_history_summary.str.startswith("No information")]
-    return df
+    cleaned = source[~source.cancer_history_summary.str.startswith("No information")]
+
+    source_ids = source.get("patient_id", pd.Series(dtype=object)).astype(str)
+    cleaned_ids = cleaned.get("patient_id", pd.Series(dtype=object)).astype(str)
+    dropped_ids = sorted(set(source_ids) - set(cleaned_ids))
+    artifact: dict[str, object] = {
+        "metric": "patients_dropped_noninformative_summary",
+        "numerator": len(dropped_ids),
+        "denominator": int(source_ids.nunique()),
+        "ids": dropped_ids,
+    }
+    return cleaned, artifact
 
 
 def postprocess_patient_summaries(
@@ -59,9 +71,10 @@ def postprocess_patient_summaries(
     reasoning_marker = patient_config["reasoning_marker"]
     boilerplate_marker = patient_config["boilerplate_marker"]
     parsed = parse_boilerplate(df, reasoning_marker, boilerplate_marker)
-    cleaned = clean_bad_data(parsed)
-    dropped_ids = sorted(
-        set(parsed["patient_id"].astype(str)) - set(cleaned["patient_id"].astype(str))
+    cleaned, qc_artifact = clean_bad_data(parsed)
+    ids_obj = qc_artifact.get("ids", [])
+    dropped_ids = (
+        [str(patient_id) for patient_id in ids_obj] if isinstance(ids_obj, list) else []
     )
     if not config.debug_mode:
         cleaned = cleaned.drop(
