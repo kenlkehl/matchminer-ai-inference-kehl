@@ -68,6 +68,7 @@ def qc_artifact_to_report_row(artifact: dict[str, object]) -> dict[str, object]:
     return {
         "metric": metric,
         "value": numerator,
+        "denominator": denominator,
         "percent": (numerator / denominator * 100) if denominator else 0.0,
         "ids": ids,
     }
@@ -184,6 +185,7 @@ def trial_qc_report(
         {
             "metric": "trials_missing_in_output",
             "value": len(missing_summary_ids),
+            "denominator": total_trials,
             "percent": (len(missing_summary_ids) / total_trials * 100)
             if total_trials
             else 0.0,
@@ -209,6 +211,7 @@ def trial_qc_report(
             {
                 "metric": "spaces_exceed_embedding_token_limit",
                 "value": int(over_limit_ids.nunique()),
+                "denominator": total_spaces,
                 "percent": (int(over_limit_ids.nunique()) / total_spaces * 100)
                 if total_spaces
                 else 0.0,
@@ -223,6 +226,7 @@ def trial_qc_report(
             {
                 "metric": "spaces_per_trial_min",
                 "value": int(spaces_per_trial.min()) if len(spaces_per_trial) else 0,
+                "denominator": None,
                 "percent": None,
                 "ids": [],
             },
@@ -231,12 +235,14 @@ def trial_qc_report(
                 "value": float(spaces_per_trial.median())
                 if len(spaces_per_trial)
                 else 0.0,
+                "denominator": None,
                 "percent": None,
                 "ids": [],
             },
             {
                 "metric": "spaces_per_trial_max",
                 "value": int(spaces_per_trial.max()) if len(spaces_per_trial) else 0,
+                "denominator": None,
                 "percent": None,
                 "ids": [],
             },
@@ -263,6 +269,7 @@ def trial_qc_report(
         {
             "metric": "trials_with_non_distinct_spaces",
             "value": len(non_distinct_ids),
+            "denominator": total_trials,
             "percent": (len(non_distinct_ids) / total_trials * 100)
             if total_trials
             else 0.0,
@@ -290,6 +297,7 @@ def trial_qc_report(
             {
                 "metric": f"spaces_dropped_missing_keyword:{keyword}",
                 "value": len(missing_spaces),
+                "denominator": total_spaces,
                 "percent": (len(missing_spaces) / total_spaces * 100)
                 if total_spaces
                 else 0.0,
@@ -305,6 +313,7 @@ def trial_qc_report(
         {
             "metric": "trials_exclusion_criteria_not_extracted",
             "value": boilerplate_missing["trial_id"].nunique(),
+            "denominator": total_trials,
             "percent": (boilerplate_missing["trial_id"].nunique() / total_trials * 100)
             if total_trials
             else 0.0,

@@ -112,6 +112,7 @@ def qc_artifact_to_report_row(artifact: dict[str, object]) -> dict[str, object]:
     return {
         "metric": metric,
         "value": numerator,
+        "denominator": denominator,
         "percent": (numerator / denominator * 100) if denominator else 0.0,
         "ids": ids,
     }
