@@ -58,14 +58,13 @@ def tagger_qc_report(
         tagged.loc[tagged["patient_long_text"].str.strip() == "", "patient_id"]
     )
     metrics = [
-        {
-            "metric": "patients_with_no_tagged_notes",
-            "value": len(no_tagged_ids),
-            "percent": (len(no_tagged_ids) / total_patients * 100)
-            if total_patients
-            else 0.0,
-            "ids": sorted(no_tagged_ids),
-        }
+        qc_artifact_to_report_row(
+            build_qc_artifact(
+                metric="patients_with_no_tagged_notes",
+                ids=sorted(str(pid) for pid in no_tagged_ids),
+                denominator=total_patients,
+            )
+        )
     ]
     return pd.DataFrame(metrics)
 
@@ -76,6 +75,64 @@ def _as_list(value: Iterable[str]) -> list[str]:
 
 def _normalize_series(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str)
+
+
+def build_qc_artifact(
+    *,
+    metric: str,
+    ids: list[str],
+    denominator: int,
+    numerator: int | None = None,
+) -> dict[str, object]:
+    """Build a standardized QC artifact dictionary."""
+    normalized_ids = sorted({str(item) for item in ids})
+    value = int(numerator) if numerator is not None else len(normalized_ids)
+    return {
+        "metric": metric,
+        "numerator": value,
+        "denominator": int(denominator),
+        "ids": normalized_ids,
+    }
+
+
+def qc_artifact_to_report_row(artifact: dict[str, object]) -> dict[str, object]:
+    """Convert a standardized QC artifact into a report row."""
+    metric_obj = artifact.get("metric", "")
+    metric = str(metric_obj) if metric_obj is not None else ""
+    ids_obj = artifact.get("ids", [])
+    ids = sorted(str(item) for item in ids_obj) if isinstance(ids_obj, list) else []
+    numerator_obj = artifact.get("numerator", len(ids))
+    numerator = (
+        int(numerator_obj) if isinstance(numerator_obj, (int, float)) else len(ids)
+    )
+    denominator_obj = artifact.get("denominator", 0)
+    denominator = (
+        int(denominator_obj) if isinstance(denominator_obj, (int, float)) else 0
+    )
+    return {
+        "metric": metric,
+        "value": numerator,
+        "percent": (numerator / denominator * 100) if denominator else 0.0,
+        "ids": ids,
+    }
+
+
+def build_truncated_response_qc_artifact(
+    patient_ids: list[str], finish_reasons: list[str]
+) -> dict[str, object]:
+    """Build QC artifact for responses truncated with finish_reason='length'."""
+    length_ids = list(
+        {
+            patient_id
+            for patient_id, reason in zip(patient_ids, finish_reasons, strict=False)
+            if str(reason) == "length"
+        }
+    )
+    return build_qc_artifact(
+        metric="patients_truncated_llm_response",
+        ids=length_ids,
+        denominator=len(patient_ids),
+    )
 
 
 def patient_qc_report(
@@ -149,14 +206,13 @@ def patient_qc_report(
     output_ids = set(summaries["patient_id"].astype(str))
     missing_summary_ids.update(input_ids - output_ids)
     metrics.append(
-        {
-            "metric": "patients_missing_summaries",
-            "value": len(missing_summary_ids),
-            "percent": (len(missing_summary_ids) / total_patients * 100)
-            if total_patients
-            else 0.0,
-            "ids": sorted(missing_summary_ids),
-        }
+        qc_artifact_to_report_row(
+            build_qc_artifact(
+                metric="patients_missing_summaries",
+                ids=sorted(str(pid) for pid in missing_summary_ids),
+                denominator=total_patients,
+            )
+        )
     )
 
     # Combine summary QC with upstream-only metrics.
@@ -172,7 +228,7 @@ def patient_summary_qc_report(
     patient_summaries: pd.DataFrame,
     *,
     noninformative_summary_qc_artifact: dict[str, object],
-    finish_reasons: pd.Series | list[str] | None,
+    truncated_llm_qc_artifact: dict[str, object],
     config: MMAIConfig | None = None,
     max_embedding_input_tokens: int = 2500,
     expected_keywords: list[str] | None = None,
@@ -189,8 +245,9 @@ def patient_summary_qc_report(
     noninformative_summary_qc_artifact : dict[str, object]
         QC artifact from clean_bad_data with metric, numerator, denominator,
         and ids for non-informative dropped summaries.
-    finish_reasons : pd.Series | list[str] | None
-        Finish reasons for each summary row (used for truncation metrics).
+    truncated_llm_qc_artifact : dict[str, object]
+        QC artifact for summaries truncated due to finish_reason='length' with
+        metric, numerator, denominator, and ids.
     config : MMAIConfig | None, optional
         Config used to resolve backend and embedding settings when token counts
         are computed inside this QC function.
@@ -222,55 +279,11 @@ def patient_summary_qc_report(
     summaries["general_exclusion_criteria_evidence"] = _normalize_series(
         summaries["general_exclusion_criteria_evidence"]
     )
-    if finish_reasons is None:
-        raise ValueError("finish_reasons is required for patient_summary_qc_report")
-    finish_series = _normalize_series(pd.Series(finish_reasons))
-    total_generated = int(len(finish_series))
 
     metrics: list[dict[str, object]] = []
     total_patients = int(summaries["patient_id"].nunique())
-    drop_ids_obj = noninformative_summary_qc_artifact.get("ids", [])
-    drop_ids = (
-        sorted(str(patient_id) for patient_id in drop_ids_obj)
-        if isinstance(drop_ids_obj, list)
-        else []
-    )
-    drop_count_obj = noninformative_summary_qc_artifact.get("numerator", len(drop_ids))
-    drop_count = (
-        int(drop_count_obj)
-        if isinstance(drop_count_obj, (int, float))
-        else len(drop_ids)
-    )
-    drop_denominator_obj = noninformative_summary_qc_artifact.get(
-        "denominator", total_patients
-    )
-    drop_denominator = (
-        int(drop_denominator_obj)
-        if isinstance(drop_denominator_obj, (int, float))
-        else total_patients
-    )
-    metrics.append(
-        {
-            "metric": "patients_dropped_noninformative_summary",
-            "value": drop_count,
-            "percent": (drop_count / drop_denominator * 100)
-            if drop_denominator
-            else 0.0,
-            "ids": drop_ids,
-        }
-    )
-
-    length_ids = finish_series[finish_series == "length"].index.to_series()
-    metrics.append(
-        {
-            "metric": "patients_truncated_llm_response",
-            "value": int(length_ids.nunique()),
-            "percent": (int(length_ids.nunique()) / total_generated * 100)
-            if total_generated
-            else 0.0,
-            "ids": sorted(length_ids.astype(str).unique().tolist()),
-        }
-    )
+    metrics.append(qc_artifact_to_report_row(noninformative_summary_qc_artifact))
+    metrics.append(qc_artifact_to_report_row(truncated_llm_qc_artifact))
 
     if config is not None and config.embedding:
         backend = get_backend(config.backend)
@@ -284,14 +297,13 @@ def patient_summary_qc_report(
         token_series = pd.to_numeric(token_series, errors="coerce").fillna(0)
         over_limit_ids = token_series[token_series > max_embedding_input_tokens].index
         metrics.append(
-            {
-                "metric": "patients_exceed_embedding_token_limit",
-                "value": int(over_limit_ids.nunique()),
-                "percent": (int(over_limit_ids.nunique()) / total_patients * 100)
-                if total_patients
-                else 0.0,
-                "ids": sorted(over_limit_ids.astype(str).unique().tolist()),
-            }
+            qc_artifact_to_report_row(
+                build_qc_artifact(
+                    metric="patients_exceed_embedding_token_limit",
+                    ids=sorted(over_limit_ids.astype(str).unique().tolist()),
+                    denominator=total_patients,
+                )
+            )
         )
 
     # Summary equals boilerplate exclusions.
@@ -301,14 +313,13 @@ def patient_summary_qc_report(
         "patient_id",
     ]
     metrics.append(
-        {
-            "metric": "patients_exclusion_criteria_not_extracted",
-            "value": int(same_text.nunique()),
-            "percent": (int(same_text.nunique()) / total_patients * 100)
-            if total_patients
-            else 0.0,
-            "ids": sorted(same_text.astype(str).unique().tolist()),
-        }
+        qc_artifact_to_report_row(
+            build_qc_artifact(
+                metric="patients_exclusion_criteria_not_extracted",
+                ids=sorted(same_text.astype(str).unique().tolist()),
+                denominator=total_patients,
+            )
+        )
     )
 
     # Missing expected keywords (per keyword).
@@ -318,14 +329,13 @@ def patient_summary_qc_report(
             "patient_id",
         ]
         metrics.append(
-            {
-                "metric": f"patients_missing_keyword:{keyword}",
-                "value": int(missing_patients.nunique()),
-                "percent": (int(missing_patients.nunique()) / total_patients * 100)
-                if total_patients
-                else 0.0,
-                "ids": sorted(missing_patients.astype(str).unique().tolist()),
-            }
+            qc_artifact_to_report_row(
+                build_qc_artifact(
+                    metric=f"patients_missing_keyword:{keyword}",
+                    ids=sorted(missing_patients.astype(str).unique().tolist()),
+                    denominator=total_patients,
+                )
+            )
         )
 
     return pd.DataFrame(metrics)

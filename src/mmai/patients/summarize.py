@@ -8,6 +8,7 @@ import pandas as pd
 
 from mmai.backends import get_backend
 from mmai.config import MMAIConfig, load_default_preset
+from mmai._qc.patients import build_truncated_response_qc_artifact
 
 from .postprocess import postprocess_patient_summaries
 from .prompt_builder import get_filled_patient_prompt
@@ -78,9 +79,9 @@ def summarize_from_relevant_sentences(
         llm_config=patient_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
     )
-    finish_reason_by_patient = pd.Series(
-        finish_reasons,
-        index=df["patient_id"].astype(str).tolist(),
+    patient_ids = df["patient_id"].astype(str).tolist()
+    truncated_llm_qc_artifact = build_truncated_response_qc_artifact(
+        patient_ids, list(finish_reasons)
     )
 
     df["original_patient_summary"] = summaries
@@ -101,7 +102,7 @@ def summarize_from_relevant_sentences(
         qc_report = patient_summary_qc_report(
             df,
             noninformative_summary_qc_artifact=noninformative_summary_qc_artifact,
-            finish_reasons=finish_reason_by_patient,
+            truncated_llm_qc_artifact=truncated_llm_qc_artifact,
             config=resolved_config,
         )
         return df, metadata, qc_report

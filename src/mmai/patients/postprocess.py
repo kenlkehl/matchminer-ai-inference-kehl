@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from mmai._qc.patients import build_qc_artifact
+
 if TYPE_CHECKING:
     from mmai.config import MMAIConfig
 
@@ -51,12 +53,11 @@ def clean_bad_data(
     source_ids = source.get("patient_id", pd.Series(dtype=object)).astype(str)
     cleaned_ids = cleaned.get("patient_id", pd.Series(dtype=object)).astype(str)
     dropped_ids = sorted(set(source_ids) - set(cleaned_ids))
-    artifact: dict[str, object] = {
-        "metric": "patients_dropped_noninformative_summary",
-        "numerator": len(dropped_ids),
-        "denominator": int(source_ids.nunique()),
-        "ids": dropped_ids,
-    }
+    artifact = build_qc_artifact(
+        metric="patients_dropped_noninformative_summary",
+        ids=dropped_ids,
+        denominator=int(source_ids.nunique()),
+    )
     return cleaned, artifact
 
 
