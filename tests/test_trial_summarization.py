@@ -61,13 +61,17 @@ def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
         ]
     )
 
-    df, metadata, finish_reasons = run_llm_summarization(trials, default_config)
+    df, metadata, truncated_llm_qc_artifact = run_llm_summarization(
+        trials, default_config
+    )
     assert df["space_reasoning_and_output"].iloc[0] == "SUM0"
     assert "trial_text" in df.columns
     assert metadata["config_snapshot"]["trial"]["model_name"] == "model"
     assert metadata["model_metadata"]["model_sha"] == "sha"
-    assert finish_reasons.index.tolist() == ["T1"]
-    assert finish_reasons.tolist() == ["stop"]
+    assert truncated_llm_qc_artifact["metric"] == "trials_truncated_llm_response"
+    assert truncated_llm_qc_artifact["denominator"] == 1
+    assert truncated_llm_qc_artifact["numerator"] == 0
+    assert truncated_llm_qc_artifact["ids"] == []
 
 
 def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
@@ -102,11 +106,13 @@ def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
         ]
     )
 
-    df, _, finish_reasons = run_llm_summarization(trials, default_config)
+    df, _, truncated_llm_qc_artifact = run_llm_summarization(trials, default_config)
     assert df["trial_id"].tolist() == ["T1", "T2"]
     assert df["space_reasoning_and_output"].tolist() == ["SUM0", "SUM1"]
-    assert finish_reasons.index.tolist() == ["T1", "T2"]
-    assert finish_reasons.tolist() == ["stop", "stop"]
+    assert truncated_llm_qc_artifact["metric"] == "trials_truncated_llm_response"
+    assert truncated_llm_qc_artifact["denominator"] == 2
+    assert truncated_llm_qc_artifact["numerator"] == 0
+    assert truncated_llm_qc_artifact["ids"] == []
 
 
 def test_flatten_trial_to_spaces(
@@ -184,7 +190,16 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
                 }
             ]
         )
-        return df, {"model_sha": "sha"}, pd.Series(["stop"], index=["T1"])
+        return (
+            df,
+            {"model_sha": "sha"},
+            {
+                "metric": "trials_truncated_llm_response",
+                "numerator": 0,
+                "denominator": 1,
+                "ids": [],
+            },
+        )
 
     monkeypatch.setattr(
         "mmai.trials.summarize.run_llm_summarization", mock_run_llm_summarization
