@@ -47,7 +47,7 @@ def clean_bad_data(
         )
     ]
     cleaned = source[~source.cancer_history_summary.str.startswith("No information")]
-
+    # record information for QC report
     source_ids = source.get("patient_id", pd.Series(dtype=object)).astype(str)
     cleaned_ids = cleaned.get("patient_id", pd.Series(dtype=object)).astype(str)
     dropped_ids = sorted(set(source_ids) - set(cleaned_ids))
@@ -65,17 +65,13 @@ def postprocess_patient_summaries(
     config: MMAIConfig,
     *,
     return_qc_data: bool = False,
-) -> pd.DataFrame | tuple[pd.DataFrame, list[str]]:
+) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, object]]:
     """Postprocess patient summaries into clean outputs."""
     patient_config = dict(config.patient)
     reasoning_marker = patient_config["reasoning_marker"]
     boilerplate_marker = patient_config["boilerplate_marker"]
     parsed = parse_boilerplate(df, reasoning_marker, boilerplate_marker)
     cleaned, qc_artifact = clean_bad_data(parsed)
-    ids_obj = qc_artifact.get("ids", [])
-    dropped_ids = (
-        [str(patient_id) for patient_id in ids_obj] if isinstance(ids_obj, list) else []
-    )
     if not config.debug_mode:
         cleaned = cleaned.drop(
             columns=[
@@ -87,6 +83,6 @@ def postprocess_patient_summaries(
         )
     if return_qc_data:
         cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
-        return cleaned, dropped_ids
+        return cleaned, qc_artifact
     cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
     return cleaned

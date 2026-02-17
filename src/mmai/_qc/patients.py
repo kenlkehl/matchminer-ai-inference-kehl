@@ -171,7 +171,7 @@ def patient_qc_report(
 def patient_summary_qc_report(
     patient_summaries: pd.DataFrame,
     *,
-    noninformative_summary_drop_ids: list[str],
+    noninformative_summary_qc_artifact: dict[str, object],
     finish_reasons: pd.Series | list[str] | None,
     config: MMAIConfig | None = None,
     max_embedding_input_tokens: int = 2500,
@@ -186,8 +186,9 @@ def patient_summary_qc_report(
         Output from summarize_from_relevant_sentences, one row per patient.
         Required columns: patient_id, cancer_history_summary,
         general_exclusion_criteria_evidence.
-    noninformative_summary_drop_ids : list[str]
-        Patient ids dropped because the summary was non-informative.
+    noninformative_summary_qc_artifact : dict[str, object]
+        QC artifact from clean_bad_data with metric, numerator, denominator,
+        and ids for non-informative dropped summaries.
     finish_reasons : pd.Series | list[str] | None
         Finish reasons for each summary row (used for truncation metrics).
     config : MMAIConfig | None, optional
@@ -228,15 +229,34 @@ def patient_summary_qc_report(
 
     metrics: list[dict[str, object]] = []
     total_patients = int(summaries["patient_id"].nunique())
-
+    drop_ids_obj = noninformative_summary_qc_artifact.get("ids", [])
+    drop_ids = (
+        sorted(str(patient_id) for patient_id in drop_ids_obj)
+        if isinstance(drop_ids_obj, list)
+        else []
+    )
+    drop_count_obj = noninformative_summary_qc_artifact.get("numerator", len(drop_ids))
+    drop_count = (
+        int(drop_count_obj)
+        if isinstance(drop_count_obj, (int, float))
+        else len(drop_ids)
+    )
+    drop_denominator_obj = noninformative_summary_qc_artifact.get(
+        "denominator", total_patients
+    )
+    drop_denominator = (
+        int(drop_denominator_obj)
+        if isinstance(drop_denominator_obj, (int, float))
+        else total_patients
+    )
     metrics.append(
         {
             "metric": "patients_dropped_noninformative_summary",
-            "value": len(noninformative_summary_drop_ids),
-            "percent": (len(noninformative_summary_drop_ids) / total_patients * 100)
-            if total_patients
+            "value": drop_count,
+            "percent": (drop_count / drop_denominator * 100)
+            if drop_denominator
             else 0.0,
-            "ids": sorted(noninformative_summary_drop_ids),
+            "ids": drop_ids,
         }
     )
 

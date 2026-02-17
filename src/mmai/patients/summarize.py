@@ -85,7 +85,7 @@ def summarize_from_relevant_sentences(
 
     df["original_patient_summary"] = summaries
     if return_qc:
-        df, dropped_ids = postprocess_patient_summaries(
+        df, noninformative_summary_qc_artifact = postprocess_patient_summaries(
             df, resolved_config, return_qc_data=True
         )
     else:
@@ -100,7 +100,7 @@ def summarize_from_relevant_sentences(
 
         qc_report = patient_summary_qc_report(
             df,
-            noninformative_summary_drop_ids=dropped_ids or [],
+            noninformative_summary_qc_artifact=noninformative_summary_qc_artifact,
             finish_reasons=finish_reason_by_patient,
             config=resolved_config,
         )
