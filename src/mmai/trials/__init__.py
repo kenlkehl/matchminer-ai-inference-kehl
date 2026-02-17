@@ -110,13 +110,14 @@ def summarize_trials(
         trials, resolved_config
     )
     logger.info("Completed LLM summarization. Beginning postprocessing.")
-    # Always capture unfiltered spaces for QC before keyword filtering.
+    # Capture unfiltered spaces for QC before keyword filtering.
     result, unfiltered_spaces = postprocess_trial_summaries(
         trials_with_summaries,
         resolved_config,
     )
     logger.info("Postprocessing complete. Produced %d rows.", len(result))
 
+    # Build QC report
     from mmai._qc.trials import trial_qc_report
 
     qc_report = trial_qc_report(
@@ -127,6 +128,7 @@ def summarize_trials(
         config=resolved_config,
     )
 
+    # Depending on flags, decide what to return
     if return_metadata:
         # Optionally return metadata, and append QC when requested.
         metadata_payload = {
