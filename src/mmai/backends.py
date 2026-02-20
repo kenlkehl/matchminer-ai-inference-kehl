@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from functools import lru_cache
+from importlib import resources
 from typing import Any, Dict, Tuple, cast
 
 
@@ -45,6 +47,31 @@ def get_model_metadata(
             json.dump(model_dict, handle)
 
     return model_dict
+
+
+@lru_cache(maxsize=4)
+def _get_embedding_model(model_path: str, device: str, prompt: str):
+    from sentence_transformers import SentenceTransformer
+
+    model = SentenceTransformer(model_path, device=device)
+    model.prompts["query"] = prompt
+    return model
+
+
+def _load_prompt_text(filename: str) -> str:
+    prompt_path = resources.files("mmai.prompts").joinpath(filename)
+    with prompt_path.open("r", encoding="utf-8") as handle:
+        return handle.read()
+
+
+def _resolve_embedding_runtime(
+    embedding_config: Dict[str, Any],
+) -> tuple[str, str, str]:
+    model_path = str(embedding_config.get("model_path", "")).strip()
+    device = str(embedding_config.get("device", "cpu")).strip() or "cpu"
+    prompt_filename = str(embedding_config.get("prompt_file", "")).strip()
+    query_prompt = _load_prompt_text(prompt_filename).strip()
+    return model_path, device, query_prompt
 
 
 @dataclass
@@ -158,6 +185,34 @@ class LocalBackend:
             truncated.append(text)
         return truncated
 
+    def generate_embeddings(
+        self,
+        texts: list[str],
+        *,
+        embedding_config: Dict[str, Any],
+    ) -> list[list[float]]:
+        model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
+        model = _get_embedding_model(model_path, device, query_prompt)
+        embeddings = model.encode(texts, prompt="query")
+        embedding_list = (
+            embeddings.tolist() if hasattr(embeddings, "tolist") else embeddings
+        )
+        return cast(list[list[float]], embedding_list)
+
+    def count_embedding_tokens(
+        self,
+        texts: list[str],
+        *,
+        embedding_config: Dict[str, Any],
+    ) -> list[int]:
+        model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
+        model = _get_embedding_model(model_path, device, query_prompt)
+        prepared = [f"{query_prompt} {text}".strip() for text in texts]
+        encoded = model.tokenizer(prepared, add_special_tokens=True, truncation=False)[
+            "input_ids"
+        ]
+        return [len(input_ids) for input_ids in encoded]
+
 
 @dataclass
 class RemoteBackend:
@@ -187,6 +242,22 @@ class RemoteBackend:
         *,
         patient_config: Dict[str, Any],
     ) -> list[str]:
+        raise NotImplementedError("Remote backend is not implemented yet.")
+
+    def generate_embeddings(
+        self,
+        texts: list[str],
+        *,
+        embedding_config: Dict[str, Any],
+    ) -> list[list[float]]:
+        raise NotImplementedError("Remote backend is not implemented yet.")
+
+    def count_embedding_tokens(
+        self,
+        texts: list[str],
+        *,
+        embedding_config: Dict[str, Any],
+    ) -> list[int]:
         raise NotImplementedError("Remote backend is not implemented yet.")
 
 

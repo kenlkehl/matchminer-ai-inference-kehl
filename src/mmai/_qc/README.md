@@ -15,15 +15,14 @@ Returned by `extract_relevant_sentences(..., return_qc=True)`.
 ### Summary-only QC
 Returned by `summarize_from_relevant_sentences(..., return_qc=True)`.
 
-- `patients_dropped_noninformative_summary`: summaries dropped by
-  `clean_bad_data` because they match non-informative patterns (e.g.,
+- `patients_dropped_noninformative_summary`: summaries dropped because they match non-informative patterns (e.g.,
   "no information", "no malignancy").
 - `patients_truncated_llm_response`: summaries where the LLM stopped due to
   max token length.
-- `patients_exclusion_criteria_not_extracted`: summary text equals the
-  exclusion criteria text, implying exclusions were not separated.
+- `patients_exclusion_criteria_not_extracted`: exclusion criteria not successfully extracted.
 - `patients_missing_keyword:<keyword>`: summaries missing an expected keyword.
-- `patient_summaries_excessive_length`: summaries above the length threshold.
+- `patients_exceed_embedding_token_limit`: summaries whose embedding-tokenized
+  length exceeds the allowable amount by the embedding model.
 
 ### Full QC
 Returned by `summarize_patients(..., return_qc=True)`.
@@ -33,16 +32,15 @@ Returned by `summarize_patients(..., return_qc=True)`.
   from the final summaries output.
 
 ### Patient percent denominators
-- Source-level metrics use unique patients in `patient_note_source` as the
-  denominator (for example, `patients_with_no_tagged_notes`,
-  `patients_missing_summaries`).
-- Most summary-level metrics use unique patients in the summary table passed
-  into `patient_summary_qc_report` as the denominator (for example,
-  `patients_dropped_noninformative_summary`,
-  `patients_missing_keyword:<keyword>`).
-- `patients_truncated_llm_response` uses the number of generated summaries
-  (`len(finish_reasons)`) as the denominator, since truncation is a generation
-  event measured from model finish reasons.
+- `patients_with_no_tagged_notes` and `patients_missing_summaries` are
+  calculated as a percent of patients in the original input notes.
+- `patients_dropped_noninformative_summary` and
+  `patients_truncated_llm_response` are calculated as a percent of patients
+  that reached the summarization step.
+- `patients_exclusion_criteria_not_extracted`,
+  `patients_missing_keyword:<keyword>`, and
+  `patients_exceed_embedding_token_limit` are calculated as a percent of
+  patients in the summary output table.
 
 ## Trial summarization QC
 Returned by `summarize_trials(..., return_qc=True)`.
@@ -59,7 +57,8 @@ Returned by `summarize_trials(..., return_qc=True)`.
   that lack the keyword (these would be dropped by keyword filtering).
 - `trials_exclusion_criteria_not_extracted`: trials with missing/empty
   general exclusion criteria in the final output.
-- `spaces_excessive_length`: spaces whose text exceeds the length threshold.
+- `spaces_exceed_embedding_token_limit`: spaces whose embedding-tokenized
+  length exceeds `max_embedding_input_tokens` (default `2500`).
 
 ### Trial percent denominators
 - Trial-level metrics use unique trials in `trial_source` as the denominator
@@ -71,4 +70,4 @@ Returned by `summarize_trials(..., return_qc=True)`.
 - Space-level metrics use the number of rows in the final `trial_spaces` table
   as the denominator (for example,
   `spaces_dropped_missing_keyword:<keyword>`,
-  `spaces_excessive_length`).
+  `spaces_exceed_embedding_token_limit`).

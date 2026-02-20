@@ -130,6 +130,7 @@ def summarize_trials(
             trial_source=trials,
             unfiltered_spaces=unfiltered_spaces,
             finish_reasons=finish_reasons,
+            config=resolved_config,
         )
     else:
         qc_report = None
