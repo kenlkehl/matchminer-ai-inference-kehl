@@ -34,6 +34,20 @@ def _as_list(value: Iterable[str]) -> list[str]:
     return list(value)
 
 
+def _ensure_space_trial_id(spaces: pd.DataFrame) -> pd.DataFrame:
+    """Ensure space-level tables have a stable space_trial_id column."""
+    if "space_trial_id" in spaces.columns:
+        return spaces
+    if {"trial_id", "clinical_space_number"}.issubset(spaces.columns):
+        spaces = spaces.copy()
+        spaces["space_trial_id"] = (
+            spaces["trial_id"].astype(str)
+            + "-"
+            + spaces["clinical_space_number"].astype(str)
+        )
+    return spaces
+
+
 def trial_qc_report(
     trial_spaces: pd.DataFrame,
     *,
@@ -96,6 +110,7 @@ def trial_qc_report(
     spaces["general_exclusion_criteria"] = normalize_series(
         spaces["general_exclusion_criteria"]
     )
+    spaces = _ensure_space_trial_id(spaces)
 
     metrics: list[dict[str, object]] = []
     total_trials = int(trial_source["trial_id"].nunique())
@@ -201,7 +216,7 @@ def trial_qc_report(
     )
 
     # Missing expected keywords (per keyword).
-    keyword_spaces = unfiltered_spaces.copy()
+    keyword_spaces = _ensure_space_trial_id(unfiltered_spaces.copy())
     if "clinical_space_summary" not in keyword_spaces.columns:
         raise ValueError("unfiltered_spaces must include clinical_space_summary")
     if "space_trial_id" not in keyword_spaces.columns:
