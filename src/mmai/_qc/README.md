@@ -9,8 +9,9 @@ prompts, filters, and postprocessing rules. Metrics are returned as rows with
 ### Tagging QC
 Returned by `extract_relevant_sentences(..., return_qc=True)`.
 
-- `patients_with_no_tagged_notes`: patients whose tagged long text is empty
-  after the tagging step.
+- `patients_with_no_tagged_notes`: patients present in the input notes who do
+  not have any non-empty tagged long text after tagging (includes patients with
+  empty tagged text and patients missing from tagged output).
 
 ### Summary-only QC
 Returned by `summarize_from_relevant_sentences(..., return_qc=True)`.

@@ -59,9 +59,13 @@ def tagger_qc_report(
     tagged["patient_long_text"] = normalize_series(tagged["patient_long_text"])
     total_patients = int(patient_note_source["patient_id"].nunique())
 
-    no_tagged_ids = set(
-        tagged.loc[tagged["patient_long_text"].str.strip() == "", "patient_id"]
+    source_ids = set(patient_note_source["patient_id"].astype(str))
+    tagged_nonempty_ids = set(
+        tagged.loc[tagged["patient_long_text"].str.strip() != "", "patient_id"]
+        .astype(str)
+        .tolist()
     )
+    no_tagged_ids = source_ids - tagged_nonempty_ids
     metrics = [
         qc_artifact_to_report_row(
             build_qc_artifact(
