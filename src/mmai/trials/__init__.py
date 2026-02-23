@@ -106,36 +106,30 @@ def summarize_trials(
         )
 
     logger.info("Starting trial summarization for %d trials.", len(trials))
-    trials_with_summaries, metadata, finish_reasons = run_llm_summarization(
+    trials_with_summaries, metadata, truncated_llm_qc_artifact = run_llm_summarization(
         trials, resolved_config
     )
     logger.info("Completed LLM summarization. Beginning postprocessing.")
-    if return_qc:
-        # Capture unfiltered spaces for QC before keyword filtering.
-        result, unfiltered_spaces = postprocess_trial_summaries(
-            trials_with_summaries,
-            resolved_config,
-            return_qc_data=True,
-        )
-    else:
-        unfiltered_spaces = None
-        result = postprocess_trial_summaries(trials_with_summaries, resolved_config)
+    # Capture unfiltered spaces for QC before keyword filtering.
+    result, unfiltered_spaces = postprocess_trial_summaries(
+        trials_with_summaries,
+        resolved_config,
+    )
     logger.info("Postprocessing complete. Produced %d rows.", len(result))
-    # Build QC report only when requested.
-    if return_qc:
-        from mmai._qc.trials import trial_qc_report
 
-        qc_report = trial_qc_report(
-            result,
-            trial_source=trials,
-            unfiltered_spaces=unfiltered_spaces,
-            finish_reasons=finish_reasons,
-            config=resolved_config,
-        )
-    else:
-        qc_report = None
+    # Build QC report
+    from mmai._qc.trials import trial_qc_report
+
+    qc_report = trial_qc_report(
+        result,
+        trial_source=trials,
+        unfiltered_spaces=unfiltered_spaces,
+        truncated_llm_qc_artifact=truncated_llm_qc_artifact,
+        config=resolved_config,
+    )
+
+    # Depending on flags, decide what to return
     if return_metadata:
-        # Optionally return metadata, and append QC when requested.
         metadata_payload = {
             "config_snapshot": resolved_config.raw,
             "model_metadata": {

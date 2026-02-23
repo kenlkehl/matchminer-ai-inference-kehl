@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from mmai._qc.patients import build_qc_artifact
+
 if TYPE_CHECKING:
     from mmai.config import MMAIConfig
 
@@ -33,36 +35,42 @@ def parse_boilerplate(
     return df
 
 
-def clean_bad_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove rows with empty or obviously invalid patient summaries."""
-    df = df.copy()
-    df = df.dropna(subset=["cancer_history_summary"])
-    df = df[
-        ~df.cancer_history_summary.str.contains(
+def clean_bad_data(
+    df: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    """Remove rows with empty/non-informative summaries and return QC artifact data."""
+    source = df.copy()
+    source = source.dropna(subset=["cancer_history_summary"])
+    source = source[
+        ~source.cancer_history_summary.str.contains(
             r"No cancer|no cancer|No primary|No evidence of malignancy",
             case=False,
             na=False,
         )
     ]
-    df = df[~df.cancer_history_summary.str.startswith("No information")]
-    return df
+    cleaned = source[~source.cancer_history_summary.str.startswith("No information")]
+    # record information for QC report
+    source_ids = source.get("patient_id", pd.Series(dtype=object)).astype(str)
+    cleaned_ids = cleaned.get("patient_id", pd.Series(dtype=object)).astype(str)
+    dropped_ids = sorted(set(source_ids) - set(cleaned_ids))
+    artifact = build_qc_artifact(
+        metric="patients_dropped_noninformative_summary",
+        ids=dropped_ids,
+        denominator=int(source_ids.nunique()),
+    )
+    return cleaned, artifact
 
 
 def postprocess_patient_summaries(
     df: pd.DataFrame,
     config: MMAIConfig,
-    *,
-    return_qc_data: bool = False,
-) -> pd.DataFrame | tuple[pd.DataFrame, list[str]]:
+) -> tuple[pd.DataFrame, dict[str, object]]:
     """Postprocess patient summaries into clean outputs."""
     patient_config = dict(config.patient)
     reasoning_marker = patient_config["reasoning_marker"]
     boilerplate_marker = patient_config["boilerplate_marker"]
     parsed = parse_boilerplate(df, reasoning_marker, boilerplate_marker)
-    cleaned = clean_bad_data(parsed)
-    dropped_ids = sorted(
-        set(parsed["patient_id"].astype(str)) - set(cleaned["patient_id"].astype(str))
-    )
+    cleaned, qc_artifact = clean_bad_data(parsed)
     if not config.debug_mode:
         cleaned = cleaned.drop(
             columns=[
@@ -72,8 +80,5 @@ def postprocess_patient_summaries(
             ],
             errors="ignore",
         )
-    if return_qc_data:
-        cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
-        return cleaned, dropped_ids
     cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
-    return cleaned
+    return cleaned, qc_artifact

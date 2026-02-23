@@ -133,6 +133,8 @@ def summarize_patients(
         summary_qc_report=summary_qc,
         tagger_qc_report=tagger_qc,
     )
+
+    # Depending on flags, decide what to return
     if return_metadata:
         metadata_payload = {
             "config_snapshot": resolved_config.raw,

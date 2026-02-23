@@ -121,32 +121,21 @@ def flatten_trial_to_spaces(
 def postprocess_trial_summaries(
     trials_with_summaries: pd.DataFrame,
     config: MMAIConfig,
-    *,
-    return_qc_data: bool = False,
-) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Postprocess trial summaries into clinical spaces."""
     trial_config = dict(config.trial)
     reasoning_marker = trial_config["reasoning_marker"]
     boilerplate_marker = trial_config["boilerplate_marker"]
-
-    if return_qc_data:
-        unfiltered_spaces = _expand_trial_spaces(
-            trials_with_summaries,
-            reasoning_marker=reasoning_marker,
-            boilerplate_marker=boilerplate_marker,
+    unfiltered_spaces = _expand_trial_spaces(
+        trials_with_summaries,
+        reasoning_marker=reasoning_marker,
+        boilerplate_marker=boilerplate_marker,
+    )
+    spaces = unfiltered_spaces.loc[
+        unfiltered_spaces["clinical_space_summary"].apply(
+            lambda text: all(term in text for term in REQUIRED_TRIAL_SPACE_KEYWORDS)
         )
-        spaces = unfiltered_spaces.loc[
-            unfiltered_spaces["clinical_space_summary"].apply(
-                lambda text: all(term in text for term in REQUIRED_TRIAL_SPACE_KEYWORDS)
-            )
-        ]
-    else:
-        unfiltered_spaces = pd.DataFrame()
-        spaces = flatten_trial_to_spaces(
-            trials_with_summaries,
-            reasoning_marker=reasoning_marker,
-            boilerplate_marker=boilerplate_marker,
-        )
+    ]
     if spaces.empty:
         empty = pd.DataFrame(
             columns=[
@@ -157,7 +146,7 @@ def postprocess_trial_summaries(
                 "general_exclusion_criteria",
             ]
         )
-        return (empty, unfiltered_spaces) if return_qc_data else empty
+        return empty, unfiltered_spaces
 
     output = pd.DataFrame(
         {
@@ -177,4 +166,4 @@ def postprocess_trial_summaries(
         output["trial_text"] = spaces["trial_text"]
         output["space_reasoning_and_output"] = spaces["space_reasoning_and_output"]
     # qc spaces = unfiltered trial spaces
-    return (output, unfiltered_spaces) if return_qc_data else output
+    return output, unfiltered_spaces
