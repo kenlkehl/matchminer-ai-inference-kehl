@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from mmai.embedding import embed_for_matching
 from mmai.patients import summarize_from_relevant_sentences
@@ -234,3 +235,43 @@ def _compare_trial_package_vs_gold(
         )
 
     return pd.DataFrame(rows)
+
+
+@pytest.mark.resource_heavy
+def test_patient_embedding_regression_mmai_synthetic():
+    """Simple patient embedding regression check against gold outputs."""
+    patient_input = _load_patient_input()
+    patient_gold = _load_patient_output_gold()
+    package_embeddings = _generate_patient_package_embeddings(patient_input)
+    scores = _compare_patient_package_vs_gold(package_embeddings, patient_gold)
+    assert not scores.empty, "No patient embeddings were comparable to gold output."
+
+    mean_score = float(scores["cosine_similarity"].mean())
+    if mean_score < 0.99:
+        worst = scores.nsmallest(5, "cosine_similarity").to_dict("records")
+        raise AssertionError(
+            "Patient embedding regression drift detected: "
+            f"mean cosine_similarity={mean_score:.6f} (< 0.99). "
+            f"min={float(scores['cosine_similarity'].min()):.6f}. "
+            f"worst_5={worst}"
+        )
+
+
+@pytest.mark.resource_heavy
+def test_trial_embedding_regression_mmai_synthetic():
+    """Simple trial embedding regression check against gold outputs."""
+    trial_input = _load_trial_input()
+    trial_gold = _load_trial_output_gold()
+    package_embeddings = _generate_trial_package_embeddings(trial_input)
+    scores = _compare_trial_package_vs_gold(package_embeddings, trial_gold)
+    assert not scores.empty, "No trial embeddings were comparable to gold output."
+
+    mean_score = float(scores["trial_score"].mean())
+    if mean_score < 0.99:
+        worst = scores.nsmallest(5, "trial_score").to_dict("records")
+        raise AssertionError(
+            "Trial embedding regression drift detected: "
+            f"mean trial_score={mean_score:.6f} (< 0.99). "
+            f"min={float(scores['trial_score'].min()):.6f}. "
+            f"worst_5={worst}"
+        )
