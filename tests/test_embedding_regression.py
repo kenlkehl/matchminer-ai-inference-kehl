@@ -173,10 +173,67 @@ def _compare_trial_package_vs_gold(
     trial_package_embeddings: pd.DataFrame,
     trial_gold: pd.DataFrame,
 ) -> tuple[pd.DataFrame, list[str], list[str]]:
-    return _compare_embedding_frames(
-        trial_package_embeddings,
-        trial_gold,
-        id_col="space_trial_id",
-        package_embedding_col="embedding",
-        gold_embedding_col="trial_embedding",
-    )
+    """
+    Compare trial embeddings by trial_id using bidirectional best-match cosine.
+
+    For each trial:
+    - pkg_to_gold: mean best gold match for each package space
+    - gold_to_pkg: mean best package match for each gold space
+    - trial_score: average of the two means
+    """
+    package = trial_package_embeddings.copy()
+    gold = trial_gold.copy()
+
+    package["trial_id"] = package["trial_id"].astype(str)
+    gold["trial_id"] = gold["trial_id"].astype(str)
+
+    package_trials = set(package["trial_id"])
+    gold_trials = set(gold["trial_id"])
+    missing_in_package = sorted(gold_trials - package_trials)
+    missing_in_gold = sorted(package_trials - gold_trials)
+
+    rows: list[dict[str, object]] = []
+    common_trials = sorted(package_trials & gold_trials)
+    for trial_id in common_trials:
+        pkg_vectors = [
+            _parse_embedding_vector(value)
+            for value in package.loc[package["trial_id"] == trial_id, "embedding"]
+        ]
+        gold_vectors = [
+            _parse_embedding_vector(value)
+            for value in gold.loc[gold["trial_id"] == trial_id, "trial_embedding"]
+        ]
+        if not pkg_vectors or not gold_vectors:
+            rows.append(
+                {
+                    "trial_id": trial_id,
+                    "n_pkg_spaces": len(pkg_vectors),
+                    "n_gold_spaces": len(gold_vectors),
+                    "pkg_to_gold": 0.0,
+                    "gold_to_pkg": 0.0,
+                    "trial_score": 0.0,
+                }
+            )
+            continue
+
+        sim_matrix = np.array(
+            [
+                [_cosine_similarity(pkg_vec, gold_vec) for gold_vec in gold_vectors]
+                for pkg_vec in pkg_vectors
+            ],
+            dtype=float,
+        )
+        pkg_to_gold = float(sim_matrix.max(axis=1).mean())
+        gold_to_pkg = float(sim_matrix.max(axis=0).mean())
+        rows.append(
+            {
+                "trial_id": trial_id,
+                "n_pkg_spaces": len(pkg_vectors),
+                "n_gold_spaces": len(gold_vectors),
+                "pkg_to_gold": pkg_to_gold,
+                "gold_to_pkg": gold_to_pkg,
+                "trial_score": (pkg_to_gold + gold_to_pkg) / 2.0,
+            }
+        )
+
+    return pd.DataFrame(rows), missing_in_package, missing_in_gold
