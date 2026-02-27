@@ -28,7 +28,7 @@ def _load_patient_input() -> pd.DataFrame:
 
 
 def _load_patient_output_gold() -> pd.DataFrame:
-    return pd.read_csv(REGRESSION_DATA_DIR / "patient_output.csv")
+    return pd.read_parquet(REGRESSION_DATA_DIR / "patient_output.parquet")
 
 
 def _load_trial_input() -> pd.DataFrame:
@@ -36,7 +36,7 @@ def _load_trial_input() -> pd.DataFrame:
 
 
 def _load_trial_output_gold() -> pd.DataFrame:
-    return pd.read_csv(REGRESSION_DATA_DIR / "trial_output.csv")
+    return pd.read_parquet(REGRESSION_DATA_DIR / "trial_output.parquet")
 
 
 def _generate_patient_package_embeddings(
