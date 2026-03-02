@@ -2,41 +2,34 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 import pandas as pd
+import torch
+import torch.nn.functional as F
 
 
-def _parse_embedding(value: Any) -> np.ndarray:
-    if isinstance(value, np.ndarray):
-        return value.astype(float)
-    if isinstance(value, list):
-        return np.asarray(value, dtype=float)
-    text = str(value).strip()
-    if not text:
-        return np.asarray([], dtype=float)
-    if text.startswith("[") and text.endswith("]"):
-        text = text[1:-1].strip()
-    return np.fromstring(text, sep=" ", dtype=float)
-
-
-def _stack_embeddings(values: pd.Series) -> np.ndarray:
-    vectors = [_parse_embedding(value) for value in values]
+def _stack_embeddings(values: pd.Series) -> torch.Tensor:
+    vectors = []
+    for value in values:
+        if isinstance(value, np.ndarray):
+            vectors.append(value.astype(float))
+            continue
+        if isinstance(value, list):
+            vectors.append(np.asarray(value, dtype=float))
+            continue
+        raise ValueError("Embeddings must be list or numpy array values.")
     if not vectors:
-        return np.empty((0, 0), dtype=float)
+        return torch.empty((0, 0), dtype=torch.float32)
     dim = max(vec.size for vec in vectors)
     if any(vec.size != dim for vec in vectors):
         raise ValueError("Embedding vectors must share the same dimension.")
-    return np.vstack(vectors).astype(float)
+    return torch.tensor(np.vstack(vectors).astype(float), dtype=torch.float32)
 
 
-def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
-    if matrix.size == 0:
+def _normalize_rows(matrix: torch.Tensor) -> torch.Tensor:
+    if matrix.numel() == 0:
         return matrix
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    norms = np.where(norms == 0.0, 1.0, norms)
-    return matrix / norms
+    return F.normalize(matrix, p=2, dim=1)
 
 
 def _prepare_context_columns(
@@ -103,7 +96,7 @@ def generate_candidate_matches(
     # Parse embeddings and ensure consistent vector dimensionality.
     query_embeddings = _stack_embeddings(query_df["embedding"])
     corpus_embeddings = _stack_embeddings(corpus_df["embedding"])
-    if query_embeddings.size == 0 or corpus_embeddings.size == 0:
+    if query_embeddings.numel() == 0 or corpus_embeddings.numel() == 0:
         return pd.DataFrame(columns=[query_id_col, corpus_id_col, "similarity_score"])
 
     # Normalize embeddings and compute cosine similarity matrix.
@@ -115,23 +108,24 @@ def generate_candidate_matches(
     query_ids = query_df[query_id_col].astype(str).tolist()
     corpus_ids = corpus_df[corpus_id_col].astype(str).tolist()
 
-    records: list[dict[str, Any]] = []
-    top_k = similarity.shape[1] if k is None else min(k, similarity.shape[1])
+    records: list[dict[str, object]] = []
+    num_corpus = similarity.shape[1]
+    top_k = num_corpus if k is None else min(k, num_corpus)
     for row_idx, query_id in enumerate(query_ids):
         scores = similarity[row_idx]
         if top_k == 0:
             continue
-        if top_k == similarity.shape[1]:
-            ranked_idx = np.argsort(-scores)
+        if top_k == num_corpus:
+            ranked_idx = torch.argsort(scores, descending=True)
         else:
-            candidate_idx = np.argpartition(-scores, top_k - 1)[:top_k]
-            ranked_idx = candidate_idx[np.argsort(-scores[candidate_idx])]
+            ranked_idx = torch.topk(scores, k=top_k, largest=True).indices
         for corpus_idx in ranked_idx:
+            corpus_idx_int = int(corpus_idx)
             records.append(
                 {
                     query_id_col: query_id,
-                    corpus_id_col: corpus_ids[corpus_idx],
-                    "similarity_score": float(scores[corpus_idx]),
+                    corpus_id_col: corpus_ids[corpus_idx_int],
+                    "similarity_score": float(scores[corpus_idx_int]),
                 }
             )
 
