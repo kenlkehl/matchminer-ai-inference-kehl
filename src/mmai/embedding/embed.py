@@ -21,6 +21,14 @@ def _resolve_text_column(entity_type: Literal["patient", "trial"]) -> str:
     raise ValueError("entity_type must be one of: 'patient', 'trial'")
 
 
+def _resolve_id_columns(entity_type: Literal["patient", "trial"]) -> list[str]:
+    if entity_type == "patient":
+        return ["patient_id"]
+    if entity_type == "trial":
+        return ["space_trial_id"]
+    raise ValueError("entity_type must be one of: 'patient', 'trial'")
+
+
 def embed_for_matching(
     df: pd.DataFrame,
     *,
@@ -50,6 +58,8 @@ def embed_for_matching(
             ----------------
             clinical_space_summary : str
                 Summary text to embed for each clinical space.
+            space_trial_id : str
+                Unique identifier for the clinical space.
     entity_type : {"patient", "trial"}
         Controls which summary column is used as the text to embed.
     config : MMAIConfig, optional
@@ -60,25 +70,38 @@ def embed_for_matching(
     Returns
     -------
     pd.DataFrame
-        Same DataFrame with an added embedding column.
+        DataFrame containing the embedding plus identifier columns for matching.
 
-        Columns (in addition to existing)
-        ---------------------------------
-        embedding : array-like
-            Vector representation of the summary text in a shared semantic space.
+        Columns
+        -------
+        For entity_type="patient"
+            patient_id : str
+            embedding : array-like
+                Vector representation of the summary text in a shared semantic space.
+
+        For entity_type="trial"
+            space_trial_id : str
+            embedding : array-like
+                Vector representation of the summary text in a shared semantic space.
     """
     text_col = _resolve_text_column(entity_type)
     if text_col not in df.columns:
         raise ValueError(f"df is missing required column for {entity_type}: {text_col}")
 
+    id_cols = _resolve_id_columns(entity_type)
+    missing = [col for col in id_cols if col not in df.columns]
+    if missing:
+        raise ValueError(f"df is missing required columns for {entity_type}: {missing}")
+
     resolved_config = config or load_default_preset()
     embedding_config = dict(getattr(resolved_config, "embedding", {}))
 
     output = df.copy()
+
     summaries = output[text_col].fillna("").astype(str).tolist()
     backend = get_backend(resolved_config.backend)
     output["embedding"] = backend.generate_embeddings(
         summaries,
         embedding_config=embedding_config,
     )
-    return output
+    return output[id_cols + ["embedding"]].copy()
