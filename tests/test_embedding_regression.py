@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pandas as pd
 import pytest
+import torch
 
 from mmai.embedding import embed_for_matching
 from mmai.patients import summarize_from_relevant_sentences
@@ -109,10 +110,29 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     """Compute cosine similarity between two vectors."""
     if a.size == 0 or b.size == 0 or a.shape != b.shape:
         return 0.0
-    denom = float(np.linalg.norm(a) * np.linalg.norm(b))
-    if denom == 0.0:
+    a_tensor = torch.tensor(a, dtype=torch.float32)
+    b_tensor = torch.tensor(b, dtype=torch.float32)
+    if a_tensor.numel() == 0 or b_tensor.numel() == 0:
         return 0.0
-    return float(np.dot(a, b) / denom)
+    a_norm = torch.nn.functional.normalize(a_tensor, p=2, dim=0)
+    b_norm = torch.nn.functional.normalize(b_tensor, p=2, dim=0)
+    return float(torch.dot(a_norm, b_norm))
+
+
+def _pairwise_cosine_similarity(
+    lhs_vectors: list[np.ndarray], rhs_vectors: list[np.ndarray]
+) -> np.ndarray:
+    """Compute pairwise cosine similarity using the same torch path as matching."""
+    if not lhs_vectors or not rhs_vectors:
+        return np.zeros((len(lhs_vectors), len(rhs_vectors)), dtype=float)
+    dim = lhs_vectors[0].size
+    if any(vec.size != dim for vec in lhs_vectors + rhs_vectors):
+        raise ValueError("Embedding vectors must share the same dimension.")
+    lhs_tensor = torch.tensor(np.vstack(lhs_vectors).astype(float), dtype=torch.float32)
+    rhs_tensor = torch.tensor(np.vstack(rhs_vectors).astype(float), dtype=torch.float32)
+    lhs_norm = torch.nn.functional.normalize(lhs_tensor, p=2, dim=1)
+    rhs_norm = torch.nn.functional.normalize(rhs_tensor, p=2, dim=1)
+    return (lhs_norm @ rhs_norm.T).cpu().numpy()
 
 
 def _compare_embedding_frames(
@@ -212,13 +232,7 @@ def _compare_trial_package_vs_gold(
             continue
 
         # Build pairwise cosine matrix: each row is a package space and each column is a gold space.
-        sim_matrix = np.array(
-            [
-                [_cosine_similarity(pkg_vec, gold_vec) for gold_vec in gold_vectors]
-                for pkg_vec in pkg_vectors
-            ],
-            dtype=float,
-        )
+        sim_matrix = _pairwise_cosine_similarity(pkg_vectors, gold_vectors)
         # Direction 1: for each package space, keep its best-matching gold space, then average.
         pkg_to_gold = float(sim_matrix.max(axis=1).mean())
         # Direction 2: for each gold space, keep its best-matching package space, then average.
