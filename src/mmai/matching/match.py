@@ -32,15 +32,6 @@ def _normalize_rows(matrix: torch.Tensor) -> torch.Tensor:
     return F.normalize(matrix, p=2, dim=1)
 
 
-def _prepare_context_columns(
-    df: pd.DataFrame,
-    *,
-    id_col: str,
-) -> pd.DataFrame:
-    columns = [col for col in df.columns if col not in {id_col, "embedding"}]
-    return df[columns].copy()
-
-
 def _resolve_id_column(df: pd.DataFrame, label: str) -> str:
     candidates = [col for col in ("patient_id", "space_trial_id") if col in df.columns]
     if not candidates:
@@ -87,7 +78,7 @@ def generate_candidate_matches(
             - patient_id or space_trial_id (from query_df)
             - patient_id or space_trial_id (from corpus_df)
             - similarity_score : float
-        plus any additional columns from the input DataFrames for context.
+            - rank : int (1 = highest similarity per query)
     """
     # Validate required schema for IDs and embeddings.
     query_id_col = _resolve_id_column(query_df, "query_df")
@@ -103,7 +94,9 @@ def generate_candidate_matches(
     query_embeddings = _stack_embeddings(query_df["embedding"])
     corpus_embeddings = _stack_embeddings(corpus_df["embedding"])
     if query_embeddings.numel() == 0 or corpus_embeddings.numel() == 0:
-        return pd.DataFrame(columns=[query_id_col, corpus_id_col, "similarity_score"])
+        return pd.DataFrame(
+            columns=[query_id_col, corpus_id_col, "similarity_score", "rank"]
+        )
 
     # Normalize embeddings and compute cosine similarity matrix.
     query_norm = _normalize_rows(query_embeddings)
@@ -125,13 +118,14 @@ def generate_candidate_matches(
             ranked_idx = torch.argsort(scores, descending=True)
         else:
             ranked_idx = torch.topk(scores, k=top_k, largest=True).indices
-        for corpus_idx in ranked_idx:
+        for rank, corpus_idx in enumerate(ranked_idx, start=1):
             corpus_idx_int = int(corpus_idx)
             records.append(
                 {
                     query_id_col: query_id,
                     corpus_id_col: corpus_ids[corpus_idx_int],
                     "similarity_score": float(scores[corpus_idx_int]),
+                    "rank": int(rank),
                 }
             )
 
@@ -139,20 +133,4 @@ def generate_candidate_matches(
     if result.empty:
         return result
 
-    # Attach context columns without duplicating ids/embedding columns.
-    query_context = _prepare_context_columns(query_df, id_col=query_id_col)
-    corpus_context = _prepare_context_columns(corpus_df, id_col=corpus_id_col)
-
-    if not query_context.empty:
-        result = result.merge(
-            pd.concat([query_df[[query_id_col]].astype(str), query_context], axis=1),
-            on=query_id_col,
-            how="left",
-        )
-    if not corpus_context.empty:
-        result = result.merge(
-            pd.concat([corpus_df[[corpus_id_col]].astype(str), corpus_context], axis=1),
-            on=corpus_id_col,
-            how="left",
-        )
     return result
