@@ -18,13 +18,7 @@ def test_generate_candidate_matches_returns_top_k_per_query():
         }
     )
 
-    result = generate_candidate_matches(
-        query_df,
-        corpus_df,
-        k=2,
-        query_id_col="patient_id",
-        corpus_id_col="space_trial_id",
-    )
+    result = generate_candidate_matches(query_df, corpus_df, k=2)
 
     assert list(result.columns[:3]) == [
         "patient_id",
@@ -53,12 +47,6 @@ def test_generate_candidate_matches_returns_all_when_k_none():
         }
     )
 
-    result = generate_candidate_matches(
-        query_df,
-        corpus_df,
-        k=None,
-        query_id_col="patient_id",
-        corpus_id_col="space_trial_id",
-    )
+    result = generate_candidate_matches(query_df, corpus_df, k=None)
 
     assert result["space_trial_id"].tolist() == ["T2-1", "T1-1"]

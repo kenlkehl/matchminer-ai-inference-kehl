@@ -41,13 +41,25 @@ def _prepare_context_columns(
     return df[columns].copy()
 
 
+def _resolve_id_column(df: pd.DataFrame, label: str) -> str:
+    candidates = [col for col in ("patient_id", "space_trial_id") if col in df.columns]
+    if not candidates:
+        raise ValueError(f"{label} must include either patient_id or space_trial_id")
+    if len(candidates) > 1:
+        raise ValueError(
+            f"{label} must include only one identifier column; found {candidates}"
+        )
+    id_col = candidates[0]
+    if df[id_col].duplicated().any():
+        raise ValueError(f"{label} must have unique {id_col} values")
+    return id_col
+
+
 def generate_candidate_matches(
     query_df: pd.DataFrame,
     corpus_df: pd.DataFrame,
     *,
     k: int | None = 20,
-    query_id_col: str,
-    corpus_id_col: str,
 ) -> pd.DataFrame:
     """
     Generate top-k candidate matches by ranking corpus items for each query item.
@@ -57,35 +69,29 @@ def generate_candidate_matches(
     query_df : pd.DataFrame
         Query-side DataFrame with embeddings.
         Must contain:
-            - <query_id_col>: str
+            - patient_id or space_trial_id: str
             - embedding : array-like
     corpus_df : pd.DataFrame
         Corpus-side DataFrame with embeddings.
         Must contain:
-            - <corpus_id_col>: str
+            - patient_id or space_trial_id: str
             - embedding : array-like
     k : int | None, default 20
         Number of top matches to return per query entity. If None, return all
         corpus items per query (sorted by similarity).
-    query_id_col : str
-        Column name for the query entity identifier.
-    corpus_id_col : str
-        Column name for the corpus entity identifier.
 
     Returns
     -------
     pd.DataFrame
         Ranked top-k match pairs including:
-            - <query_id_col>
-            - <corpus_id_col>
+            - patient_id or space_trial_id (from query_df)
+            - patient_id or space_trial_id (from corpus_df)
             - similarity_score : float
         plus any additional columns from the input DataFrames for context.
     """
     # Validate required schema for IDs and embeddings.
-    if query_id_col not in query_df.columns:
-        raise ValueError(f"query_df must include {query_id_col}")
-    if corpus_id_col not in corpus_df.columns:
-        raise ValueError(f"corpus_df must include {corpus_id_col}")
+    query_id_col = _resolve_id_column(query_df, "query_df")
+    corpus_id_col = _resolve_id_column(corpus_df, "corpus_df")
     if "embedding" not in query_df.columns:
         raise ValueError("query_df must include embedding")
     if "embedding" not in corpus_df.columns:
