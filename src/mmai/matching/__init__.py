@@ -1,11 +1,8 @@
-"""Matching stubs."""
+"""Matching helpers."""
 
 from __future__ import annotations
 
-
-def generate_candidate_matches(*args: object, **kwargs: object) -> None:
-    """Phase-level candidate generation (stub)."""
-    raise NotImplementedError("Candidate generation phase not implemented in skeleton.")
+from .match import generate_candidate_matches
 
 
 def reasonable_match_check(*args: object, **kwargs: object) -> None:
