@@ -43,3 +43,8 @@ embedding:
   model_path: "ksg-dfci/TrialSpace-1225"
   device: cpu
   prompt_file: embedding.txt
+reasonable_match:
+  model_name: "ksg-dfci/TrialChecker-1225"
+  device: cuda
+  batch_size: 512
+  prompt_file: reasonable_match_checker_template.txt
