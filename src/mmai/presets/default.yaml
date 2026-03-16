@@ -46,5 +46,4 @@ embedding:
 reasonable_match:
   model_name: "ksg-dfci/TrialChecker-1225"
   device: cuda
-  batch_size: 512
   prompt_file: reasonable_match_checker_template.txt

@@ -173,7 +173,6 @@ class LocalBackend:
 
         model_name = checker_config["model_name"]
         device = checker_config["device"]
-        batch_size = int(checker_config["batch_size"])
 
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         checker_pipeline = pipeline(
@@ -191,7 +190,7 @@ class LocalBackend:
         )
         outputs = cast(
             list[dict[str, Any]],
-            checker_pipeline(prompts, batch_size=batch_size),
+            checker_pipeline(prompts),
         )
         return outputs, model_metadata
 

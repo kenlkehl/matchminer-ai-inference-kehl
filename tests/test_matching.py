@@ -96,7 +96,6 @@ def test_reasonable_match_check_maps_outputs_and_filters(monkeypatch):
             "reasonable_match": {
                 "model_name": "ksg-dfci/TrialChecker-1225",
                 "device": "cpu",
-                "batch_size": 16,
                 "prompt_file": "reasonable_match_checker_template.txt",
             }
         },
@@ -155,7 +154,6 @@ def test_reasonable_match_check_return_metadata(monkeypatch):
             "reasonable_match": {
                 "model_name": "ksg-dfci/TrialChecker-1225",
                 "device": "cpu",
-                "batch_size": 16,
                 "prompt_file": "reasonable_match_checker_template.txt",
             }
         },
