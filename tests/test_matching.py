@@ -1,7 +1,11 @@
 import pandas as pd
 
 from mmai.config import MMAIConfig
-from mmai.matching import generate_candidate_matches, reasonable_match_check
+from mmai.matching import (
+    exclusion_criteria_check,
+    generate_candidate_matches,
+    reasonable_match_check,
+)
 
 
 def test_generate_candidate_matches_returns_top_k_per_query():
@@ -66,9 +70,7 @@ class _MockReasonableBackend:
         self.last_checker_config = None
         self.last_model_metadata_cache_dir = None
 
-    def check_reasonable_matches(
-        self, prompts, *, checker_config, model_metadata_cache_dir=None
-    ):
+    def run_checker(self, prompts, *, checker_config, model_metadata_cache_dir=None):
         self.last_prompts = prompts
         self.last_checker_config = checker_config
         self.last_model_metadata_cache_dir = model_metadata_cache_dir
@@ -182,4 +184,120 @@ def test_reasonable_match_check_return_metadata(monkeypatch):
     )
     assert metadata["model_metadata"]["reasonable_match_checker"]["model_name"] == (
         "ksg-dfci/TrialChecker-1225"
+    )
+
+
+def test_exclusion_criteria_check_maps_outputs_and_filters(monkeypatch):
+    """Map boilerplate checker outputs and apply optional pass filtering."""
+    backend = _MockReasonableBackend(
+        [
+            {"label": "NEGATIVE", "score": 0.81},
+            {"label": "POSITIVE", "score": 0.66},
+        ]
+    )
+    monkeypatch.setattr("mmai.matching.exclusion_check.get_backend", lambda _: backend)
+    config = MMAIConfig(
+        preset_name="default",
+        debug_mode=False,
+        backend="local",
+        trial={},
+        patient={},
+        embedding={},
+        model_metadata_cache_dir=None,
+        raw={
+            "exclusion_criteria": {
+                "model_name": "ksg-dfci/BoilerPlateChecker-1225",
+                "device": "cpu",
+                "prompt_file": "exclusion_criteria_checker_template.txt",
+            }
+        },
+    )
+    matches = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "trial_id": "T1",
+                "general_exclusion_criteria": "Trial excludes X",
+                "general_exclusion_criteria_evidence": "Patient has no X",
+            },
+            {
+                "patient_id": "P2",
+                "trial_id": "T2",
+                "general_exclusion_criteria": "Trial excludes Y",
+                "general_exclusion_criteria_evidence": "Patient has Y",
+            },
+        ]
+    )
+
+    unfiltered = exclusion_criteria_check(
+        matches,
+        config=config,
+        filter_excluded=False,
+    )
+    assert list(unfiltered.columns) == [
+        "patient_id",
+        "trial_id",
+        "exclusion_score",
+        "exclusion_criteria_pass",
+    ]
+    assert unfiltered["exclusion_criteria_pass"].tolist() == [True, False]
+    assert unfiltered["exclusion_score"].tolist() == [0.81, 0.66]
+    assert (
+        backend.last_checker_config["model_name"] == "ksg-dfci/BoilerPlateChecker-1225"
+    )
+
+    filtered = exclusion_criteria_check(matches, config=config, filter_excluded=True)
+    assert len(filtered) == 1
+    assert filtered.loc[0, "patient_id"] == "P1"
+    assert bool(filtered.loc[0, "exclusion_criteria_pass"]) is True
+
+
+def test_exclusion_criteria_check_return_metadata(monkeypatch):
+    """Return config snapshot and exclusion-checker model metadata."""
+    backend = _MockReasonableBackend(
+        [
+            {"label": "NEGATIVE", "score": 0.81},
+        ]
+    )
+    monkeypatch.setattr("mmai.matching.exclusion_check.get_backend", lambda _: backend)
+    config = MMAIConfig(
+        preset_name="default",
+        debug_mode=False,
+        backend="local",
+        trial={},
+        patient={},
+        embedding={},
+        model_metadata_cache_dir=".mmai_cache/model_metadata",
+        raw={
+            "exclusion_criteria": {
+                "model_name": "ksg-dfci/BoilerPlateChecker-1225",
+                "device": "cpu",
+                "prompt_file": "exclusion_criteria_checker_template.txt",
+            }
+        },
+    )
+    matches = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "trial_id": "T1",
+                "general_exclusion_criteria": "Trial excludes X",
+                "general_exclusion_criteria_evidence": "Patient has no X",
+            }
+        ]
+    )
+
+    result, metadata = exclusion_criteria_check(
+        matches,
+        config=config,
+        filter_excluded=False,
+        return_metadata=True,
+    )
+
+    assert len(result) == 1
+    assert metadata["config_snapshot"]["exclusion_criteria"]["model_name"] == (
+        "ksg-dfci/BoilerPlateChecker-1225"
+    )
+    assert metadata["model_metadata"]["exclusion_criteria_checker"]["model_name"] == (
+        "ksg-dfci/BoilerPlateChecker-1225"
     )
