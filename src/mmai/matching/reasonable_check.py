@@ -132,7 +132,8 @@ def reasonable_match_check(
         for prediction in predictions
     ]
     if filter_unreasonable:
-        output = output[output["reasonable_match"]].copy()
+        keep_rows = output["reasonable_match"]
+        output = output.loc[keep_rows].copy()
     output = output.reset_index(drop=True)
 
     if return_metadata:
