@@ -116,7 +116,7 @@ def reasonable_match_check(
 
     # Run the backend text-classification model over all prompts.
     backend = get_backend(resolved_config.backend)
-    predictions, model_metadata = backend.check_reasonable_matches(
+    predictions, model_metadata = backend.run_checker(
         prompts,
         checker_config=checker_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
