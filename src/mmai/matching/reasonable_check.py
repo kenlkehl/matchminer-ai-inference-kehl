@@ -93,6 +93,7 @@ def reasonable_match_check(
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus a metadata dict.
     """
+    # Validate that candidate pair rows contain the text + ids needed for checker prompts.
     required = [
         "patient_id",
         "space_trial_id",
@@ -105,12 +106,15 @@ def reasonable_match_check(
             f"candidate_pairs is missing required columns: {', '.join(missing)}"
         )
 
+    # Resolve run config and build checker prompts from the configured template.
     resolved_config = config or load_default_preset()
     checker_config = dict(resolved_config.raw.get("reasonable_match", {}))
     prompt_file = str(checker_config["prompt_file"]).strip()
 
     template = _load_reasonable_match_template(prompt_file)
     prompts = _build_reasonable_match_prompts(candidate_pairs, template=template)
+
+    # Run the backend text-classification model over all prompts.
     backend = get_backend(resolved_config.backend)
     predictions, model_metadata = backend.check_reasonable_matches(
         prompts,
@@ -123,6 +127,7 @@ def reasonable_match_check(
             "Checker returned a different number of predictions than input rows."
         )
 
+    # Convert model outputs into a compact, derived result table.
     output = candidate_pairs[["patient_id", "space_trial_id"]].copy()
     output["reasonable_match_score"] = [
         float(prediction["score"]) for prediction in predictions
@@ -131,11 +136,14 @@ def reasonable_match_check(
         str(prediction["label"]).strip().upper() == "POSITIVE"
         for prediction in predictions
     ]
+
+    # Optionally keep only reasonable (positive-label) matches.
     if filter_unreasonable:
         keep_rows = output["reasonable_match"]
         output = output.loc[keep_rows].copy()
     output = output.reset_index(drop=True)
 
+    # Optionally return metadata for reproducibility/debugging.
     if return_metadata:
         metadata_payload = {
             "config_snapshot": resolved_config.raw,
