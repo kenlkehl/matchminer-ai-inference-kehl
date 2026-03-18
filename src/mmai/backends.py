@@ -161,6 +161,39 @@ class LocalBackend:
             model_metadata,
         )
 
+    def check_reasonable_matches(
+        self,
+        prompts: list[str],
+        *,
+        checker_config: Dict[str, Any],
+        model_metadata_cache_dir: str | None = None,
+    ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
+        """Score candidate patient-trial prompts with the trial checker model."""
+        from transformers import AutoTokenizer, pipeline
+
+        model_name = checker_config["model_name"]
+        device = checker_config["device"]
+
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        checker_pipeline = pipeline(
+            "text-classification",
+            model_name,
+            tokenizer=tokenizer,
+            truncation=True,
+            padding="max_length",
+            max_length=4096,
+            device=device,
+        )
+        model_metadata = get_model_metadata(
+            model_name,
+            cache_dir=model_metadata_cache_dir,
+        )
+        outputs = cast(
+            list[dict[str, Any]],
+            checker_pipeline(prompts),
+        )
+        return outputs, model_metadata
+
     def truncate_texts(
         self,
         texts: list[str],
@@ -264,6 +297,15 @@ class RemoteBackend:
         *,
         embedding_config: Dict[str, Any],
     ) -> list[int]:
+        raise NotImplementedError("Remote backend is not implemented yet.")
+
+    def check_reasonable_matches(
+        self,
+        prompts: list[str],
+        *,
+        checker_config: Dict[str, Any],
+        model_metadata_cache_dir: str | None = None,
+    ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
         raise NotImplementedError("Remote backend is not implemented yet.")
 
 
