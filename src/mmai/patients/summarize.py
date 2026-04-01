@@ -7,7 +7,6 @@ from typing import Any, cast
 import pandas as pd
 from transformers import AutoTokenizer
 
-from mmai._qc.patients import build_qc_artifact
 from mmai.backends import get_backend
 from mmai.config import MMAIConfig, load_default_preset
 
@@ -134,7 +133,6 @@ def summarize_patient_notes(
     current_summaries = {
         patient_id: summary for patient_id, summary in existing_summary_lookup.items()
     }
-    patient_ids_with_truncated_responses: set[str] = set()
     model_metadata: dict[str, Any] = {}
 
     # Round N contains the Nth chunk for every patient that still has one.
@@ -161,7 +159,7 @@ def summarize_patient_notes(
                 )
             )
 
-        summaries, round_model_metadata, finish_reasons = backend.generate_llm_outputs(
+        summaries, round_model_metadata, _finish_reasons = backend.generate_llm_outputs(
             messages_list=messages_list,
             llm_config=patient_config,
             model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
@@ -170,12 +168,8 @@ def summarize_patient_notes(
             model_metadata = round_model_metadata
         # Persist each round's output so it becomes the prior summary for the
         # next chunk from that same patient.
-        for patient_id, summary, finish_reason in zip(
-            round_patient_ids, summaries, finish_reasons, strict=False
-        ):
+        for patient_id, summary in zip(round_patient_ids, summaries, strict=False):
             current_summaries[patient_id] = summary
-            if str(finish_reason) == "length":
-                patient_ids_with_truncated_responses.add(patient_id)
 
     # Collapse the running patient state back to one final row per patient,
     # then do postprocessing and QC report generation.
@@ -184,13 +178,6 @@ def summarize_patient_notes(
         current_summaries
     )
     final_rows = final_rows.dropna(subset=["original_patient_summary"]).copy()
-
-    total_patients = int(prepared_patients["patient_id"].nunique())
-    truncated_llm_qc_artifact = build_qc_artifact(
-        metric="patients_truncated_llm_response",
-        ids=sorted(patient_ids_with_truncated_responses),
-        denominator=total_patients,
-    )
 
     final_rows, noninformative_summary_qc_artifact = postprocess_patient_summaries(
         final_rows, resolved_config
@@ -206,7 +193,6 @@ def summarize_patient_notes(
     qc_report = patient_summary_qc_report(
         final_rows,
         noninformative_summary_qc_artifact=noninformative_summary_qc_artifact,
-        truncated_llm_qc_artifact=truncated_llm_qc_artifact,
         config=resolved_config,
     )
     if return_qc:

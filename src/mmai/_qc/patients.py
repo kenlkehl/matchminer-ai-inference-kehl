@@ -175,7 +175,6 @@ def patient_summary_qc_report(
     patient_summaries: pd.DataFrame,
     *,
     noninformative_summary_qc_artifact: dict[str, object],
-    truncated_llm_qc_artifact: dict[str, object],
     config: MMAIConfig | None = None,
     max_embedding_input_tokens: int = 2500,
     expected_keywords: list[str] | None = None,
@@ -192,9 +191,6 @@ def patient_summary_qc_report(
     noninformative_summary_qc_artifact : dict[str, object]
         QC artifact from clean_bad_data with metric, numerator, denominator,
         and ids for non-informative dropped summaries.
-    truncated_llm_qc_artifact : dict[str, object]
-        QC artifact for summaries truncated due to finish_reason='length' with
-        metric, numerator, denominator, and ids.
     config : MMAIConfig | None, optional
         Config used to resolve backend and embedding settings when token counts
         are computed inside this QC function.
@@ -230,9 +226,8 @@ def patient_summary_qc_report(
     metrics: list[dict[str, object]] = []
     total_patients = int(summaries["patient_id"].nunique())
 
-    # Add QC metrics for noninformative patient summary and LLM responses that were truncated
+    # Add QC metric for noninformative patient summaries.
     metrics.append(qc_artifact_to_report_row(noninformative_summary_qc_artifact))
-    metrics.append(qc_artifact_to_report_row(truncated_llm_qc_artifact))
 
     # QC metric for summaries that exceed embedding model token limit
     if config is not None and config.embedding:
