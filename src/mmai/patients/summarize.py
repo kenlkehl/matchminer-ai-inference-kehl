@@ -115,6 +115,8 @@ def summarize_patient_notes(
     primer_filename = prompt_files["primer"]
     question_filename = prompt_files["question"]
 
+    # Convert note-level input into patient-level metadata plus chunk-level
+    # rows. The chunk rows are what drive the serial summarization loop.
     tokenizer = AutoTokenizer.from_pretrained(patient_config["model_name"])
     prepared_patients, prepared_chunks = prepare_patient_notes(
         notes,
@@ -126,12 +128,18 @@ def summarize_patient_notes(
     rounds = _build_rounds(prepared_chunks)
 
     backend = get_backend(resolved_config.backend)
+    # This dict holds the latest available summary for each patient. If the
+    # caller provided an existing summary, that is used for round 1; after each
+    # round, the newly generated summary overwrites the prior one.
     current_summaries = {
         patient_id: summary for patient_id, summary in existing_summary_lookup.items()
     }
     patient_ids_with_truncated_responses: set[str] = set()
     model_metadata: dict[str, Any] = {}
 
+    # Round N contains the Nth chunk for every patient that still has one.
+    # Processing by rounds ensures each patient's next chunk sees the most
+    # recent summary generated from prior chunks.
     for round_df in rounds:
         messages_list: list[list[dict[str, str]]] = []
         round_patient_ids: list[str] = []
@@ -160,6 +168,8 @@ def summarize_patient_notes(
         )
         if not model_metadata:
             model_metadata = round_model_metadata
+        # Persist each round's output so it becomes the prior summary for the
+        # next chunk from that same patient.
         for patient_id, summary, finish_reason in zip(
             round_patient_ids, summaries, finish_reasons, strict=False
         ):
@@ -167,6 +177,8 @@ def summarize_patient_notes(
             if str(finish_reason) == "length":
                 patient_ids_with_truncated_responses.add(patient_id)
 
+    # Collapse the running patient state back to one final row per patient,
+    # then do postprocessing and QC report generation.
     final_rows = prepared_patients.copy()
     final_rows["original_patient_summary"] = final_rows["patient_id"].map(
         current_summaries
