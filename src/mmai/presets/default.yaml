@@ -34,7 +34,7 @@ patient:
     primer: patient.serial.user.primer.txt
     question: patient.serial.user.question.txt
   reasoning_marker: assistantfinal
-  boilerplate_marker: "\\n.*Boilerplate.*\\n"
+  boilerplate_marker: "\\n.*Boilerplate.*"
   text_token_threshold: 115000
   tagger:
     model_name: "ksg-dfci/TinyBertOncoTagger-1225"
