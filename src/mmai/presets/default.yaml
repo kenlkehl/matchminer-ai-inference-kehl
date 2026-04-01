@@ -22,14 +22,17 @@ patient:
   max_model_len: 120000
   tensor_parallel_size: 1
   gpu_memory_utilization: 0.9
+  chunk_size: 10000
+  chunk_overlap: 500
+  prompt_margin_tokens: 5000
   sampling_params:
     temperature: 0.0
     top_k: 1
     max_tokens: 7500
     repetition_penalty: 1.2
   prompt_files:
-    primer: patient.user.primer.txt
-    question: patient.user.question.txt
+    primer: patient.serial.user.primer.txt
+    question: patient.serial.user.question.txt
   reasoning_marker: assistantfinal
   boilerplate_marker: "\\n.*Boilerplate.*\\n"
   text_token_threshold: 115000
