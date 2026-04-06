@@ -81,6 +81,13 @@ def _load_prompt_text(filename: str) -> str:
         return handle.read()
 
 
+@lru_cache(maxsize=4)
+def _get_openai_client(base_url: str, api_key: str):
+    from openai import OpenAI
+
+    return OpenAI(base_url=base_url, api_key=api_key)
+
+
 def _resolve_embedding_runtime(
     embedding_config: Dict[str, Any],
 ) -> tuple[str, str, str]:
@@ -280,7 +287,44 @@ class RemoteBackend:
         llm_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any], list[str]]:
-        raise NotImplementedError("Remote backend is not implemented yet.")
+        model_name = str(llm_config["model_name"])
+        sampling_params = dict(llm_config["sampling_params"])
+        base_url = str(
+            llm_config.get("base_url") or os.environ.get("OPENAI_BASE_URL", "")
+        ).strip()
+        api_key = str(
+            llm_config.get("api_key") or os.environ.get("OPENAI_API_KEY", "not-needed")
+        ).strip()
+
+        if not base_url:
+            raise ValueError(
+                "Remote backend requires llm_config['base_url'] or OPENAI_BASE_URL."
+            )
+
+        client = _get_openai_client(base_url, api_key or "not-needed")
+        model_metadata = get_model_metadata(
+            model_name,
+            cache_dir=model_metadata_cache_dir,
+        )
+
+        texts: list[str] = []
+        finish_reasons: list[str] = []
+        for messages in messages_list:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=float(sampling_params["temperature"]),
+                max_tokens=int(sampling_params["max_tokens"]),
+                extra_body={
+                    "top_k": int(sampling_params["top_k"]),
+                    "repetition_penalty": float(sampling_params["repetition_penalty"]),
+                },
+            )
+            choice = response.choices[0]
+            texts.append(choice.message.content or "")
+            finish_reasons.append(cast(str, choice.finish_reason or "stop"))
+
+        return texts, model_metadata, finish_reasons
 
     def tag_excerpts(
         self,
