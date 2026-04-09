@@ -23,6 +23,13 @@ class MockTokenizer:
         return "".join(input_ids)
 
 
+def _stub_patient_qc(monkeypatch):
+    monkeypatch.setattr(
+        "mmai._qc.patients.patient_summary_qc_report",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+
+
 def _patient_config() -> dict:
     return {
         "model_name": "model",
@@ -162,6 +169,7 @@ def test_get_serial_patient_prompt_includes_prior_summary_and_chunk_text():
 
 def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypatch):
     """Carry each round's summary forward as prior state for the next chunk."""
+    _stub_patient_qc(monkeypatch)
     monkeypatch.setattr(
         "mmai.patients.summarize.AutoTokenizer.from_pretrained",
         lambda model_name: MockTokenizer(),
@@ -238,6 +246,7 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
 
 def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatch):
     """Use a provided existing summary as the starting state for round 1."""
+    _stub_patient_qc(monkeypatch)
     monkeypatch.setattr(
         "mmai.patients.summarize.AutoTokenizer.from_pretrained",
         lambda model_name: MockTokenizer(),
