@@ -43,14 +43,14 @@ patient:
     positive_tag_cutoff: 0.1
     negative_tag_cutoff: 0.9
 embedding:
-  model_path: "ksg-dfci/TrialSpace-1225"
+  model_path: "ksg-dfci/TrialSpace-0426"
   device: cpu
   prompt_file: embedding.txt
 reasonable_match:
-  model_name: "ksg-dfci/TrialChecker-1225"
+  model_name: "ksg-dfci/TrialChecker-0426"
   device: cuda
   prompt_file: reasonable_match_checker_template.txt
 exclusion_criteria:
-  model_name: "ksg-dfci/BoilerPlateChecker-1225"
+  model_name: "ksg-dfci/BoilerPlateChecker-0426"
   device: cuda
   prompt_file: exclusion_criteria_checker_template.txt
