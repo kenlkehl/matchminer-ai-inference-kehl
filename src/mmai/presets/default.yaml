@@ -50,6 +50,7 @@ reasonable_match:
   model_name: "ksg-dfci/TrialChecker-0426"
   device: cuda
   prompt_file: reasonable_match_checker_template.txt
+  score_cutoff: 0.2
 exclusion_criteria:
   model_name: "ksg-dfci/BoilerPlateChecker-0426"
   device: cuda
