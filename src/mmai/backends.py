@@ -161,40 +161,6 @@ class LocalBackend:
         ]
         return texts, model_metadata, finish_reasons
 
-    def tag_excerpts(
-        self,
-        excerpts: list[str],
-        *,
-        tagger_config: Dict[str, Any],
-        model_metadata_cache_dir: str | None = None,
-    ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
-        """Tag note excerpts using a local text classification pipeline."""
-        from transformers import AutoTokenizer, pipeline
-
-        weights_path_or_model_name = tagger_config["model_name"]
-        device = tagger_config["device"]
-        batch_size = int(tagger_config["batch_size"])
-        tokenizer = AutoTokenizer.from_pretrained(weights_path_or_model_name)
-        tagger_pipeline = pipeline(
-            "text-classification",
-            weights_path_or_model_name,
-            tokenizer=tokenizer,
-            truncation=True,
-            padding="max_length",
-            max_length=128,
-            device=device,
-        )
-        model_metadata = get_model_metadata(
-            weights_path_or_model_name,
-            cache_dir=model_metadata_cache_dir,
-        )
-        return (
-            cast(
-                list[dict[str, Any]], tagger_pipeline(excerpts, batch_size=batch_size)
-            ),
-            model_metadata,
-        )
-
     def run_checker(
         self,
         prompts: list[str],
@@ -207,8 +173,11 @@ class LocalBackend:
 
         model_name = checker_config["model_name"]
         device = checker_config["device"]
-
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            cache_dir=model_metadata_cache_dir,
+            trust_remote_code=True,
+        )
         checker_pipeline = pipeline(
             "text-classification",
             model_name,
@@ -344,15 +313,6 @@ class RemoteBackend:
             finish_reasons.append(cast(str, choice.finish_reason or "stop"))
 
         return texts, model_metadata, finish_reasons
-
-    def tag_excerpts(
-        self,
-        excerpts: list[str],
-        *,
-        tagger_config: Dict[str, Any],
-        model_metadata_cache_dir: str | None = None,
-    ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
-        raise NotImplementedError("Remote backend is not implemented yet.")
 
     def truncate_texts(
         self,
