@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 from mmai.config import MMAIConfig, load_default_preset
 
-from .summarize import summarize_from_relevant_sentences
-from .tagging import extract_relevant_sentences
+from .summarize import summarize_patient_notes
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -20,6 +19,7 @@ def summarize_patients(
     notes: pd.DataFrame,
     *,
     config: MMAIConfig | None = None,
+    existing_summaries: pd.DataFrame | None = None,
     return_metadata: bool = False,
     return_qc: bool = False,
 ) -> (
@@ -43,10 +43,18 @@ def summarize_patients(
             Unique patient identifier.
         note_text : str
             Full note text.
-        note_type: str
-            Type of note (clinical_note, pathology_report, etc.).
         note_date : str or datetime
             Date of the note.
+    existing_summaries : pd.DataFrame, optional
+        Optional patient-level prior summaries used as the starting state for
+        serial updates.
+
+        Expected columns
+        ----------------
+        patient_id : str
+            Unique patient identifier.
+        patient_summary : str
+            Existing full patient summary text to update.
     return_metadata : bool, optional
         When True, also return a metadata dict containing the config snapshot
         and model metadata for this run.
@@ -56,28 +64,19 @@ def summarize_patients(
     Returns
     -------
     pd.DataFrame
-        Patient-level summary DataFrame. One row per patient.
+        Patient-level DataFrame. One row per patient.
 
         Columns
         -------
         patient_id : str
-            Unique patient identifier.
+            Original patient identifier.
         cancer_history_summary : str
             Summary of the patient's cancer history.
         general_exclusion_criteria_evidence : str
             Summary of conditions / findings that correspond to common
             clinical trial exclusion criteria.
 
-        Debug Columns
-        (Available only if pipeline initialized with debug_mode=True)
-        -------------------------------------------------------------
-        patient_long_text : str
-            Concatenated set of tagger-selected (relevant) patient note text
-            used as the input context for the LLM.
-        original_patient_summary : str
-            Raw LLM response generated from the patient long text.
-        cleaned_patient_summary : str
-            LLM response with reasoning text removed.
+        Debug output columns for serial patient summarization will be added later.
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus a metadata dict.
     tuple[pd.DataFrame, pd.DataFrame]
@@ -85,6 +84,7 @@ def summarize_patients(
     tuple[pd.DataFrame, dict, pd.DataFrame]
         When return_metadata and return_qc are True, returns the DataFrame,
         metadata dict, and QC report DataFrame.
+
     """
     logger = logging.getLogger(__name__)
     resolved_config = config or load_default_preset()
@@ -94,7 +94,6 @@ def summarize_patients(
     required_columns = [
         "patient_id",
         "note_text",
-        "note_type",
         "note_date",
     ]
     missing = [col for col in required_columns if col not in notes.columns]
@@ -104,42 +103,22 @@ def summarize_patients(
             f"{', '.join(missing)} in the input DataFrame."
         )
 
-    logger.info("Extracting relevant patient sentences from %d notes.", len(notes))
-    relevant_sentences, tagger_metadata, tagger_qc = cast(
+    logger.info("Preparing serial patient summarization for %d notes.", len(notes))
+    summaries, metadata, qc_report = cast(
         tuple[pd.DataFrame, dict, pd.DataFrame],
-        extract_relevant_sentences(
+        summarize_patient_notes(
             notes,
             config=resolved_config,
-            return_qc=True,
-        ),
-    )
-    logger.info("Extracted relevant text for %d patients.", len(relevant_sentences))
-
-    summaries, metadata, summary_qc = cast(
-        tuple[pd.DataFrame, dict, pd.DataFrame],
-        summarize_from_relevant_sentences(
-            relevant_sentences,
-            config=resolved_config,
+            existing_summaries=existing_summaries,
             return_qc=True,
         ),
     )
     logger.info("Patient summarization complete. Produced %d rows.", len(summaries))
-    # Build the full QC report using original notes, tagged notes, and summary QC.
-    from mmai._qc.patients import patient_qc_report
 
-    qc_report = patient_qc_report(
-        summaries,
-        patient_note_source=notes,
-        summary_qc_report=summary_qc,
-        tagger_qc_report=tagger_qc,
-    )
-
-    # Depending on flags, decide what to return
     if return_metadata:
         metadata_payload = {
             "config_snapshot": resolved_config.raw,
             "model_metadata": {
-                "patient_tagger": tagger_metadata["model_metadata"],
                 "patient_summarizer": metadata["model_metadata"],
             },
         }
@@ -153,6 +132,5 @@ def summarize_patients(
 
 __all__ = [
     "summarize_patients",
-    "extract_relevant_sentences",
-    "summarize_from_relevant_sentences",
+    "summarize_patient_notes",
 ]

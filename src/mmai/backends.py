@@ -58,10 +58,44 @@ def _get_embedding_model(model_path: str, device: str, prompt: str):
     return model
 
 
+@lru_cache(maxsize=2)
+def _get_local_llm(
+    model_name: str,
+    tensor_parallel_size: int,
+    max_model_len: int,
+    gpu_memory_utilization: float,
+):
+    from vllm import LLM
+
+    return LLM(
+        model=model_name,
+        tensor_parallel_size=tensor_parallel_size,
+        max_model_len=max_model_len,
+        gpu_memory_utilization=gpu_memory_utilization,
+    )
+
+
+@lru_cache(maxsize=4)
+def _get_chat_template_tokenizer(model_name: str):
+    from transformers import AutoTokenizer
+
+    return AutoTokenizer.from_pretrained(
+        model_name,
+        trust_remote_code=True,
+    )
+
+
 def _load_prompt_text(filename: str) -> str:
     prompt_path = resources.files("mmai.prompts").joinpath(filename)
     with prompt_path.open("r", encoding="utf-8") as handle:
         return handle.read()
+
+
+@lru_cache(maxsize=4)
+def _get_openai_client(base_url: str, api_key: str):
+    from openai import OpenAI
+
+    return OpenAI(base_url=base_url, api_key=api_key)
 
 
 def _resolve_embedding_runtime(
@@ -85,7 +119,7 @@ class LocalBackend:
         llm_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any], list[str]]:
-        from vllm import LLM, SamplingParams
+        from vllm import SamplingParams
 
         model_name = llm_config["model_name"]
         max_model_len = llm_config["max_model_len"]
@@ -97,11 +131,11 @@ class LocalBackend:
             model_name,
             cache_dir=model_metadata_cache_dir,
         )
-        llm = LLM(
-            model=model_name,
-            tensor_parallel_size=tensor_parallel_size,
-            max_model_len=max_model_len,
-            gpu_memory_utilization=gpu_memory_utilization,
+        llm = _get_local_llm(
+            model_name,
+            int(tensor_parallel_size),
+            int(max_model_len),
+            float(gpu_memory_utilization),
         )
         tokenizer = llm.get_tokenizer()
         prompts = [
@@ -127,40 +161,6 @@ class LocalBackend:
         ]
         return texts, model_metadata, finish_reasons
 
-    def tag_excerpts(
-        self,
-        excerpts: list[str],
-        *,
-        tagger_config: Dict[str, Any],
-        model_metadata_cache_dir: str | None = None,
-    ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
-        """Tag note excerpts using a local text classification pipeline."""
-        from transformers import AutoTokenizer, pipeline
-
-        weights_path_or_model_name = tagger_config["model_name"]
-        device = tagger_config["device"]
-        batch_size = int(tagger_config["batch_size"])
-        tokenizer = AutoTokenizer.from_pretrained(weights_path_or_model_name)
-        tagger_pipeline = pipeline(
-            "text-classification",
-            weights_path_or_model_name,
-            tokenizer=tokenizer,
-            truncation=True,
-            padding="max_length",
-            max_length=128,
-            device=device,
-        )
-        model_metadata = get_model_metadata(
-            weights_path_or_model_name,
-            cache_dir=model_metadata_cache_dir,
-        )
-        return (
-            cast(
-                list[dict[str, Any]], tagger_pipeline(excerpts, batch_size=batch_size)
-            ),
-            model_metadata,
-        )
-
     def run_checker(
         self,
         prompts: list[str],
@@ -173,8 +173,11 @@ class LocalBackend:
 
         model_name = checker_config["model_name"]
         device = checker_config["device"]
-
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            cache_dir=model_metadata_cache_dir,
+            trust_remote_code=True,
+        )
         checker_pipeline = pipeline(
             "text-classification",
             model_name,
@@ -263,16 +266,53 @@ class RemoteBackend:
         llm_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any], list[str]]:
-        raise NotImplementedError("Remote backend is not implemented yet.")
+        model_name = str(llm_config["model_name"])
+        sampling_params = dict(llm_config["sampling_params"])
+        base_url = str(
+            llm_config.get("base_url") or os.environ.get("OPENAI_BASE_URL", "")
+        ).strip()
+        api_key = str(
+            llm_config.get("api_key") or os.environ.get("OPENAI_API_KEY", "not-needed")
+        ).strip()
 
-    def tag_excerpts(
-        self,
-        excerpts: list[str],
-        *,
-        tagger_config: Dict[str, Any],
-        model_metadata_cache_dir: str | None = None,
-    ) -> Tuple[list[dict[str, Any]], Dict[str, Any]]:
-        raise NotImplementedError("Remote backend is not implemented yet.")
+        if not base_url:
+            raise ValueError(
+                "Remote backend requires llm_config['base_url'] or OPENAI_BASE_URL."
+            )
+
+        client = _get_openai_client(base_url, api_key or "not-needed")
+        model_metadata = get_model_metadata(
+            model_name,
+            cache_dir=model_metadata_cache_dir,
+        )
+        tokenizer = _get_chat_template_tokenizer(model_name)
+        prompts = [
+            tokenizer.apply_chat_template(
+                conversation=messages,
+                add_generation_prompt=True,
+                tokenize=False,
+            )
+            for messages in messages_list
+        ]
+
+        texts: list[str] = []
+        finish_reasons: list[str] = []
+        for prompt in prompts:
+            response = client.completions.create(
+                model=model_name,
+                prompt=prompt,
+                temperature=float(sampling_params["temperature"]),
+                max_tokens=int(sampling_params["max_tokens"]),
+                extra_body={
+                    "top_k": int(sampling_params["top_k"]),
+                    "repetition_penalty": float(sampling_params["repetition_penalty"]),
+                },
+            )
+            choice = response.choices[0]
+            texts.append(cast(str, getattr(choice, "text", "") or ""))
+            finish_reasons.append(cast(str, choice.finish_reason or "stop"))
+
+        return texts, model_metadata, finish_reasons
 
     def truncate_texts(
         self,
@@ -297,7 +337,13 @@ class RemoteBackend:
         *,
         embedding_config: Dict[str, Any],
     ) -> list[int]:
-        raise NotImplementedError("Remote backend is not implemented yet.")
+        model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
+        model = _get_embedding_model(model_path, device, query_prompt)
+        prepared = [f"{query_prompt} {text}".strip() for text in texts]
+        encoded = model.tokenizer(prepared, add_special_tokens=True, truncation=False)[
+            "input_ids"
+        ]
+        return [len(input_ids) for input_ids in encoded]
 
     def run_checker(
         self,

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from importlib import resources
 
 import pandas as pd
+import torch
 
 from mmai.backends import get_backend
 from mmai.config import load_default_preset
@@ -110,6 +111,7 @@ def reasonable_match_check(
     resolved_config = config or load_default_preset()
     checker_config = dict(resolved_config.raw.get("reasonable_match", {}))
     prompt_file = str(checker_config["prompt_file"]).strip()
+    score_cutoff = float(checker_config.get("score_cutoff", 0.2))
 
     template = _load_reasonable_match_template(prompt_file)
     prompts = _build_reasonable_match_prompts(candidate_pairs, template=template)
@@ -129,15 +131,14 @@ def reasonable_match_check(
 
     # Convert model outputs into a compact, derived result table.
     output = candidate_pairs[["patient_id", "space_trial_id"]].copy()
-    output["reasonable_match_score"] = [
-        float(prediction["score"]) for prediction in predictions
-    ]
-    output["reasonable_match"] = [
-        str(prediction["label"]).strip().upper() == "POSITIVE"
+    confidence_scores = [
+        float(torch.sigmoid(torch.tensor(float(prediction["score"]))).item())
         for prediction in predictions
     ]
+    output["reasonable_match_score"] = confidence_scores
+    output["reasonable_match"] = [score >= score_cutoff for score in confidence_scores]
 
-    # Optionally keep only reasonable (positive-label) matches.
+    # Optionally keep only reasonable matches.
     if filter_unreasonable:
         keep_rows = output["reasonable_match"]
         output = output.loc[keep_rows].copy()

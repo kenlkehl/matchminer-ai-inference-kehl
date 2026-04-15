@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from mmai.config import MMAIConfig
 from mmai.matching import (
@@ -78,11 +79,11 @@ class _MockReasonableBackend:
 
 
 def test_reasonable_match_check_maps_outputs_and_filters(monkeypatch):
-    """Map checker label/score outputs and apply optional filtering."""
+    """Map checker logits to confidence scores and apply cutoff-based filtering."""
     backend = _MockReasonableBackend(
         [
-            {"label": "POSITIVE", "score": 0.91},
-            {"label": "NEGATIVE", "score": 0.12},
+            {"score": 2.0},
+            {"score": -2.0},
         ]
     )
     monkeypatch.setattr("mmai.matching.reasonable_check.get_backend", lambda _: backend)
@@ -99,6 +100,7 @@ def test_reasonable_match_check_maps_outputs_and_filters(monkeypatch):
                 "model_name": "ksg-dfci/TrialChecker-1225",
                 "device": "cpu",
                 "prompt_file": "reasonable_match_checker_template.txt",
+                "score_cutoff": 0.2,
             }
         },
     )
@@ -127,7 +129,10 @@ def test_reasonable_match_check_maps_outputs_and_filters(monkeypatch):
         "reasonable_match",
     ]
     assert unfiltered["reasonable_match"].tolist() == [True, False]
-    assert unfiltered["reasonable_match_score"].tolist() == [0.91, 0.12]
+    assert unfiltered["reasonable_match_score"].tolist() == pytest.approx(
+        [0.880797, 0.119203],
+        abs=1e-6,
+    )
     assert backend.last_checker_config["model_name"] == "ksg-dfci/TrialChecker-1225"
 
     filtered = reasonable_match_check(pairs, config=config, filter_unreasonable=True)
@@ -140,7 +145,7 @@ def test_reasonable_match_check_return_metadata(monkeypatch):
     """Return config snapshot and checker model metadata when requested."""
     backend = _MockReasonableBackend(
         [
-            {"label": "POSITIVE", "score": 0.91},
+            {"score": 2.0},
         ]
     )
     monkeypatch.setattr("mmai.matching.reasonable_check.get_backend", lambda _: backend)
@@ -157,6 +162,7 @@ def test_reasonable_match_check_return_metadata(monkeypatch):
                 "model_name": "ksg-dfci/TrialChecker-1225",
                 "device": "cpu",
                 "prompt_file": "reasonable_match_checker_template.txt",
+                "score_cutoff": 0.2,
             }
         },
     )
