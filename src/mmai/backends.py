@@ -1,4 +1,4 @@
-"""Backend registry stubs."""
+"""Inference backend implementations and backend registry."""
 
 from __future__ import annotations
 
@@ -9,12 +9,18 @@ from functools import lru_cache
 from importlib import resources
 from typing import Any, Dict, Tuple, cast
 
+from mmai.prompt_rendering import Prompt
+from mmai.remote_inference import generate_remote_llm_outputs
+from mmai.remote_inference import normalize_remote_server_urls
+
 
 def _default_metadata_cache_dir() -> str:
+    """Return the default on-disk cache directory for model metadata."""
     return os.path.join(os.path.expanduser("~"), ".cache", "mmai", "model_metadata")
 
 
 def create_model_metadata(model_name: str) -> Dict[str, Any]:
+    """Fetch immutable model metadata from Hugging Face Hub."""
     from huggingface_hub import model_info
 
     metadata = model_info(model_name)
@@ -31,6 +37,12 @@ def get_model_metadata(
     *,
     cache_dir: str | None = None,
 ) -> Dict[str, Any]:
+    """
+    Load model metadata from cache, fetching it if needed.
+
+    Metadata is stored by model name so summarization and embedding outputs can
+    include model provenance without repeated Hugging Face Hub calls.
+    """
     cache_dir = cache_dir or _default_metadata_cache_dir()
     os.makedirs(cache_dir, exist_ok=True)
     cache_file = os.path.join(cache_dir, f"{model_name.replace('/', '_')}.json")
@@ -51,6 +63,7 @@ def get_model_metadata(
 
 @lru_cache(maxsize=4)
 def _get_embedding_model(model_path: str, device: str, prompt: str):
+    """Load and cache a SentenceTransformer embedding model."""
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_path, device=device)
@@ -65,6 +78,7 @@ def _get_local_llm(
     max_model_len: int,
     gpu_memory_utilization: float,
 ):
+    """Load and cache a local vLLM model instance."""
     from vllm import LLM
 
     return LLM(
@@ -75,32 +89,17 @@ def _get_local_llm(
     )
 
 
-@lru_cache(maxsize=4)
-def _get_chat_template_tokenizer(model_name: str):
-    from transformers import AutoTokenizer
-
-    return AutoTokenizer.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-    )
-
-
 def _load_prompt_text(filename: str) -> str:
+    """Load a prompt text asset bundled with the package."""
     prompt_path = resources.files("mmai.prompts").joinpath(filename)
     with prompt_path.open("r", encoding="utf-8") as handle:
         return handle.read()
 
 
-@lru_cache(maxsize=4)
-def _get_openai_client(base_url: str, api_key: str):
-    from openai import OpenAI
-
-    return OpenAI(base_url=base_url, api_key=api_key)
-
-
 def _resolve_embedding_runtime(
     embedding_config: Dict[str, Any],
 ) -> tuple[str, str, str]:
+    """Resolve embedding model path, device, and query prompt text."""
     model_path = str(embedding_config.get("model_path", "")).strip()
     device = str(embedding_config.get("device", "cpu")).strip() or "cpu"
     prompt_filename = str(embedding_config.get("prompt_file", "")).strip()
@@ -115,10 +114,25 @@ class LocalBackend:
     def generate_llm_outputs(
         self,
         *,
-        messages_list: list[list[dict[str, str]]],
+        prompt_list: list[Prompt],
         llm_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any], list[str]]:
+        """
+        Generate LLM outputs with a local vLLM model.
+
+        Parameters
+        ----------
+        prompt_list
+            Rendered prompts to send to vLLM. Output order follows this list.
+        llm_config
+            Model and sampling configuration.
+
+        Returns
+        -------
+        tuple
+            ``(texts, model_metadata, finish_reasons)``.
+        """
         from vllm import SamplingParams
 
         model_name = llm_config["model_name"]
@@ -137,15 +151,7 @@ class LocalBackend:
             int(max_model_len),
             float(gpu_memory_utilization),
         )
-        tokenizer = llm.get_tokenizer()
-        prompts = [
-            tokenizer.apply_chat_template(
-                conversation=messages,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
-            for messages in messages_list
-        ]
+        prompts = [prompt.prompt_text for prompt in prompt_list]
         responses = llm.generate(
             prompts=prompts,
             sampling_params=SamplingParams(
@@ -228,6 +234,7 @@ class LocalBackend:
         embedding_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[list[float]], Dict[str, Any]]:
+        """Generate sentence-transformer embeddings and model metadata."""
         model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
         model = _get_embedding_model(model_path, device, query_prompt)
         model_metadata = get_model_metadata(
@@ -246,6 +253,7 @@ class LocalBackend:
         *,
         embedding_config: Dict[str, Any],
     ) -> list[int]:
+        """Count embedding-model input tokens after applying the query prompt."""
         model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
         model = _get_embedding_model(model_path, device, query_prompt)
         prepared = [f"{query_prompt} {text}".strip() for text in texts]
@@ -257,60 +265,37 @@ class LocalBackend:
 
 @dataclass
 class RemoteBackend:
-    """Remote vLLM HTTP backend (stub)."""
+    """OpenAI-compatible remote vLLM HTTP backend."""
 
     def generate_llm_outputs(
         self,
         *,
-        messages_list: list[list[dict[str, str]]],
+        prompt_list: list[Prompt],
         llm_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
     ) -> Tuple[list[str], Dict[str, Any], list[str]]:
+        """
+        Generate LLM outputs through one or more remote vLLM servers.
+
+        Remote execution uses OpenAI-compatible completions, distributes prompts
+        across configured server URLs, and restores outputs to ``Prompt.row_idx``
+        order.
+        """
         model_name = str(llm_config["model_name"])
-        sampling_params = dict(llm_config["sampling_params"])
-        base_url = str(
-            llm_config.get("base_url") or os.environ.get("OPENAI_BASE_URL", "")
-        ).strip()
         api_key = str(
             llm_config.get("api_key") or os.environ.get("OPENAI_API_KEY", "not-needed")
         ).strip()
-
-        if not base_url:
-            raise ValueError(
-                "Remote backend requires llm_config['base_url'] or OPENAI_BASE_URL."
-            )
-
-        client = _get_openai_client(base_url, api_key or "not-needed")
+        server_urls = normalize_remote_server_urls(llm_config)
         model_metadata = get_model_metadata(
             model_name,
             cache_dir=model_metadata_cache_dir,
         )
-        tokenizer = _get_chat_template_tokenizer(model_name)
-        prompts = [
-            tokenizer.apply_chat_template(
-                conversation=messages,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
-            for messages in messages_list
-        ]
-
-        texts: list[str] = []
-        finish_reasons: list[str] = []
-        for prompt in prompts:
-            response = client.completions.create(
-                model=model_name,
-                prompt=prompt,
-                temperature=float(sampling_params["temperature"]),
-                max_tokens=int(sampling_params["max_tokens"]),
-                extra_body={
-                    "top_k": int(sampling_params["top_k"]),
-                    "repetition_penalty": float(sampling_params["repetition_penalty"]),
-                },
-            )
-            choice = response.choices[0]
-            texts.append(cast(str, getattr(choice, "text", "") or ""))
-            finish_reasons.append(cast(str, choice.finish_reason or "stop"))
+        texts, finish_reasons = generate_remote_llm_outputs(
+            prompts=prompt_list,
+            llm_config=llm_config,
+            server_urls=server_urls,
+            api_key=api_key,
+        )
 
         return texts, model_metadata, finish_reasons
 
@@ -337,6 +322,7 @@ class RemoteBackend:
         *,
         embedding_config: Dict[str, Any],
     ) -> list[int]:
+        """Count embedding-model input tokens after applying the query prompt."""
         model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
         model = _get_embedding_model(model_path, device, query_prompt)
         prepared = [f"{query_prompt} {text}".strip() for text in texts]
