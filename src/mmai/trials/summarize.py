@@ -8,6 +8,7 @@ import pandas as pd
 
 from mmai._qc.trials import build_qc_artifact
 from mmai.backends import get_backend
+from mmai.prompt_rendering import build_prompt_list
 
 from .prompt_builder import build_trial_text, get_filled_trial_prompt
 
@@ -29,10 +30,11 @@ def summarize_trials_multi_cohort(
         get_filled_trial_prompt(text, primer_filename, question_filename)
         for text in trial_texts
     ]
+    prompt_list = build_prompt_list(messages_list, llm_config=trial_config)
     return cast(
         tuple[list[str], dict[str, Any], list[str]],
         backend.generate_llm_outputs(
-            messages_list=messages_list,
+            prompt_list=prompt_list,
             llm_config=trial_config,
             model_metadata_cache_dir=model_metadata_cache_dir,
         ),
