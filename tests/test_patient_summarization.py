@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -9,6 +10,7 @@ from mmai.patients.postprocess import clean_bad_data, parse_boilerplate
 from mmai.patients.prompt_builder import get_serial_patient_prompt
 from mmai.patients.summarize import summarize_patient_notes
 from mmai.prompt_rendering import Prompt
+from mmai.remote_inference import generate_remote_llm_outputs
 
 
 class MockTokenResult:
@@ -46,9 +48,6 @@ def _patient_config() -> dict:
             "max_tokens": 10,
             "repetition_penalty": 1.0,
         },
-        "max_model_len": 100,
-        "tensor_parallel_size": 1,
-        "gpu_memory_utilization": 0.9,
         "chunk_size": 50,
         "chunk_overlap": 5,
         "prompt_margin_tokens": 10,
@@ -59,9 +58,16 @@ def _config(debug_mode: bool = False) -> MMAIConfig:
     return MMAIConfig(
         preset_name="default",
         debug_mode=debug_mode,
-        backend="local",
         trial={},
         patient=_patient_config(),
+        local={
+            "patient": {
+                "max_model_len": 100,
+                "tensor_parallel_size": 1,
+                "gpu_memory_utilization": 0.9,
+            }
+        },
+        remote={},
         model_metadata_cache_dir=None,
         raw={"config": "snapshot"},
         embedding={
@@ -74,14 +80,16 @@ def _config(debug_mode: bool = False) -> MMAIConfig:
 
 def _remote_config(debug_mode: bool = False) -> MMAIConfig:
     config = _config(debug_mode=debug_mode)
-    config.backend = "remote"
-    config.patient = {
-        **config.patient,
+    config.remote = {
+        "enabled": True,
         "server_urls": ["http://server-a/v1"],
         "max_concurrent_requests": 2,
         "request_timeout": 123,
         "max_retries": 2,
         "batch_size": 1000,
+    }
+    config.patient = {
+        **config.patient,
         "prompt_build_workers": 2,
     }
     return config
@@ -259,8 +267,8 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
             )
 
     monkeypatch.setattr(
-        "mmai.patients.summarize.get_backend",
-        lambda name: MockBackend(),
+        "mmai.patients.summarize.get_summarization_backend",
+        lambda config: MockBackend(),
     )
 
     notes = pd.DataFrame(
@@ -317,8 +325,8 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
         lambda prompt_pool: None,
     )
     monkeypatch.setattr(
-        "mmai.patients.summarize.get_backend",
-        lambda name: MagicMock(
+        "mmai.patients.summarize.get_summarization_backend",
+        lambda config: MagicMock(
             generate_llm_outputs=MagicMock(
                 return_value=(
                     ["assistantfinal\nUpdated\nBoilerplate:\nNone"],
@@ -424,8 +432,8 @@ def test_remote_summarize_patient_notes_uses_parallel_prompt_workers(monkeypatch
             )
 
     monkeypatch.setattr(
-        "mmai.patients.summarize.get_backend",
-        lambda name: MockBackend(),
+        "mmai.patients.summarize.get_summarization_backend",
+        lambda config: MockBackend(),
     )
 
     notes = pd.DataFrame(
@@ -444,6 +452,37 @@ def test_remote_summarize_patient_notes_uses_parallel_prompt_workers(monkeypatch
     assert pool_calls["shutdown"] is True
     assert result["cancer_history_summary"].tolist() == ["Remote 1", "Remote 2"]
     assert metadata["model_metadata"]["model_sha"] == "sha"
+
+
+def test_generate_remote_llm_outputs_handles_running_event_loop(monkeypatch):
+    """Allow the sync remote wrapper to run from notebooks and async shells."""
+
+    async def fake_generate_remote_llm_outputs_async(
+        *,
+        prompts,
+        llm_config,
+        server_urls,
+        api_key,
+    ):
+        return ["assistantfinal\nSummary"], ["stop"]
+
+    monkeypatch.setattr(
+        "mmai.remote_inference.generate_remote_llm_outputs_async",
+        fake_generate_remote_llm_outputs_async,
+    )
+
+    async def invoke_wrapper():
+        return generate_remote_llm_outputs(
+            prompts=[Prompt(row_idx=0, prompt_text="chunk", max_tokens=7)],
+            llm_config={"model_name": "model"},
+            server_urls=["http://server-a/v1"],
+            api_key="not-needed",
+        )
+
+    texts, finish_reasons = asyncio.run(invoke_wrapper())
+
+    assert texts == ["assistantfinal\nSummary"]
+    assert finish_reasons == ["stop"]
 
 
 def test_summarize_patients_returns_metadata_and_qc(monkeypatch):

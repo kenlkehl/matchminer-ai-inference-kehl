@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from mmai.config import MMAIConfig
-from mmai.backends import LocalBackend
+from mmai.backends import LocalBackend, build_summarization_runtime_config
 from mmai.prompt_rendering import Prompt
 from mmai.trials.postprocess import flatten_trial_to_spaces
 from mmai.trials.prompt_builder import build_trial_text, get_filled_trial_prompt
@@ -39,7 +39,10 @@ def test_get_filled_trial_prompt_includes_trial_text():
 def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
     """Verify LLM summarization wiring and metadata return."""
     mock_backend = MagicMock()
-    monkeypatch.setattr("mmai.trials.summarize.get_backend", lambda name: mock_backend)
+    monkeypatch.setattr(
+        "mmai.trials.summarize.get_summarization_backend",
+        lambda config: mock_backend,
+    )
 
     mock_summarize = MagicMock()
     mock_summarize.return_value = (
@@ -78,7 +81,10 @@ def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
 def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
     """Ensure LLM outputs are aligned with the input trial order."""
     mock_backend = MagicMock()
-    monkeypatch.setattr("mmai.trials.summarize.get_backend", lambda name: mock_backend)
+    monkeypatch.setattr(
+        "mmai.trials.summarize.get_summarization_backend",
+        lambda config: mock_backend,
+    )
 
     mock_summarize = MagicMock()
     mock_summarize.return_value = (
@@ -130,7 +136,7 @@ def test_flatten_trial_to_spaces(
     )
 
 
-def test_local_backend_generate_llm_outputs(monkeypatch, default_trial_config):
+def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
     """Ensure our function running vLLM locally return both raw LLM outputs and model metadata."""
     mock_llm = MagicMock()
     mock_tokenizer = MagicMock()
@@ -157,12 +163,17 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_trial_config):
     )
 
     backend = LocalBackend()
+    llm_config = build_summarization_runtime_config(
+        "trial",
+        default_config.trial,
+        config=default_config,
+    )
     summaries, metadata, finish_reasons = backend.generate_llm_outputs(
         prompt_list=[
             Prompt(row_idx=0, prompt_text="p1", max_tokens=10),
             Prompt(row_idx=1, prompt_text="p2", max_tokens=10),
         ],
-        llm_config=default_trial_config,
+        llm_config=llm_config,
     )
 
     assert summaries == ["SUM0", "SUM1"]
@@ -209,12 +220,13 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
     config = MMAIConfig(
         preset_name="default",
         debug_mode=True,
-        backend="local",
         trial={
             "reasoning_marker": "assistantfinal",
             "boilerplate_marker": "\\n.*Boilerplate.*\\n",
         },
         patient={},
+        local={},
+        remote={},
         model_metadata_cache_dir=None,
         raw={},
         embedding={},
@@ -260,7 +272,10 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
                 ["stop"],
             )
 
-    monkeypatch.setattr("mmai.trials.summarize.get_backend", lambda name: MockBackend())
+    monkeypatch.setattr(
+        "mmai.trials.summarize.get_summarization_backend",
+        lambda config: MockBackend(),
+    )
 
     trials = pd.DataFrame(
         [

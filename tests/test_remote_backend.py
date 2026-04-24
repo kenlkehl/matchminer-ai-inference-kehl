@@ -138,6 +138,19 @@ def test_remote_backend_multiple_servers_distributes_and_preserves_order(monkeyp
     assert calls_by_server["http://server-b/v1"] == ["p1", "p3"]
 
 
+def test_remote_backend_uses_env_var_api_key(monkeypatch):
+    """Remote backend should source API keys from the environment only."""
+    _install_fakes(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "env-key")
+
+    RemoteBackend().generate_llm_outputs(
+        prompt_list=_prompts("p0"),
+        llm_config=_llm_config(api_key="config-key"),
+    )
+
+    assert FakeAsyncOpenAI.clients[0].api_key == "env-key"
+
+
 def test_remote_backend_allows_multiple_in_flight_and_respects_limit(monkeypatch):
     """Remote backend allows concurrent requests but respects configured limits."""
     _install_fakes(monkeypatch)

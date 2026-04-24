@@ -86,13 +86,16 @@ def test_reasonable_match_check_maps_outputs_and_filters(monkeypatch):
             {"score": -2.0},
         ]
     )
-    monkeypatch.setattr("mmai.matching.reasonable_check.get_backend", lambda _: backend)
+    monkeypatch.setattr(
+        "mmai.matching.reasonable_check.run_checker", backend.run_checker
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         embedding={},
         model_metadata_cache_dir=None,
         raw={
@@ -148,13 +151,16 @@ def test_reasonable_match_check_return_metadata(monkeypatch):
             {"score": 2.0},
         ]
     )
-    monkeypatch.setattr("mmai.matching.reasonable_check.get_backend", lambda _: backend)
+    monkeypatch.setattr(
+        "mmai.matching.reasonable_check.run_checker", backend.run_checker
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         embedding={},
         model_metadata_cache_dir=".mmai_cache/model_metadata",
         raw={
@@ -201,13 +207,16 @@ def test_exclusion_criteria_check_maps_outputs_and_filters(monkeypatch):
             {"label": "POSITIVE", "score": 0.66},
         ]
     )
-    monkeypatch.setattr("mmai.matching.exclusion_check.get_backend", lambda _: backend)
+    monkeypatch.setattr(
+        "mmai.matching.exclusion_check.run_checker", backend.run_checker
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         embedding={},
         model_metadata_cache_dir=None,
         raw={
@@ -265,13 +274,16 @@ def test_exclusion_criteria_check_return_metadata(monkeypatch):
             {"label": "NEGATIVE", "score": 0.81},
         ]
     )
-    monkeypatch.setattr("mmai.matching.exclusion_check.get_backend", lambda _: backend)
+    monkeypatch.setattr(
+        "mmai.matching.exclusion_check.run_checker", backend.run_checker
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         embedding={},
         model_metadata_cache_dir=".mmai_cache/model_metadata",
         raw={

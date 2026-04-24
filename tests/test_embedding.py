@@ -26,13 +26,16 @@ class MockBackend:
 def test_embed_for_matching_patient(monkeypatch):
     """Embed patient summaries and pass embedding config through to backend."""
     backend = MockBackend()
-    monkeypatch.setattr("mmai.embedding.embed.get_backend", lambda name: backend)
+    monkeypatch.setattr(
+        "mmai.embedding.embed.generate_embeddings", backend.generate_embeddings
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         model_metadata_cache_dir=None,
         raw={},
         embedding={
@@ -55,13 +58,16 @@ def test_embed_for_matching_patient(monkeypatch):
 def test_embed_for_matching_trial(monkeypatch):
     """Embed trial space summaries using the trial summary text column."""
     backend = MockBackend()
-    monkeypatch.setattr("mmai.embedding.embed.get_backend", lambda name: backend)
+    monkeypatch.setattr(
+        "mmai.embedding.embed.generate_embeddings", backend.generate_embeddings
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         model_metadata_cache_dir=None,
         raw={},
         embedding={
@@ -88,13 +94,16 @@ def test_embed_for_matching_trial(monkeypatch):
 def test_embed_for_matching_missing_column(monkeypatch):
     """Raise a clear error when the required summary column is missing."""
     backend = MockBackend()
-    monkeypatch.setattr("mmai.embedding.embed.get_backend", lambda name: backend)
+    monkeypatch.setattr(
+        "mmai.embedding.embed.generate_embeddings", backend.generate_embeddings
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         model_metadata_cache_dir=None,
         raw={},
         embedding={
@@ -115,14 +124,17 @@ def test_embed_for_matching_missing_column(monkeypatch):
 def test_embed_for_matching_reads_config(monkeypatch):
     """Read embedding model/device/prompt settings from config."""
     backend = MockBackend()
-    monkeypatch.setattr("mmai.embedding.embed.get_backend", lambda name: backend)
+    monkeypatch.setattr(
+        "mmai.embedding.embed.generate_embeddings", backend.generate_embeddings
+    )
 
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         model_metadata_cache_dir=None,
         raw={},
         embedding={
@@ -145,13 +157,16 @@ def test_embed_for_matching_reads_config(monkeypatch):
 def test_embed_for_matching_return_metadata(monkeypatch):
     """Return embedding metadata payload when requested."""
     backend = MockBackend()
-    monkeypatch.setattr("mmai.embedding.embed.get_backend", lambda name: backend)
+    monkeypatch.setattr(
+        "mmai.embedding.embed.generate_embeddings", backend.generate_embeddings
+    )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         model_metadata_cache_dir=".mmai_cache/model_metadata",
         raw={"preset_name": "default"},
         embedding={
