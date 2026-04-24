@@ -140,7 +140,7 @@ def trial_qc_report(
 
     # QC metric for trial summaries exceeding embedding model token limit
     if config is not None and config.embedding:
-        backend = get_backend(config.backend)
+        backend = get_backend("local")
         embedding_config = dict(config.embedding)
         token_series = pd.Series(
             backend.count_embedding_tokens(

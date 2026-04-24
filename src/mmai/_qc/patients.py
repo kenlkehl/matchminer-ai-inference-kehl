@@ -92,7 +92,7 @@ def patient_summary_qc_report(
 
     # QC metric for summaries that exceed embedding model token limit
     if config is not None and config.embedding:
-        backend = get_backend(config.backend)
+        backend = get_backend("local")
         token_series = pd.Series(
             backend.count_embedding_tokens(
                 summaries["cancer_history_summary"].fillna("").astype(str).tolist(),
