@@ -1,6 +1,15 @@
 version: 0
 debug_mode: false
 model_metadata_cache_dir: ".mmai_cache/model_metadata"
+local:
+  trial:
+    max_model_len: 10000
+    tensor_parallel_size: 1
+    gpu_memory_utilization: 0.9
+  patient:
+    max_model_len: 120000
+    tensor_parallel_size: 1
+    gpu_memory_utilization: 0.9
 remote:
   enabled: false
   server_urls:
@@ -12,9 +21,6 @@ remote:
   retry_backoff_base: 1.0
 trial:
   model_name: openai/gpt-oss-120b
-  max_model_len: 10000
-  tensor_parallel_size: 1
-  gpu_memory_utilization: 0.9
   sampling_params:
     temperature: 0.0
     top_k: 1
@@ -27,9 +33,6 @@ trial:
   boilerplate_marker: "\\n.*Boilerplate.*\\n"
 patient:
   model_name: openai/gpt-oss-120b
-  max_model_len: 120000
-  tensor_parallel_size: 1
-  gpu_memory_utilization: 0.9
   chunk_size: 10000
   chunk_overlap: 500
   prompt_margin_tokens: 5000
