@@ -8,7 +8,7 @@ from typing import Any, cast
 import pandas as pd
 from transformers import AutoTokenizer
 
-from mmai.backends import get_backend
+from mmai.backends import build_summarization_runtime_config, get_summarization_backend
 from mmai.config import MMAIConfig, load_default_preset
 from mmai.prompt_rendering import Prompt
 
@@ -146,6 +146,11 @@ def summarize_patient_notes(
         raise TypeError("config must be an MMAIConfig instance or None.")
 
     patient_config = dict(resolved_config.patient)
+    runtime_patient_config = build_summarization_runtime_config(
+        "patient",
+        patient_config,
+        config=resolved_config,
+    )
 
     # Convert note-level input into patient-level metadata plus chunk-level
     # rows. The chunk rows are what drive the serial summarization loop.
@@ -159,7 +164,7 @@ def summarize_patient_notes(
     existing_summary_lookup = _build_existing_summary_lookup(existing_summaries)
     rounds = _build_rounds(prepared_chunks)
 
-    backend = get_backend(resolved_config.backend)
+    backend = get_summarization_backend(resolved_config)
     # This dict holds the latest available summary for each patient. If the
     # caller provided an existing summary, that is used for round 1; after each
     # round, the newly generated summary overwrites the prior one.
@@ -193,7 +198,7 @@ def summarize_patient_notes(
             summaries, round_model_metadata, _finish_reasons = (
                 backend.generate_llm_outputs(
                     prompt_list=prompt_list,
-                    llm_config=patient_config,
+                    llm_config=runtime_patient_config,
                     model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
                 )
             )
