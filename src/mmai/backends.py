@@ -282,9 +282,7 @@ class RemoteBackend:
         order.
         """
         model_name = str(llm_config["model_name"])
-        api_key = str(
-            llm_config.get("api_key") or os.environ.get("OPENAI_API_KEY", "not-needed")
-        ).strip()
+        api_key = str(os.environ.get("OPENAI_API_KEY", "not-needed")).strip()
         server_urls = normalize_remote_server_urls(llm_config)
         model_metadata = get_model_metadata(
             model_name,
