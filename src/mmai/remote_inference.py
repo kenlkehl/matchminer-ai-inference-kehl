@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Dict, cast
+from typing import Any, Callable, Coroutine, Dict, TypeVar, cast
 from urllib.parse import urlparse
 
 from mmai.prompt_rendering import Prompt
 
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
 @dataclass
@@ -39,6 +41,18 @@ def normalize_remote_server_urls(llm_config: Dict[str, Any]) -> list[str]:
     if not server_urls:
         raise ValueError("Remote backend requires at least one server URL.")
     return server_urls
+
+
+def _run_sync(awaitable_factory: Callable[[], Coroutine[Any, Any, T]]) -> T:
+    """Run an async task from sync code, including notebook event loops."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(awaitable_factory())
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future: Future[T] = executor.submit(lambda: asyncio.run(awaitable_factory()))
+        return future.result()
 
 
 def connect_to_remote_servers(
@@ -340,8 +354,8 @@ def generate_remote_llm_outputs(
     api_key: str,
 ) -> tuple[list[str], list[str]]:
     """Synchronous wrapper around ``generate_remote_llm_outputs_async``."""
-    return asyncio.run(
-        generate_remote_llm_outputs_async(
+    return _run_sync(
+        lambda: generate_remote_llm_outputs_async(
             prompts=prompts,
             llm_config=llm_config,
             server_urls=server_urls,
