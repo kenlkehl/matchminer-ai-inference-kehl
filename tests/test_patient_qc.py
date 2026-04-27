@@ -26,25 +26,16 @@ def test_patient_summary_qc_report_metrics(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "mmai._qc.patients.get_backend",
-        lambda _: type(
-            "MockBackend",
-            (),
-            {
-                "count_embedding_tokens": lambda self, texts, embedding_config: [
-                    100,
-                    3001,
-                    50,
-                ]
-            },
-        )(),
+        "mmai._qc.patients.count_embedding_tokens",
+        lambda texts, *, embedding_config: [100, 3001, 50],
     )
     config = MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial={},
         patient={},
+        local={},
+        remote={},
         embedding={"model_path": "m", "device": "cpu", "prompt_file": "embedding.txt"},
         model_metadata_cache_dir=None,
         raw={},

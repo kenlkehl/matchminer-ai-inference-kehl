@@ -1,13 +1,16 @@
+import asyncio
 from unittest.mock import MagicMock
 
 import pandas as pd
 
-from mmai.backends import LocalBackend
+from mmai.llm.backends import LocalBackend
 from mmai.config import MMAIConfig
 from mmai.patients import summarize_patients
 from mmai.patients.postprocess import clean_bad_data, parse_boilerplate
 from mmai.patients.prompt_builder import get_serial_patient_prompt
 from mmai.patients.summarize import summarize_patient_notes
+from mmai.llm.prompt_rendering import Prompt
+from mmai.llm.remote_inference import generate_remote_llm_outputs
 
 
 class MockTokenResult:
@@ -45,9 +48,6 @@ def _patient_config() -> dict:
             "max_tokens": 10,
             "repetition_penalty": 1.0,
         },
-        "max_model_len": 100,
-        "tensor_parallel_size": 1,
-        "gpu_memory_utilization": 0.9,
         "chunk_size": 50,
         "chunk_overlap": 5,
         "prompt_margin_tokens": 10,
@@ -58,9 +58,16 @@ def _config(debug_mode: bool = False) -> MMAIConfig:
     return MMAIConfig(
         preset_name="default",
         debug_mode=debug_mode,
-        backend="local",
         trial={},
         patient=_patient_config(),
+        local={
+            "patient": {
+                "max_model_len": 100,
+                "tensor_parallel_size": 1,
+                "gpu_memory_utilization": 0.9,
+            }
+        },
+        remote={},
         model_metadata_cache_dir=None,
         raw={"config": "snapshot"},
         embedding={
@@ -69,6 +76,23 @@ def _config(debug_mode: bool = False) -> MMAIConfig:
             "prompt_file": "embedding.txt",
         },
     )
+
+
+def _remote_config(debug_mode: bool = False) -> MMAIConfig:
+    config = _config(debug_mode=debug_mode)
+    config.remote = {
+        "enabled": True,
+        "server_urls": ["http://server-a/v1"],
+        "max_concurrent_requests": 2,
+        "request_timeout": 123,
+        "max_retries": 2,
+        "batch_size": 1000,
+    }
+    config.patient = {
+        **config.patient,
+        "prompt_build_workers": 2,
+    }
+    return config
 
 
 def test_parse_boilerplate_splits_summary_and_exclusions():
@@ -201,12 +225,21 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
 
     seen_prior_summaries = []
 
-    def mock_prompt(**kwargs):
-        seen_prior_summaries.append(kwargs["prior_summary"])
-        return [{"role": "user", "content": kwargs["chunk_text"]}]
+    class FakePromptPool:
+        def map(self, func, work_items, chunksize=1):
+            seen_prior_summaries.extend(item.prior_summary_text for item in work_items)
+            return [
+                Prompt(row_idx=item.row_idx, prompt_text=item.chunk_text, max_tokens=7)
+                for item in work_items
+            ]
 
     monkeypatch.setattr(
-        "mmai.patients.summarize.get_serial_patient_prompt", mock_prompt
+        "mmai.patients.summarize.prep_prompt_pool",
+        lambda patient_config, n_workers: FakePromptPool(),
+    )
+    monkeypatch.setattr(
+        "mmai.patients.summarize.shutdown_prompt_pool",
+        lambda prompt_pool: None,
     )
 
     class MockBackend:
@@ -214,7 +247,11 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
             self.calls = 0
 
         def generate_llm_outputs(
-            self, *, messages_list, llm_config, model_metadata_cache_dir=None
+            self,
+            *,
+            prompt_list,
+            llm_config,
+            model_metadata_cache_dir=None,
         ):
             self.calls += 1
             if self.calls == 1:
@@ -230,8 +267,8 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
             )
 
     monkeypatch.setattr(
-        "mmai.patients.summarize.get_backend",
-        lambda name: MockBackend(),
+        "mmai.patients.summarize.get_summarization_backend",
+        lambda config: MockBackend(),
     )
 
     notes = pd.DataFrame(
@@ -271,16 +308,25 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
 
     seen_prior_summaries = []
 
-    def mock_prompt(**kwargs):
-        seen_prior_summaries.append(kwargs["prior_summary"])
-        return [{"role": "user", "content": kwargs["chunk_text"]}]
+    class FakePromptPool:
+        def map(self, func, work_items, chunksize=1):
+            seen_prior_summaries.extend(item.prior_summary_text for item in work_items)
+            return [
+                Prompt(row_idx=item.row_idx, prompt_text=item.chunk_text, max_tokens=7)
+                for item in work_items
+            ]
 
     monkeypatch.setattr(
-        "mmai.patients.summarize.get_serial_patient_prompt", mock_prompt
+        "mmai.patients.summarize.prep_prompt_pool",
+        lambda patient_config, n_workers: FakePromptPool(),
     )
     monkeypatch.setattr(
-        "mmai.patients.summarize.get_backend",
-        lambda name: MagicMock(
+        "mmai.patients.summarize.shutdown_prompt_pool",
+        lambda prompt_pool: None,
+    )
+    monkeypatch.setattr(
+        "mmai.patients.summarize.get_summarization_backend",
+        lambda config: MagicMock(
             generate_llm_outputs=MagicMock(
                 return_value=(
                     ["assistantfinal\nUpdated\nBoilerplate:\nNone"],
@@ -306,6 +352,137 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
 
     assert seen_prior_summaries == ["Existing summary"]
     assert result.loc[result.index[0], "cancer_history_summary"] == "Updated"
+
+
+def test_remote_summarize_patient_notes_uses_parallel_prompt_workers(monkeypatch):
+    """Remote patient summarization builds pre-rendered prompts via prompt pool."""
+    _stub_patient_qc(monkeypatch)
+    monkeypatch.setattr(
+        "mmai.patients.summarize.AutoTokenizer.from_pretrained",
+        lambda model_name: MockTokenizer(),
+    )
+    monkeypatch.setattr(
+        "mmai.patients.summarize.prepare_patient_notes",
+        lambda notes, tokenizer, chunk_size, chunk_overlap: (
+            pd.DataFrame(
+                [
+                    {"patient_id": "P1", "last_note_date": "2024-01-01"},
+                    {"patient_id": "P2", "last_note_date": "2024-01-01"},
+                ]
+            ),
+            pd.DataFrame(
+                [
+                    {
+                        "patient_id": "P1",
+                        "chunk_index": 0,
+                        "first_date": "2024-01-01",
+                        "last_date": "2024-01-01",
+                        "chunk_text": "chunk one",
+                    },
+                    {
+                        "patient_id": "P2",
+                        "chunk_index": 0,
+                        "first_date": "2024-01-01",
+                        "last_date": "2024-01-01",
+                        "chunk_text": "chunk two",
+                    },
+                ]
+            ),
+        ),
+    )
+
+    pool_calls = {}
+
+    class FakePromptPool:
+        def map(self, func, work_items, chunksize=1):
+            pool_calls["chunksize"] = chunksize
+            pool_calls["work_items"] = work_items
+            return [
+                Prompt(row_idx=item.row_idx, prompt_text=item.chunk_text, max_tokens=7)
+                for item in work_items
+            ]
+
+    monkeypatch.setattr(
+        "mmai.patients.summarize.prep_prompt_pool",
+        lambda patient_config, n_workers: FakePromptPool(),
+    )
+    monkeypatch.setattr(
+        "mmai.patients.summarize.shutdown_prompt_pool",
+        lambda prompt_pool: pool_calls.setdefault("shutdown", True),
+    )
+
+    captured = {}
+
+    class MockBackend:
+        def generate_llm_outputs(
+            self,
+            *,
+            prompt_list,
+            llm_config,
+            model_metadata_cache_dir=None,
+        ):
+            captured["prompt_list"] = prompt_list
+            return (
+                [
+                    "assistantfinal\nRemote 1\nBoilerplate:\nNone",
+                    "assistantfinal\nRemote 2\nBoilerplate:\nNone",
+                ],
+                {"model_name": "model", "model_sha": "sha"},
+                ["stop", "stop"],
+            )
+
+    monkeypatch.setattr(
+        "mmai.patients.summarize.get_summarization_backend",
+        lambda config: MockBackend(),
+    )
+
+    notes = pd.DataFrame(
+        [{"patient_id": "P1", "note_text": "x", "note_date": "2024-01-01"}]
+    )
+    result, metadata = summarize_patient_notes(notes, config=_remote_config())
+
+    assert [prompt.prompt_text for prompt in captured["prompt_list"]] == [
+        "chunk one",
+        "chunk two",
+    ]
+    assert [item.prior_summary_text for item in pool_calls["work_items"]] == [
+        None,
+        None,
+    ]
+    assert pool_calls["shutdown"] is True
+    assert result["cancer_history_summary"].tolist() == ["Remote 1", "Remote 2"]
+    assert metadata["model_metadata"]["model_sha"] == "sha"
+
+
+def test_generate_remote_llm_outputs_handles_running_event_loop(monkeypatch):
+    """Allow the sync remote wrapper to run from notebooks and async shells."""
+
+    async def fake_generate_remote_llm_outputs_async(
+        *,
+        prompts,
+        llm_config,
+        server_urls,
+        api_key,
+    ):
+        return ["assistantfinal\nSummary"], ["stop"]
+
+    monkeypatch.setattr(
+        "mmai.llm.remote_inference.generate_remote_llm_outputs_async",
+        fake_generate_remote_llm_outputs_async,
+    )
+
+    async def invoke_wrapper():
+        return generate_remote_llm_outputs(
+            prompts=[Prompt(row_idx=0, prompt_text="chunk", max_tokens=7)],
+            llm_config={"model_name": "model"},
+            server_urls=["http://server-a/v1"],
+            api_key="not-needed",
+        )
+
+    texts, finish_reasons = asyncio.run(invoke_wrapper())
+
+    assert texts == ["assistantfinal\nSummary"]
+    assert finish_reasons == ["stop"]
 
 
 def test_summarize_patients_returns_metadata_and_qc(monkeypatch):

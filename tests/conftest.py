@@ -37,9 +37,6 @@ BOILERPLATE_2 = "History of pneumonitis."
 def default_trial_config() -> dict:
     return {
         "model_name": "model",
-        "max_model_len": 100,
-        "tensor_parallel_size": 1,
-        "gpu_memory_utilization": 0.9,
         "sampling_params": {
             "temperature": 0.0,
             "top_k": 1,
@@ -61,9 +58,16 @@ def default_config(default_trial_config: dict) -> MMAIConfig:
     return MMAIConfig(
         preset_name="default",
         debug_mode=False,
-        backend="local",
         trial=default_trial_config,
         patient={},
+        local={
+            "trial": {
+                "max_model_len": 100,
+                "tensor_parallel_size": 1,
+                "gpu_memory_utilization": 0.9,
+            }
+        },
+        remote={},
         model_metadata_cache_dir=None,
         raw={},
         embedding={},

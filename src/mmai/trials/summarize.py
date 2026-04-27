@@ -7,7 +7,11 @@ from typing import Any, TYPE_CHECKING, cast
 import pandas as pd
 
 from mmai._qc.trials import build_qc_artifact
-from mmai.backends import get_backend
+from mmai.llm.backends import (
+    build_summarization_runtime_config,
+    get_summarization_backend,
+)
+from mmai.llm.prompt_rendering import build_prompt_list
 
 from .prompt_builder import build_trial_text, get_filled_trial_prompt
 
@@ -29,10 +33,11 @@ def summarize_trials_multi_cohort(
         get_filled_trial_prompt(text, primer_filename, question_filename)
         for text in trial_texts
     ]
+    prompt_list = build_prompt_list(messages_list, llm_config=trial_config)
     return cast(
         tuple[list[str], dict[str, Any], list[str]],
         backend.generate_llm_outputs(
-            messages_list=messages_list,
+            prompt_list=prompt_list,
             llm_config=trial_config,
             model_metadata_cache_dir=model_metadata_cache_dir,
         ),
@@ -44,18 +49,23 @@ def run_llm_summarization(
 ) -> tuple[pd.DataFrame, dict[str, Any], dict[str, object]]:
     """Run LLM-based trial summarization."""
     trial_config = dict(config.trial)
+    runtime_trial_config = build_summarization_runtime_config(
+        "trial",
+        trial_config,
+        config=config,
+    )
     prompt_files = dict(trial_config["prompt_files"])
     primer_filename = prompt_files["primer"]
     question_filename = prompt_files["question"]
 
-    backend = get_backend(config.backend)
+    backend = get_summarization_backend(config)
 
     trials_with_summaries = trials_to_process.copy()
     trials_with_summaries["trial_text"] = build_trial_text(trials_to_process)
     trial_summaries, model_metadata, finish_reasons = summarize_trials_multi_cohort(
         trials_with_summaries["trial_text"].tolist(),
         backend,
-        trial_config=trial_config,
+        trial_config=runtime_trial_config,
         primer_filename=primer_filename,
         question_filename=question_filename,
         model_metadata_cache_dir=config.model_metadata_cache_dir,
