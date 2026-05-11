@@ -13,7 +13,7 @@ from typing import cast
 
 from transformers import AutoTokenizer
 
-from mmai.llm.prompt_rendering import Prompt
+from matchminer_ai.llm.prompt_rendering import Prompt
 
 
 _worker_tokenizer: Any = None
@@ -22,7 +22,7 @@ _worker_config: dict[str, Any] = {}
 
 def load_prompt_text(filename: str) -> str:
     """Load a prompt text file from the package."""
-    prompt_path = resources.files("mmai.prompts").joinpath(filename)
+    prompt_path = resources.files("matchminer_ai.prompts").joinpath(filename)
     with prompt_path.open("r", encoding="utf-8") as handle:
         return handle.read()
 

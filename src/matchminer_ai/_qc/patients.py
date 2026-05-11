@@ -6,15 +6,15 @@ from typing import TYPE_CHECKING, Iterable
 
 import pandas as pd
 
-from mmai._qc.common import (
+from matchminer_ai._qc.common import (
     build_qc_artifact,
     normalize_series,
     qc_artifact_to_report_row,
 )
-from mmai.embedding.inference import count_embedding_tokens
+from matchminer_ai.embedding.inference import count_embedding_tokens
 
 if TYPE_CHECKING:
-    from mmai.config import MMAIConfig
+    from matchminer_ai.config import MMAIConfig
 
 
 DEFAULT_KEYWORDS = [

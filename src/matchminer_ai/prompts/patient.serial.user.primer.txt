@@ -39,4 +39,3 @@ Treatment history:
 # 3/2021-present: docetaxel; achieved partial response, ongoing as of last note
 Boilerplate:
 No evidence of common boilerplate exclusion criteria
-

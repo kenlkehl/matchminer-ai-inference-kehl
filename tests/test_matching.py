@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from mmai.config import MMAIConfig
-from mmai.matching import (
+from matchminer_ai.config import MMAIConfig
+from matchminer_ai.matching import (
     exclusion_criteria_check,
     generate_candidate_matches,
     reasonable_match_check,
@@ -87,7 +87,7 @@ def test_reasonable_match_check_maps_outputs_and_filters(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "mmai.matching.reasonable_check.run_checker", backend.run_checker
+        "matchminer_ai.matching.reasonable_check.run_checker", backend.run_checker
     )
     config = MMAIConfig(
         preset_name="default",
@@ -152,7 +152,7 @@ def test_reasonable_match_check_return_metadata(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "mmai.matching.reasonable_check.run_checker", backend.run_checker
+        "matchminer_ai.matching.reasonable_check.run_checker", backend.run_checker
     )
     config = MMAIConfig(
         preset_name="default",
@@ -208,7 +208,7 @@ def test_exclusion_criteria_check_maps_outputs_and_filters(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "mmai.matching.exclusion_check.run_checker", backend.run_checker
+        "matchminer_ai.matching.exclusion_check.run_checker", backend.run_checker
     )
     config = MMAIConfig(
         preset_name="default",
@@ -275,7 +275,7 @@ def test_exclusion_criteria_check_return_metadata(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "mmai.matching.exclusion_check.run_checker", backend.run_checker
+        "matchminer_ai.matching.exclusion_check.run_checker", backend.run_checker
     )
     config = MMAIConfig(
         preset_name="default",

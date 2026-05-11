@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from mmai._qc.patients import build_qc_artifact
+from matchminer_ai._qc.patients import build_qc_artifact
 
 if TYPE_CHECKING:
-    from mmai.config import MMAIConfig
+    from matchminer_ai.config import MMAIConfig
 
 
 def parse_boilerplate(

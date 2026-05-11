@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 
-from mmai.config import load_default_preset
+from matchminer_ai.config import load_default_preset
 from .inference import generate_embeddings
 
 if TYPE_CHECKING:
-    from mmai.config import MMAIConfig
+    from matchminer_ai.config import MMAIConfig
 
 
 def _resolve_text_column(entity_type: Literal["patient", "trial"]) -> str:

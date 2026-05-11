@@ -1,4 +1,4 @@
-# mmai
+# matchminer-ai
 
 MatchMiner-AI Python package.
 
@@ -6,6 +6,8 @@ This repository contains the Python package that implements the MatchMiner-AI
 pipeline.
 
 Requires Python 3.12+.
+
+Install the package as `matchminer-ai`; import it in Python as `matchminer_ai`.
 
 ## Development
 
@@ -71,4 +73,4 @@ pytest -m resource_heavy
 ```
 
 ## QC metrics
-See `mmai-package/src/mmai/_qc/README.md`.
+See `mmai-package/src/matchminer_ai/_qc/README.md`.

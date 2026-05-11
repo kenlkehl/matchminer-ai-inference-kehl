@@ -26,7 +26,7 @@ class MMAIConfig:
 
 
 def _load_preset_data(name: str) -> dict[str, Any]:
-    preset_path = resources.files("mmai.presets").joinpath(f"{name}.yaml")
+    preset_path = resources.files("matchminer_ai.presets").joinpath(f"{name}.yaml")
     with preset_path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):

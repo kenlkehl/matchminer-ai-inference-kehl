@@ -1,13 +1,16 @@
 from unittest.mock import MagicMock
 import pandas as pd
 
-from mmai.config import MMAIConfig
-from mmai.llm.backends import LocalBackend, build_summarization_runtime_config
-from mmai.llm.prompt_rendering import Prompt
-from mmai.trials.postprocess import flatten_trial_to_spaces
-from mmai.trials.prompt_builder import build_trial_text, get_filled_trial_prompt
-from mmai.trials import summarize_trials
-from mmai.trials.summarize import run_llm_summarization
+from matchminer_ai.config import MMAIConfig
+from matchminer_ai.llm.backends import LocalBackend, build_summarization_runtime_config
+from matchminer_ai.llm.prompt_rendering import Prompt
+from matchminer_ai.trials.postprocess import flatten_trial_to_spaces
+from matchminer_ai.trials.prompt_builder import (
+    build_trial_text,
+    get_filled_trial_prompt,
+)
+from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials.summarize import run_llm_summarization
 
 
 def test_build_trial_text_normalizes_whitespace():
@@ -40,7 +43,7 @@ def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
     """Verify LLM summarization wiring and metadata return."""
     mock_backend = MagicMock()
     monkeypatch.setattr(
-        "mmai.trials.summarize.get_summarization_backend",
+        "matchminer_ai.trials.summarize.get_summarization_backend",
         lambda config: mock_backend,
     )
 
@@ -51,7 +54,7 @@ def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
         ["stop"],
     )
     monkeypatch.setattr(
-        "mmai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
+        "matchminer_ai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
     )
 
     trials = pd.DataFrame(
@@ -82,7 +85,7 @@ def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
     """Ensure LLM outputs are aligned with the input trial order."""
     mock_backend = MagicMock()
     monkeypatch.setattr(
-        "mmai.trials.summarize.get_summarization_backend",
+        "matchminer_ai.trials.summarize.get_summarization_backend",
         lambda config: mock_backend,
     )
 
@@ -93,7 +96,7 @@ def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
         ["stop", "stop"],
     )
     monkeypatch.setattr(
-        "mmai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
+        "matchminer_ai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
     )
 
     trials = pd.DataFrame(
@@ -154,7 +157,7 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
     mock_vllm.SamplingParams = MagicMock()
     monkeypatch.setitem(__import__("sys").modules, "vllm", mock_vllm)
     monkeypatch.setattr(
-        "mmai.llm.backends.get_model_metadata",
+        "matchminer_ai.llm.backends.get_model_metadata",
         lambda model_name, cache_dir=None: {
             "model_sha": "sha",
             "created_at": "now",
@@ -214,7 +217,8 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "mmai.trials.summarize.run_llm_summarization", mock_run_llm_summarization
+        "matchminer_ai.trials.summarize.run_llm_summarization",
+        mock_run_llm_summarization,
     )
 
     config = MMAIConfig(
@@ -273,7 +277,7 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
             )
 
     monkeypatch.setattr(
-        "mmai.trials.summarize.get_summarization_backend",
+        "matchminer_ai.trials.summarize.get_summarization_backend",
         lambda config: MockBackend(),
     )
 

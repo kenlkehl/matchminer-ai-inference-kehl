@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, cast
 
-from mmai.config import MMAIConfig, load_default_preset
+from matchminer_ai.config import MMAIConfig, load_default_preset
 
 from .summarize import summarize_patient_notes
 

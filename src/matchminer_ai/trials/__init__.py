@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from mmai.config import MMAIConfig
+from matchminer_ai.config import MMAIConfig
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -81,7 +81,7 @@ def summarize_trials(
         When return_metadata and return_qc are True, returns the DataFrame,
         metadata dict, and QC report DataFrame.
     """
-    from mmai.config import MMAIConfig, load_default_preset
+    from matchminer_ai.config import MMAIConfig, load_default_preset
 
     from .postprocess import postprocess_trial_summaries
     from .summarize import run_llm_summarization
@@ -118,7 +118,7 @@ def summarize_trials(
     logger.info("Postprocessing complete. Produced %d rows.", len(result))
 
     # Build QC report
-    from mmai._qc.trials import trial_qc_report
+    from matchminer_ai._qc.trials import trial_qc_report
 
     qc_report = trial_qc_report(
         result,

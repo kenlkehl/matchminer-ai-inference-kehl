@@ -9,17 +9,19 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Dict, Tuple, cast
 
-from mmai.llm.prompt_rendering import Prompt
-from mmai.llm.remote_inference import generate_remote_llm_outputs
-from mmai.llm.remote_inference import normalize_remote_server_urls
+from matchminer_ai.llm.prompt_rendering import Prompt
+from matchminer_ai.llm.remote_inference import generate_remote_llm_outputs
+from matchminer_ai.llm.remote_inference import normalize_remote_server_urls
 
 if TYPE_CHECKING:
-    from mmai.config import MMAIConfig
+    from matchminer_ai.config import MMAIConfig
 
 
 def _default_metadata_cache_dir() -> str:
     """Return the default on-disk cache directory for model metadata."""
-    return os.path.join(os.path.expanduser("~"), ".cache", "mmai", "model_metadata")
+    return os.path.join(
+        os.path.expanduser("~"), ".cache", "matchminer_ai", "model_metadata"
+    )
 
 
 def create_model_metadata(model_name: str) -> Dict[str, Any]:

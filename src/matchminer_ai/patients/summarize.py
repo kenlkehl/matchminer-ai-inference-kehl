@@ -8,12 +8,12 @@ from typing import Any, cast
 import pandas as pd
 from transformers import AutoTokenizer
 
-from mmai.llm.backends import (
+from matchminer_ai.llm.backends import (
     build_summarization_runtime_config,
     get_summarization_backend,
 )
-from mmai.config import MMAIConfig, load_default_preset
-from mmai.llm.prompt_rendering import Prompt
+from matchminer_ai.config import MMAIConfig, load_default_preset
+from matchminer_ai.llm.prompt_rendering import Prompt
 
 from .postprocess import postprocess_patient_summaries
 from .prepare import prepare_patient_notes
@@ -232,7 +232,7 @@ def summarize_patient_notes(
         "model_metadata": model_metadata,
     }
 
-    from mmai._qc.patients import patient_summary_qc_report
+    from matchminer_ai._qc.patients import patient_summary_qc_report
 
     qc_report = patient_summary_qc_report(
         final_rows,

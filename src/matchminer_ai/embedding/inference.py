@@ -6,12 +6,12 @@ from functools import lru_cache
 from importlib import resources
 from typing import Any, Dict, cast
 
-from mmai.llm.backends import get_model_metadata
+from matchminer_ai.llm.backends import get_model_metadata
 
 
 def _load_prompt_text(filename: str) -> str:
     """Load a prompt text asset bundled with the package."""
-    prompt_path = resources.files("mmai.prompts").joinpath(filename)
+    prompt_path = resources.files("matchminer_ai.prompts").joinpath(filename)
     with prompt_path.open("r", encoding="utf-8") as handle:
         return handle.read()
 

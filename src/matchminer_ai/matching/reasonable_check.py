@@ -8,15 +8,15 @@ from importlib import resources
 import pandas as pd
 import torch
 
-from mmai.config import load_default_preset
+from matchminer_ai.config import load_default_preset
 from .inference import run_checker
 
 if TYPE_CHECKING:
-    from mmai.config import MMAIConfig
+    from matchminer_ai.config import MMAIConfig
 
 
 def _load_reasonable_match_template(filename: str) -> str:
-    prompt_path = resources.files("mmai.prompts").joinpath(filename)
+    prompt_path = resources.files("matchminer_ai.prompts").joinpath(filename)
     with prompt_path.open("r", encoding="utf-8") as handle:
         return handle.read().strip()
 
