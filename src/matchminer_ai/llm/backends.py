@@ -69,19 +69,13 @@ def get_model_metadata(
 @lru_cache(maxsize=2)
 def _get_local_llm(
     model_name: str,
-    tensor_parallel_size: int,
-    max_model_len: int,
-    gpu_memory_utilization: float,
+    llm_kwargs_json: str,
 ):
-    """Load and cache a local vLLM model instance."""
+    """Load and cache a local vLLM model instance from config kwargs."""
     from vllm import LLM
 
-    return LLM(
-        model=model_name,
-        tensor_parallel_size=tensor_parallel_size,
-        max_model_len=max_model_len,
-        gpu_memory_utilization=gpu_memory_utilization,
-    )
+    llm_kwargs = json.loads(llm_kwargs_json)
+    return LLM(model=model_name, **llm_kwargs)
 
 
 def clear_local_llm_cache() -> None:
@@ -116,7 +110,10 @@ class LocalBackend:
         prompt_list
             Rendered prompts to send to vLLM. Output order follows this list.
         llm_config
-            Model and sampling configuration.
+            Model and sampling configuration. Local-engine fields from
+            ``config.local.<task>`` are passed through to ``vllm.LLM`` as
+            keyword arguments, and ``sampling_params`` is passed through to
+            ``vllm.SamplingParams`` as keyword arguments.
 
         Returns
         -------
@@ -126,9 +123,25 @@ class LocalBackend:
         from vllm import SamplingParams
 
         model_name = llm_config["model_name"]
-        max_model_len = llm_config["max_model_len"]
-        tensor_parallel_size = llm_config["tensor_parallel_size"]
-        gpu_memory_utilization = llm_config["gpu_memory_utilization"]
+        llm_kwargs = {
+            key: value
+            for key, value in llm_config.items()
+            if key
+            not in {
+                "model_name",
+                "sampling_params",
+                "prompt_files",
+                "reasoning_marker",
+                "boilerplate_marker",
+                "chunk_size",
+                "chunk_overlap",
+                "prompt_margin_tokens",
+                "text_token_threshold",
+                "prompt_build_workers",
+                "model_metadata_cache_dir",
+                "vllm_server_args",
+            }
+        }
         sampling_params = dict(llm_config["sampling_params"])
 
         model_metadata = get_model_metadata(
@@ -137,19 +150,12 @@ class LocalBackend:
         )
         llm = _get_local_llm(
             model_name,
-            int(tensor_parallel_size),
-            int(max_model_len),
-            float(gpu_memory_utilization),
+            json.dumps(llm_kwargs, sort_keys=True),
         )
         prompts = [prompt.prompt_text for prompt in prompt_list]
         responses = llm.generate(
             prompts=prompts,
-            sampling_params=SamplingParams(
-                temperature=sampling_params["temperature"],
-                top_k=sampling_params["top_k"],
-                max_tokens=sampling_params["max_tokens"],
-                repetition_penalty=sampling_params["repetition_penalty"],
-            ),
+            sampling_params=SamplingParams(**sampling_params),
         )
         texts = [response.outputs[0].text for response in responses]
         finish_reasons = [
