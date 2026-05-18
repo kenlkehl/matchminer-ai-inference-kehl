@@ -51,10 +51,10 @@ embedding:
   model_path: "ksg-dfci/TrialSpace-0426"
   device: cpu
   prompt_file: embedding.txt
-reasonable_match:
+match_quality:
   model_name: "ksg-dfci/TrialChecker-0426"
   device: cuda
-  prompt_file: reasonable_match_checker_template.txt
+  prompt_file: match_quality_checker_template.txt
   score_cutoff: 0.2
 exclusion_criteria:
   model_name: "ksg-dfci/BoilerPlateChecker-0426"

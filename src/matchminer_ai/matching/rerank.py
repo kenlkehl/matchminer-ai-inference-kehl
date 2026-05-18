@@ -1,4 +1,4 @@
-"""Reasonable match check helpers."""
+"""Match quality scoring helpers."""
 
 from __future__ import annotations
 
@@ -15,13 +15,13 @@ if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
 
-def _load_reasonable_match_template(filename: str) -> str:
+def _load_match_quality_template(filename: str) -> str:
     prompt_path = resources.files("matchminer_ai.prompts").joinpath(filename)
     with prompt_path.open("r", encoding="utf-8") as handle:
         return handle.read().strip()
 
 
-def _build_reasonable_match_prompts(
+def _build_match_quality_prompts(
     candidate_pairs: pd.DataFrame,
     *,
     template: str,
@@ -40,15 +40,15 @@ def _build_reasonable_match_prompts(
     ]
 
 
-def reasonable_match_check(
+def score_match_quality(
     candidate_pairs: pd.DataFrame,
     *,
     config: MMAIConfig | None = None,
-    filter_unreasonable: bool = True,
+    filter_low_quality: bool = True,
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    Evaluate whether each candidate patient-trial pair is a clinically reasonable match.
+    Score the clinical match quality of each candidate patient-trial pair.
 
     Parameters
     ----------
@@ -67,10 +67,10 @@ def reasonable_match_check(
             Trial clinical-space summary text.
 
     config : MMAIConfig, optional
-        MMAI configuration containing reasonable match checker settings.
+        MMAI configuration containing match quality checker settings.
         Uses default preset when omitted.
-    filter_unreasonable : bool, default True
-        If True, only return rows where ``reasonable_match`` evaluates to True.
+    filter_low_quality : bool, default True
+        If True, only return rows where ``match_quality_pass`` evaluates to True.
     return_metadata : bool, default False
         When True, also return a metadata dict containing the config snapshot
         and model metadata for this run.
@@ -86,11 +86,10 @@ def reasonable_match_check(
             Patient identifier.
         space_trial_id : str
             Trial-space identifier.
-        reasonable_match_score : float
-            Model-generated confidence score that the candidate pair is clinically
-            reasonable.
-        reasonable_match : bool
-            Whether the candidate pair is considered clinically reasonable.
+        match_quality_score : float
+            Model-generated confidence score for clinical match quality.
+        match_quality_pass : bool
+            Whether the match quality score meets the configured cutoff.
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus a metadata dict.
     """
@@ -109,12 +108,12 @@ def reasonable_match_check(
 
     # Resolve run config and build checker prompts from the configured template.
     resolved_config = config or load_default_preset()
-    checker_config = dict(resolved_config.raw.get("reasonable_match", {}))
+    checker_config = dict(resolved_config.raw.get("match_quality", {}))
     prompt_file = str(checker_config["prompt_file"]).strip()
     score_cutoff = float(checker_config.get("score_cutoff", 0.2))
 
-    template = _load_reasonable_match_template(prompt_file)
-    prompts = _build_reasonable_match_prompts(candidate_pairs, template=template)
+    template = _load_match_quality_template(prompt_file)
+    prompts = _build_match_quality_prompts(candidate_pairs, template=template)
 
     # Run the backend text-classification model over all prompts.
     predictions, model_metadata = run_checker(
@@ -134,12 +133,14 @@ def reasonable_match_check(
         float(torch.sigmoid(torch.tensor(float(prediction["score"]))).item())
         for prediction in predictions
     ]
-    output["reasonable_match_score"] = confidence_scores
-    output["reasonable_match"] = [score >= score_cutoff for score in confidence_scores]
+    output["match_quality_score"] = confidence_scores
+    output["match_quality_pass"] = [
+        score >= score_cutoff for score in confidence_scores
+    ]
 
-    # Optionally keep only reasonable matches.
-    if filter_unreasonable:
-        keep_rows = output["reasonable_match"]
+    # Optionally keep only matches that pass the quality threshold.
+    if filter_low_quality:
+        keep_rows = output["match_quality_pass"]
         output = output.loc[keep_rows].copy()
     output = output.reset_index(drop=True)
 
@@ -148,7 +149,7 @@ def reasonable_match_check(
         metadata_payload = {
             "config_snapshot": resolved_config.raw,
             "model_metadata": {
-                "reasonable_match_checker": model_metadata,
+                "match_quality_checker": model_metadata,
             },
         }
         return output, metadata_payload
