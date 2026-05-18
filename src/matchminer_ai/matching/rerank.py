@@ -48,7 +48,7 @@ def score_match_quality(
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    Score the clinical match quality of each candidate patient-trial pair.
+    Evaluate the clinical match quality of each candidate patient-trial pair.
 
     Parameters
     ----------
