@@ -91,6 +91,9 @@ def build_vllm_server_command(
 
     The served model name is set to the configured model name so remote requests
     using ``trial.model_name`` or ``patient.model_name`` match the running server.
+    The helper maps only the known local engine fields needed by the default
+    config. Additional server-only CLI flags, such as speculative decoding
+    options, should be supplied explicitly with ``extra_args``.
     """
     resolved_config = config or load_default_preset()
     llm_config, local_config = _resolve_task_config(resolved_config, task)
@@ -160,7 +163,8 @@ def start_vllm_server(
     Start one local OpenAI-compatible vLLM server from config.
 
     Returns the ``subprocess.Popen`` handle so callers can monitor or terminate
-    the server process.
+    the server process. Additional vLLM server CLI flags are not read from the
+    config; pass them explicitly with ``extra_args``.
     """
     command = build_vllm_server_command(
         config=config,

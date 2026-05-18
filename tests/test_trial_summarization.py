@@ -166,6 +166,11 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
     )
 
     backend = LocalBackend()
+    default_config.local["trial"]["trust_remote_code"] = True
+    default_config.local["trial"]["speculative_config"] = {
+        "num_speculative_tokens": 4,
+    }
+    default_config.trial["sampling_params"]["seed"] = 123
     llm_config = build_summarization_runtime_config(
         "trial",
         default_config.trial,
@@ -182,6 +187,11 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
     assert summaries == ["SUM0", "SUM1"]
     assert metadata["model_sha"] == "sha"
     assert finish_reasons == ["stop", "stop"]
+    assert mock_vllm.LLM.call_args.kwargs["trust_remote_code"] is True
+    assert mock_vllm.LLM.call_args.kwargs["speculative_config"] == {
+        "num_speculative_tokens": 4,
+    }
+    assert mock_vllm.SamplingParams.call_args.kwargs["seed"] == 123
 
 
 def test_summarize_trials_includes_debug_columns(monkeypatch):
