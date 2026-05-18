@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
+import time
 from dataclasses import dataclass
 from typing import Any, Sequence
+from urllib import error, request
 from urllib.parse import urlparse
 
 from matchminer_ai.config import MMAIConfig, load_default_preset
@@ -150,6 +153,53 @@ def build_vllm_server_commands(
     ]
 
 
+def wait_for_vllm_server(
+    base_url: str,
+    *,
+    process: subprocess.Popen[str] | None = None,
+    timeout: float = 600.0,
+    poll_interval: float = 5.0,
+    api_key: str | None = None,
+) -> None:
+    """
+    Wait until a vLLM OpenAI-compatible server responds to ``/models``.
+
+    ``base_url`` should be the OpenAI-compatible base URL, usually ending in
+    ``/v1``. Raises ``TimeoutError`` if the server does not become ready before
+    ``timeout`` seconds.
+    """
+    models_url = f"{base_url.rstrip('/')}/models"
+    deadline = time.monotonic() + timeout
+    api_key = api_key or os.environ.get("OPENAI_API_KEY", "not-needed")
+    last_error: Exception | None = None
+
+    while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(
+                "vLLM server process exited before becoming ready "
+                f"with code {process.returncode}."
+            )
+
+        req = request.Request(
+            models_url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            method="GET",
+        )
+        try:
+            with request.urlopen(req, timeout=min(poll_interval, 10.0)) as response:
+                if 200 <= response.status < 300:
+                    return
+        except (OSError, error.URLError, error.HTTPError) as exc:
+            last_error = exc
+
+        time.sleep(poll_interval)
+
+    message = f"Timed out waiting for vLLM server at {models_url}."
+    if last_error is not None:
+        message += f" Last error: {last_error}"
+    raise TimeoutError(message)
+
+
 def start_vllm_server(
     *,
     config: MMAIConfig | None = None,
@@ -159,6 +209,9 @@ def start_vllm_server(
     stdout: int | None = None,
     stderr: int | None = None,
     print_url: bool = True,
+    wait_until_ready: bool = True,
+    ready_timeout: float = 600.0,
+    ready_poll_interval: float = 5.0,
 ) -> subprocess.Popen[str]:
     """
     Start one local OpenAI-compatible vLLM server from config.
@@ -166,7 +219,8 @@ def start_vllm_server(
     Returns the ``subprocess.Popen`` handle so callers can monitor or terminate
     the server process. Additional vLLM server CLI flags are not read from the
     config; pass them explicitly with ``extra_args``. By default, prints the
-    remote base URL that should be used in ``config.remote["server_urls"]``.
+    remote base URL that should be used in ``config.remote["server_urls"]`` and
+    waits until the server responds to ``/v1/models``.
     """
     command = build_vllm_server_command(
         config=config,
@@ -176,12 +230,20 @@ def start_vllm_server(
     )
     if print_url:
         print(f"vLLM server URL: {command.base_url}")
-    return subprocess.Popen(
+    process = subprocess.Popen(
         command.command,
         text=True,
         stdout=stdout,
         stderr=stderr,
     )
+    if wait_until_ready:
+        wait_for_vllm_server(
+            command.base_url,
+            process=process,
+            timeout=ready_timeout,
+            poll_interval=ready_poll_interval,
+        )
+    return process
 
 
 def start_vllm_servers(
@@ -192,6 +254,9 @@ def start_vllm_servers(
     stdout: int | None = None,
     stderr: int | None = None,
     print_url: bool = True,
+    wait_until_ready: bool = True,
+    ready_timeout: float = 600.0,
+    ready_poll_interval: float = 5.0,
 ) -> list[subprocess.Popen[str]]:
     """Start one local vLLM server for each URL in ``config.remote.server_urls``."""
     resolved_config = config or load_default_preset()
@@ -204,6 +269,9 @@ def start_vllm_servers(
             stdout=stdout,
             stderr=stderr,
             print_url=print_url,
+            wait_until_ready=wait_until_ready,
+            ready_timeout=ready_timeout,
+            ready_poll_interval=ready_poll_interval,
         )
         for server_index, _url in enumerate(_remote_server_urls(resolved_config))
     ]
@@ -215,4 +283,5 @@ __all__ = [
     "build_vllm_server_commands",
     "start_vllm_server",
     "start_vllm_servers",
+    "wait_for_vllm_server",
 ]

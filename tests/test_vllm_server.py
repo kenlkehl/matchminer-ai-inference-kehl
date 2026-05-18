@@ -4,6 +4,7 @@ from matchminer_ai.llm.vllm_server import (
     build_vllm_server_commands,
     start_vllm_server,
     start_vllm_servers,
+    wait_for_vllm_server,
 )
 
 
@@ -94,6 +95,7 @@ def test_start_vllm_server_invokes_subprocess(monkeypatch, capsys):
         task="patient",
         stdout=-1,
         stderr=-1,
+        wait_until_ready=False,
     )
 
     assert isinstance(process, FakeProcess)
@@ -117,6 +119,7 @@ def test_start_vllm_server_can_suppress_url_print(monkeypatch, capsys):
         config=_config(),
         task="patient",
         print_url=False,
+        wait_until_ready=False,
     )
 
     assert capsys.readouterr().out == ""
@@ -138,10 +141,48 @@ def test_plural_helpers_use_all_configured_server_urls(monkeypatch):
 
     monkeypatch.setattr("matchminer_ai.llm.vllm_server.subprocess.Popen", fake_popen)
 
-    processes = start_vllm_servers(config=_config(), task="trial")
+    processes = start_vllm_servers(
+        config=_config(),
+        task="trial",
+        wait_until_ready=False,
+    )
 
     assert len(processes) == 2
     assert [call[0][call[0].index("--port") + 1] for call in calls] == [
         "8000",
         "8001",
+    ]
+
+
+def test_wait_for_vllm_server_polls_models_endpoint(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+    def fake_urlopen(req, timeout):
+        calls.append((req.full_url, req.headers, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr("matchminer_ai.llm.vllm_server.request.urlopen", fake_urlopen)
+
+    wait_for_vllm_server(
+        "http://localhost:8000/v1",
+        timeout=1,
+        poll_interval=0.1,
+        api_key="test-key",
+    )
+
+    assert calls == [
+        (
+            "http://localhost:8000/v1/models",
+            {"Authorization": "Bearer test-key"},
+            0.1,
+        )
     ]
