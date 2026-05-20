@@ -290,6 +290,21 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
         "matchminer_ai.trials.summarize.get_summarization_backend",
         lambda config: MockBackend(),
     )
+    monkeypatch.setattr(
+        "matchminer_ai.trials.summarize.build_prompt_list",
+        lambda messages_list, llm_config: [
+            Prompt(
+                row_idx=idx,
+                prompt_text=f"Here is a clinical trial document: {messages[-1]['content']}",
+                max_tokens=10,
+            )
+            for idx, messages in enumerate(messages_list)
+        ],
+    )
+    monkeypatch.setattr(
+        "matchminer_ai._qc.trials.count_embedding_tokens",
+        lambda texts, embedding_config: [1 for _text in texts],
+    )
 
     trials = pd.DataFrame(
         [
@@ -341,6 +356,13 @@ def test_summarize_trials_metadata_uses_live_config(monkeypatch, default_config)
     monkeypatch.setattr(
         "matchminer_ai.trials.summarize.get_summarization_backend",
         lambda config: MockBackend(),
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.trials.summarize.build_prompt_list",
+        lambda messages_list, llm_config: [
+            Prompt(row_idx=idx, prompt_text="prompt", max_tokens=10)
+            for idx, _messages in enumerate(messages_list)
+        ],
     )
 
     default_config.raw = {"remote": {"enabled": False}}
