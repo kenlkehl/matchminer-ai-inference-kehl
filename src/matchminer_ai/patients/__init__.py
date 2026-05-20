@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, cast
 
-from matchminer_ai.config import MMAIConfig, load_default_preset
+from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 
 from .summarize import summarize_patient_notes
 
@@ -117,7 +117,7 @@ def summarize_patients(
 
     if return_metadata:
         metadata_payload = {
-            "config_snapshot": resolved_config.raw,
+            "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
                 "patient_summarizer": metadata["model_metadata"],
             },

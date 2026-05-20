@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from importlib import resources
 
-from matchminer_ai.config import load_default_preset
+from matchminer_ai.config import config_snapshot, load_default_preset
 from .inference import run_checker
 
 if TYPE_CHECKING:
@@ -142,7 +142,7 @@ def exclusion_criteria_check(
     # Optionally return metadata for reproducibility/debugging.
     if return_metadata:
         metadata_payload = {
-            "config_snapshot": resolved_config.raw,
+            "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
                 "exclusion_criteria_checker": model_metadata,
             },
