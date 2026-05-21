@@ -12,6 +12,20 @@ if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
 
+def split_reasoning_from_summary(
+    raw_text: str,
+    reasoning_marker: str,
+) -> tuple[str, str]:
+    """
+    Split raw LLM output into reasoning and final patient summary text.
+
+    """
+    if reasoning_marker in raw_text:
+        reasoning, summary = raw_text.split(reasoning_marker, 1)
+        return reasoning.strip(), summary.strip()
+    return "", raw_text.strip()
+
+
 def parse_boilerplate(
     df: pd.DataFrame, reasoning_marker: str, boilerplate_marker: str
 ) -> pd.DataFrame:

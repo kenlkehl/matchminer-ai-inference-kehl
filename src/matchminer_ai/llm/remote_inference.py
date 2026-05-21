@@ -301,49 +301,56 @@ async def generate_remote_llm_outputs_async(
         api_key=api_key,
     )
 
-    server_prompt_groups: list[list[Prompt]] = [[] for _ in server_clients]
-    for i, prompt in enumerate(prompts):
-        server_prompt_groups[i % len(server_clients)].append(prompt)
+    try:
+        server_prompt_groups: list[list[Prompt]] = [[] for _ in server_clients]
+        for i, prompt in enumerate(prompts):
+            server_prompt_groups[i % len(server_clients)].append(prompt)
 
-    tasks = []
-    for server_idx, (client, port) in enumerate(server_clients):
-        prompt_group = server_prompt_groups[server_idx]
-        if prompt_group:
-            tasks.append(
-                run_inference_batch(
-                    client=client,
-                    prompts=prompt_group,
-                    model=model_name,
-                    temperature=float(sampling_params["temperature"]),
-                    top_k=int(sampling_params["top_k"]),
-                    top_p=float(sampling_params.get("top_p", 1.0)),
-                    presence_penalty=float(
-                        sampling_params.get("presence_penalty", 0.0)
-                    ),
-                    min_p=float(sampling_params.get("min_p", 0.0)),
-                    repetition_penalty=float(sampling_params["repetition_penalty"]),
-                    reasoning_marker=str(
-                        llm_config.get("reasoning_marker", "assistantfinal")
-                    ),
-                    max_concurrent=max_concurrent_requests,
-                    batch_size=batch_size,
-                    max_retries=max_retries,
-                    base_timeout=request_timeout,
-                    port=port,
-                    retry_backoff_base=retry_backoff_base,
+        tasks = []
+        for server_idx, (client, port) in enumerate(server_clients):
+            prompt_group = server_prompt_groups[server_idx]
+            if prompt_group:
+                tasks.append(
+                    run_inference_batch(
+                        client=client,
+                        prompts=prompt_group,
+                        model=model_name,
+                        temperature=float(sampling_params["temperature"]),
+                        top_k=int(sampling_params["top_k"]),
+                        top_p=float(sampling_params.get("top_p", 1.0)),
+                        presence_penalty=float(
+                            sampling_params.get("presence_penalty", 0.0)
+                        ),
+                        min_p=float(sampling_params.get("min_p", 0.0)),
+                        repetition_penalty=float(sampling_params["repetition_penalty"]),
+                        reasoning_marker=str(
+                            llm_config.get("reasoning_marker", "assistantfinal")
+                        ),
+                        max_concurrent=max_concurrent_requests,
+                        batch_size=batch_size,
+                        max_retries=max_retries,
+                        base_timeout=request_timeout,
+                        port=port,
+                        retry_backoff_base=retry_backoff_base,
+                    )
                 )
-            )
 
-    all_batch_results = await asyncio.gather(*tasks)
-    results = [
-        result for batch_results in all_batch_results for result in batch_results
-    ]
-    texts: list[str] = [""] * len(prompts)
-    finish_reasons: list[str] = [""] * len(prompts)
-    for result in results:
-        texts[result.row_idx] = result.summary
-        finish_reasons[result.row_idx] = result.finish_reason
-    return texts, finish_reasons
+        all_batch_results = await asyncio.gather(*tasks)
+        results = [
+            result for batch_results in all_batch_results for result in batch_results
+        ]
+        texts: list[str] = [""] * len(prompts)
+        finish_reasons: list[str] = [""] * len(prompts)
+        for result in results:
+            texts[result.row_idx] = result.summary
+            finish_reasons[result.row_idx] = result.finish_reason
+        return texts, finish_reasons
+    finally:
+        close_tasks = [
+            client.aclose() for client, _ in server_clients if hasattr(client, "aclose")
+        ]
+        if close_tasks:
+            await asyncio.gather(*close_tasks, return_exceptions=True)
 
 
 def generate_remote_llm_outputs(

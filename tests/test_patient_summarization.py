@@ -6,7 +6,11 @@ import pandas as pd
 from matchminer_ai.llm.backends import LocalBackend
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.patients import summarize_patients
-from matchminer_ai.patients.postprocess import clean_bad_data, parse_boilerplate
+from matchminer_ai.patients.postprocess import (
+    clean_bad_data,
+    parse_boilerplate,
+    split_reasoning_from_summary,
+)
 from matchminer_ai.patients.prompt_builder import get_serial_patient_prompt
 from matchminer_ai.patients.summarize import summarize_patient_notes
 from matchminer_ai.llm.prompt_rendering import Prompt
@@ -93,6 +97,17 @@ def _remote_config(debug_mode: bool = False) -> MMAIConfig:
         "prompt_build_workers": 2,
     }
     return config
+
+
+def test_split_reasoning_from_summary_matches_original_serial_script():
+    """Split raw model output before using it as serial prior summary state."""
+    reasoning, summary = split_reasoning_from_summary(
+        "analysis text\nassistantfinal\nAge: 70\nBoilerplate:\nNone",
+        "assistantfinal",
+    )
+
+    assert reasoning == "analysis text"
+    assert summary == "Age: 70\nBoilerplate:\nNone"
 
 
 def test_parse_boilerplate_splits_summary_and_exclusions():
@@ -276,7 +291,7 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
     )
     result, metadata = summarize_patient_notes(notes, config=_config())
 
-    assert seen_prior_summaries == [None, "assistantfinal\nRound 1\nBoilerplate:\nNone"]
+    assert seen_prior_summaries == [None, "Round 1\nBoilerplate:\nNone"]
     assert result.loc[result.index[0], "cancer_history_summary"] == "Round 2"
     assert metadata["model_metadata"]["model_sha"] == "sha"
 

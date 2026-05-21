@@ -31,7 +31,11 @@ class FakeAsyncOpenAI:
         self.timeout = timeout
         self.completions = FakeCompletions(self)
         self.calls: list[dict[str, Any]] = []
+        self.closed = False
         FakeAsyncOpenAI.clients.append(self)
+
+    async def aclose(self):
+        self.closed = True
 
     async def create(self, **kwargs):
         self.calls.append(kwargs)
@@ -111,6 +115,7 @@ def test_remote_backend_single_server_preserves_order(monkeypatch):
     assert metadata["model_sha"] == "sha"
     assert finish_reasons == ["stop", "stop", "stop"]
     assert FakeAsyncOpenAI.clients[0].timeout == 183
+    assert FakeAsyncOpenAI.clients[0].closed is True
 
 
 def test_remote_backend_multiple_servers_distributes_and_preserves_order(monkeypatch):
@@ -136,6 +141,7 @@ def test_remote_backend_multiple_servers_distributes_and_preserves_order(monkeyp
     }
     assert calls_by_server["http://server-a/v1"] == ["p0", "p2"]
     assert calls_by_server["http://server-b/v1"] == ["p1", "p3"]
+    assert all(client.closed for client in FakeAsyncOpenAI.clients)
 
 
 def test_remote_backend_uses_env_var_api_key(monkeypatch):

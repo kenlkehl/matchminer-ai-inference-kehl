@@ -15,7 +15,7 @@ from matchminer_ai.llm.backends import (
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 from matchminer_ai.llm.prompt_rendering import Prompt
 
-from .postprocess import postprocess_patient_summaries
+from .postprocess import postprocess_patient_summaries, split_reasoning_from_summary
 from .prepare import prepare_patient_notes
 from .prompt_builder import (
     PromptWorkItem,
@@ -207,9 +207,16 @@ def summarize_patient_notes(
             )
             if not model_metadata:
                 model_metadata = round_model_metadata
-            # Persist each round's output so it becomes the prior summary for the
-            # next chunk from that same patient.
-            for patient_id, summary in zip(round_patient_ids, summaries, strict=False):
+            # Persist each round's final summary, not the model's raw reasoning
+            # trace, so it becomes the prior summary for the next patient chunk.
+            reasoning_marker = str(patient_config["reasoning_marker"])
+            for patient_id, raw_summary in zip(
+                round_patient_ids, summaries, strict=False
+            ):
+                _, summary = split_reasoning_from_summary(
+                    str(raw_summary),
+                    reasoning_marker,
+                )
                 current_summaries[patient_id] = summary
     finally:
         if prompt_pool is not None:
