@@ -1,12 +1,12 @@
 # MatchMiner-AI Tutorial
 
-This tutorial provides background as well as specific information regarding how to run the example.ipynb notebook.
+This tutorial provides background as well as specific information regarding how to run the run_examples.ipynb notebook.
 
 There are two main ways patients and clinical trials can be matched:
 1. Patient-centric matching: Find a set of clinical trials for a patient; and
 2. Trial-centric matching: Find a set of patients for a clinical trial.
 
-Currently, MatchMiner-AI is most fully developed for Patient-centric matching. The example.ipynb notebook and the following information mainly support this method of finding patient-trial matches.
+Currently, MatchMiner-AI is most fully developed for Patient-centric matching. The run_examples.ipynb notebook and the following information mainly support this method of finding patient-trial matches.
 
 ## How MatchMiner-AI works
 
