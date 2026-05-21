@@ -16,7 +16,7 @@
       }
     },
     "remote": {
-      "enabled": false,
+      "enabled": true,
       "server_urls": [
         "http://localhost:8000/v1"
       ],
@@ -75,7 +75,8 @@
       "model_name": "ksg-dfci/BoilerPlateChecker-0426",
       "device": "cuda",
       "prompt_file": "exclusion_criteria_checker_template.txt"
-    }
+    },
+    "preset_name": "default"
   },
   "model_metadata": {
     "trial_summarizer": {
