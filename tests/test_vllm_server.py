@@ -12,8 +12,16 @@ def _config() -> MMAIConfig:
     return MMAIConfig(
         preset_name="test",
         debug_mode=False,
-        trial={"model_name": "trial-model"},
-        patient={"model_name": "patient-model"},
+        trial={
+            "model_name": "trial-model",
+            "reasoning_parser": "gemma4",
+            "chat_template_kwargs": {"enable_thinking": True},
+        },
+        patient={
+            "model_name": "patient-model",
+            "reasoning_parser": "gemma4",
+            "chat_template_kwargs": {"enable_thinking": True},
+        },
         local={
             "trial": {
                 "max_model_len": 10000,
@@ -61,6 +69,10 @@ def test_build_vllm_server_command_uses_task_model_and_local_runtime():
         "2",
         "--gpu-memory-utilization",
         "0.9",
+        "--reasoning-parser",
+        "gemma4",
+        "--default-chat-template-kwargs",
+        '{"enable_thinking": true}',
     ]
 
 

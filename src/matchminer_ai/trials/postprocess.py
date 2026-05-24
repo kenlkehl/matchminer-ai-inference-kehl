@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -41,24 +42,19 @@ def _expand_trial_spaces(
 ) -> pd.DataFrame:
     """Expand LLM summaries into one row per clinical space."""
     trials_with_summaries = trials_with_summaries.copy()
-    trials_with_summaries["space_output_no_reasoning"] = (
-        trials_with_summaries["space_reasoning_and_output"]
-        .str.split(reasoning_marker, n=1)
-        .apply(lambda parts: parts[-1])
-    )
+    if "space_output_no_reasoning" not in trials_with_summaries.columns:
+        output = trials_with_summaries["space_reasoning_and_output"].astype(str)
+        if reasoning_marker:
+            output = output.str.split(reasoning_marker, n=1).apply(
+                lambda parts: parts[-1]
+            )
+        trials_with_summaries["space_output_no_reasoning"] = output
 
-    trials_with_summaries[["space_text", "boilerplate_text"]] = trials_with_summaries[
-        "space_output_no_reasoning"
-    ].str.split(boilerplate_marker, n=1, expand=True, regex=True)
-    trials_with_summaries["space_text"] = trials_with_summaries[
-        "space_text"
-    ].str.strip()
-    trials_with_summaries["boilerplate_text"] = (
-        trials_with_summaries["boilerplate_text"]
-        .str.strip()
-        .fillna("None")
-        .replace("", "None")
+    split_parts = trials_with_summaries["space_output_no_reasoning"].apply(
+        lambda text: _split_boilerplate_section(str(text), boilerplate_marker)
     )
+    trials_with_summaries["space_text"] = split_parts.apply(lambda parts: parts[0])
+    trials_with_summaries["boilerplate_text"] = split_parts.apply(lambda parts: parts[1])
 
     frames: list[pd.DataFrame] = []
     for i in range(trials_with_summaries.shape[0]):
@@ -98,6 +94,40 @@ def _expand_trial_spaces(
     return pd.concat(frames, axis=0).reset_index(drop=True)
 
 
+def _line_matches_boilerplate_marker(line: str, boilerplate_marker: str) -> bool:
+    if "Boilerplate" in boilerplate_marker:
+        return "Boilerplate" in line
+    try:
+        return re.search(boilerplate_marker, line) is not None
+    except re.error:
+        return boilerplate_marker in line
+
+
+def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:
+    """
+    Split final trial output at the line containing the boilerplate marker.
+
+    This mirrors the v22 training postprocessor: the marker line is removed from
+    both parts so downstream QC does not see headings as exclusion criteria.
+    """
+    lines = text.splitlines()
+    split_idx = next(
+        (
+            idx
+            for idx, line in enumerate(lines)
+            if _line_matches_boilerplate_marker(line, boilerplate_marker)
+        ),
+        -1,
+    )
+    if split_idx == -1:
+        cleaned = text.strip()
+        return cleaned, cleaned or "None"
+
+    space_part = "\n".join(lines[:split_idx]).strip()
+    boilerplate_part = "\n".join(lines[split_idx + 1 :]).strip() or "None"
+    return space_part, boilerplate_part
+
+
 def flatten_trial_to_spaces(
     trials_with_summaries: pd.DataFrame,
     reasoning_marker: str,
@@ -124,7 +154,7 @@ def postprocess_trial_summaries(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Postprocess trial summaries into clinical spaces."""
     trial_config = dict(config.trial)
-    reasoning_marker = trial_config["reasoning_marker"]
+    reasoning_marker = str(trial_config.get("reasoning_marker", ""))
     boilerplate_marker = trial_config["boilerplate_marker"]
     unfiltered_spaces = _expand_trial_spaces(
         trials_with_summaries,
@@ -165,5 +195,7 @@ def postprocess_trial_summaries(
     if config.debug_mode:
         output["trial_text"] = spaces["trial_text"]
         output["space_reasoning_and_output"] = spaces["space_reasoning_and_output"]
+        if "space_reasoning" in spaces.columns:
+            output["space_reasoning"] = spaces["space_reasoning"]
     # qc spaces = unfiltered trial spaces
     return output, unfiltered_spaces

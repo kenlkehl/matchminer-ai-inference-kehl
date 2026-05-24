@@ -37,6 +37,8 @@ def test_get_filled_trial_prompt_includes_trial_text():
     assert prompts[0]["role"] == "system"
     assert prompts[1]["role"] == "user"
     assert "FIND ME" in prompts[1]["content"]
+    assert "ECOG performance status" in prompts[1]["content"]
+    assert "Boilerplate exclusions:" in prompts[1]["content"]
 
 
 def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
@@ -139,6 +141,45 @@ def test_flatten_trial_to_spaces(
     )
 
 
+def test_flatten_trial_to_spaces_uses_final_output_and_line_boilerplate():
+    """Use parsed final text and remove the boilerplate marker line."""
+    trial_space = (
+        "1. Age: 18+. Sex: Any. Cancer type allowed: A. Histology allowed: Any. "
+        "Cancer burden allowed: Any. Prior treatment required: None. "
+        "Prior treatment excluded: None. Biomarkers required: None. "
+        "Biomarkers excluded: None."
+    )
+    boilerplate = "Uncontrolled brain metastases."
+    df = pd.DataFrame(
+        [
+            {
+                "trial_id": "T1",
+                "trial_text": "raw input",
+                "space_reasoning_and_output": "raw reasoning text",
+                "space_output_no_reasoning": (
+                    f"{trial_space}\n"
+                    "Boilerplate exclusions:\n"
+                    f"{boilerplate}"
+                ),
+            }
+        ]
+    )
+
+    result = flatten_trial_to_spaces(
+        df,
+        reasoning_marker="",
+        boilerplate_marker="Boilerplate",
+    )
+
+    assert result["clinical_space_summary"].tolist() == [
+        "Age: 18+. Sex: Any. Cancer type allowed: A. Histology allowed: Any. "
+        "Cancer burden allowed: Any. Prior treatment required: None. "
+        "Prior treatment excluded: None. Biomarkers required: None. "
+        "Biomarkers excluded: None."
+    ]
+    assert result["boilerplate_text"].tolist() == [boilerplate]
+
+
 def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
     """Ensure our function running vLLM locally return both raw LLM outputs and model metadata."""
     mock_llm = MagicMock()
@@ -164,12 +205,17 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
             "last_modified": "now",
         },
     )
+    monkeypatch.setattr(
+        "matchminer_ai.llm.backends.parse_reasoning_output",
+        lambda text, parser_name, tokenizer: (f"REASON {text}", f"FINAL {text}"),
+    )
 
     backend = LocalBackend()
     default_config.local["trial"]["trust_remote_code"] = True
     default_config.local["trial"]["speculative_config"] = {
         "num_speculative_tokens": 4,
     }
+    default_config.trial["reasoning_parser"] = "gemma4"
     default_config.trial["sampling_params"]["seed"] = 123
     llm_config = build_summarization_runtime_config(
         "trial",
@@ -184,7 +230,9 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
         llm_config=llm_config,
     )
 
-    assert summaries == ["SUM0", "SUM1"]
+    assert summaries == ["FINAL SUM0", "FINAL SUM1"]
+    assert backend.last_raw_outputs == ["SUM0", "SUM1"]
+    assert backend.last_reasoning_outputs == ["REASON SUM0", "REASON SUM1"]
     assert metadata["model_sha"] == "sha"
     assert finish_reasons == ["stop", "stop"]
     assert mock_vllm.LLM.call_args.kwargs["trust_remote_code"] is True

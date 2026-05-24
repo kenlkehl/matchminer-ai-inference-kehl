@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
@@ -11,6 +12,7 @@ from urllib import error, request
 from urllib.parse import urlparse
 
 from matchminer_ai.config import MMAIConfig, load_default_preset
+from matchminer_ai.llm.reasoning import resolve_reasoning_parser
 
 
 @dataclass(frozen=True)
@@ -121,6 +123,20 @@ def build_vllm_server_command(
         "--gpu-memory-utilization",
         str(local_config["gpu_memory_utilization"]),
     ]
+    reasoning_parser = resolve_reasoning_parser(
+        model_name,
+        str(llm_config.get("reasoning_parser", "auto")),
+    )
+    if reasoning_parser:
+        command.extend(["--reasoning-parser", reasoning_parser])
+    chat_template_kwargs = llm_config.get("chat_template_kwargs")
+    if chat_template_kwargs:
+        command.extend(
+            [
+                "--default-chat-template-kwargs",
+                json.dumps(chat_template_kwargs, sort_keys=True),
+            ]
+        )
     if extra_args:
         command.extend(str(arg) for arg in extra_args)
 

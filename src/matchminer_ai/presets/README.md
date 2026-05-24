@@ -58,9 +58,9 @@ maximum context window used for chunk truncation.
 ## `remote`
 
 Configuration used when `remote.enabled` is true and trial/patient
-summarization sends OpenAI-compatible HTTP requests to external vLLM servers.
-The remote backend reads the API key from the `OPENAI_API_KEY` environment
-variable. API keys are not stored in preset files.
+summarization sends OpenAI-compatible chat completion requests to external
+vLLM servers. The remote backend reads the API key from the `OPENAI_API_KEY`
+environment variable. API keys are not stored in preset files.
 
 ### `remote.enabled`
 
@@ -69,7 +69,10 @@ Selects the remote summarization backend when true.
 ### `remote.server_urls`
 
 List of OpenAI-compatible base URLs. Values are passed to the OpenAI client as
-`base_url`.
+`base_url`. For the default Gemma 4 configuration, the server should be a vLLM
+chat endpoint launched with the `gemma4` reasoning parser; the package
+`start_vllm_server()` helper adds this flag from `trial.reasoning_parser` or
+`patient.reasoning_parser`.
 
 ### `remote.max_concurrent_requests`
 
@@ -112,7 +115,7 @@ value.
 Keyword arguments passed to `vllm.SamplingParams(...)` in local mode.
 
 Remote mode maps known OpenAI-compatible fields and selected vLLM-specific
-fields from this mapping into completion request parameters.
+fields from this mapping into chat completion request parameters.
 
 Additional keys may be included if they are valid `vllm.SamplingParams` keyword
 arguments. vLLM validates those keys in local mode.
@@ -121,10 +124,23 @@ arguments. vLLM validates those keys in local mode.
 
 Prompt template filenames loaded from `matchminer_ai.prompts`.
 
+### `trial.reasoning_parser`
+
+vLLM reasoning parser name. The default `auto` resolves
+`google/gemma-4-31B-it` to `gemma4`. Use `none` to disable reasoning parsing
+for a non-reasoning model.
+
+### `trial.chat_template_kwargs`
+
+Keyword arguments passed to tokenizer chat-template rendering in local mode and
+to vLLM request `extra_body.chat_template_kwargs` in remote mode. The default
+sets `enable_thinking: true` for Gemma 4.
+
 ### `trial.reasoning_marker`
 
-Marker used by trial postprocessing to split/remove reasoning text from model
-output.
+Legacy marker used only as a fallback when parsing outputs produced by older
+configs or mocked backends. The v22 default is empty because reasoning is
+handled by vLLM parsers.
 
 ### `trial.boilerplate_marker`
 
@@ -165,7 +181,7 @@ Token margin reserved when truncating patient chunks before prompt rendering.
 Keyword arguments passed to `vllm.SamplingParams(...)` in local mode.
 
 Remote mode maps known OpenAI-compatible fields and selected vLLM-specific
-fields from this mapping into completion request parameters.
+fields from this mapping into chat completion request parameters.
 
 Additional keys may be included if they are valid `vllm.SamplingParams` keyword
 arguments. vLLM validates those keys in local mode.
@@ -174,10 +190,23 @@ arguments. vLLM validates those keys in local mode.
 
 Prompt template filenames loaded from `matchminer_ai.prompts`.
 
+### `patient.reasoning_parser`
+
+vLLM reasoning parser name. The default `auto` resolves
+`google/gemma-4-31B-it` to `gemma4`. Use `none` to disable reasoning parsing
+for a non-reasoning model.
+
+### `patient.chat_template_kwargs`
+
+Keyword arguments passed to tokenizer chat-template rendering in local mode and
+to vLLM request `extra_body.chat_template_kwargs` in remote mode. The default
+sets `enable_thinking: true` for Gemma 4.
+
 ### `patient.reasoning_marker`
 
-Marker used by patient postprocessing to split/remove reasoning text from model
-output.
+Legacy marker used only as a fallback when parsing outputs produced by older
+configs or mocked backends. The v22 default is empty because reasoning is
+handled by vLLM parsers.
 
 ### `patient.boilerplate_marker`
 

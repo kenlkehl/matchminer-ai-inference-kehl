@@ -1,3 +1,5 @@
 Now, write your updated summary, or if there is no new relevant information, output the prior summary exactly as it was.
 If any information is still relevant but is unchanged, just restate it in the updated summary, but do NOT state "no change" or similar - just produce the updated summary text as if you were writing it fresh, incorporating any new information but keeping relevant old information, without calling out what changed vs what stayed the same from the prior summary.
+You may update the old summary content in your output if the new information demonstrates that there was an error in the old output.
+You may sometimes encounter contradictory information across notes (eg different biomarker results, or different cancer stage descriptions) - in that case, use your best judgment to determine which information is most likely to be correct based on the dates and context, and update the summary accordingly to reflect the most likely current state of the patient.
 Do not add preceding text before the abstraction, and do not add commentary afterwards.

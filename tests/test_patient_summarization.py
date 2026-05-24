@@ -3,8 +3,10 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from matchminer_ai.llm.backends import LocalBackend
 from matchminer_ai.config import MMAIConfig
+from matchminer_ai.llm.backends import LocalBackend
+from matchminer_ai.llm.prompt_rendering import Prompt
+from matchminer_ai.llm.remote_inference import generate_remote_llm_outputs
 from matchminer_ai.patients import summarize_patients
 from matchminer_ai.patients.postprocess import (
     clean_bad_data,
@@ -13,8 +15,6 @@ from matchminer_ai.patients.postprocess import (
 )
 from matchminer_ai.patients.prompt_builder import get_serial_patient_prompt
 from matchminer_ai.patients.summarize import summarize_patient_notes
-from matchminer_ai.llm.prompt_rendering import Prompt
-from matchminer_ai.llm.remote_inference import generate_remote_llm_outputs
 
 
 class MockTokenResult:
@@ -137,6 +137,34 @@ def test_parse_boilerplate_splits_summary_and_exclusions():
     assert parsed.loc[1, "general_exclusion_criteria_evidence"] == "Cancer only."
 
 
+def test_parse_boilerplate_accepts_final_only_v22_output():
+    """Parsed final content should not need a reasoning marker."""
+    df = pd.DataFrame(
+        [
+            {
+                "original_patient_summary": (
+                    "Cancer history here.\n"
+                    "\n"
+                    "Boilerplate conditions:\n"
+                    "Remote inactive prostate cancer."
+                )
+            }
+        ]
+    )
+
+    parsed = parse_boilerplate(
+        df,
+        reasoning_marker="",
+        boilerplate_marker="\\s*Boilerplate conditions\\s*:?\\s*",
+    )
+
+    assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
+    assert (
+        parsed.loc[0, "general_exclusion_criteria_evidence"]
+        == "Remote inactive prostate cancer."
+    )
+
+
 def test_clean_bad_data_filters_invalid_summaries():
     """Drop rows with empty or invalid patient summaries."""
     df = pd.DataFrame(
@@ -196,7 +224,7 @@ def test_get_serial_patient_prompt_includes_prior_summary_and_chunk_text():
         primer_filename="patient.serial.user.primer.txt",
         question_filename="patient.serial.user.question.txt",
         margin_tokens=10,
-        model_name="openai/gpt-oss-120b",
+        model_name="google/gemma-4-31B-it",
     )
 
     assert len(prompts) == 2
@@ -204,6 +232,8 @@ def test_get_serial_patient_prompt_includes_prior_summary_and_chunk_text():
     assert prompts[1]["role"] == "user"
     assert "Age: 70" in prompts[1]["content"]
     assert "Clinical note text." in prompts[1]["content"]
+    assert "Boilerplate conditions:" in prompts[1]["content"]
+    assert "contradictory information across notes" in prompts[1]["content"]
 
 
 def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypatch):
@@ -211,7 +241,7 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
     _stub_patient_qc(monkeypatch)
     monkeypatch.setattr(
         "matchminer_ai.patients.summarize.AutoTokenizer.from_pretrained",
-        lambda model_name: MockTokenizer(),
+        lambda model_name, **kwargs: MockTokenizer(),
     )
     monkeypatch.setattr(
         "matchminer_ai.patients.summarize.prepare_patient_notes",
@@ -301,7 +331,7 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
     _stub_patient_qc(monkeypatch)
     monkeypatch.setattr(
         "matchminer_ai.patients.summarize.AutoTokenizer.from_pretrained",
-        lambda model_name: MockTokenizer(),
+        lambda model_name, **kwargs: MockTokenizer(),
     )
     monkeypatch.setattr(
         "matchminer_ai.patients.summarize.prepare_patient_notes",
@@ -374,7 +404,7 @@ def test_remote_summarize_patient_notes_uses_parallel_prompt_workers(monkeypatch
     _stub_patient_qc(monkeypatch)
     monkeypatch.setattr(
         "matchminer_ai.patients.summarize.AutoTokenizer.from_pretrained",
-        lambda model_name: MockTokenizer(),
+        lambda model_name, **kwargs: MockTokenizer(),
     )
     monkeypatch.setattr(
         "matchminer_ai.patients.summarize.prepare_patient_notes",
@@ -479,7 +509,7 @@ def test_generate_remote_llm_outputs_handles_running_event_loop(monkeypatch):
         server_urls,
         api_key,
     ):
-        return ["assistantfinal\nSummary"], ["stop"]
+        return ["Summary"], ["thinking"], ["stop"]
 
     monkeypatch.setattr(
         "matchminer_ai.llm.remote_inference.generate_remote_llm_outputs_async",
@@ -494,9 +524,10 @@ def test_generate_remote_llm_outputs_handles_running_event_loop(monkeypatch):
             api_key="not-needed",
         )
 
-    texts, finish_reasons = asyncio.run(invoke_wrapper())
+    texts, reasonings, finish_reasons = asyncio.run(invoke_wrapper())
 
-    assert texts == ["assistantfinal\nSummary"]
+    assert texts == ["Summary"]
+    assert reasonings == ["thinking"]
     assert finish_reasons == ["stop"]
 
 

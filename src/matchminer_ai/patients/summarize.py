@@ -76,6 +76,17 @@ def _build_rounds(prepared_chunks: pd.DataFrame) -> list[pd.DataFrame]:
     return rounds
 
 
+def _backend_outputs_or(
+    backend: Any,
+    attr_name: str,
+    fallback: list[str],
+) -> list[str]:
+    value = getattr(backend, attr_name, None)
+    if isinstance(value, list) and len(value) == len(fallback):
+        return value
+    return fallback
+
+
 def _build_prompt_list(
     round_df: pd.DataFrame,
     *,
@@ -157,7 +168,10 @@ def summarize_patient_notes(
 
     # Convert note-level input into patient-level metadata plus chunk-level
     # rows. The chunk rows are what drive the serial summarization loop.
-    tokenizer = AutoTokenizer.from_pretrained(patient_config["model_name"])
+    tokenizer = AutoTokenizer.from_pretrained(
+        patient_config["model_name"],
+        trust_remote_code=True,
+    )
     prepared_patients, prepared_chunks = prepare_patient_notes(
         notes,
         tokenizer,
@@ -174,6 +188,8 @@ def summarize_patient_notes(
     current_summaries = {
         patient_id: summary for patient_id, summary in existing_summary_lookup.items()
     }
+    current_raw_outputs: dict[str, str] = {}
+    current_reasoning_outputs: dict[str, str] = {}
     model_metadata: dict[str, Any] = {}
     prompt_pool = None
 
@@ -207,17 +223,32 @@ def summarize_patient_notes(
             )
             if not model_metadata:
                 model_metadata = round_model_metadata
-            # Persist each round's final summary, not the model's raw reasoning
-            # trace, so it becomes the prior summary for the next patient chunk.
-            reasoning_marker = str(patient_config["reasoning_marker"])
-            for patient_id, raw_summary in zip(
-                round_patient_ids, summaries, strict=False
+            raw_outputs = _backend_outputs_or(backend, "last_raw_outputs", summaries)
+            reasoning_outputs = _backend_outputs_or(
+                backend,
+                "last_reasoning_outputs",
+                ["" for _summary in summaries],
+            )
+            # Persist each round's final summary, not the reasoning trace, so
+            # it becomes the prior summary for the next patient chunk. The
+            # split fallback supports older callers/tests that still return
+            # legacy assistantfinal-style raw text from a mocked backend.
+            reasoning_marker = str(patient_config.get("reasoning_marker", ""))
+            for patient_id, summary, raw_output, reasoning in zip(
+                round_patient_ids,
+                summaries,
+                raw_outputs,
+                reasoning_outputs,
+                strict=False,
             ):
-                _, summary = split_reasoning_from_summary(
-                    str(raw_summary),
-                    reasoning_marker,
-                )
-                current_summaries[patient_id] = summary
+                if reasoning_marker and reasoning_marker in str(summary):
+                    _, summary = split_reasoning_from_summary(
+                        str(summary),
+                        reasoning_marker,
+                    )
+                current_summaries[patient_id] = str(summary)
+                current_raw_outputs[patient_id] = str(raw_output)
+                current_reasoning_outputs[patient_id] = str(reasoning)
     finally:
         if prompt_pool is not None:
             shutdown_prompt_pool(prompt_pool)
@@ -228,6 +259,13 @@ def summarize_patient_notes(
     final_rows["original_patient_summary"] = final_rows["patient_id"].map(
         current_summaries
     )
+    if resolved_config.debug_mode:
+        final_rows["patient_summary_raw_output"] = final_rows["patient_id"].map(
+            current_raw_outputs
+        )
+        final_rows["patient_summary_reasoning"] = final_rows["patient_id"].map(
+            current_reasoning_outputs
+        )
     final_rows = final_rows.dropna(subset=["original_patient_summary"]).copy()
 
     final_rows, noninformative_summary_qc_artifact = postprocess_patient_summaries(

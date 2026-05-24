@@ -98,7 +98,7 @@ def connect_to_remote_servers(
 async def single_inference_request(
     client: Any,
     row_idx: int,
-    prompt: str,
+    messages: list[dict[str, str]],
     model: str,
     temperature: float,
     max_tokens: int,
@@ -107,31 +107,33 @@ async def single_inference_request(
     presence_penalty: float = 0.0,
     min_p: float = 0.0,
     repetition_penalty: float = 1.0,
-    reasoning_marker: str = "assistantfinal",
+    chat_template_kwargs: dict[str, Any] | None = None,
     max_retries: int = 6,
     base_timeout: float = 600.0,
     retry_backoff_base: float = 1.0,
 ) -> ModelResult:
     """
-    Send one completion request and retry transient failures.
+    Send one chat-completion request and retry transient failures.
 
     The returned ``ModelResult.row_idx`` is copied from the input so callers can
-    restore original ordering after concurrent execution. This function does
-    not split reasoning from summary; downstream package postprocessing expects
-    the raw model text.
+    restore original ordering after concurrent execution. vLLM reasoning
+    parsers expose the final text as ``message.content`` and the reasoning
+    trace as ``message.reasoning`` (``reasoning_content`` on older servers).
     """
     for attempt in range(max_retries):
         try:
-            extra: dict[str, float | int] = {
+            extra: dict[str, Any] = {
                 "top_k": top_k,
                 "repetition_penalty": repetition_penalty,
             }
             if min_p > 0.0:
                 extra["min_p"] = min_p
+            if chat_template_kwargs:
+                extra["chat_template_kwargs"] = dict(chat_template_kwargs)
             response = await asyncio.wait_for(
-                client.completions.create(
+                client.chat.completions.create(
                     model=model,
-                    prompt=prompt,
+                    messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     top_p=top_p,
@@ -141,12 +143,19 @@ async def single_inference_request(
                 timeout=base_timeout,
             )
             choice = response.choices[0]
-            raw_text = cast(str, getattr(choice, "text", "") or "")
+            message = getattr(choice, "message", None)
+            content = cast(str, getattr(message, "content", "") or "")
+            reasoning = cast(
+                str,
+                getattr(message, "reasoning", None)
+                or getattr(message, "reasoning_content", None)
+                or "",
+            )
             finish_reason = cast(str, getattr(choice, "finish_reason", None) or "stop")
             return ModelResult(
                 row_idx=row_idx,
-                reasoning="",
-                summary=raw_text,
+                reasoning=reasoning,
+                summary=content,
                 finish_reason=finish_reason,
             )
 
@@ -194,7 +203,7 @@ async def run_inference_batch(
     presence_penalty: float = 0.0,
     min_p: float = 0.0,
     repetition_penalty: float = 1.0,
-    reasoning_marker: str = "assistantfinal",
+    chat_template_kwargs: dict[str, Any] | None = None,
     max_concurrent: int = 16,
     batch_size: int = 1000,
     max_retries: int = 6,
@@ -224,33 +233,31 @@ async def run_inference_batch(
 
         semaphore = asyncio.Semaphore(max(1, int(max_concurrent)))
 
-        async def bounded_request(
-            row_idx: int, prompt: str, prompt_max_tokens: int
-        ) -> ModelResult:
+        async def bounded_request(prompt: Prompt) -> ModelResult:
             async with semaphore:
+                messages = prompt.messages or [
+                    {"role": "user", "content": prompt.prompt_text}
+                ]
                 return await single_inference_request(
                     client=client,
-                    row_idx=row_idx,
-                    prompt=prompt,
+                    row_idx=prompt.row_idx,
+                    messages=messages,
                     model=model,
                     temperature=temperature,
-                    max_tokens=prompt_max_tokens,
+                    max_tokens=prompt.max_tokens,
                     top_k=top_k,
                     top_p=top_p,
                     presence_penalty=presence_penalty,
                     min_p=min_p,
                     repetition_penalty=repetition_penalty,
-                    reasoning_marker=reasoning_marker,
+                    chat_template_kwargs=chat_template_kwargs,
                     max_retries=max_retries,
                     base_timeout=base_timeout,
                     retry_backoff_base=retry_backoff_base,
                 )
 
         batch_results = await asyncio.gather(
-            *[
-                bounded_request(p.row_idx, p.prompt_text, p.max_tokens)
-                for p in batch_prompts
-            ]
+            *[bounded_request(prompt) for prompt in batch_prompts]
         )
         all_results.extend(batch_results)
 
@@ -263,7 +270,7 @@ async def generate_remote_llm_outputs_async(
     llm_config: Dict[str, Any],
     server_urls: list[str],
     api_key: str,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     """
     Run remote generation across one or more servers.
 
@@ -272,7 +279,7 @@ async def generate_remote_llm_outputs_async(
     reason lists are restored to input ``Prompt.row_idx`` order.
     """
     if not prompts:
-        return [], []
+        return [], [], []
 
     model_name = str(llm_config["model_name"])
     sampling_params = dict(llm_config["sampling_params"])
@@ -295,6 +302,7 @@ async def generate_remote_llm_outputs_async(
     max_retries = max(1, int(llm_config["max_retries"]))
     retry_backoff_base = float(llm_config.get("retry_backoff_base", 1.0))
     batch_size = max(1, int(llm_config["batch_size"]))
+    chat_template_kwargs = llm_config.get("chat_template_kwargs")
     server_clients = connect_to_remote_servers(
         server_urls=server_urls,
         request_timeout=request_timeout,
@@ -323,9 +331,7 @@ async def generate_remote_llm_outputs_async(
                         ),
                         min_p=float(sampling_params.get("min_p", 0.0)),
                         repetition_penalty=float(sampling_params["repetition_penalty"]),
-                        reasoning_marker=str(
-                            llm_config.get("reasoning_marker", "assistantfinal")
-                        ),
+                        chat_template_kwargs=chat_template_kwargs,
                         max_concurrent=max_concurrent_requests,
                         batch_size=batch_size,
                         max_retries=max_retries,
@@ -340,11 +346,13 @@ async def generate_remote_llm_outputs_async(
             result for batch_results in all_batch_results for result in batch_results
         ]
         texts: list[str] = [""] * len(prompts)
+        reasonings: list[str] = [""] * len(prompts)
         finish_reasons: list[str] = [""] * len(prompts)
         for result in results:
             texts[result.row_idx] = result.summary
+            reasonings[result.row_idx] = result.reasoning
             finish_reasons[result.row_idx] = result.finish_reason
-        return texts, finish_reasons
+        return texts, reasonings, finish_reasons
     finally:
         close_tasks = [
             client.aclose() for client, _ in server_clients if hasattr(client, "aclose")
@@ -359,7 +367,7 @@ def generate_remote_llm_outputs(
     llm_config: Dict[str, Any],
     server_urls: list[str],
     api_key: str,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     """Synchronous wrapper around ``generate_remote_llm_outputs_async``."""
     return _run_sync(
         lambda: generate_remote_llm_outputs_async(

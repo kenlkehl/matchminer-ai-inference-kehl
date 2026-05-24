@@ -22,11 +22,15 @@ class Prompt:
         Final text prompt after applying the model chat template.
     max_tokens
         Generation token limit for this specific prompt.
+    messages
+        Original chat-style messages. Remote OpenAI-compatible backends use
+        these directly so vLLM can return structured reasoning fields.
     """
 
     row_idx: int
     prompt_text: str
     max_tokens: int
+    messages: list[dict[str, str]] | None = None
 
 
 @lru_cache(maxsize=4)
@@ -45,6 +49,7 @@ def build_chat_prompts(
     *,
     model_name: str,
     prompt_build_workers: int | None = None,
+    chat_template_kwargs: dict[str, Any] | None = None,
 ) -> list[str]:
     """
     Render chat-style messages into model prompt strings.
@@ -58,8 +63,11 @@ def build_chat_prompts(
     prompt_build_workers
         Optional number of threads for applying chat templates. Output order
         matches input order.
+    chat_template_kwargs
+        Extra keyword arguments passed to ``tokenizer.apply_chat_template``.
     """
     tokenizer = _get_chat_template_tokenizer(model_name)
+    template_kwargs = dict(chat_template_kwargs or {})
 
     def apply_template(messages: list[dict[str, str]]) -> str:
         return cast(
@@ -68,6 +76,7 @@ def build_chat_prompts(
                 conversation=messages,
                 add_generation_prompt=True,
                 tokenize=False,
+                **template_kwargs,
             ),
         )
 
@@ -96,14 +105,18 @@ def build_prompt_list(
         messages_list,
         model_name=str(llm_config["model_name"]),
         prompt_build_workers=llm_config.get("prompt_build_workers"),
+        chat_template_kwargs=llm_config.get("chat_template_kwargs"),
     )
     return [
         Prompt(
             row_idx=row_idx,
             prompt_text=prompt_text,
             max_tokens=int(llm_config["sampling_params"]["max_tokens"]),
+            messages=messages,
         )
-        for row_idx, prompt_text in enumerate(prompt_texts)
+        for row_idx, (messages, prompt_text) in enumerate(
+            zip(messages_list, prompt_texts, strict=False)
+        )
     ]
 
 

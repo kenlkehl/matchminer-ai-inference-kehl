@@ -32,8 +32,8 @@ Table 1: MatchMiner-AI Steps and Models
 
 | Step | Package Function | Model | Notes |
 |------|-------|-------|--------|
-| 1. Summarize Trials | `summarize_trials` | public LLM | by default, currently uses `gpt-oss-120b` |
-| 2. Summarize Patients | `summarize_patients` | public LLM | by default, currently uses `gpt-oss-120b` |
+| 1. Summarize Trials | `summarize_trials` | public LLM | by default, currently uses `google/gemma-4-31B-it` |
+| 2. Summarize Patients | `summarize_patients` | public LLM | by default, currently uses `google/gemma-4-31B-it` |
 | 3. Embed Trial Spaces and Patient Summaries | `embed_for_matching` | `TrialSpace`, a trained Sentence Transformers model | provided on Hugging Face at `https://huggingface.co/ksg-dfci` |
 | 4. Generate Candidate Matches | `generate_candidate_matches` | NA | |
 | 5. Evaluate Candidate Match Quality | `score_match_quality` | `TrialChecker`, a trained ModernBERT model | provided on Hugging Face at `https://huggingface.co/ksg-dfci` |
@@ -50,7 +50,7 @@ For the most GPU-intensive steps (Trial and Patient Summarization), we offer two
 
 ![Figure 2: Trial and Patient Summarization can be run in Local Mode.](./images/local_server_mode.png)\
 
-2. Remote mode (Figure 3): sends summarization requests to an existing OpenAI-compatible endpoint.
+2. Remote mode (Figure 3): sends summarization requests to an existing OpenAI-compatible vLLM chat endpoint. For the default Gemma 4 model, start the server with the `gemma4` reasoning parser, or use `start_vllm_server()` so the package builds the command from the preset.
 
 ![Figure 3: Trial and Patient Summarization can be run in Remote Mode.](./images/remote_server_mode.png)
 
