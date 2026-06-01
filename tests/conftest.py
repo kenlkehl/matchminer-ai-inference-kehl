@@ -47,7 +47,7 @@ def default_trial_config() -> dict:
             "primer": "trial.user.primer.txt",
             "question": "trial.user.question.txt",
         },
-        "boilerplate_marker": "\\n.*Boilerplate.*\\n",
+        "boilerplate_marker": "Boilerplate exclusions",
         "model_metadata_cache_dir": ".mmai_cache/model_metadata",
     }
 

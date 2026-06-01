@@ -133,7 +133,7 @@ def test_flatten_trial_to_spaces(
     """Validate postprocessing output against a fixture-based expected DataFrame."""
     result = flatten_trial_to_spaces(
         mock_summarized_data,
-        boilerplate_marker="\\n.*Boilerplate.*\\n",
+        boilerplate_marker="Boilerplate exclusions",
     )
     pd.testing.assert_frame_equal(
         result.reset_index(drop=True), expected_flattened_spaces
@@ -164,7 +164,7 @@ def test_flatten_trial_to_spaces_uses_final_output_and_line_boilerplate():
 
     result = flatten_trial_to_spaces(
         df,
-        boilerplate_marker="Boilerplate",
+        boilerplate_marker="Boilerplate exclusions",
     )
 
     assert result["clinical_space_summary"].tolist() == [
@@ -278,7 +278,7 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
         preset_name="default",
         debug_mode=True,
         trial={
-            "boilerplate_marker": "\\n.*Boilerplate.*\\n",
+            "boilerplate_marker": "Boilerplate exclusions",
         },
         patient={},
         local={},

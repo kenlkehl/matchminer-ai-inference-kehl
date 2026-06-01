@@ -43,7 +43,7 @@ def _patient_config() -> dict:
             "primer": "patient.serial.user.primer.txt",
             "question": "patient.serial.user.question.txt",
         },
-        "boilerplate_marker": "\\n.*Boilerplate.*\\n",
+        "boilerplate_marker": "Boilerplate conditions",
         "sampling_params": {
             "temperature": 0.0,
             "top_k": 1,
@@ -103,7 +103,7 @@ def test_parse_boilerplate_splits_summary_and_exclusions():
         [
             {
                 "original_patient_summary": (
-                    "Cancer history here.\n" "Boilerplate exclusions:\n" "No CNS mets."
+                    "Cancer history here.\n" "Boilerplate conditions:\n" "No CNS mets."
                 )
             },
             {"original_patient_summary": "Cancer only."},
@@ -112,7 +112,7 @@ def test_parse_boilerplate_splits_summary_and_exclusions():
 
     parsed = parse_boilerplate(
         df,
-        boilerplate_marker="Boilerplate exclusions:",
+        boilerplate_marker="Boilerplate conditions",
     )
 
     assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
@@ -137,7 +137,7 @@ def test_parse_boilerplate_accepts_final_only_v22_output():
 
     parsed = parse_boilerplate(
         df,
-        boilerplate_marker="\\s*Boilerplate conditions\\s*:?\\s*",
+        boilerplate_marker="Boilerplate conditions",
     )
 
     assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
@@ -283,12 +283,12 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
             self.calls += 1
             if self.calls == 1:
                 return (
-                    ["Round 1\nBoilerplate:\nNone"],
+                    ["Round 1\nBoilerplate conditions:\nNone"],
                     {"model_name": "model", "model_sha": "sha"},
                     ["stop"],
                 )
             return (
-                ["Round 2\nBoilerplate:\nNone"],
+                ["Round 2\nBoilerplate conditions:\nNone"],
                 {"model_name": "model", "model_sha": "sha"},
                 ["stop"],
             )
@@ -303,7 +303,7 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
     )
     result, metadata = summarize_patient_notes(notes, config=_config())
 
-    assert seen_prior_summaries == [None, "Round 1\nBoilerplate:\nNone"]
+    assert seen_prior_summaries == [None, "Round 1\nBoilerplate conditions:\nNone"]
     assert result.loc[result.index[0], "cancer_history_summary"] == "Round 2"
     assert metadata["model_metadata"]["model_sha"] == "sha"
 
@@ -356,7 +356,7 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
         lambda config: MagicMock(
             generate_llm_outputs=MagicMock(
                 return_value=(
-                    ["Updated\nBoilerplate:\nNone"],
+                    ["Updated\nBoilerplate conditions:\nNone"],
                     {"model_name": "model", "model_sha": "sha"},
                     ["stop"],
                 )
@@ -451,8 +451,8 @@ def test_remote_summarize_patient_notes_uses_parallel_prompt_workers(monkeypatch
             captured["prompt_list"] = prompt_list
             return (
                 [
-                    "Remote 1\nBoilerplate:\nNone",
-                    "Remote 2\nBoilerplate:\nNone",
+                    "Remote 1\nBoilerplate conditions:\nNone",
+                    "Remote 2\nBoilerplate conditions:\nNone",
                 ],
                 {"model_name": "model", "model_sha": "sha"},
                 ["stop", "stop"],

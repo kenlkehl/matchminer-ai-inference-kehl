@@ -38,7 +38,7 @@ trial:
   prompt_files:
     primer: trial.user.primer.txt
     question: trial.user.question.txt
-  boilerplate_marker: Boilerplate
+  boilerplate_marker: Boilerplate exclusions
 patient:
   model_name: google/gemma-4-31B-it
   reasoning_parser: gemma4
@@ -59,7 +59,7 @@ patient:
   prompt_files:
     primer: patient.serial.user.primer.txt
     question: patient.serial.user.question.txt
-  boilerplate_marker: "\\s*Boilerplate conditions\\s*:?\\s*"
+  boilerplate_marker: Boilerplate conditions
   text_token_threshold: 95000
 embedding:
   model_path: "ksg-dfci/TrialSpace-0426"

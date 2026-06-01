@@ -138,8 +138,8 @@ sets `enable_thinking: true` for Gemma 4.
 
 ### `trial.boilerplate_marker`
 
-Regular expression used by trial postprocessing to identify boilerplate
-exclusion text.
+Line marker used by trial postprocessing to identify the boilerplate exclusion
+section heading.
 
 ## `patient`
 
@@ -198,8 +198,8 @@ sets `enable_thinking: true` for Gemma 4.
 
 ### `patient.boilerplate_marker`
 
-Regular expression used by patient postprocessing to remove boilerplate marker
-text.
+Line marker used by patient postprocessing to identify the boilerplate
+conditions section heading.
 
 ### `patient.text_token_threshold`
 

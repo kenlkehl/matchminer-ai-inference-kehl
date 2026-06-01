@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -33,6 +32,22 @@ REQUIRED_TRIAL_SPACE_KEYWORDS = [
     "Biomarkers required",
     "Biomarkers excluded",
 ]
+
+
+def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:
+    """Split generated text at the line containing the boilerplate marker."""
+    lines = text.splitlines()
+    split_idx = next(
+        (idx for idx, line in enumerate(lines) if boilerplate_marker in line),
+        -1,
+    )
+    if split_idx == -1:
+        cleaned = text.strip()
+        return cleaned, cleaned or "None"
+
+    main_part = "\n".join(lines[:split_idx]).strip()
+    boilerplate_part = "\n".join(lines[split_idx + 1 :]).strip() or "None"
+    return main_part, boilerplate_part
 
 
 def _expand_trial_spaces(
@@ -90,40 +105,6 @@ def _expand_trial_spaces(
         )
 
     return pd.concat(frames, axis=0).reset_index(drop=True)
-
-
-def _line_matches_boilerplate_marker(line: str, boilerplate_marker: str) -> bool:
-    if "Boilerplate" in boilerplate_marker:
-        return "Boilerplate" in line
-    try:
-        return re.search(boilerplate_marker, line) is not None
-    except re.error:
-        return boilerplate_marker in line
-
-
-def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:
-    """
-    Split final trial output at the line containing the boilerplate marker.
-
-    This mirrors the v22 training postprocessor: the marker line is removed from
-    both parts so downstream QC does not see headings as exclusion criteria.
-    """
-    lines = text.splitlines()
-    split_idx = next(
-        (
-            idx
-            for idx, line in enumerate(lines)
-            if _line_matches_boilerplate_marker(line, boilerplate_marker)
-        ),
-        -1,
-    )
-    if split_idx == -1:
-        cleaned = text.strip()
-        return cleaned, cleaned or "None"
-
-    space_part = "\n".join(lines[:split_idx]).strip()
-    boilerplate_part = "\n".join(lines[split_idx + 1 :]).strip() or "None"
-    return space_part, boilerplate_part
 
 
 def flatten_trial_to_spaces(
