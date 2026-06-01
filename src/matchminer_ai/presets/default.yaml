@@ -11,6 +11,7 @@ local:
     max_model_len: 100000
     tensor_parallel_size: 1
     gpu_memory_utilization: 0.9
+    language_model_only: true
 remote:
   enabled: false
   server_urls:
