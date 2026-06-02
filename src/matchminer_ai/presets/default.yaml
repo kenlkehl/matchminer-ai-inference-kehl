@@ -62,15 +62,15 @@ patient:
   boilerplate_marker: Boilerplate conditions
   text_token_threshold: 95000
 embedding:
-  model_path: "ksg-dfci/TrialSpace-0426"
-  device: cpu
+  model_path: "ksg-dfci/TrialSpace-0526"
+  device: cuda
   prompt_file: embedding.txt
 match_quality:
-  model_name: "ksg-dfci/TrialChecker-0426"
+  model_name: "ksg-dfci/TrialChecker-0526"
   device: cuda
   prompt_file: match_quality_checker_template.txt
   score_cutoff: 0.2
 exclusion_criteria:
-  model_name: "ksg-dfci/BoilerPlateChecker-0426"
+  model_name: "ksg-dfci/BoilerPlateChecker-0526"
   device: cuda
   prompt_file: exclusion_criteria_checker_template.txt
