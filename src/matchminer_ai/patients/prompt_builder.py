@@ -18,6 +18,7 @@ from matchminer_ai.llm.prompt_rendering import Prompt
 
 _worker_tokenizer: Any = None
 _worker_config: dict[str, Any] = {}
+_RESPONSE_TOKEN_MARGIN = 256
 
 
 def load_prompt_text(filename: str) -> str:
@@ -187,10 +188,12 @@ def build_prompt_worker(item: PromptWorkItem) -> Prompt:
         _worker_tokenizer(prompt_text, add_special_tokens=False).input_ids
     )
     max_tokens = int(_worker_config["sampling_params"]["max_tokens"])
-    gen_tokens = max(
-        1,
-        min(int(_worker_config["max_model_len"]) - prompt_token_count, max_tokens),
+    available_generation_tokens = (
+        int(_worker_config["max_model_len"])
+        - prompt_token_count
+        - _RESPONSE_TOKEN_MARGIN
     )
+    gen_tokens = max(1, min(available_generation_tokens, max_tokens))
     return Prompt(
         row_idx=item.row_idx,
         prompt_text=prompt_text,

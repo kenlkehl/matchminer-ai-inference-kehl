@@ -12,7 +12,12 @@ from matchminer_ai.patients.postprocess import (
     clean_bad_data,
     parse_boilerplate,
 )
-from matchminer_ai.patients.prompt_builder import get_serial_patient_prompt
+from matchminer_ai.patients.prompt_builder import (
+    PromptWorkItem,
+    _RESPONSE_TOKEN_MARGIN,
+    build_prompt_worker,
+    get_serial_patient_prompt,
+)
 from matchminer_ai.patients.summarize import summarize_patient_notes
 
 
@@ -216,6 +221,49 @@ def test_get_serial_patient_prompt_includes_prior_summary_and_chunk_text():
     assert "Clinical note text." in prompts[1]["content"]
     assert "Boilerplate conditions:" in prompts[1]["content"]
     assert "contradictory information across notes" in prompts[1]["content"]
+
+
+def test_build_prompt_worker_leaves_response_token_margin(monkeypatch):
+    """Leave a small generation margin for remote chat-template token drift."""
+
+    class FixedPromptTokenizer(MockTokenizer):
+        def apply_chat_template(
+            self,
+            conversation,
+            add_generation_prompt=True,
+            tokenize=False,
+            **kwargs,
+        ):
+            return "x" * 600
+
+    monkeypatch.setattr(
+        "matchminer_ai.patients.prompt_builder._worker_tokenizer",
+        FixedPromptTokenizer(),
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.patients.prompt_builder._worker_config",
+        {
+            **_patient_config(),
+            "model_name": "google/gemma-4-31B-it",
+            "max_model_len": 1000,
+            "sampling_params": {
+                **_patient_config()["sampling_params"],
+                "max_tokens": 900,
+            },
+        },
+    )
+
+    prompt = build_prompt_worker(
+        PromptWorkItem(
+            row_idx=0,
+            prior_summary_text=None,
+            first_date="2024-01-01",
+            last_date="2024-01-02",
+            chunk_text="Clinical note text.",
+        )
+    )
+
+    assert prompt.max_tokens == 1000 - 600 - _RESPONSE_TOKEN_MARGIN
 
 
 def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypatch):
