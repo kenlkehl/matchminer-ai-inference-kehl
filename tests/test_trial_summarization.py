@@ -2,7 +2,11 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from matchminer_ai.config import MMAIConfig
-from matchminer_ai.llm.backends import LocalBackend, build_summarization_runtime_config
+from matchminer_ai.llm.backends import (
+    LLMGenerationResult,
+    LocalBackend,
+    build_summarization_runtime_config,
+)
 from matchminer_ai.llm.prompt_rendering import Prompt
 from matchminer_ai.trials.postprocess import flatten_trial_to_spaces
 from matchminer_ai.trials.prompt_builder import (
@@ -37,6 +41,8 @@ def test_get_filled_trial_prompt_includes_trial_text():
     assert prompts[0]["role"] == "system"
     assert prompts[1]["role"] == "user"
     assert "FIND ME" in prompts[1]["content"]
+    assert "ECOG performance status" in prompts[1]["content"]
+    assert "Boilerplate exclusions:" in prompts[1]["content"]
 
 
 def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
@@ -48,10 +54,12 @@ def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
     )
 
     mock_summarize = MagicMock()
-    mock_summarize.return_value = (
-        ["SUM0"],
-        {"model_sha": "sha"},
-        ["stop"],
+    mock_summarize.return_value = LLMGenerationResult(
+        final_outputs=["SUM0"],
+        model_metadata={"model_sha": "sha"},
+        finish_reasons=["stop"],
+        reasoning_outputs=[""],
+        raw_outputs=[],
     )
     monkeypatch.setattr(
         "matchminer_ai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
@@ -71,7 +79,7 @@ def test_run_llm_summarization_returns_metadata(monkeypatch, default_config):
     df, metadata, truncated_llm_qc_artifact = run_llm_summarization(
         trials, default_config
     )
-    assert df["space_reasoning_and_output"].iloc[0] == "SUM0"
+    assert df["space_output_no_reasoning"].iloc[0] == "SUM0"
     assert "trial_text" in df.columns
     assert metadata["config_snapshot"]["trial"]["model_name"] == "model"
     assert metadata["model_metadata"]["model_sha"] == "sha"
@@ -90,10 +98,12 @@ def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
     )
 
     mock_summarize = MagicMock()
-    mock_summarize.return_value = (
-        ["SUM0", "SUM1"],
-        {"model_sha": "sha"},
-        ["stop", "stop"],
+    mock_summarize.return_value = LLMGenerationResult(
+        final_outputs=["SUM0", "SUM1"],
+        model_metadata={"model_sha": "sha"},
+        finish_reasons=["stop", "stop"],
+        reasoning_outputs=["", ""],
+        raw_outputs=[],
     )
     monkeypatch.setattr(
         "matchminer_ai.trials.summarize.summarize_trials_multi_cohort", mock_summarize
@@ -118,7 +128,7 @@ def test_run_llm_summarization_preserves_order(monkeypatch, default_config):
 
     df, _, truncated_llm_qc_artifact = run_llm_summarization(trials, default_config)
     assert df["trial_id"].tolist() == ["T1", "T2"]
-    assert df["space_reasoning_and_output"].tolist() == ["SUM0", "SUM1"]
+    assert df["space_output_no_reasoning"].tolist() == ["SUM0", "SUM1"]
     assert truncated_llm_qc_artifact["metric"] == "trials_truncated_llm_response"
     assert truncated_llm_qc_artifact["denominator"] == 2
     assert truncated_llm_qc_artifact["numerator"] == 0
@@ -131,12 +141,47 @@ def test_flatten_trial_to_spaces(
     """Validate postprocessing output against a fixture-based expected DataFrame."""
     result = flatten_trial_to_spaces(
         mock_summarized_data,
-        reasoning_marker="assistantfinal",
-        boilerplate_marker="\\n.*Boilerplate.*\\n",
+        boilerplate_marker="Boilerplate exclusions",
     )
     pd.testing.assert_frame_equal(
         result.reset_index(drop=True), expected_flattened_spaces
     )
+
+
+def test_flatten_trial_to_spaces_uses_final_output_and_line_boilerplate():
+    """Use parsed final text and remove the boilerplate marker line."""
+    trial_space = (
+        "1. Age: 18+. Sex: Any. Cancer type allowed: A. Histology allowed: Any. "
+        "Cancer burden allowed: Any. Prior treatment required: None. "
+        "Prior treatment excluded: None. Biomarkers required: None. "
+        "Biomarkers excluded: None."
+    )
+    boilerplate = "Uncontrolled brain metastases."
+    df = pd.DataFrame(
+        [
+            {
+                "trial_id": "T1",
+                "trial_text": "raw input",
+                "space_raw_output": "raw reasoning text",
+                "space_output_no_reasoning": (
+                    f"{trial_space}\n" "Boilerplate exclusions:\n" f"{boilerplate}"
+                ),
+            }
+        ]
+    )
+
+    result = flatten_trial_to_spaces(
+        df,
+        boilerplate_marker="Boilerplate exclusions",
+    )
+
+    assert result["clinical_space_summary"].tolist() == [
+        "Age: 18+. Sex: Any. Cancer type allowed: A. Histology allowed: Any. "
+        "Cancer burden allowed: Any. Prior treatment required: None. "
+        "Prior treatment excluded: None. Biomarkers required: None. "
+        "Biomarkers excluded: None."
+    ]
+    assert result["boilerplate_text"].tolist() == [boilerplate]
 
 
 def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
@@ -164,19 +209,24 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
             "last_modified": "now",
         },
     )
+    monkeypatch.setattr(
+        "matchminer_ai.llm.backends.parse_reasoning_output",
+        lambda text, parser_name, tokenizer: (f"REASON {text}", f"FINAL {text}"),
+    )
 
     backend = LocalBackend()
     default_config.local["trial"]["trust_remote_code"] = True
     default_config.local["trial"]["speculative_config"] = {
         "num_speculative_tokens": 4,
     }
+    default_config.trial["reasoning_parser"] = "gemma4"
     default_config.trial["sampling_params"]["seed"] = 123
     llm_config = build_summarization_runtime_config(
         "trial",
         default_config.trial,
         config=default_config,
     )
-    summaries, metadata, finish_reasons = backend.generate_llm_outputs(
+    generation = backend.generate_llm_outputs(
         prompt_list=[
             Prompt(row_idx=0, prompt_text="p1", max_tokens=10),
             Prompt(row_idx=1, prompt_text="p2", max_tokens=10),
@@ -184,9 +234,11 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
         llm_config=llm_config,
     )
 
-    assert summaries == ["SUM0", "SUM1"]
-    assert metadata["model_sha"] == "sha"
-    assert finish_reasons == ["stop", "stop"]
+    assert generation.final_outputs == ["FINAL SUM0", "FINAL SUM1"]
+    assert generation.raw_outputs == ["SUM0", "SUM1"]
+    assert generation.reasoning_outputs == ["REASON SUM0", "REASON SUM1"]
+    assert generation.model_metadata["model_sha"] == "sha"
+    assert generation.finish_reasons == ["stop", "stop"]
     assert mock_vllm.LLM.call_args.kwargs["trust_remote_code"] is True
     assert mock_vllm.LLM.call_args.kwargs["speculative_config"] == {
         "num_speculative_tokens": 4,
@@ -203,8 +255,7 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
                 {
                     "trial_id": "T1",
                     "trial_text": "TEXT",
-                    "space_reasoning_and_output": (
-                        "assistantfinal\n"
+                    "space_output_no_reasoning": (
                         "1. Age: 18+. Sex: Any. Cancer type allowed: A. "
                         "Histology allowed: Any. Cancer burden allowed: Any. "
                         "Prior treatment required: None. Prior treatment excluded: None. "
@@ -235,8 +286,7 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
         preset_name="default",
         debug_mode=True,
         trial={
-            "reasoning_marker": "assistantfinal",
-            "boilerplate_marker": "\\n.*Boilerplate.*\\n",
+            "boilerplate_marker": "Boilerplate exclusions",
         },
         patient={},
         local={},
@@ -259,7 +309,7 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
 
     result = summarize_trials(trials, config=config)
     assert "trial_text" in result.columns
-    assert "space_reasoning_and_output" in result.columns
+    assert "space_output_no_reasoning" in result.columns
 
 
 def test_summarize_trials_lightweight_integration(monkeypatch):
@@ -272,9 +322,8 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
             self, *, prompt_list, llm_config, model_metadata_cache_dir=None
         ):
             captured_prompts["prompt_list"] = prompt_list
-            return (
-                [
-                    "assistantfinal\n"
+            return LLMGenerationResult(
+                final_outputs=[
                     "1. Age: 18+. Sex: Any. Cancer type allowed: A. "
                     "Histology allowed: Any. Cancer burden allowed: Any. "
                     "Prior treatment required: None. Prior treatment excluded: None. "
@@ -282,8 +331,10 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
                     "Boilerplate exclusions:\n"
                     "Uncontrolled brain metastases."
                 ],
-                {"model_sha": "sha"},
-                ["stop"],
+                model_metadata={"model_sha": "sha"},
+                finish_reasons=["stop"],
+                reasoning_outputs=[""],
+                raw_outputs=[],
             )
 
     monkeypatch.setattr(
@@ -339,9 +390,8 @@ def test_summarize_trials_metadata_uses_live_config(monkeypatch, default_config)
         def generate_llm_outputs(
             self, *, prompt_list, llm_config, model_metadata_cache_dir=None
         ):
-            return (
-                [
-                    "assistantfinal\n"
+            return LLMGenerationResult(
+                final_outputs=[
                     "1. Age: 18+. Sex: Any. Cancer type allowed: A. "
                     "Histology allowed: Any. Cancer burden allowed: Any. "
                     "Prior treatment required: None. Prior treatment excluded: None. "
@@ -349,8 +399,10 @@ def test_summarize_trials_metadata_uses_live_config(monkeypatch, default_config)
                     "Boilerplate exclusions:\n"
                     "None."
                 ],
-                {"model_sha": "sha"},
-                ["stop"],
+                model_metadata={"model_sha": "sha"},
+                finish_reasons=["stop"],
+                reasoning_outputs=[""],
+                raw_outputs=[],
             )
 
     monkeypatch.setattr(

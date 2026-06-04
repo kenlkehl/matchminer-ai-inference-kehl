@@ -12,40 +12,34 @@ if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
 
-def split_reasoning_from_summary(
-    raw_text: str,
-    reasoning_marker: str,
-) -> tuple[str, str]:
-    """
-    Split raw LLM output into reasoning and final patient summary text.
+def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:
+    """Split generated text at the line containing the boilerplate marker."""
+    lines = text.splitlines()
+    split_idx = next(
+        (idx for idx, line in enumerate(lines) if boilerplate_marker in line),
+        -1,
+    )
+    if split_idx == -1:
+        cleaned = text.strip()
+        return cleaned, cleaned or "None"
 
-    """
-    if reasoning_marker in raw_text:
-        reasoning, summary = raw_text.split(reasoning_marker, 1)
-        return reasoning.strip(), summary.strip()
-    return "", raw_text.strip()
+    main_part = "\n".join(lines[:split_idx]).strip()
+    boilerplate_part = "\n".join(lines[split_idx + 1 :]).strip() or "None"
+    return main_part, boilerplate_part
 
 
-def parse_boilerplate(
-    df: pd.DataFrame, reasoning_marker: str, boilerplate_marker: str
-) -> pd.DataFrame:
+def parse_boilerplate(df: pd.DataFrame, boilerplate_marker: str) -> pd.DataFrame:
     """Split final patient summary output into summary and boilerplate portions."""
     df = df.copy()
-    df["cleaned_patient_summary"] = (
-        df["original_patient_summary"]
-        .str.split(reasoning_marker, n=1)
-        .apply(lambda parts: parts[-1])
-        .str.strip()
+    summary_source = df["original_patient_summary"].fillna("").astype(str)
+    df["cleaned_patient_summary"] = summary_source.str.strip()
+    split_parts = df["cleaned_patient_summary"].apply(
+        lambda text: _split_boilerplate_section(str(text), boilerplate_marker)
     )
-
-    split_df = df["cleaned_patient_summary"].str.split(
-        boilerplate_marker, n=1, expand=True, regex=True
+    df["cancer_history_summary"] = split_parts.apply(lambda parts: parts[0])
+    df["general_exclusion_criteria_evidence"] = split_parts.apply(
+        lambda parts: parts[1]
     )
-    df["cancer_history_summary"] = split_df[0].str.strip()
-    df["general_exclusion_criteria_evidence"] = split_df[1].str.strip()
-    df["general_exclusion_criteria_evidence"] = df[
-        "general_exclusion_criteria_evidence"
-    ].fillna(df["cancer_history_summary"])
     return df
 
 
@@ -81,9 +75,8 @@ def postprocess_patient_summaries(
 ) -> tuple[pd.DataFrame, dict[str, object]]:
     """Postprocess final serial patient summaries into clean outputs."""
     patient_config = dict(config.patient)
-    reasoning_marker = patient_config["reasoning_marker"]
     boilerplate_marker = patient_config["boilerplate_marker"]
-    parsed = parse_boilerplate(df, reasoning_marker, boilerplate_marker)
+    parsed = parse_boilerplate(df, boilerplate_marker)
     cleaned, qc_artifact = clean_bad_data(parsed)
     if not config.debug_mode:
         cleaned = cleaned.drop(

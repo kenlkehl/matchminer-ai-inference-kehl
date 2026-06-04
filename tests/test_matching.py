@@ -1,3 +1,6 @@
+import sys
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
@@ -319,3 +322,111 @@ def test_exclusion_criteria_check_return_metadata(monkeypatch):
     assert metadata["model_metadata"]["exclusion_criteria_checker"]["model_name"] == (
         "ksg-dfci/BoilerPlateChecker-1225"
     )
+
+
+def test_run_checker_reuses_cached_pipeline(monkeypatch):
+    """Repeated checker calls with the same config should reuse the pipeline."""
+    from matchminer_ai.matching import inference
+
+    inference.clear_checker_pipeline_cache()
+    tokenizer_calls = []
+    pipeline_calls = []
+
+    class FakeTokenizer:
+        @staticmethod
+        def from_pretrained(model_name, **kwargs):
+            tokenizer_calls.append((model_name, kwargs))
+            return f"tokenizer:{model_name}"
+
+    class FakePipeline:
+        def __init__(self):
+            self.prompt_batches = []
+
+        def __call__(self, prompts):
+            self.prompt_batches.append(list(prompts))
+            return [
+                {"label": "POSITIVE", "score": float(index)}
+                for index, _prompt in enumerate(prompts)
+            ]
+
+    def fake_pipeline(*args, **kwargs):
+        checker_pipeline = FakePipeline()
+        pipeline_calls.append((args, kwargs, checker_pipeline))
+        return checker_pipeline
+
+    fake_transformers = SimpleNamespace(
+        AutoTokenizer=FakeTokenizer,
+        pipeline=fake_pipeline,
+    )
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+    monkeypatch.setattr(
+        "matchminer_ai.matching.inference.get_model_metadata",
+        lambda model_name, cache_dir=None: {"model_name": model_name},
+    )
+
+    checker_config = {"model_name": "checker/model", "device": "cpu"}
+    first_outputs, first_metadata = inference.run_checker(
+        ["prompt 1"],
+        checker_config=checker_config,
+        model_metadata_cache_dir=".cache/models",
+    )
+    second_outputs, second_metadata = inference.run_checker(
+        ["prompt 2", "prompt 3"],
+        checker_config=checker_config,
+        model_metadata_cache_dir=".cache/models",
+    )
+
+    assert first_outputs == [{"label": "POSITIVE", "score": 0.0}]
+    assert second_outputs == [
+        {"label": "POSITIVE", "score": 0.0},
+        {"label": "POSITIVE", "score": 1.0},
+    ]
+    assert first_metadata == {"model_name": "checker/model"}
+    assert second_metadata == {"model_name": "checker/model"}
+    assert len(tokenizer_calls) == 1
+    assert len(pipeline_calls) == 1
+    assert pipeline_calls[0][0] == ("text-classification", "checker/model")
+    assert pipeline_calls[0][1]["tokenizer"] == "tokenizer:checker/model"
+    assert pipeline_calls[0][1]["device"] == "cpu"
+    assert pipeline_calls[0][2].prompt_batches == [
+        ["prompt 1"],
+        ["prompt 2", "prompt 3"],
+    ]
+
+    inference.clear_checker_pipeline_cache()
+
+
+def test_clear_checker_pipeline_cache_forces_reload(monkeypatch):
+    """Clearing the checker cache should make the next run rebuild the pipeline."""
+    from matchminer_ai.matching import inference
+
+    inference.clear_checker_pipeline_cache()
+    pipeline_calls = []
+
+    class FakeTokenizer:
+        @staticmethod
+        def from_pretrained(model_name, **kwargs):
+            return f"tokenizer:{model_name}"
+
+    def fake_pipeline(*args, **kwargs):
+        pipeline_calls.append((args, kwargs))
+        return lambda prompts: [{"label": "NEGATIVE", "score": 0.5} for _ in prompts]
+
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        SimpleNamespace(AutoTokenizer=FakeTokenizer, pipeline=fake_pipeline),
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.matching.inference.get_model_metadata",
+        lambda model_name, cache_dir=None: {"model_name": model_name},
+    )
+
+    checker_config = {"model_name": "checker/model", "device": "cpu"}
+    inference.run_checker(["prompt 1"], checker_config=checker_config)
+    inference.clear_checker_pipeline_cache()
+    inference.run_checker(["prompt 2"], checker_config=checker_config)
+
+    assert len(pipeline_calls) == 2
+
+    inference.clear_checker_pipeline_cache()

@@ -58,9 +58,9 @@ maximum context window used for chunk truncation.
 ## `remote`
 
 Configuration used when `remote.enabled` is true and trial/patient
-summarization sends OpenAI-compatible HTTP requests to external vLLM servers.
-The remote backend reads the API key from the `OPENAI_API_KEY` environment
-variable. API keys are not stored in preset files.
+summarization sends OpenAI-compatible chat completion requests to external
+vLLM servers. The remote backend reads the API key from the `OPENAI_API_KEY`
+environment variable. API keys are not stored in preset files.
 
 ### `remote.enabled`
 
@@ -69,7 +69,10 @@ Selects the remote summarization backend when true.
 ### `remote.server_urls`
 
 List of OpenAI-compatible base URLs. Values are passed to the OpenAI client as
-`base_url`.
+`base_url`. For the default Gemma 4 configuration, the server should be a vLLM
+chat endpoint launched with the `gemma4` reasoning parser; the package
+`start_vllm_server()` helper adds this flag from `trial.reasoning_parser` or
+`patient.reasoning_parser`.
 
 ### `remote.max_concurrent_requests`
 
@@ -107,12 +110,16 @@ Model identifier used for:
 For remote mode, the vLLM server must expose a served model name matching this
 value.
 
+The default preset uses a Gemma 4 model for summarization. The specific Gemma
+variant that will run successfully may depend on the available GPU type and
+memory.
+
 ### `trial.sampling_params`
 
 Keyword arguments passed to `vllm.SamplingParams(...)` in local mode.
 
 Remote mode maps known OpenAI-compatible fields and selected vLLM-specific
-fields from this mapping into completion request parameters.
+fields from this mapping into chat completion request parameters.
 
 Additional keys may be included if they are valid `vllm.SamplingParams` keyword
 arguments. vLLM validates those keys in local mode.
@@ -121,15 +128,23 @@ arguments. vLLM validates those keys in local mode.
 
 Prompt template filenames loaded from `matchminer_ai.prompts`.
 
-### `trial.reasoning_marker`
+### `trial.reasoning_parser`
 
-Marker used by trial postprocessing to split/remove reasoning text from model
-output.
+vLLM reasoning parser name. The default `auto` resolves known model names,
+including `google/gemma-4-31B-it` to `gemma4`. Set this explicitly when using a
+model not covered by the package mapping, or use `none` to disable reasoning
+parsing for a non-reasoning model.
+
+### `trial.chat_template_kwargs`
+
+Keyword arguments passed to tokenizer chat-template rendering in local mode and
+to vLLM request `extra_body.chat_template_kwargs` in remote mode. The default
+sets `enable_thinking: true` for Gemma 4.
 
 ### `trial.boilerplate_marker`
 
-Regular expression used by trial postprocessing to identify boilerplate
-exclusion text.
+Line marker used by trial postprocessing to identify the boilerplate exclusion
+section heading.
 
 ## `patient`
 
@@ -146,6 +161,10 @@ Model identifier used for:
 
 For remote mode, the vLLM server must expose a served model name matching this
 value.
+
+The default preset uses a Gemma 4 model for summarization. The specific Gemma
+variant that will run successfully may depend on the available GPU type and
+memory.
 
 ### `patient.chunk_size`
 
@@ -165,7 +184,7 @@ Token margin reserved when truncating patient chunks before prompt rendering.
 Keyword arguments passed to `vllm.SamplingParams(...)` in local mode.
 
 Remote mode maps known OpenAI-compatible fields and selected vLLM-specific
-fields from this mapping into completion request parameters.
+fields from this mapping into chat completion request parameters.
 
 Additional keys may be included if they are valid `vllm.SamplingParams` keyword
 arguments. vLLM validates those keys in local mode.
@@ -174,15 +193,23 @@ arguments. vLLM validates those keys in local mode.
 
 Prompt template filenames loaded from `matchminer_ai.prompts`.
 
-### `patient.reasoning_marker`
+### `patient.reasoning_parser`
 
-Marker used by patient postprocessing to split/remove reasoning text from model
-output.
+vLLM reasoning parser name. The default `auto` resolves known model names,
+including `google/gemma-4-31B-it` to `gemma4`. Set this explicitly when using a
+model not covered by the package mapping, or use `none` to disable reasoning
+parsing for a non-reasoning model.
+
+### `patient.chat_template_kwargs`
+
+Keyword arguments passed to tokenizer chat-template rendering in local mode and
+to vLLM request `extra_body.chat_template_kwargs` in remote mode. The default
+sets `enable_thinking: true` for Gemma 4.
 
 ### `patient.boilerplate_marker`
 
-Regular expression used by patient postprocessing to remove boilerplate marker
-text.
+Line marker used by patient postprocessing to identify the boilerplate
+conditions section heading.
 
 ### `patient.text_token_threshold`
 

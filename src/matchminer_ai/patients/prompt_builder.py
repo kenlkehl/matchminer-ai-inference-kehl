@@ -18,6 +18,7 @@ from matchminer_ai.llm.prompt_rendering import Prompt
 
 _worker_tokenizer: Any = None
 _worker_config: dict[str, Any] = {}
+_RESPONSE_TOKEN_MARGIN = 256
 
 
 def load_prompt_text(filename: str) -> str:
@@ -138,7 +139,10 @@ def _init_prompt_worker(patient_config: dict[str, Any]) -> None:
     """Initialize tokenizer and config in each prompt-building worker."""
     global _worker_tokenizer, _worker_config
     _worker_config = dict(patient_config)
-    _worker_tokenizer = AutoTokenizer.from_pretrained(_worker_config["model_name"])
+    _worker_tokenizer = AutoTokenizer.from_pretrained(
+        _worker_config["model_name"],
+        trust_remote_code=True,
+    )
 
 
 def prep_prompt_pool(
@@ -170,26 +174,31 @@ def build_prompt_worker(item: PromptWorkItem) -> Prompt:
         margin_tokens=int(_worker_config["prompt_margin_tokens"]),
         model_name=str(_worker_config["model_name"]),
     )
+    chat_template_kwargs = dict(_worker_config.get("chat_template_kwargs") or {})
     prompt_text = cast(
         str,
         _worker_tokenizer.apply_chat_template(
             conversation=messages,
             add_generation_prompt=True,
             tokenize=False,
+            **chat_template_kwargs,
         ),
     )
     prompt_token_count = len(
         _worker_tokenizer(prompt_text, add_special_tokens=False).input_ids
     )
     max_tokens = int(_worker_config["sampling_params"]["max_tokens"])
-    gen_tokens = max(
-        1,
-        min(int(_worker_config["max_model_len"]) - prompt_token_count, max_tokens),
+    available_generation_tokens = (
+        int(_worker_config["max_model_len"])
+        - prompt_token_count
+        - _RESPONSE_TOKEN_MARGIN
     )
+    gen_tokens = max(1, min(available_generation_tokens, max_tokens))
     return Prompt(
         row_idx=item.row_idx,
         prompt_text=prompt_text,
         max_tokens=gen_tokens,
+        messages=messages,
     )
 
 

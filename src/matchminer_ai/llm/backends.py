@@ -7,14 +7,27 @@ import json
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Dict, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, cast
 
 from matchminer_ai.llm.prompt_rendering import Prompt
+from matchminer_ai.llm.reasoning import parse_reasoning_output
+from matchminer_ai.llm.reasoning import resolve_reasoning_parser
 from matchminer_ai.llm.remote_inference import generate_remote_llm_outputs
 from matchminer_ai.llm.remote_inference import normalize_remote_server_urls
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
+
+
+@dataclass(frozen=True)
+class LLMGenerationResult:
+    """Structured output from one backend generation call."""
+
+    final_outputs: list[str]
+    model_metadata: Dict[str, Any]
+    finish_reasons: list[str]
+    reasoning_outputs: list[str]
+    raw_outputs: list[str]
 
 
 def _default_metadata_cache_dir() -> str:
@@ -101,7 +114,7 @@ class LocalBackend:
         prompt_list: list[Prompt],
         llm_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
-    ) -> Tuple[list[str], Dict[str, Any], list[str]]:
+    ) -> LLMGenerationResult:
         """
         Generate LLM outputs with a local vLLM model.
 
@@ -117,8 +130,9 @@ class LocalBackend:
 
         Returns
         -------
-        tuple
-            ``(texts, model_metadata, finish_reasons)``.
+        LLMGenerationResult
+            Final outputs, reasoning traces, raw local outputs, finish reasons,
+            and model metadata.
         """
         from vllm import SamplingParams
 
@@ -131,7 +145,8 @@ class LocalBackend:
                 "model_name",
                 "sampling_params",
                 "prompt_files",
-                "reasoning_marker",
+                "reasoning_parser",
+                "chat_template_kwargs",
                 "boilerplate_marker",
                 "chunk_size",
                 "chunk_overlap",
@@ -143,6 +158,10 @@ class LocalBackend:
             }
         }
         sampling_params = dict(llm_config["sampling_params"])
+        parser_name = resolve_reasoning_parser(
+            str(model_name),
+            str(llm_config.get("reasoning_parser", "auto")),
+        )
 
         model_metadata = get_model_metadata(
             model_name,
@@ -157,11 +176,28 @@ class LocalBackend:
             prompts=prompts,
             sampling_params=SamplingParams(**sampling_params),
         )
-        texts = [response.outputs[0].text for response in responses]
+        raw_texts = [response.outputs[0].text for response in responses]
+        tokenizer = llm.get_tokenizer()
+        parsed_outputs = [
+            parse_reasoning_output(
+                text,
+                parser_name=parser_name,
+                tokenizer=tokenizer,
+            )
+            for text in raw_texts
+        ]
+        reasonings = [reasoning for reasoning, _content in parsed_outputs]
+        texts = [content for _reasoning, content in parsed_outputs]
         finish_reasons = [
             cast(str, response.outputs[0].finish_reason) for response in responses
         ]
-        return texts, model_metadata, finish_reasons
+        return LLMGenerationResult(
+            final_outputs=texts,
+            model_metadata=model_metadata,
+            finish_reasons=finish_reasons,
+            reasoning_outputs=reasonings,
+            raw_outputs=raw_texts,
+        )
 
     def truncate_texts(
         self,
@@ -198,13 +234,13 @@ class RemoteBackend:
         prompt_list: list[Prompt],
         llm_config: Dict[str, Any],
         model_metadata_cache_dir: str | None = None,
-    ) -> Tuple[list[str], Dict[str, Any], list[str]]:
+    ) -> LLMGenerationResult:
         """
         Generate LLM outputs through one or more remote vLLM servers.
 
-        Remote execution uses OpenAI-compatible completions, distributes prompts
-        across configured server URLs, and restores outputs to ``Prompt.row_idx``
-        order.
+        Remote execution uses OpenAI-compatible chat completions, distributes
+        prompts across configured server URLs, and restores outputs to
+        ``Prompt.row_idx`` order.
         """
         model_name = str(llm_config["model_name"])
         api_key = str(os.environ.get("OPENAI_API_KEY", "not-needed")).strip()
@@ -213,14 +249,19 @@ class RemoteBackend:
             model_name,
             cache_dir=model_metadata_cache_dir,
         )
-        texts, finish_reasons = generate_remote_llm_outputs(
+        texts, reasonings, finish_reasons = generate_remote_llm_outputs(
             prompts=prompt_list,
             llm_config=llm_config,
             server_urls=server_urls,
             api_key=api_key,
         )
-
-        return texts, model_metadata, finish_reasons
+        return LLMGenerationResult(
+            final_outputs=texts,
+            model_metadata=model_metadata,
+            finish_reasons=finish_reasons,
+            reasoning_outputs=reasonings,
+            raw_outputs=[],
+        )
 
 
 def get_backend(name: str) -> LocalBackend | RemoteBackend:
