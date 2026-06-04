@@ -72,6 +72,8 @@ def run_llm_summarization(
     )
 
     trial_summaries = generation.final_outputs
+    # postprocessing consumes only the
+    # final content, while reasoning/raw text are debug artifacts when present.
     trials_with_summaries["space_output_no_reasoning"] = trial_summaries
     trials_with_summaries["space_reasoning"] = generation.reasoning_outputs
     if generation.raw_outputs:
