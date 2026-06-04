@@ -63,7 +63,7 @@ def parse_reasoning_output(
     parser_name: str | None,
     tokenizer: Any,
 ) -> tuple[str, str]:
-    """Split raw vLLM output into ``(reasoning, final_text)``."""
+    """Split raw local-mode vLLM output into ``(reasoning, final_text)``."""
     if parser_name is None:
         return "", text.strip()
 
@@ -87,18 +87,8 @@ def parse_reasoning_output(
     return (reasoning or "").strip(), (content or "").strip()
 
 
-def compose_raw_text(reasoning: str, content: str) -> str:
-    """Reconstruct a readable debug string from structured reasoning output."""
-    reasoning = reasoning.strip()
-    content = content.strip()
-    if reasoning and content:
-        return f"{reasoning}\n{content}"
-    return reasoning or content
-
-
 __all__ = [
     "MODEL_TO_REASONING_PARSER",
-    "compose_raw_text",
     "parse_reasoning_output",
     "resolve_reasoning_parser",
 ]
