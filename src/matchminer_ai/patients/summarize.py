@@ -238,6 +238,8 @@ def summarize_patient_notes(
         current_summaries
     )
     if resolved_config.debug_mode:
+        # These columns preserve final-round debug traces without feeding them
+        # back into the serial patient summary state.
         if current_raw_outputs:
             final_rows["final_round_patient_summary_raw_output"] = final_rows[
                 "patient_id"

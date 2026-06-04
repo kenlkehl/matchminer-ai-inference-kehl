@@ -165,6 +165,8 @@ def postprocess_trial_summaries(
 
     if config.debug_mode:
         output["trial_text"] = spaces["trial_text"]
+        # Remote chat completions provide final content and reasoning separately;
+        # local in-process vLLM can also expose the raw generated text.
         output["space_output_no_reasoning"] = spaces["space_output_no_reasoning"]
         if "space_reasoning" in spaces.columns:
             output["space_reasoning"] = spaces["space_reasoning"]
