@@ -1,8 +1,11 @@
+import sys
+
 import pandas as pd
 import pytest
 
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.embedding.embed import embed_for_matching
+from matchminer_ai.embedding.inference import generate_embeddings
 
 
 class MockBackend:
@@ -188,3 +191,53 @@ def test_embed_for_matching_return_metadata(monkeypatch):
     assert metadata["config_snapshot"]["embedding"]["model_path"] == "cfg-model"
     assert metadata["model_metadata"]["embedding_model"]["model_name"] == "cfg-model"
     assert backend.last_model_metadata_cache_dir == ".mmai_cache/model_metadata"
+
+
+def test_generate_embeddings_applies_configured_max_seq_length(monkeypatch):
+    """Set SentenceTransformer max_seq_length from embedding config."""
+    loaded_models = []
+
+    class FakeSentenceTransformer:
+        def __init__(self, model_path, device):
+            self.model_path = model_path
+            self.device = device
+            self.prompts = {}
+            self.max_seq_length = None
+            loaded_models.append(self)
+
+        def encode(self, texts, prompt):
+            assert prompt == "query"
+            return [[float(len(text))] for text in texts]
+
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference._load_prompt_text",
+        lambda filename: "Represent this sentence for retrieval:",
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference.get_model_metadata",
+        lambda model_name, cache_dir=None: {"model_name": model_name},
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        type(
+            "FakeSentenceTransformersModule",
+            (),
+            {"SentenceTransformer": FakeSentenceTransformer},
+        ),
+    )
+
+    embeddings, metadata = generate_embeddings(
+        ["abc"],
+        embedding_config={
+            "model_path": "embedder/model",
+            "device": "cpu",
+            "prompt_file": "embedding.txt",
+            "max_seq_length": 2500,
+        },
+    )
+
+    assert embeddings == [[3.0]]
+    assert metadata == {"model_name": "embedder/model"}
+    assert loaded_models[0].prompts["query"] == "Represent this sentence for retrieval:"
+    assert loaded_models[0].max_seq_length == 2500

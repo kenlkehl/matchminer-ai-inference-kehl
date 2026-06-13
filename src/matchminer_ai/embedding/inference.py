@@ -18,22 +18,33 @@ def _load_prompt_text(filename: str) -> str:
 
 def _resolve_embedding_runtime(
     embedding_config: Dict[str, Any],
-) -> tuple[str, str, str]:
-    """Resolve embedding model path, device, and query prompt text."""
+) -> tuple[str, str, str, int | None]:
+    """Resolve embedding model path, device, query prompt text, and length."""
     model_path = str(embedding_config.get("model_path", "")).strip()
     device = str(embedding_config.get("device", "cpu")).strip() or "cpu"
     prompt_filename = str(embedding_config.get("prompt_file", "")).strip()
+    max_seq_length_value = embedding_config.get("max_seq_length")
+    max_seq_length = (
+        None if max_seq_length_value is None else int(max_seq_length_value)
+    )
     query_prompt = _load_prompt_text(prompt_filename).strip()
-    return model_path, device, query_prompt
+    return model_path, device, query_prompt, max_seq_length
 
 
 @lru_cache(maxsize=4)
-def _get_embedding_model(model_path: str, device: str, prompt: str):
+def _get_embedding_model(
+    model_path: str,
+    device: str,
+    prompt: str,
+    max_seq_length: int | None,
+):
     """Load and cache a SentenceTransformer embedding model."""
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_path, device=device)
     model.prompts["query"] = prompt
+    if max_seq_length is not None:
+        model.max_seq_length = max_seq_length
     return model
 
 
@@ -44,8 +55,10 @@ def generate_embeddings(
     model_metadata_cache_dir: str | None = None,
 ) -> tuple[list[list[float]], Dict[str, Any]]:
     """Generate sentence-transformer embeddings and model metadata."""
-    model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
-    model = _get_embedding_model(model_path, device, query_prompt)
+    model_path, device, query_prompt, max_seq_length = _resolve_embedding_runtime(
+        embedding_config
+    )
+    model = _get_embedding_model(model_path, device, query_prompt, max_seq_length)
     model_metadata = get_model_metadata(
         model_path,
         cache_dir=model_metadata_cache_dir,
@@ -63,8 +76,10 @@ def count_embedding_tokens(
     embedding_config: Dict[str, Any],
 ) -> list[int]:
     """Count embedding-model input tokens after applying the query prompt."""
-    model_path, device, query_prompt = _resolve_embedding_runtime(embedding_config)
-    model = _get_embedding_model(model_path, device, query_prompt)
+    model_path, device, query_prompt, max_seq_length = _resolve_embedding_runtime(
+        embedding_config
+    )
+    model = _get_embedding_model(model_path, device, query_prompt, max_seq_length)
     prepared = [f"{query_prompt} {text}".strip() for text in texts]
     encoded = model.tokenizer(prepared, add_special_tokens=True, truncation=False)[
         "input_ids"

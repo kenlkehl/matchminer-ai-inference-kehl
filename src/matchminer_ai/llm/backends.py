@@ -144,6 +144,7 @@ class LocalBackend:
             not in {
                 "model_name",
                 "sampling_params",
+                "prompt_file",
                 "prompt_files",
                 "reasoning_parser",
                 "chat_template_kwargs",
