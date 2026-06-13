@@ -43,3 +43,5 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.raw["llm_exclusion_criteria"]["sampling_params"]["max_tokens"] == (
         20000
     )
+    assert config.remote["served_model_name"] == "google/gemma-4-31B-it"
+    assert config.remote["send_vllm_extra_body"] is True

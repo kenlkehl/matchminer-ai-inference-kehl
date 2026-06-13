@@ -26,6 +26,8 @@ remote:
   enabled: false
   server_urls:
     - http://localhost:8000/v1
+  served_model_name: google/gemma-4-31B-it
+  send_vllm_extra_body: true
   max_concurrent_requests: 16
   request_timeout: 600
   max_retries: 6
