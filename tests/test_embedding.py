@@ -1,10 +1,12 @@
 import sys
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.embedding.embed import embed_for_matching
+from matchminer_ai.embedding import inference as embedding_inference
 from matchminer_ai.embedding.inference import generate_embeddings
 
 
@@ -241,3 +243,55 @@ def test_generate_embeddings_applies_configured_max_seq_length(monkeypatch):
     assert metadata == {"model_name": "embedder/model"}
     assert loaded_models[0].prompts["query"] == "Represent this sentence for retrieval:"
     assert loaded_models[0].max_seq_length == 2500
+
+
+def test_count_embedding_tokens_uses_tokenizer_without_loading_model(monkeypatch):
+    """Token counting should not allocate the embedding model on CUDA."""
+    embedding_inference._get_embedding_tokenizer.cache_clear()
+    embedding_inference._get_embedding_model.cache_clear()
+    loaded_tokenizers = []
+
+    class FakeTokenizer:
+        def __call__(self, texts, add_special_tokens=True, truncation=False):
+            assert texts == ["query prompt abc", "query prompt de"]
+            assert add_special_tokens is True
+            assert truncation is False
+            return {"input_ids": [[1, 2, 3], [1, 2]]}
+
+    class FakeAutoTokenizer:
+        @staticmethod
+        def from_pretrained(model_path, trust_remote_code=True):
+            loaded_tokenizers.append((model_path, trust_remote_code))
+            return FakeTokenizer()
+
+    class FailingSentenceTransformer:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("SentenceTransformer should not be loaded")
+
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference._load_prompt_text",
+        lambda filename: "query prompt",
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        SimpleNamespace(AutoTokenizer=FakeAutoTokenizer),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        SimpleNamespace(SentenceTransformer=FailingSentenceTransformer),
+    )
+
+    counts = embedding_inference.count_embedding_tokens(
+        ["abc", "de"],
+        embedding_config={
+            "model_path": "embedder/model",
+            "device": "cuda",
+            "prompt_file": "embedding.txt",
+            "max_seq_length": 2500,
+        },
+    )
+
+    assert counts == [3, 2]
+    assert loaded_tokenizers == [("embedder/model", True)]

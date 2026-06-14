@@ -48,6 +48,14 @@ def _get_embedding_model(
     return model
 
 
+@lru_cache(maxsize=4)
+def _get_embedding_tokenizer(model_path: str):
+    """Load and cache the tokenizer for embedding token counts."""
+    from transformers import AutoTokenizer
+
+    return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+
+
 def generate_embeddings(
     texts: list[str],
     *,
@@ -76,15 +84,16 @@ def count_embedding_tokens(
     embedding_config: Dict[str, Any],
 ) -> list[int]:
     """Count embedding-model input tokens after applying the query prompt."""
-    model_path, device, query_prompt, max_seq_length = _resolve_embedding_runtime(
+    model_path, _device, query_prompt, _max_seq_length = _resolve_embedding_runtime(
         embedding_config
     )
-    model = _get_embedding_model(model_path, device, query_prompt, max_seq_length)
+    tokenizer = _get_embedding_tokenizer(model_path)
     prepared = [f"{query_prompt} {text}".strip() for text in texts]
-    encoded = model.tokenizer(prepared, add_special_tokens=True, truncation=False)[
-        "input_ids"
-    ]
-    return [len(input_ids) for input_ids in encoded]
+    encoded = tokenizer(prepared, add_special_tokens=True, truncation=False)
+    input_ids = (
+        encoded["input_ids"] if isinstance(encoded, dict) else encoded.input_ids
+    )
+    return [len(ids) for ids in input_ids]
 
 
 __all__ = [
