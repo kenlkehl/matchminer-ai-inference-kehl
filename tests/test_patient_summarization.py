@@ -269,10 +269,10 @@ def test_filter_notes_uses_last_note_date_for_old_existing_summary():
     assert filtered["note_text"].tolist() == ["after"]
 
 
-def test_filter_notes_uses_eight_day_lookback_for_recent_existing_summary():
-    """Recent existing summaries should include an 8-day late-arrival buffer."""
+def test_filter_notes_uses_ten_day_lookback_for_recent_existing_summary():
+    """Recent existing summaries should include a 10-day late-arrival buffer."""
     last_note_date = pd.Timestamp.today().normalize() - pd.Timedelta(days=2)
-    effective_cutoff = last_note_date - pd.Timedelta(days=8)
+    effective_cutoff = last_note_date - pd.Timedelta(days=10)
     existing = validate_existing_summaries(
         pd.DataFrame(
             [

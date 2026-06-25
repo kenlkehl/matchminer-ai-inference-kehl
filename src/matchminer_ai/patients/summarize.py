@@ -25,7 +25,7 @@ from .prompt_builder import (
 )
 
 
-_RECENT_SUMMARY_LOOKBACK_DAYS = 8
+_RECENT_SUMMARY_LOOKBACK_DAYS = 10
 
 
 def validate_existing_summaries(
