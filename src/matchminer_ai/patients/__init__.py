@@ -85,6 +85,8 @@ def summarize_patients(
         -------
         patient_id : str
             Original patient identifier.
+        last_note_date : str
+            Date of the last note included in the patient summary.
         cancer_history_summary : str
             Summary of the patient's cancer history.
         general_exclusion_criteria_evidence : str

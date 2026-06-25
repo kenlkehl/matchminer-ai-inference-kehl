@@ -414,13 +414,7 @@ def summarize_patient_notes(
     pass_through_state = existing_summary_state[
         ~existing_summary_state["patient_id"].isin(generated_patient_ids)
     ].copy()
-    pass_through_rows = pd.DataFrame(
-        columns=[
-            "patient_id",
-            "last_note_date",
-            "original_patient_summary",
-        ]
-    )
+    pass_through_rows = pd.DataFrame()
     if not pass_through_state.empty:
         pass_through_rows = pass_through_state[
             [

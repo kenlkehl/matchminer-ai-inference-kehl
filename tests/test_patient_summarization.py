@@ -592,7 +592,9 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
     result, metadata = summarize_patient_notes(notes, config=_config())
 
     assert seen_prior_summaries == [None, "Round 1\nBoilerplate conditions:\nNone"]
+    assert result.loc[result.index[0], "last_note_date"] == "2024-01-02"
     assert result.loc[result.index[0], "cancer_history_summary"] == "Round 2"
+    assert "original_patient_summary" not in result.columns
     assert metadata["model_metadata"]["model_sha"] == "sha"
 
 
