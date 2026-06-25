@@ -25,6 +25,9 @@ from .prompt_builder import (
 )
 
 
+_RECENT_SUMMARY_LOOKBACK_DAYS = 8
+
+
 def validate_existing_summaries(
     existing_summaries: pd.DataFrame,
     *,
@@ -157,14 +160,24 @@ def _filter_notes_newer_than_existing_summaries(
     notes: pd.DataFrame,
     existing_summary_state: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Keep all new-patient notes and only newer notes for existing patients."""
+    """Keep new-patient notes and buffered newer notes for existing patients."""
     normalized_notes = validate_note_inputs(notes)
     if normalized_notes.empty or existing_summary_state.empty:
         return normalized_notes
 
-    cutoff_by_patient = existing_summary_state.set_index("patient_id")[
-        "_last_note_date"
-    ].to_dict()
+    last_note_dates = pd.to_datetime(
+        existing_summary_state.set_index("patient_id")[
+            "_last_note_date"
+        ]
+    )
+    recent_threshold = pd.Timestamp.today().normalize() - pd.Timedelta(
+        days=_RECENT_SUMMARY_LOOKBACK_DAYS
+    )
+    effective_cutoff_dates = last_note_dates.where(
+        last_note_dates < recent_threshold,
+        last_note_dates - pd.Timedelta(days=_RECENT_SUMMARY_LOOKBACK_DAYS),
+    )
+    cutoff_by_patient = effective_cutoff_dates.to_dict()
     note_dates = normalized_notes["note_date"].dt.normalize()
     cutoff_dates = pd.to_datetime(normalized_notes["patient_id"].map(cutoff_by_patient))
     keep = cutoff_dates.isna() | (note_dates > cutoff_dates)

@@ -19,6 +19,7 @@ from matchminer_ai.patients.prompt_builder import (
     get_serial_patient_prompt,
 )
 from matchminer_ai.patients.summarize import (
+    _filter_notes_newer_than_existing_summaries,
     summarize_patient_notes,
     validate_existing_summaries,
 )
@@ -227,6 +228,90 @@ def test_validate_existing_summaries_rejects_missing_summary_columns():
         assert "patient_summary_with_boilerplate" in str(exc)
     else:
         raise AssertionError("Expected ValueError for missing summary text")
+
+
+def test_filter_notes_uses_last_note_date_for_old_existing_summary():
+    """Old existing summaries should only include strictly newer notes."""
+    last_note_date = pd.Timestamp.today().normalize() - pd.Timedelta(days=20)
+    existing = validate_existing_summaries(
+        pd.DataFrame(
+            [
+                {
+                    "patient_id": "P1",
+                    "last_note_date": last_note_date.isoformat(),
+                    "patient_summary_with_boilerplate": "Summary",
+                }
+            ]
+        )
+    )
+    notes = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "note_text": "before",
+                "note_date": (last_note_date - pd.Timedelta(days=1)).isoformat(),
+            },
+            {
+                "patient_id": "P1",
+                "note_text": "same",
+                "note_date": last_note_date.isoformat(),
+            },
+            {
+                "patient_id": "P1",
+                "note_text": "after",
+                "note_date": (last_note_date + pd.Timedelta(days=1)).isoformat(),
+            },
+        ]
+    )
+
+    filtered = _filter_notes_newer_than_existing_summaries(notes, existing)
+
+    assert filtered["note_text"].tolist() == ["after"]
+
+
+def test_filter_notes_uses_eight_day_lookback_for_recent_existing_summary():
+    """Recent existing summaries should include an 8-day late-arrival buffer."""
+    last_note_date = pd.Timestamp.today().normalize() - pd.Timedelta(days=2)
+    effective_cutoff = last_note_date - pd.Timedelta(days=8)
+    existing = validate_existing_summaries(
+        pd.DataFrame(
+            [
+                {
+                    "patient_id": "P1",
+                    "last_note_date": last_note_date.isoformat(),
+                    "patient_summary_with_boilerplate": "Summary",
+                }
+            ]
+        )
+    )
+    notes = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "note_text": "outside",
+                "note_date": effective_cutoff.isoformat(),
+            },
+            {
+                "patient_id": "P1",
+                "note_text": "inside",
+                "note_date": (effective_cutoff + pd.Timedelta(days=1)).isoformat(),
+            },
+            {
+                "patient_id": "P1",
+                "note_text": "same as summary",
+                "note_date": last_note_date.isoformat(),
+            },
+            {
+                "patient_id": "P1",
+                "note_text": "newer",
+                "note_date": (last_note_date + pd.Timedelta(days=1)).isoformat(),
+            },
+        ]
+    )
+
+    filtered = _filter_notes_newer_than_existing_summaries(notes, existing)
+
+    assert filtered["note_text"].tolist() == ["inside", "same as summary", "newer"]
 
 
 def test_parse_boilerplate_splits_summary_and_exclusions():
