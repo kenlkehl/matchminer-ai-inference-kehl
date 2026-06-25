@@ -71,7 +71,7 @@ patient:
   prompt_files:
     primer: patient.serial.user.primer.txt
     question: patient.serial.user.question.txt
-  boilerplate_marker: Boilerplate conditions
+  boilerplate_marker: "Boilerplate conditions:"
   text_token_threshold: 95000
 embedding:
   model_path: "ksg-dfci/TrialSpace-0526"

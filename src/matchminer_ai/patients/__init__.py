@@ -53,8 +53,17 @@ def summarize_patients(
         ----------------
         patient_id : str
             Unique patient identifier.
-        patient_summary : str
-            Existing full patient summary text to update.
+        last_note_date : str or datetime
+            Date of the last note included in the existing summary.
+        patient_summary_with_boilerplate : str, optional
+            Existing full patient summary text, including the boilerplate
+            conditions section. Legacy ``patient_summary`` is also accepted.
+        cancer_history_summary : str, optional
+            Existing cancer history summary. Required only when
+            ``patient_summary_with_boilerplate`` is not provided.
+        general_exclusion_criteria_evidence : str, optional
+            Existing boilerplate/exclusion evidence. Required only when
+            ``patient_summary_with_boilerplate`` is not provided.
     return_metadata : bool, optional
         When True, also return a metadata dict containing the config snapshot
         and model metadata for this run.

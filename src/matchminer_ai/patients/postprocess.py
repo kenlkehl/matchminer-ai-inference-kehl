@@ -72,12 +72,23 @@ def clean_bad_data(
 def postprocess_patient_summaries(
     df: pd.DataFrame,
     config: MMAIConfig,
+    *,
+    drop_noninformative: bool = True,
 ) -> tuple[pd.DataFrame, dict[str, object]]:
     """Postprocess final serial patient summaries into clean outputs."""
     patient_config = dict(config.patient)
     boilerplate_marker = patient_config["boilerplate_marker"]
     parsed = parse_boilerplate(df, boilerplate_marker)
-    cleaned, qc_artifact = clean_bad_data(parsed)
+    if drop_noninformative:
+        cleaned, qc_artifact = clean_bad_data(parsed)
+    else:
+        cleaned = parsed
+        patient_ids = cleaned.get("patient_id", pd.Series(dtype=object)).astype(str)
+        qc_artifact = build_qc_artifact(
+            metric="patients_dropped_noninformative_summary",
+            ids=[],
+            denominator=int(patient_ids.nunique()),
+        )
     if not config.debug_mode:
         cleaned = cleaned.drop(
             columns=[

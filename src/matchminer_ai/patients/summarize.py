@@ -16,7 +16,7 @@ from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_prese
 from matchminer_ai.llm.prompt_rendering import Prompt
 
 from .postprocess import postprocess_patient_summaries
-from .prepare import prepare_patient_notes
+from .prepare import prepare_patient_notes, validate_note_inputs
 from .prompt_builder import (
     PromptWorkItem,
     build_prompt_worker,
@@ -27,9 +27,11 @@ from .prompt_builder import (
 
 def validate_existing_summaries(
     existing_summaries: pd.DataFrame,
+    *,
+    boilerplate_marker: str = "Boilerplate conditions:",
 ) -> pd.DataFrame:
     """Validate and normalize existing patient summary state."""
-    required_columns = ["patient_id", "patient_summary"]
+    required_columns = ["patient_id", "last_note_date"]
     missing = [
         column
         for column in required_columns
@@ -38,29 +40,105 @@ def validate_existing_summaries(
     if missing:
         raise ValueError(
             "existing summaries input must include columns "
-            "'patient_id' and 'patient_summary'. Missing: "
+            "'patient_id' and 'last_note_date'. Missing: "
             f"{', '.join(missing)}"
         )
 
     normalized = existing_summaries.copy()
     normalized["patient_id"] = normalized["patient_id"].astype(str)
-    normalized["patient_summary"] = normalized["patient_summary"].where(
-        normalized["patient_summary"].notna(),
+
+    summary_column = None
+    if "patient_summary_with_boilerplate" in normalized.columns:
+        summary_column = "patient_summary_with_boilerplate"
+    elif "patient_summary" in normalized.columns:
+        summary_column = "patient_summary"
+
+    split_columns = [
+        "cancer_history_summary",
+        "general_exclusion_criteria_evidence",
+    ]
+    has_split_columns = all(column in normalized.columns for column in split_columns)
+    if summary_column is None and not has_split_columns:
+        raise ValueError(
+            "existing summaries input must include either "
+            "'patient_summary_with_boilerplate', legacy 'patient_summary', or "
+            "'cancer_history_summary' and 'general_exclusion_criteria_evidence'."
+        )
+
+    if summary_column is not None:
+        normalized["patient_summary_with_boilerplate"] = normalized[
+            summary_column
+        ].where(
+            normalized[summary_column].notna(),
+            None,
+        )
+    else:
+        cancer_summary = normalized["cancer_history_summary"].fillna("").astype(str)
+        boilerplate = normalized["general_exclusion_criteria_evidence"].fillna(
+            ""
+        ).astype(str)
+        normalized["patient_summary_with_boilerplate"] = (
+            cancer_summary.str.strip()
+            + "\n\n"
+            + boilerplate_marker
+            + "\n"
+            + boilerplate.str.strip()
+        ).str.strip()
+
+    parsed_dates = pd.to_datetime(normalized["last_note_date"], errors="coerce")
+    invalid_dates = normalized.loc[parsed_dates.isna(), "patient_id"].astype(str)
+    if not invalid_dates.empty:
+        raise ValueError(
+            "existing summaries input has invalid or missing last_note_date for "
+            f"patient_id(s): {', '.join(sorted(invalid_dates.unique()))}"
+        )
+    normalized["_last_note_date"] = parsed_dates.dt.normalize()
+    normalized["last_note_date"] = parsed_dates.dt.date.astype(str)
+
+    normalized["patient_summary_with_boilerplate"] = normalized[
+        "patient_summary_with_boilerplate"
+    ].where(
+        normalized["patient_summary_with_boilerplate"].notna(),
         None,
     )
-    return normalized.drop_duplicates(subset=["patient_id"], keep="last")
+    return normalized.drop_duplicates(subset=["patient_id"], keep="last")[
+        [
+            "patient_id",
+            "last_note_date",
+            "_last_note_date",
+            "patient_summary_with_boilerplate",
+        ]
+    ]
 
 
-def _build_existing_summary_lookup(
-    existing_summaries: pd.DataFrame | None,
-) -> dict[str, str | None]:
-    if existing_summaries is None:
-        return {}
-    normalized = validate_existing_summaries(existing_summaries)
-    return cast(
-        dict[str, str | None],
-        normalized.set_index("patient_id")["patient_summary"].to_dict(),
+def _empty_existing_summary_state() -> pd.DataFrame:
+    """Return an empty canonical existing-summary table."""
+    return pd.DataFrame(
+        columns=[
+            "patient_id",
+            "last_note_date",
+            "_last_note_date",
+            "patient_summary_with_boilerplate",
+        ]
     )
+
+
+def _filter_notes_newer_than_existing_summaries(
+    notes: pd.DataFrame,
+    existing_summary_state: pd.DataFrame,
+) -> pd.DataFrame:
+    """Keep all new-patient notes and only newer notes for existing patients."""
+    normalized_notes = validate_note_inputs(notes)
+    if normalized_notes.empty or existing_summary_state.empty:
+        return normalized_notes
+
+    cutoff_by_patient = existing_summary_state.set_index("patient_id")[
+        "_last_note_date"
+    ].to_dict()
+    note_dates = normalized_notes["note_date"].dt.normalize()
+    cutoff_dates = pd.to_datetime(normalized_notes["patient_id"].map(cutoff_by_patient))
+    keep = cutoff_dates.isna() | (note_dates > cutoff_dates)
+    return normalized_notes.loc[keep].copy()
 
 
 def _build_rounds(prepared_chunks: pd.DataFrame) -> list[pd.DataFrame]:
@@ -139,8 +217,17 @@ def summarize_patient_notes(
         ----------------
         patient_id : str
             Unique patient identifier.
-        patient_summary : str
-            Existing full patient summary text to update.
+        last_note_date : str or datetime
+            Date of the last note included in the existing summary.
+        patient_summary_with_boilerplate : str, optional
+            Existing full patient summary text, including the boilerplate
+            conditions section. Legacy ``patient_summary`` is also accepted.
+        cancer_history_summary : str, optional
+            Existing cancer history summary. Required only when
+            ``patient_summary_with_boilerplate`` is not provided.
+        general_exclusion_criteria_evidence : str, optional
+            Existing boilerplate/exclusion evidence. Required only when
+            ``patient_summary_with_boilerplate`` is not provided.
     return_qc : bool, optional
         When True, also return a QC report DataFrame for this summarization step.
     """
@@ -154,31 +241,49 @@ def summarize_patient_notes(
         patient_config,
         config=resolved_config,
     )
-
-    # Convert note-level input into patient-level metadata plus chunk-level
-    # rows. The chunk rows are what drive the serial summarization loop.
-    tokenizer = AutoTokenizer.from_pretrained(
-        patient_config["model_name"],
-        trust_remote_code=True,
+    boilerplate_marker = str(patient_config["boilerplate_marker"])
+    existing_summary_state = (
+        validate_existing_summaries(
+            existing_summaries,
+            boilerplate_marker=boilerplate_marker,
+        )
+        if existing_summaries is not None
+        else _empty_existing_summary_state()
     )
-    prepared_patients, prepared_chunks = prepare_patient_notes(
+    filtered_notes = _filter_notes_newer_than_existing_summaries(
         notes,
-        tokenizer,
-        chunk_size=int(patient_config["chunk_size"]),
-        chunk_overlap=int(patient_config["chunk_overlap"]),
+        existing_summary_state,
     )
-    existing_summary_lookup = _build_existing_summary_lookup(existing_summaries)
-    rounds = _build_rounds(prepared_chunks)
 
-    backend = get_summarization_backend(resolved_config)
+    prepared_patients = pd.DataFrame(columns=["patient_id", "last_note_date"])
+    rounds: list[pd.DataFrame] = []
+    if not filtered_notes.empty:
+        # Convert note-level input into patient-level metadata plus chunk-level
+        # rows. The chunk rows are what drive the serial summarization loop.
+        tokenizer = AutoTokenizer.from_pretrained(
+            patient_config["model_name"],
+            trust_remote_code=True,
+        )
+        prepared_patients, prepared_chunks = prepare_patient_notes(
+            filtered_notes,
+            tokenizer,
+            chunk_size=int(patient_config["chunk_size"]),
+            chunk_overlap=int(patient_config["chunk_overlap"]),
+        )
+        rounds = _build_rounds(prepared_chunks)
+
     # This dict holds the latest available summary for each patient. If the
     # caller provided an existing summary, that is used for round 1; after each
     # round, the newly generated summary overwrites the prior one.
-    current_summaries = {
-        patient_id: summary for patient_id, summary in existing_summary_lookup.items()
-    }
+    current_summaries = cast(
+        dict[str, str | None],
+        existing_summary_state.set_index("patient_id")[
+            "patient_summary_with_boilerplate"
+        ].to_dict(),
+    )
     current_raw_outputs: dict[str, str] = {}
     current_reasoning_outputs: dict[str, str] = {}
+    generated_patient_ids: set[str] = set()
     model_metadata: dict[str, Any] = {}
     prompt_pool = None
 
@@ -191,6 +296,7 @@ def summarize_patient_notes(
     )
     try:
         if rounds:
+            backend = get_summarization_backend(resolved_config)
             prompt_pool = prep_prompt_pool(
                 patient_config=runtime_patient_config,
                 n_workers=n_prompt_workers,
@@ -224,6 +330,7 @@ def summarize_patient_notes(
                 strict=False,
             ):
                 current_summaries[patient_id] = str(summary)
+                generated_patient_ids.add(patient_id)
                 if has_raw_outputs:
                     current_raw_outputs[patient_id] = str(raw_output)
                 current_reasoning_outputs[patient_id] = str(reasoning)
@@ -231,26 +338,62 @@ def summarize_patient_notes(
         if prompt_pool is not None:
             shutdown_prompt_pool(prompt_pool)
 
-    # Collapse the running patient state back to one final row per patient,
-    # then do postprocessing and QC report generation.
-    final_rows = prepared_patients.copy()
-    final_rows["original_patient_summary"] = final_rows["patient_id"].map(
+    # Collapse generated patient state and unchanged prior summaries back to one
+    # final row per patient, then do postprocessing and QC report generation.
+    generated_rows = prepared_patients[
+        prepared_patients["patient_id"].isin(generated_patient_ids)
+    ].copy()
+    generated_rows["original_patient_summary"] = generated_rows["patient_id"].map(
         current_summaries
     )
     if resolved_config.debug_mode:
         # These columns preserve final-round debug traces without feeding them
         # back into the serial patient summary state.
         if current_raw_outputs:
-            final_rows["final_round_patient_summary_raw_output"] = final_rows[
+            generated_rows["final_round_patient_summary_raw_output"] = generated_rows[
                 "patient_id"
             ].map(current_raw_outputs)
-        final_rows["final_round_patient_summary_reasoning"] = final_rows[
+        generated_rows["final_round_patient_summary_reasoning"] = generated_rows[
             "patient_id"
         ].map(current_reasoning_outputs)
-    final_rows = final_rows.dropna(subset=["original_patient_summary"]).copy()
+    generated_rows = generated_rows.dropna(subset=["original_patient_summary"]).copy()
 
-    final_rows, noninformative_summary_qc_artifact = postprocess_patient_summaries(
-        final_rows, resolved_config
+    generated_rows, noninformative_summary_qc_artifact = postprocess_patient_summaries(
+        generated_rows,
+        resolved_config,
+    )
+    pass_through_state = existing_summary_state[
+        ~existing_summary_state["patient_id"].isin(generated_patient_ids)
+    ].copy()
+    pass_through_rows = pd.DataFrame(
+        columns=[
+            "patient_id",
+            "last_note_date",
+            "original_patient_summary",
+        ]
+    )
+    if not pass_through_state.empty:
+        pass_through_rows = pass_through_state[
+            [
+                "patient_id",
+                "last_note_date",
+                "patient_summary_with_boilerplate",
+            ]
+        ].rename(
+            columns={
+                "patient_summary_with_boilerplate": "original_patient_summary",
+            }
+        )
+        pass_through_rows, _ = postprocess_patient_summaries(
+            pass_through_rows,
+            resolved_config,
+            drop_noninformative=False,
+        )
+
+    final_rows = pd.concat(
+        [generated_rows, pass_through_rows],
+        ignore_index=True,
+        sort=False,
     )
 
     metadata = {

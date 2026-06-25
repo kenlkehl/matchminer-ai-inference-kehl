@@ -18,7 +18,10 @@ from matchminer_ai.patients.prompt_builder import (
     build_prompt_worker,
     get_serial_patient_prompt,
 )
-from matchminer_ai.patients.summarize import summarize_patient_notes
+from matchminer_ai.patients.summarize import (
+    summarize_patient_notes,
+    validate_existing_summaries,
+)
 
 
 class MockTokenResult:
@@ -48,7 +51,7 @@ def _patient_config() -> dict:
             "primer": "patient.serial.user.primer.txt",
             "question": "patient.serial.user.question.txt",
         },
-        "boilerplate_marker": "Boilerplate conditions",
+        "boilerplate_marker": "Boilerplate conditions:",
         "sampling_params": {
             "temperature": 0.0,
             "top_k": 1,
@@ -102,6 +105,109 @@ def _remote_config(debug_mode: bool = False) -> MMAIConfig:
     return config
 
 
+def test_validate_existing_summaries_accepts_combined_column():
+    """Normalize combined existing summaries to the canonical column."""
+    existing = pd.DataFrame(
+        [
+            {
+                "patient_id": 1,
+                "last_note_date": "2024-01-03",
+                "patient_summary_with_boilerplate": (
+                    "Summary\n\nBoilerplate conditions:\nNone"
+                ),
+            }
+        ]
+    )
+
+    normalized = validate_existing_summaries(existing)
+
+    assert normalized.loc[0, "patient_id"] == "1"
+    assert normalized.loc[0, "last_note_date"] == "2024-01-03"
+    assert (
+        normalized.loc[0, "patient_summary_with_boilerplate"]
+        == "Summary\n\nBoilerplate conditions:\nNone"
+    )
+
+
+def test_validate_existing_summaries_concatenates_split_columns():
+    """Build canonical prior-summary text from split output columns."""
+    existing = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "2024-01-03",
+                "cancer_history_summary": "Cancer summary",
+                "general_exclusion_criteria_evidence": "ECOG 1",
+            }
+        ]
+    )
+
+    normalized = validate_existing_summaries(existing)
+
+    assert (
+        normalized.loc[0, "patient_summary_with_boilerplate"]
+        == "Cancer summary\n\nBoilerplate conditions:\nECOG 1"
+    )
+
+
+def test_validate_existing_summaries_rejects_missing_date():
+    """Existing summaries need a cutoff date for incremental note filtering."""
+    existing = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "patient_summary_with_boilerplate": "Summary",
+            }
+        ]
+    )
+
+    try:
+        validate_existing_summaries(existing)
+    except ValueError as exc:
+        assert "last_note_date" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for missing last_note_date")
+
+
+def test_validate_existing_summaries_rejects_invalid_date():
+    """Existing summary cutoff dates must be parseable dates."""
+    existing = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "not-a-date",
+                "patient_summary_with_boilerplate": "Summary",
+            }
+        ]
+    )
+
+    try:
+        validate_existing_summaries(existing)
+    except ValueError as exc:
+        assert "P1" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for invalid last_note_date")
+
+
+def test_validate_existing_summaries_rejects_missing_summary_columns():
+    """Existing summaries need either combined or split summary text."""
+    existing = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "2024-01-03",
+            }
+        ]
+    )
+
+    try:
+        validate_existing_summaries(existing)
+    except ValueError as exc:
+        assert "patient_summary_with_boilerplate" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for missing summary text")
+
+
 def test_parse_boilerplate_splits_summary_and_exclusions():
     """Split patient summaries into cancer history vs exclusion evidence."""
     df = pd.DataFrame(
@@ -117,7 +223,7 @@ def test_parse_boilerplate_splits_summary_and_exclusions():
 
     parsed = parse_boilerplate(
         df,
-        boilerplate_marker="Boilerplate conditions",
+        boilerplate_marker="Boilerplate conditions:",
     )
 
     assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
@@ -142,7 +248,7 @@ def test_parse_boilerplate_accepts_final_only_v22_output():
 
     parsed = parse_boilerplate(
         df,
-        boilerplate_marker="Boilerplate conditions",
+        boilerplate_marker="Boilerplate conditions:",
     )
 
     assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
@@ -419,7 +525,13 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
     )
 
     existing_summaries = pd.DataFrame(
-        [{"patient_id": "P1", "patient_summary": "Existing summary"}]
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "2024-01-01",
+                "patient_summary": "Existing summary",
+            }
+        ]
     )
     notes = pd.DataFrame(
         [{"patient_id": "P1", "note_text": "x", "note_date": "2024-01-02"}]
@@ -433,6 +545,279 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
 
     assert seen_prior_summaries == ["Existing summary"]
     assert result.loc[result.index[0], "cancer_history_summary"] == "Updated"
+
+
+def test_summarize_patient_notes_filters_existing_notes_by_last_note_date(monkeypatch):
+    """Only notes newer than the prior summary date should reach chunking."""
+    _stub_patient_qc(monkeypatch)
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.AutoTokenizer.from_pretrained",
+        lambda model_name, **kwargs: MockTokenizer(),
+    )
+    captured_notes = {}
+
+    def fake_prepare_patient_notes(notes, tokenizer, chunk_size, chunk_overlap):
+        captured_notes["notes"] = notes.copy()
+        return (
+            pd.DataFrame([{"patient_id": "P1", "last_note_date": "2024-01-03"}]),
+            pd.DataFrame(
+                [
+                    {
+                        "patient_id": "P1",
+                        "chunk_index": 0,
+                        "first_date": "2024-01-03",
+                        "last_date": "2024-01-03",
+                        "chunk_text": "new chunk",
+                    }
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.prepare_patient_notes",
+        fake_prepare_patient_notes,
+    )
+
+    seen_prior_summaries = []
+
+    class FakePromptPool:
+        def map(self, func, work_items, chunksize=1):
+            seen_prior_summaries.extend(item.prior_summary_text for item in work_items)
+            return [
+                Prompt(row_idx=item.row_idx, prompt_text=item.chunk_text, max_tokens=7)
+                for item in work_items
+            ]
+
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.prep_prompt_pool",
+        lambda patient_config, n_workers: FakePromptPool(),
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.shutdown_prompt_pool",
+        lambda prompt_pool: None,
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.get_summarization_backend",
+        lambda config: MagicMock(
+            generate_llm_outputs=MagicMock(
+                return_value=LLMGenerationResult(
+                    final_outputs=["Updated\nBoilerplate conditions:\nNone"],
+                    model_metadata={"model_name": "model", "model_sha": "sha"},
+                    finish_reasons=["stop"],
+                    reasoning_outputs=[""],
+                    raw_outputs=[],
+                )
+            )
+        ),
+    )
+
+    existing_summaries = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "2024-01-02",
+                "patient_summary_with_boilerplate": "Existing summary",
+            }
+        ]
+    )
+    notes = pd.DataFrame(
+        [
+            {"patient_id": "P1", "note_text": "old", "note_date": "2024-01-01"},
+            {"patient_id": "P1", "note_text": "same", "note_date": "2024-01-02"},
+            {"patient_id": "P1", "note_text": "new", "note_date": "2024-01-03"},
+        ]
+    )
+
+    result, _ = summarize_patient_notes(
+        notes,
+        config=_config(),
+        existing_summaries=existing_summaries,
+    )
+
+    assert captured_notes["notes"]["note_text"].tolist() == ["new"]
+    assert seen_prior_summaries == ["Existing summary"]
+    assert result.loc[result.index[0], "last_note_date"] == "2024-01-03"
+    assert result.loc[result.index[0], "cancer_history_summary"] == "Updated"
+
+
+def test_summarize_patient_notes_passes_through_when_no_newer_notes(monkeypatch):
+    """Existing rows with no newer notes should return without model setup."""
+    _stub_patient_qc(monkeypatch)
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.AutoTokenizer.from_pretrained",
+        MagicMock(side_effect=AssertionError("tokenizer should not load")),
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.get_summarization_backend",
+        MagicMock(side_effect=AssertionError("backend should not load")),
+    )
+
+    existing_summaries = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "2024-01-02",
+                "patient_summary_with_boilerplate": (
+                    "No evidence of malignancy\n"
+                    "Boilerplate conditions:\n"
+                    "None"
+                ),
+            }
+        ]
+    )
+    notes = pd.DataFrame(
+        [
+            {"patient_id": "P1", "note_text": "old", "note_date": "2024-01-01"},
+            {"patient_id": "P1", "note_text": "same", "note_date": "2024-01-02"},
+        ]
+    )
+
+    result, metadata = summarize_patient_notes(
+        notes,
+        config=_config(),
+        existing_summaries=existing_summaries,
+    )
+
+    assert result["patient_id"].tolist() == ["P1"]
+    assert result.loc[result.index[0], "last_note_date"] == "2024-01-02"
+    assert (
+        result.loc[result.index[0], "cancer_history_summary"]
+        == "No evidence of malignancy"
+    )
+    assert result.loc[result.index[0], "general_exclusion_criteria_evidence"] == "None"
+    assert metadata["model_metadata"] == {}
+
+
+def test_summarize_patient_notes_updates_and_passes_through_mixed_cohort(
+    monkeypatch,
+):
+    """Mix updated existing, unchanged existing, and new patients in one run."""
+    _stub_patient_qc(monkeypatch)
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.AutoTokenizer.from_pretrained",
+        lambda model_name, **kwargs: MockTokenizer(),
+    )
+    captured_notes = {}
+
+    def fake_prepare_patient_notes(notes, tokenizer, chunk_size, chunk_overlap):
+        captured_notes["patient_ids"] = notes["patient_id"].tolist()
+        return (
+            pd.DataFrame(
+                [
+                    {"patient_id": "P1", "last_note_date": "2024-01-03"},
+                    {"patient_id": "P3", "last_note_date": "2024-01-01"},
+                ]
+            ),
+            pd.DataFrame(
+                [
+                    {
+                        "patient_id": "P1",
+                        "chunk_index": 0,
+                        "first_date": "2024-01-03",
+                        "last_date": "2024-01-03",
+                        "chunk_text": "p1 chunk",
+                    },
+                    {
+                        "patient_id": "P3",
+                        "chunk_index": 0,
+                        "first_date": "2024-01-01",
+                        "last_date": "2024-01-01",
+                        "chunk_text": "p3 chunk",
+                    },
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.prepare_patient_notes",
+        fake_prepare_patient_notes,
+    )
+    pool_calls = {}
+
+    class FakePromptPool:
+        def map(self, func, work_items, chunksize=1):
+            pool_calls["prior_summaries"] = [
+                item.prior_summary_text for item in work_items
+            ]
+            return [
+                Prompt(row_idx=item.row_idx, prompt_text=item.chunk_text, max_tokens=7)
+                for item in work_items
+            ]
+
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.prep_prompt_pool",
+        lambda patient_config, n_workers: FakePromptPool(),
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.shutdown_prompt_pool",
+        lambda prompt_pool: None,
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize.get_summarization_backend",
+        lambda config: MagicMock(
+            generate_llm_outputs=MagicMock(
+                return_value=LLMGenerationResult(
+                    final_outputs=[
+                        "Updated P1\nBoilerplate conditions:\nNone",
+                        "New P3\nBoilerplate conditions:\nNone",
+                    ],
+                    model_metadata={"model_name": "model", "model_sha": "sha"},
+                    finish_reasons=["stop", "stop"],
+                    reasoning_outputs=["", ""],
+                    raw_outputs=[],
+                )
+            )
+        ),
+    )
+
+    existing_summaries = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "2024-01-02",
+                "cancer_history_summary": "Old P1",
+                "general_exclusion_criteria_evidence": "Old boilerplate P1",
+            },
+            {
+                "patient_id": "P2",
+                "last_note_date": "2024-01-05",
+                "cancer_history_summary": "Old P2",
+                "general_exclusion_criteria_evidence": "Old boilerplate P2",
+            },
+        ]
+    )
+    notes = pd.DataFrame(
+        [
+            {"patient_id": "P1", "note_text": "new p1", "note_date": "2024-01-03"},
+            {"patient_id": "P2", "note_text": "old p2", "note_date": "2024-01-04"},
+            {"patient_id": "P3", "note_text": "new p3", "note_date": "2024-01-01"},
+        ]
+    )
+
+    result, metadata = summarize_patient_notes(
+        notes,
+        config=_config(),
+        existing_summaries=existing_summaries,
+    )
+
+    summaries_by_patient = dict(
+        zip(
+            result["patient_id"],
+            result["cancer_history_summary"],
+            strict=False,
+        )
+    )
+    assert captured_notes["patient_ids"] == ["P1", "P3"]
+    assert pool_calls["prior_summaries"] == [
+        "Old P1\n\nBoilerplate conditions:\nOld boilerplate P1",
+        None,
+    ]
+    assert summaries_by_patient == {
+        "P1": "Updated P1",
+        "P2": "Old P2",
+        "P3": "New P3",
+    }
+    assert metadata["model_metadata"]["model_sha"] == "sha"
 
 
 def test_remote_summarize_patient_notes_uses_parallel_prompt_workers(monkeypatch):
