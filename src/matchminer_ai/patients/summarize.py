@@ -47,32 +47,45 @@ def validate_existing_summaries(
     normalized = existing_summaries.copy()
     normalized["patient_id"] = normalized["patient_id"].astype(str)
 
-    summary_column = None
-    if "patient_summary_with_boilerplate" in normalized.columns:
-        summary_column = "patient_summary_with_boilerplate"
-    elif "patient_summary" in normalized.columns:
-        summary_column = "patient_summary"
-
-    split_columns = [
+    has_combined_column = "patient_summary_with_boilerplate" in normalized.columns
+    package_split_columns = [
         "cancer_history_summary",
         "general_exclusion_criteria_evidence",
     ]
-    has_split_columns = all(column in normalized.columns for column in split_columns)
-    if summary_column is None and not has_split_columns:
+    training_split_columns = [
+        "patient_summary",
+        "patient_boilerplate_text",
+    ]
+    has_package_split_columns = all(
+        column in normalized.columns for column in package_split_columns
+    )
+    has_training_split_columns = all(
+        column in normalized.columns for column in training_split_columns
+    )
+    has_legacy_combined_column = (
+        "patient_summary" in normalized.columns and not has_training_split_columns
+    )
+    if (
+        not has_combined_column
+        and not has_package_split_columns
+        and not has_training_split_columns
+        and not has_legacy_combined_column
+    ):
         raise ValueError(
             "existing summaries input must include either "
             "'patient_summary_with_boilerplate', legacy 'patient_summary', or "
-            "'cancer_history_summary' and 'general_exclusion_criteria_evidence'."
+            "'cancer_history_summary' and 'general_exclusion_criteria_evidence', "
+            "or 'patient_summary' and 'patient_boilerplate_text'."
         )
 
-    if summary_column is not None:
+    if has_combined_column:
         normalized["patient_summary_with_boilerplate"] = normalized[
-            summary_column
+            "patient_summary_with_boilerplate"
         ].where(
-            normalized[summary_column].notna(),
+            normalized["patient_summary_with_boilerplate"].notna(),
             None,
         )
-    else:
+    elif has_package_split_columns:
         cancer_summary = normalized["cancer_history_summary"].fillna("").astype(str)
         boilerplate = normalized["general_exclusion_criteria_evidence"].fillna(
             ""
@@ -84,6 +97,23 @@ def validate_existing_summaries(
             + "\n"
             + boilerplate.str.strip()
         ).str.strip()
+    elif has_training_split_columns:
+        cancer_summary = normalized["patient_summary"].fillna("").astype(str)
+        boilerplate = normalized["patient_boilerplate_text"].fillna("").astype(str)
+        normalized["patient_summary_with_boilerplate"] = (
+            cancer_summary.str.strip()
+            + "\n\n"
+            + boilerplate_marker
+            + "\n"
+            + boilerplate.str.strip()
+        ).str.strip()
+    else:
+        normalized["patient_summary_with_boilerplate"] = normalized[
+            "patient_summary"
+        ].where(
+            normalized["patient_summary"].notna(),
+            None,
+        )
 
     parsed_dates = pd.to_datetime(normalized["last_note_date"], errors="coerce")
     invalid_dates = normalized.loc[parsed_dates.isna(), "patient_id"].astype(str)
@@ -228,6 +258,12 @@ def summarize_patient_notes(
         general_exclusion_criteria_evidence : str, optional
             Existing boilerplate/exclusion evidence. Required only when
             ``patient_summary_with_boilerplate`` is not provided.
+        patient_summary : str, optional
+            Existing cancer history summary when paired with
+            ``patient_boilerplate_text``; otherwise accepted as a legacy
+            combined-summary alias.
+        patient_boilerplate_text : str, optional
+            Existing boilerplate/exclusion evidence from training-style output.
     return_qc : bool, optional
         When True, also return a QC report DataFrame for this summarization step.
     """

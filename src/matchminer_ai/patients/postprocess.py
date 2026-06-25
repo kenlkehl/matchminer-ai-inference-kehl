@@ -15,8 +15,21 @@ if TYPE_CHECKING:
 def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:
     """Split generated text at the line containing the boilerplate marker."""
     lines = text.splitlines()
+    markers = [
+        boilerplate_marker,
+        "Boilerplate conditions:",
+        "BOILERPLATE CONDITIONS:",
+        "boilerplate conditions:",
+        "Boilerplate:",
+        "BOILERPLATE:",
+        "boilerplate:",
+    ]
     split_idx = next(
-        (idx for idx, line in enumerate(lines) if boilerplate_marker in line),
+        (
+            idx
+            for idx, line in enumerate(lines)
+            if any(marker in line for marker in markers)
+        ),
         -1,
     )
     if split_idx == -1:

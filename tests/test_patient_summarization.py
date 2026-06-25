@@ -150,6 +150,27 @@ def test_validate_existing_summaries_concatenates_split_columns():
     )
 
 
+def test_validate_existing_summaries_concatenates_training_split_columns():
+    """Accept training output columns as split summary and boilerplate text."""
+    existing = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "last_note_date": "2024-01-03",
+                "patient_summary": "Training summary",
+                "patient_boilerplate_text": "Training boilerplate",
+            }
+        ]
+    )
+
+    normalized = validate_existing_summaries(existing)
+
+    assert (
+        normalized.loc[0, "patient_summary_with_boilerplate"]
+        == "Training summary\n\nBoilerplate conditions:\nTraining boilerplate"
+    )
+
+
 def test_validate_existing_summaries_rejects_missing_date():
     """Existing summaries need a cutoff date for incremental note filtering."""
     existing = pd.DataFrame(
@@ -255,6 +276,30 @@ def test_parse_boilerplate_accepts_final_only_v22_output():
     assert (
         parsed.loc[0, "general_exclusion_criteria_evidence"]
         == "Remote inactive prostate cancer."
+    )
+
+
+def test_parse_boilerplate_accepts_legacy_boilerplate_marker():
+    """Keep compatibility with training's legacy marker aliases."""
+    df = pd.DataFrame(
+        [
+            {
+                "original_patient_summary": (
+                    "Cancer history here.\n" "Boilerplate:\n" "Legacy marker text."
+                )
+            }
+        ]
+    )
+
+    parsed = parse_boilerplate(
+        df,
+        boilerplate_marker="Boilerplate conditions:",
+    )
+
+    assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
+    assert (
+        parsed.loc[0, "general_exclusion_criteria_evidence"]
+        == "Legacy marker text."
     )
 
 

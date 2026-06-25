@@ -64,6 +64,12 @@ def summarize_patients(
         general_exclusion_criteria_evidence : str, optional
             Existing boilerplate/exclusion evidence. Required only when
             ``patient_summary_with_boilerplate`` is not provided.
+        patient_summary : str, optional
+            Existing cancer history summary when paired with
+            ``patient_boilerplate_text``; otherwise accepted as a legacy
+            combined-summary alias.
+        patient_boilerplate_text : str, optional
+            Existing boilerplate/exclusion evidence from training-style output.
     return_metadata : bool, optional
         When True, also return a metadata dict containing the config snapshot
         and model metadata for this run.
