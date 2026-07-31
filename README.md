@@ -6,6 +6,8 @@
 
 Optional source-grounded extensions can also:
 
+- answer a focused question over one patient's raw notes through local
+  embedding retrieval and a bounded, evidence-citing LLM agent;
 - transform free-text cancer histories into JSON with one record per active
   cancer, hierarchical OncoTree coding, and locally searched NCIt drug
   normalization;

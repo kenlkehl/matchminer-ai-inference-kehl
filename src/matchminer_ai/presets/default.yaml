@@ -91,6 +91,53 @@ patient:
     question: patient.serial.user.question.txt
   boilerplate_marker: Boilerplate conditions
   text_token_threshold: 95000
+raw_patient_note_qa:
+  embedding_model_name: Qwen/Qwen3-Embedding-0.6B
+  embedding_device: cpu
+  embedding_batch_size: 32
+  chunk_size: 220
+  chunk_overlap: 32
+  document_prefix: ""
+  query_prefix: |-
+    Instruct: Given a question about a patient's longitudinal medical record,
+    retrieve relevant clinical note passages that answer the question
+    Query:
+  initial_top_k: 6
+  tool_top_k: 6
+  min_similarity: -1.0
+  max_agent_steps: 6
+  response_retry_limit: 2
+  reasoning_parser: auto
+  local:
+    model_name: google/gemma-4-31B-it
+    engine:
+      max_model_len: 30000
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      temperature: 0.0
+      top_k: 1
+      top_p: 1.0
+      min_p: 0.0
+      max_tokens: 4000
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+  remote:
+    model_name: google/gemma-4-31B-it
+    request_params:
+      max_tokens: 4000
+      temperature: 0.0
+      top_p: 1.0
+    extra_body:
+      top_k: 1
+      min_p: 0.0
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
 patient_structuring:
   oncotree_resource: oncotree_stable_7-31-26.json
   oncotree_version: stable-2026-07-31

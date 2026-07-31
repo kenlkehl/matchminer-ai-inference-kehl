@@ -204,6 +204,35 @@ conditions section heading.
 
 Maximum token count used by local truncation before patient summarization.
 
+## `raw_patient_note_qa`
+
+Configuration for focused question answering over one patient's raw notes. Its
+`local`, `remote`, and `reasoning_parser` fields select the same in-process vLLM
+or OpenAI-compatible backend used by other LLM tasks.
+
+- `embedding_model_name`: Hugging Face SentenceTransformer identifier or local
+  path. The function argument of the same name overrides this setting. The
+  default is `Qwen/Qwen3-Embedding-0.6B`, independently of TrialSpace.
+- `embedding_device` and `embedding_batch_size`: embedding runtime settings.
+- `chunk_size` and `chunk_overlap`: raw-note chunk sizes in tokens from the
+  embedding model's own tokenizer. The effective chunk size is capped so the
+  document prefix and special tokens fit the model's sequence limit.
+- `document_prefix` and `query_prefix`: optional model-specific text prepended
+  before document and query embedding. The default query prefix supplies
+  Qwen3-Embedding with a patient-note passage-retrieval instruction.
+- `initial_top_k`: chunk count retrieved for the original question.
+- `tool_top_k`: chunk count returned by each agent-requested retrieval.
+- `min_similarity`: minimum cosine similarity for returned chunks. The default
+  `-1.0` does not filter cosine results.
+- `max_agent_steps`: maximum parent-agent actions before forced finalization.
+- `response_retry_limit`: retry limit for malformed JSON responses.
+
+The agent can request additional semantic retrieval or a separately grounded
+answer to a narrower related question. Both tools operate only on the in-memory
+raw-note index. Retrieved excerpts are sent to the configured LLM backend; no
+web-search tool is used. Final citations are checked against retrieved chunks
+and must contain exact source substrings.
+
 ## `patient_structuring`
 
 Configuration for ontology-grounded JSON conversion of an existing patient

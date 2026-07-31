@@ -10,7 +10,11 @@ from matchminer_ai.matching import (
     generate_candidate_matches,
     score_match_quality,
 )
-from matchminer_ai.patients import structure_patient_summary, summarize_patients
+from matchminer_ai.patients import (
+    answer_question_with_raw_patient_notes,
+    structure_patient_summary,
+    summarize_patients,
+)
 from matchminer_ai.trials import structure_trial_space, summarize_trials
 
 
@@ -23,6 +27,7 @@ def test_imports():
     assert structure_trial_space is not None
     assert summarize_patients is not None
     assert structure_patient_summary is not None
+    assert answer_question_with_raw_patient_notes is not None
     assert embed_for_matching is not None
     assert generate_candidate_matches is not None
     assert score_match_quality is not None

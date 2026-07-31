@@ -45,6 +45,15 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.patient["local"]["generation"]["temperature"] == 0.0
     assert config.patient["local"]["generation"]["top_k"] == 1
     assert config.patient["local"]["generation"]["max_tokens"] == 20000
+    assert config.raw_patient_note_qa["embedding_model_name"] == (
+        "Qwen/Qwen3-Embedding-0.6B"
+    )
+    assert config.raw_patient_note_qa["chunk_size"] == 220
+    assert config.raw_patient_note_qa["chunk_overlap"] == 32
+    assert config.raw_patient_note_qa["query_prefix"].startswith("Instruct:")
+    assert config.raw_patient_note_qa["query_prefix"].endswith("\nQuery:")
+    assert config.raw_patient_note_qa["max_agent_steps"] == 6
+    assert config.raw_patient_note_qa["local"]["generation"]["max_tokens"] == 4000
     assert config.patient_structuring["oncotree_version"] == "stable-2026-07-31"
     assert config.patient_structuring["ncit_version"] == "26.07d"
     assert config.patient_structuring["ncit_candidate_limit"] == 8
