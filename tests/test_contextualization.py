@@ -194,7 +194,9 @@ def test_partial_sources_are_synthesized_with_notices(monkeypatch):
     assert "### Workup to consider now or at the next decision point" in prompt
     assert "pathologic or histologic confirmation" in prompt
     assert "timing or conditions for repetition" in prompt
-    assert "rather than supplying it from intrinsic knowledge" in prompt
+    assert "fill gaps in the retrieved evidence from intrinsic" in prompt
+    system_prompt = llm_calls[0][0][0][0]["content"]
+    assert "Model-knowledge inference (uncited):" in system_prompt
     assert '"diagnostic_evidence_signal"' in prompt
     assert "Do not include preclinical or experimental mechanisms" in prompt
 
@@ -429,6 +431,7 @@ def test_patient_personalization_is_separate_and_per_space(monkeypatch):
     assert "Fabricated patient summary." in captured[0][1]["content"]
     assert "rank" in captured[0][0]["content"].casefold()
     assert "absent test or result" in captured[0][0]["content"]
+    assert "Model-knowledge inference (uncited):" in captured[0][0]["content"]
     assert "diagnostic steps and results explicitly documented" in captured[0][1][
         "content"
     ]
