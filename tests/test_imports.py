@@ -10,8 +10,8 @@ from matchminer_ai.matching import (
     generate_candidate_matches,
     score_match_quality,
 )
-from matchminer_ai.patients import summarize_patients
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.patients import structure_patient_summary, summarize_patients
+from matchminer_ai.trials import structure_trial_space, summarize_trials
 
 
 def test_imports():
@@ -20,7 +20,9 @@ def test_imports():
     assert MMAIPipeline is not None
     assert load_config is not None
     assert summarize_trials is not None
+    assert structure_trial_space is not None
     assert summarize_patients is not None
+    assert structure_patient_summary is not None
     assert embed_for_matching is not None
     assert generate_candidate_matches is not None
     assert score_match_quality is not None

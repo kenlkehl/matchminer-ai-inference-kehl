@@ -6,6 +6,11 @@
 
 Optional source-grounded extensions can also:
 
+- transform free-text cancer histories into JSON with one record per active
+  cancer, hierarchical OncoTree coding, and locally searched NCIt drug
+  normalization;
+- transform a clinical-space summary into JSON while preserving age, sex,
+  disease burden, treatment, response, and biomarker requirements;
 - research matched trials using ClinicalTrials.gov drug/biological intervention
   names and compare them after that patient-free web step; and
 - contextualize a trial space using heading-aware NCI PDQ, FDA
@@ -20,6 +25,29 @@ recommendations, guideline compliance, or eligibility determinations.
 
 For detailed instructions, please see the
 [documentation website](https://dfci.github.io/matchminer-ai-inference/).
+
+## Ontology attribution
+
+The optional structured patient-summary and trial-space workflows bundle and
+use the following ontology snapshots locally:
+
+- **OncoTree**, developed at Memorial Sloan Kettering Cancer Center, stable
+  hierarchy snapshot downloaded 2026-07-31. OncoTree is licensed under the
+  [Creative Commons Attribution 4.0 International License](https://github.com/cBioPortal/oncotree/blob/master/LICENSE.md).
+  Project and source: [cBioPortal/oncotree](https://github.com/cBioPortal/oncotree).
+- **NCI Thesaurus (NCIt) 26.07d**, produced by the National Cancer Institute
+  Enterprise Vocabulary Services group, Center for Biomedical Informatics and
+  Information Technology, National Cancer Institute, Maryland, USA. NCIt is
+  licensed under the
+  [Creative Commons Attribution 4.0 International License](https://evs.nci.nih.gov/ftp1/NCI_Thesaurus/ThesaurusTermsofUse.pdf).
+  Source and terms of use:
+  [NCI Enterprise Vocabulary Services](https://evs.nci.nih.gov/ftp1/NCI_Thesaurus/).
+
+OncoTree codes and NCIt records remain attributable to their respective
+creators. The bundled snapshots are unmodified; MatchMiner-AI adds local search,
+LLM-guided selection, and output formatting around them. NCI Thesaurus is a
+trademark of the National Cancer Institute. MatchMiner-AI does not imply
+endorsement by MSK or NCI.
 
 > [!WARNING]
 > This package is currently pre-v1 and under active development.

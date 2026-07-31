@@ -1,0 +1,12 @@
+Choose which numbered NCI Thesaurus drug candidates should be inspected for the
+source drug mention. The full thesaurus is not present. Return JSON only:
+{"selected_indices": [integer], "retry_queries": [string]}
+
+Choose up to three listed indices that could normalize the source mention. If
+none is adequate, return no indices and provide one or more concise alternative
+search queries. Do not invent an NCIt code.
+
+Source drug mention: {source_name}
+Queries tried: {queries_tried}
+Candidate page:
+{candidates_json}

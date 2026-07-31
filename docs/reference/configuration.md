@@ -204,6 +204,40 @@ conditions section heading.
 
 Maximum token count used by local truncation before patient summarization.
 
+## `patient_structuring`
+
+Configuration for ontology-grounded JSON conversion of an existing patient
+summary. The `local`, `remote`, and `reasoning_parser` fields follow the other
+LLM task sections.
+
+- `oncotree_resource` and `ncit_resource` select bundled ontology snapshots or
+  explicit local file paths.
+- `oncotree_max_depth` bounds hierarchical OncoTree descent.
+- `ontology_retry_limit` bounds malformed JSON and invalid-index retries.
+- `ncit_candidate_limit` bounds each locally searched candidate page.
+- `ncit_max_agent_steps` bounds revised NCIt search attempts.
+
+Complete ontology contents remain local. Only immediate OncoTree children,
+bounded NCIt candidate labels, and selected NCIt definitions are sent to the
+configured LLM backend.
+
+## `trial_space_structuring`
+
+Configuration for ontology-grounded JSON conversion of an existing clinical
+trial-space summary. The `local`, `remote`, and `reasoning_parser` fields follow
+the other LLM task sections. Its ontology fields and limits have the same
+meaning as `patient_structuring`:
+
+- `oncotree_resource` and `ncit_resource` select bundled ontology snapshots or
+  explicit local file paths.
+- `oncotree_max_depth` bounds hierarchical OncoTree descent.
+- `ontology_retry_limit` bounds malformed JSON and invalid-index retries.
+- `ncit_candidate_limit` bounds each locally searched candidate page.
+- `ncit_max_agent_steps` bounds revised NCIt search attempts.
+
+The extraction prompt is trial-specific, but it reuses the bounded ontology
+selection harness. Complete ontology contents remain local.
+
 ## `embedding`
 
 Configuration for summary embedding.

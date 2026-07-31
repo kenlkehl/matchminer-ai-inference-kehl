@@ -45,6 +45,15 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.patient["local"]["generation"]["temperature"] == 0.0
     assert config.patient["local"]["generation"]["top_k"] == 1
     assert config.patient["local"]["generation"]["max_tokens"] == 20000
+    assert config.patient_structuring["oncotree_version"] == "stable-2026-07-31"
+    assert config.patient_structuring["ncit_version"] == "26.07d"
+    assert config.patient_structuring["ncit_candidate_limit"] == 8
+    assert config.patient_structuring["ncit_max_agent_steps"] == 3
+    assert config.trial_space_structuring["oncotree_version"] == (
+        "stable-2026-07-31"
+    )
+    assert config.trial_space_structuring["ncit_version"] == "26.07d"
+    assert config.trial_space_structuring["ncit_candidate_limit"] == 8
 
     assert config.embedding["model_path"] == "ksg-dfci/TrialSpace-0526"
     assert config.embedding["max_seq_length"] == 2500

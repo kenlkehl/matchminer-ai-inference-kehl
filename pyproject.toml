@@ -78,7 +78,13 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-matchminer_ai = ["presets/*.yaml", "prompts/*.txt"]
+matchminer_ai = [
+  "presets/*.yaml",
+  "prompts/*.txt",
+  "data/*.json",
+  "data/*.zip",
+  "data/*.md",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"

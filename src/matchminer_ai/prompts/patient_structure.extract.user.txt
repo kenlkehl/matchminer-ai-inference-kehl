@@ -1,0 +1,52 @@
+Transform the patient cancer history below into the intermediate JSON object
+described here. Use only facts present in the history. Return JSON only, with no
+markdown or commentary.
+
+Schema:
+{
+  "age": integer or null,
+  "sex": "female", "male", "intersex", "other", or "unknown",
+  "cancers": [
+    {
+      "cancer_description": string,
+      "histology_description": string or null,
+      "biomarkers": [
+        {
+          "marker": string,
+          "type": "mutation", "fusion", "expression", or
+                  "copy_number_alteration",
+          "result": string
+        }
+      ],
+      "treatment_history": [
+        {
+          "treatment": string,
+          "start_date": string or null,
+          "end_date": string or null,
+          "drug_mentions": [string],
+          "response": string or null
+        }
+      ],
+      "cancer_burden": "early_or_curative_intent" or
+                       "advanced_or_palliative_intent"
+    }
+  ]
+}
+
+Rules:
+- Include one cancers entry for every active cancer. Keep each cancer's
+  diagnosis, biomarkers, treatments, responses, and burden in that cancer's
+  entry. Do not include inactive or remote prior cancers in cancers.
+- Map localized, resectable, neoadjuvant, adjuvant, and explicitly curative
+  disease to early_or_curative_intent. Map metastatic, unresectable advanced,
+  explicitly incurable, and palliative disease to
+  advanced_or_palliative_intent.
+- Preserve every treatment-history line item for every active cancer as exactly
+  one list entry and preserve its response in the response field.
+- Put each individual systemic drug in drug_mentions. Expand a regimen into
+  its component generic drugs when the history provides them. Surgery and
+  radiation are treatments but are not drugs.
+- Do not include standard laboratory tests as biomarkers.
+
+Patient cancer history:
+{patient_summary}

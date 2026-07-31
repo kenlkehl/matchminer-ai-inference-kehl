@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 from matchminer_ai.config import MMAIConfig, config_snapshot
 
+from .structure import structure_trial_space
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -148,4 +150,4 @@ def summarize_trials(
     return result
 
 
-__all__ = ["summarize_trials"]
+__all__ = ["structure_trial_space", "summarize_trials"]

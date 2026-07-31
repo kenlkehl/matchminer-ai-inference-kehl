@@ -1,0 +1,58 @@
+Transform the clinical trial space below into the intermediate JSON object
+described here. Use only criteria present in the space. Return JSON only, with
+no markdown or commentary.
+
+Schema:
+{
+  "minimum_age": number or null,
+  "maximum_age": number or null,
+  "sex_allowed": ["female", "male", or "other"],
+  "cancer_description": string,
+  "histology_description": string or null,
+  "cancer_burden_allowed": [
+    "early_or_curative_intent" and/or "advanced_or_palliative_intent"
+  ],
+  "prior_treatment_required": [
+    {
+      "requirement": string,
+      "drug_mentions": [string],
+      "response_requirement": string or null
+    }
+  ],
+  "prior_treatment_excluded": [
+    {
+      "requirement": string,
+      "drug_mentions": [string],
+      "response_requirement": string or null
+    }
+  ],
+  "biomarkers_required": [
+    {
+      "marker": string,
+      "type": "mutation", "fusion", "expression", or
+              "copy_number_alteration",
+      "result": string,
+      "screening_assessment_required": boolean or null
+    }
+  ],
+  "biomarkers_excluded": [same biomarker object schema]
+}
+
+Rules:
+- Ages are in years. Use null for an open or unspecified bound.
+- For unrestricted sex, return ["female", "male", "other"].
+- Map localized, resectable, neoadjuvant, adjuvant, and explicitly curative
+  disease to early_or_curative_intent. Map metastatic, unresectable advanced,
+  explicitly incurable, and palliative disease to
+  advanced_or_palliative_intent. If burden is unrestricted or NA, include both.
+- Preserve every distinct required or excluded prior-treatment clause as one
+  list entry. Keep its AND/OR wording in requirement. Put every individual
+  systemic drug in drug_mentions, expanding a regimen only when its components
+  are stated or unambiguous in the source space.
+- Ignore short pre-treatment washout periods.
+- For biomarkers, keep required and excluded criteria separate. Record whether
+  protocol screening assessment is explicitly required; otherwise use null.
+- Use empty lists for NA, none, or no requirements.
+
+Clinical trial space:
+{clinical_space_summary}

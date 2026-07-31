@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 
 from .summarize import summarize_patient_notes
+from .structure import structure_patient_summary
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -147,6 +148,7 @@ def summarize_patients(
 
 
 __all__ = [
+    "structure_patient_summary",
     "summarize_patients",
     "summarize_patient_notes",
 ]

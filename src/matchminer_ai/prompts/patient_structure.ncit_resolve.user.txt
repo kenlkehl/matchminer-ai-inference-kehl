@@ -1,0 +1,17 @@
+Resolve the source drug mention against only the inspected NCI Thesaurus
+records below. Return JSON only in one of these forms:
+
+{"status": "matched", "selected_index": integer,
+ "target": string or null, "mechanism_of_action": string or null}
+{"status": "retry", "retry_queries": [string]}
+{"status": "unmatched", "retry_queries": []}
+
+For a match, select exactly one inspected index. Derive target and mechanism of
+action only from that record's NCIt definition. Use null when the definition
+does not support the field. Do not use outside knowledge and do not invent an
+NCIt code. If the records are inadequate but a revised name, generic name, or
+brand name could help, request another search.
+
+Source drug mention: {source_name}
+Inspected records:
+{records_json}

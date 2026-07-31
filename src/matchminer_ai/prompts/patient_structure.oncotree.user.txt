@@ -1,0 +1,14 @@
+Choose the best supported OncoTree option for the active cancer below.
+You are seeing only the immediate children of the current OncoTree node.
+Return JSON only:
+{"selected_index": integer, "stop": boolean}
+
+Select exactly one listed index. Set stop to true when the selected option is
+as specific as the supplied diagnosis supports. Set stop to false only when a
+more specific child level should be examined. Do not invent a code.
+
+Cancer description: {cancer_description}
+Histology description: {histology_description}
+Current path: {current_path}
+Immediate child options:
+{options_json}

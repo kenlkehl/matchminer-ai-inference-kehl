@@ -30,6 +30,8 @@ class MMAIConfig:
     help_me_choose: dict[str, Any] = field(default_factory=dict)
     trial_space_contextualization: dict[str, Any] = field(default_factory=dict)
     patient_contextualization: dict[str, Any] = field(default_factory=dict)
+    patient_structuring: dict[str, Any] = field(default_factory=dict)
+    trial_space_structuring: dict[str, Any] = field(default_factory=dict)
 
 
 def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
@@ -53,6 +55,8 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "patient_contextualization": deepcopy(
                 config.patient_contextualization
             ),
+            "patient_structuring": deepcopy(config.patient_structuring),
+            "trial_space_structuring": deepcopy(config.trial_space_structuring),
             "model_metadata_cache_dir": config.model_metadata_cache_dir,
         }
     )
@@ -84,6 +88,8 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
             data.get("trial_space_contextualization", {})
         ),
         patient_contextualization=dict(data.get("patient_contextualization", {})),
+        patient_structuring=dict(data.get("patient_structuring", {})),
+        trial_space_structuring=dict(data.get("trial_space_structuring", {})),
         model_metadata_cache_dir=data["model_metadata_cache_dir"],
         raw=deepcopy(data),
     )
