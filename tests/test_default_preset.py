@@ -76,3 +76,19 @@ def test_default_preset_matches_training_runtime_defaults():
         "presence_penalty": 0.0,
     }
     assert config.llm_match_quality["remote"]["extra_body"]["top_k"] == 1
+    assert config.help_me_choose["local"]["generation"]["max_tokens"] == 6000
+    assert config.help_me_choose["remote"]["request_params"]["max_tokens"] == 6000
+    assert config.trial_space_contextualization["sources"] == [
+        "nci_pdq",
+        "fda",
+        "civic",
+        "pubmed",
+    ]
+    assert (
+        config.trial_space_contextualization["local"]["generation"]["temperature"]
+        == 0.0
+    )
+    assert (
+        config.patient_contextualization["remote"]["request_params"]["max_tokens"]
+        == 5000
+    )

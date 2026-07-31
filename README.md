@@ -4,6 +4,18 @@
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
+Optional source-grounded extensions can also:
+
+- research matched trials using ClinicalTrials.gov drug/biological intervention
+  names and compare them after that patient-free web step; and
+- contextualize a trial space using NCI PDQ, FDA companion-diagnostic and
+  DailyMed material, accepted CIViC evidence, and PubMed citation abstracts.
+
+Trial-space retrieval rejects patient-bearing columns. Patient personalization
+is a separate API that sends patient context only to the configured LLM
+backend. These extensions produce research considerations, not treatment
+recommendations, guideline compliance, or eligibility determinations.
+
 For detailed instructions, please see the
 [documentation website](https://dfci.github.io/matchminer-ai-inference/).
 

@@ -318,3 +318,38 @@ return no separate reasoning field.
 ### `llm_exclusion_criteria.remote`
 
 Task-specific remote chat completion request settings. See `trial.remote`.
+
+## `help_me_choose`
+
+LLM task configuration for the optional matched-trial comparison. Its
+`local` and `remote` blocks follow the same structure as `trial.local` and
+`trial.remote`. Drug-information retrieval is intentionally separate from this
+LLM block and never accepts patient text.
+
+## `trial_space_contextualization`
+
+Configuration for trial-only public-source retrieval and grounded synthesis.
+Its `local` and `remote` blocks select the synthesis LLM. Additional fields
+include:
+
+- `sources`: default source adapter names (`nci_pdq`, `fda`, `civic`, and
+  `pubmed`);
+- `request_timeout`: public-source HTTP timeout in seconds;
+- `max_concurrency`: maximum simultaneous source requests;
+- `max_evidence_per_source`: per-space adapter result limit; and
+- `pubmed_retmax`: retained for source-specific result tuning.
+
+Optional source credentials and identification are read from environment
+variables rather than configuration snapshots:
+
+- `CIVIC_API_KEY`;
+- `NCBI_EMAIL` and `NCBI_API_KEY`.
+
+The NCBI API works without an API key at its lower public rate limit. Supplying
+`NCBI_EMAIL` is recommended so requests identify the application operator.
+
+## `patient_contextualization`
+
+LLM task configuration for the separate per-patient, per-space review. This
+stage does not call public-source adapters. Its `local` and `remote` blocks
+follow the same structure as `trial.local` and `trial.remote`.

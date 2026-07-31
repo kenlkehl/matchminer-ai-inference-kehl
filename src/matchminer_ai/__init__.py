@@ -11,6 +11,8 @@ from .pipeline import MMAIPipeline
 
 _LAZY_SUBMODULES = {
     "embedding",
+    "contextualization",
+    "help_me_choose",
     "llm",
     "matching",
     "patients",

@@ -177,3 +177,108 @@ llm_exclusion_criteria:
       chat_template_kwargs:
         enable_thinking: true
   prompt_file: llm_exclusion_criteria.user.txt
+help_me_choose:
+  reasoning_parser: auto
+  local:
+    model_name: google/gemma-4-31B-it
+    engine:
+      max_model_len: 50000
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      temperature: 0.2
+      top_k: 20
+      top_p: 0.95
+      min_p: 0.0
+      max_tokens: 6000
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+  remote:
+    model_name: google/gemma-4-31B-it
+    request_params:
+      max_tokens: 6000
+      temperature: 0.2
+      top_p: 0.95
+    extra_body:
+      top_k: 20
+      min_p: 0.0
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
+trial_space_contextualization:
+  sources:
+    - nci_pdq
+    - fda
+    - civic
+    - pubmed
+  request_timeout: 30
+  max_concurrency: 4
+  max_evidence_per_source: 8
+  pubmed_retmax: 8
+  reasoning_parser: auto
+  local:
+    model_name: google/gemma-4-31B-it
+    engine:
+      max_model_len: 50000
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      temperature: 0.0
+      top_k: 1
+      top_p: 1.0
+      min_p: 0.0
+      max_tokens: 6000
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+  remote:
+    model_name: google/gemma-4-31B-it
+    request_params:
+      max_tokens: 6000
+      temperature: 0.0
+      top_p: 1.0
+    extra_body:
+      top_k: 1
+      min_p: 0.0
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
+patient_contextualization:
+  reasoning_parser: auto
+  local:
+    model_name: google/gemma-4-31B-it
+    engine:
+      max_model_len: 50000
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      temperature: 0.0
+      top_k: 1
+      top_p: 1.0
+      min_p: 0.0
+      max_tokens: 5000
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+  remote:
+    model_name: google/gemma-4-31B-it
+    request_params:
+      max_tokens: 5000
+      temperature: 0.0
+      top_p: 1.0
+    extra_body:
+      top_k: 1
+      min_p: 0.0
+      repetition_penalty: 1.05
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true

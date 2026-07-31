@@ -27,6 +27,9 @@ class MMAIConfig:
     raw: dict[str, Any]
     llm_match_quality: dict[str, Any] = field(default_factory=dict)
     llm_exclusion_criteria: dict[str, Any] = field(default_factory=dict)
+    help_me_choose: dict[str, Any] = field(default_factory=dict)
+    trial_space_contextualization: dict[str, Any] = field(default_factory=dict)
+    patient_contextualization: dict[str, Any] = field(default_factory=dict)
 
 
 def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
@@ -43,6 +46,13 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "embedding": deepcopy(config.embedding),
             "llm_match_quality": deepcopy(config.llm_match_quality),
             "llm_exclusion_criteria": deepcopy(config.llm_exclusion_criteria),
+            "help_me_choose": deepcopy(config.help_me_choose),
+            "trial_space_contextualization": deepcopy(
+                config.trial_space_contextualization
+            ),
+            "patient_contextualization": deepcopy(
+                config.patient_contextualization
+            ),
             "model_metadata_cache_dir": config.model_metadata_cache_dir,
         }
     )
@@ -69,6 +79,11 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
         embedding=dict(data["embedding"]),
         llm_match_quality=dict(data.get("llm_match_quality", {})),
         llm_exclusion_criteria=dict(data.get("llm_exclusion_criteria", {})),
+        help_me_choose=dict(data.get("help_me_choose", {})),
+        trial_space_contextualization=dict(
+            data.get("trial_space_contextualization", {})
+        ),
+        patient_contextualization=dict(data.get("patient_contextualization", {})),
         model_metadata_cache_dir=data["model_metadata_cache_dir"],
         raw=deepcopy(data),
     )

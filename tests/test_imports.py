@@ -1,5 +1,9 @@
 import matchminer_ai
 from matchminer_ai import MMAIPipeline, load_config
+from matchminer_ai.contextualization import (
+    contextualize_trial_spaces,
+    personalize_trial_space_context,
+)
 from matchminer_ai.embedding import embed_for_matching
 from matchminer_ai.matching import (
     exclusion_criteria_check,
@@ -21,3 +25,5 @@ def test_imports():
     assert generate_candidate_matches is not None
     assert score_match_quality is not None
     assert exclusion_criteria_check is not None
+    assert contextualize_trial_spaces is not None
+    assert personalize_trial_space_context is not None
