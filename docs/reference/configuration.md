@@ -332,12 +332,31 @@ Configuration for trial-only public-source retrieval and grounded synthesis.
 Its `local` and `remote` blocks select the synthesis LLM. Additional fields
 include:
 
-- `sources`: default source adapter names (`nci_pdq`, `fda`, `civic`, and
-  `pubmed`);
+- `sources`: default source adapter names (`nci_pdq`, `fda`, `civic`,
+  `pubmed`, and `europe_pmc_open_guidelines`);
 - `request_timeout`: public-source HTTP timeout in seconds;
 - `max_concurrency`: maximum simultaneous source requests;
-- `max_evidence_per_source`: per-space adapter result limit; and
-- `pubmed_retmax`: retained for source-specific result tuning.
+- `max_evidence_per_source`: per-space adapter result limit;
+- `pubmed_retmax`: candidate count for each diagnostic, molecular-testing, and
+  treatment-guidance PubMed query;
+- `europe_pmc_languages`: allowed Europe PMC article language codes (English by
+  default);
+- `evidence_context_max_tokens`: model-token budget for raw evidence excerpts
+  (the implementation enforces a minimum of 10,000; default 12,000);
+- `diagnostic_context_min_tokens`: evidence budget reserved for diagnostic
+  passages before therapeutic/general evidence is packed; and
+- `evidence_item_max_tokens`: maximum contribution from one evidence record.
+
+The packer uses `tokenizer_name` from the active local or remote task block. If
+that tokenizer cannot be loaded, it records a warning and uses a lexical-token
+fallback rather than reverting to character counts. Context rows report packed
+token counts, dropped/truncated records, diagnostic coverage facets, and a
+deterministic diagnostic-evidence sufficiency signal.
+
+The Europe PMC adapter fetches structured full text only when core metadata
+reports an allowlisted CC BY or CC0 license. It then applies disease relevance,
+guideline/consensus, and diagnostic-section checks. Other open-access licenses
+and records without explicit license metadata are rejected.
 
 Optional source credentials and identification are read from environment
 variables rather than configuration snapshots:

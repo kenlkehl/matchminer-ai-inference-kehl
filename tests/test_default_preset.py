@@ -83,7 +83,16 @@ def test_default_preset_matches_training_runtime_defaults():
         "fda",
         "civic",
         "pubmed",
+        "europe_pmc_open_guidelines",
     ]
+    assert (
+        config.trial_space_contextualization["evidence_context_max_tokens"]
+        == 12000
+    )
+    assert (
+        config.trial_space_contextualization["diagnostic_context_min_tokens"]
+        == 8000
+    )
     assert (
         config.trial_space_contextualization["local"]["generation"]["temperature"]
         == 0.0

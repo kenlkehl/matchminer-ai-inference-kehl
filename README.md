@@ -8,8 +8,10 @@ Optional source-grounded extensions can also:
 
 - research matched trials using ClinicalTrials.gov drug/biological intervention
   names and compare them after that patient-free web step; and
-- contextualize a trial space using NCI PDQ, FDA companion-diagnostic and
-  DailyMed material, accepted CIViC evidence, and PubMed citation abstracts.
+- contextualize a trial space using heading-aware NCI PDQ, FDA
+  companion-diagnostic and DailyMed material, accepted CIViC evidence, focused
+  PubMed searches, and permissively licensed Europe PMC guideline/consensus
+  full text.
 
 Trial-space retrieval rejects patient-bearing columns. Patient personalization
 is a separate API that sends patient context only to the configured LLM

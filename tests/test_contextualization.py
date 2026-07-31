@@ -13,6 +13,7 @@ from matchminer_ai.contextualization import (
     contextualize_trial_spaces,
     personalize_trial_space_context,
 )
+from matchminer_ai.contextualization.api import _pack_prompt_evidence
 from matchminer_ai.contextualization.query import (
     build_trial_space_query,
     parse_clinical_space_summary,
@@ -29,6 +30,37 @@ SPACE_SUMMARY = (
     "Biomarkers required: EGFR L858R mutation. "
     "Biomarkers excluded: ALK rearrangement."
 )
+
+
+class WordTokenizer:
+    def encode(self, text, *, add_special_tokens=False):
+        del add_special_tokens
+        return text.split()
+
+    def decode(
+        self,
+        tokens,
+        *,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False,
+    ):
+        del skip_special_tokens, clean_up_tokenization_spaces
+        return " ".join(tokens)
+
+
+@pytest.fixture(autouse=True)
+def _use_network_free_context_tokenizer(monkeypatch):
+    monkeypatch.setattr(
+        "matchminer_ai.contextualization.api._resolve_evidence_tokenizer",
+        lambda config, settings: (
+            WordTokenizer(),
+            {
+                "kind": "test_tokenizer",
+                "model_name": "word-tokenizer",
+                "warning": "",
+            },
+        ),
+    )
 
 
 def _spaces(**extra: Any) -> pd.DataFrame:
@@ -148,9 +180,14 @@ def test_partial_sources_are_synthesized_with_notices(monkeypatch):
     assert evidence_adapter.queries[0].disease == "non-small cell lung cancer"
     assert result.contexts.iloc[0]["contextualization_status"] == "ok"
     assert result.contexts.iloc[0]["evidence_count"] == 1
+    assert (
+        result.contexts.iloc[0]["diagnostic_evidence_sufficiency"]
+        == "insufficient"
+    )
     notices = result.metadata["source_notices"]["NCT12345678-1"]
     assert any(notice["status"] == "failed" for notice in notices)
     assert result.evidence.iloc[0]["citation_label"] == "E1"
+    assert result.evidence.iloc[0]["evidence_category"] == "general"
     assert len(llm_calls) == 1
     prompt = llm_calls[0][0][0][1]["content"]
     assert "### Workup generally expected before this disease state" in prompt
@@ -158,6 +195,8 @@ def test_partial_sources_are_synthesized_with_notices(monkeypatch):
     assert "pathologic or histologic confirmation" in prompt
     assert "timing or conditions for repetition" in prompt
     assert "rather than supplying it from intrinsic knowledge" in prompt
+    assert '"diagnostic_evidence_signal"' in prompt
+    assert "Do not include preclinical or experimental mechanisms" in prompt
 
 
 def test_no_evidence_skips_llm(monkeypatch):
@@ -215,6 +254,128 @@ def test_bad_citation_is_retried_once(monkeypatch):
         result.contexts.iloc[0]["contextualization_status"]
         == "ok_after_citation_retry"
     )
+
+
+def test_trial_space_pseudo_citation_is_retried(monkeypatch):
+    monkeypatch.setattr(
+        "matchminer_ai.contextualization.api.resolve_sources",
+        lambda names: [EvidenceAdapter()],
+    )
+    outputs = iter(
+        [
+            "## Disease context\nThe trial space represents disease [Trial Space].",
+            (
+                "## Disease context\nThe trial space represents disease.\n"
+                "## Diagnostic considerations\nSupported [E1]\n"
+                "## Therapeutic considerations\nSupported [E1]\n"
+                "## Evidence limits\nSupported [E1]"
+            ),
+        ]
+    )
+    calls = []
+
+    def fake_llm(messages, *, config, section_name):
+        del config, section_name
+        calls.append(messages)
+        return [next(outputs)], {"model_name": "synthetic-model"}, ["stop"]
+
+    monkeypatch.setattr(
+        "matchminer_ai.contextualization.api._run_llm",
+        fake_llm,
+    )
+    result = contextualize_trial_spaces(_spaces(), sources=("nci_pdq",))
+
+    assert len(calls) == 2
+    assert "Unsupported pseudo-citation labels" in calls[1][0][-1]["content"]
+    assert (
+        result.contexts.iloc[0]["contextualization_status"]
+        == "ok_after_citation_retry"
+    )
+
+
+def test_evidence_packing_uses_token_budget_and_reserves_diagnostics():
+    records = []
+    for index, category in enumerate(
+        ["diagnostic", "diagnostic", "diagnostic", "therapeutic"], start=1
+    ):
+        records.append(
+            {
+                "citation_label": f"E{index}",
+                "source": f"synthetic-{index}",
+                "evidence_type": f"{category}_guideline_full_text",
+                "title": f"Synthetic {category} source {index}",
+                "excerpt": "biopsy staging imaging molecular " * 1500,
+                "url": f"https://example.org/{index}",
+                "source_locator": f"section {index}",
+                "published_at": "2026",
+                "updated_at": "",
+                "jurisdiction": "Synthetic",
+                "license": "CC0",
+                "attributes": {"evidence_category": category},
+            }
+        )
+
+    packed, stats = _pack_prompt_evidence(
+        pd.DataFrame(records),
+        tokenizer=WordTokenizer(),
+        max_tokens=12000,
+        diagnostic_min_tokens=6000,
+        item_max_tokens=4000,
+    )
+
+    assert stats["context_evidence_token_budget"] == 12000
+    assert stats["packed_evidence_tokens"] == 12000
+    assert stats["diagnostic_evidence_tokens"] >= 6000
+    assert stats["diagnostic_evidence_sufficiency"] == "broad"
+    assert stats["truncated_evidence_count"] >= 1
+    assert {"pathology_or_specimen", "staging_or_extent", "imaging"}.issubset(
+        stats["diagnostic_coverage"]
+    )
+    assert all(record["excerpt_tokens"] <= 4000 for record in packed)
+
+
+def test_therapeutic_packing_prefers_nci_over_experimental_full_text():
+    common = {
+        "published_at": "2026",
+        "updated_at": "",
+        "jurisdiction": "Synthetic",
+        "license": "CC0",
+    }
+    records = [
+        {
+            **common,
+            "citation_label": "E1",
+            "source": "europe_pmc_open_guidelines",
+            "evidence_type": "therapeutic_guideline_full_text",
+            "title": "Experimental mechanism discussion",
+            "excerpt": "preclinical experimental mechanism " * 1000,
+            "url": "https://example.org/experimental",
+            "source_locator": "experimental section",
+            "attributes": {"evidence_category": "therapeutic"},
+        },
+        {
+            **common,
+            "citation_label": "E2",
+            "source": "nci_pdq",
+            "evidence_type": "treatment_evidence_summary",
+            "title": "NCI treatment evidence",
+            "excerpt": "established treatment evidence " * 1000,
+            "url": "https://example.org/nci",
+            "source_locator": "treatment section",
+            "attributes": {"evidence_category": "therapeutic"},
+        },
+    ]
+
+    packed, _ = _pack_prompt_evidence(
+        pd.DataFrame(records),
+        tokenizer=WordTokenizer(),
+        max_tokens=1000,
+        diagnostic_min_tokens=0,
+        item_max_tokens=1000,
+    )
+
+    assert packed[0]["citation_label"] == "E2"
+    assert packed[0]["source"] == "NCI PDQ"
 
 
 def test_patient_personalization_is_separate_and_per_space(monkeypatch):

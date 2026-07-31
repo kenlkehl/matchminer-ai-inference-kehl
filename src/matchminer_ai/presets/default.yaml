@@ -215,13 +215,21 @@ trial_space_contextualization:
     - fda
     - civic
     - pubmed
+    - europe_pmc_open_guidelines
   request_timeout: 30
   max_concurrency: 4
   max_evidence_per_source: 8
-  pubmed_retmax: 8
+  pubmed_retmax: 24
+  europe_pmc_languages:
+    - eng
+    - en
+  evidence_context_max_tokens: 12000
+  diagnostic_context_min_tokens: 8000
+  evidence_item_max_tokens: 3000
   reasoning_parser: auto
   local:
     model_name: google/gemma-4-31B-it
+    tokenizer_name: google/gemma-4-31B-it
     engine:
       max_model_len: 50000
       tensor_parallel_size: 1
@@ -239,6 +247,7 @@ trial_space_contextualization:
       skip_special_tokens: false
   remote:
     model_name: google/gemma-4-31B-it
+    tokenizer_name: google/gemma-4-31B-it
     request_params:
       max_tokens: 6000
       temperature: 0.0
