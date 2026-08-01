@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING, cast
 
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 
+from .full_screen import (
+    FullPatientScreenError,
+    FullPatientScreenProgress,
+    full_patient_screen,
+)
 from .raw_note_qa import (
     RawPatientNoteQAProgress,
     RawPatientNoteQuestionError,
@@ -153,9 +158,12 @@ def summarize_patients(
 
 
 __all__ = [
+    "FullPatientScreenError",
+    "FullPatientScreenProgress",
     "RawPatientNoteQAProgress",
     "RawPatientNoteQuestionError",
     "answer_question_with_raw_patient_notes",
+    "full_patient_screen",
     "structure_patient_summary",
     "summarize_patient_notes",
     "summarize_patients",

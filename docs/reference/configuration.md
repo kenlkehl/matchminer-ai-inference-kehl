@@ -236,6 +236,30 @@ chunked independently, and retrieved chunks and final evidence receive one
 code-derived `note_date`. String input returns `note_date: null` because it has
 no structured note-to-date provenance.
 
+## `full_patient_screen`
+
+Configuration for screening complete trial eligibility criteria through the
+raw-note QA workflow. Its `local`, `remote`, and `reasoning_parser` fields select
+the same LLM backend pattern used by other tasks.
+
+- `max_workers`: maximum CPU worker processes for independent criterion
+  questions. The runtime also caps this by question count and available CPUs.
+- `process_start_method`: multiprocessing context. The default `spawn` avoids
+  inheriting initialized model or HTTP-client state.
+- `max_questions`: safety bound on the number of independently assessable
+  criteria returned by decomposition. Exceeding it fails rather than silently
+  dropping protocol criteria.
+- `synthesis_evidence_limit_per_question`: maximum validated evidence records
+  copied from each raw-note answer into the final synthesis prompt. Complete
+  raw-note responses remain in the returned JSON.
+- `response_retry_limit`: malformed JSON and schema-validation retry bound for
+  criterion decomposition and final synthesis.
+
+Process parallelism requires `remote.enabled: true` and
+`raw_patient_note_qa.embedding_device: cpu`. Use `max_workers=1` with local
+in-process vLLM. This workflow performs no web search, but retrieved patient
+excerpts and aggregated answers reach the configured LLM backend.
+
 ## `patient_structuring`
 
 Configuration for ontology-grounded JSON conversion of an existing patient

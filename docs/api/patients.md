@@ -4,6 +4,7 @@
     options:
       members:
         - answer_question_with_raw_patient_notes
+        - full_patient_screen
         - summarize_patients
         - structure_patient_summary
 
@@ -53,6 +54,42 @@ research review and does not establish diagnosis, treatment recommendations,
 or trial eligibility. This standalone workflow does not add retrieval or note
 tagging to `summarize_patients`, whose serial summarization behavior is
 unchanged.
+
+## Full patient screen
+
+`full_patient_screen` accepts the same concatenated-note string or dated,
+one-patient DataFrame as raw-note question answering plus the complete
+eligibility-criteria text for one trial. An LLM first converts every
+independently assessable protocol requirement into a focused raw-note question.
+The package then calls `answer_question_with_raw_patient_notes` for every
+question and retains each grounded answer, exact-quote evidence item, limitation,
+and code-derived `note_date`.
+
+With the remote/OpenAI-compatible backend enabled and raw-note embeddings on
+CPU, independent questions run in spawned CPU processes. This lets the bounded
+question agents issue simultaneous requests to a vLLM server or another
+configured endpoint. The configured worker count is capped by the question
+count and available CPUs. For an in-process local vLLM backend, set
+`max_workers=1`; the package will not duplicate a local GPU engine across
+workers.
+
+```python
+from matchminer_ai.patients import full_patient_screen
+
+screen = full_patient_screen(
+    notes_dataframe,
+    complete_eligibility_criteria,
+    config=config,
+    max_workers=4,
+)
+```
+
+The final JSON-compatible object includes an overall research signal, a concise
+summary, one result per criterion with the complete raw-note QA response, known
+limitations, execution counts, and a code-generated research-use notice. It is
+not an eligibility determination. Retrieved excerpts and the aggregated
+patient-specific results reach the configured LLM endpoint; no web search is
+used. Use only an endpoint authorized for the sensitivity of the patient data.
 
 ## Structured patient summary schema
 

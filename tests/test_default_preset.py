@@ -54,6 +54,13 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.raw_patient_note_qa["query_prefix"].endswith("\nQuery:")
     assert config.raw_patient_note_qa["max_agent_steps"] == 6
     assert config.raw_patient_note_qa["local"]["generation"]["max_tokens"] == 4000
+    assert config.full_patient_screen["max_workers"] == 4
+    assert config.full_patient_screen["process_start_method"] == "spawn"
+    assert config.full_patient_screen["max_questions"] == 128
+    assert (
+        config.full_patient_screen["remote"]["request_params"]["max_tokens"]
+        == 12000
+    )
     assert config.patient_structuring["oncotree_version"] == "stable-2026-07-31"
     assert config.patient_structuring["ncit_version"] == "26.07d"
     assert config.patient_structuring["ncit_candidate_limit"] == 8
