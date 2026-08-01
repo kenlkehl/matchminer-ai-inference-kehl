@@ -7,7 +7,8 @@
 Optional source-grounded extensions can also:
 
 - answer a focused question over one patient's raw notes through local
-  embedding retrieval and a bounded, evidence-citing LLM agent;
+  embedding retrieval and a bounded, evidence-citing LLM agent, with one
+  code-derived source date per chunk when note-level dated input is available;
 - transform free-text cancer histories into JSON with one record per active
   cancer, hierarchical OncoTree coding, and locally searched NCIt drug
   normalization;

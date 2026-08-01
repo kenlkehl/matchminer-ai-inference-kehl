@@ -30,11 +30,26 @@ class RawPatientNoteQuestionError(ValueError):
 
 
 @dataclass(frozen=True)
+class _NoteSourceSpan:
+    note_date: str
+    char_start: int
+    char_end: int
+
+
+@dataclass(frozen=True)
+class _PreparedPatientNotes:
+    raw_text: str
+    input_type: str
+    source_spans: tuple[_NoteSourceSpan, ...]
+
+
+@dataclass(frozen=True)
 class _NoteChunk:
     chunk_id: str
     text: str
     token_start: int
     token_end: int
+    note_date: str | None = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +62,7 @@ class _RetrievedChunk:
         return {
             "chunk_id": self.chunk.chunk_id,
             "similarity": round(self.score, 6),
+            "note_date": self.chunk.note_date,
             "text": self.chunk.text,
         }
 
@@ -90,13 +106,13 @@ def _prepare_raw_text(
     *,
     text_column: str,
     date_column: str,
-) -> tuple[str, str]:
-    """Validate input and return raw note text plus a non-sensitive input label."""
+) -> _PreparedPatientNotes:
+    """Validate input and retain note-level source spans for dated DataFrames."""
     if isinstance(patient_notes, str):
         raw_text = patient_notes.strip()
         if not raw_text:
             raise ValueError("patient_notes must be a non-empty string or DataFrame.")
-        return raw_text, "string"
+        return _PreparedPatientNotes(raw_text, "string", ())
 
     if not isinstance(patient_notes, pd.DataFrame):
         raise TypeError("patient_notes must be a string or pandas DataFrame.")
@@ -138,12 +154,30 @@ def _prepare_raw_text(
     normalized["_sort_note_date"] = normalized["_parsed_note_date"].map(_utc_sort_date)
     normalized = normalized.sort_values("_sort_note_date", kind="mergesort")
 
-    blocks = [
-        f"=== Clinical Note dated {_format_note_date(row['_parsed_note_date'])} ===\n"
-        f"{str(row[text_column]).strip()}"
-        for _, row in normalized.iterrows()
-    ]
-    return "\n\n".join(blocks), "dataframe"
+    blocks: list[str] = []
+    source_spans: list[_NoteSourceSpan] = []
+    cursor = 0
+    for _, row in normalized.iterrows():
+        if blocks:
+            cursor += 2  # The two newlines inserted by the join below.
+        note_date = _format_note_date(row["_parsed_note_date"])
+        block = (
+            f"=== Clinical Note dated {note_date} ===\n{str(row[text_column]).strip()}"
+        )
+        blocks.append(block)
+        source_spans.append(
+            _NoteSourceSpan(
+                note_date=note_date,
+                char_start=cursor,
+                char_end=cursor + len(block),
+            )
+        )
+        cursor += len(block)
+    return _PreparedPatientNotes(
+        raw_text="\n\n".join(blocks),
+        input_type="dataframe",
+        source_spans=tuple(source_spans),
+    )
 
 
 @lru_cache(maxsize=2)
@@ -247,39 +281,54 @@ def _chunk_raw_text(
     *,
     chunk_size: int,
     chunk_overlap: int,
+    source_spans: tuple[_NoteSourceSpan, ...] = (),
 ) -> list[_NoteChunk]:
-    token_ids, offsets = _tokenize_with_offsets(tokenizer, raw_text)
-    if not token_ids:
-        raise ValueError("patient_notes produced no embedding-model tokens.")
-    if offsets and isinstance(offsets[0], list):
-        offsets = offsets[0]
-
+    chunk_sources = (
+        [
+            (
+                raw_text[source_span.char_start : source_span.char_end],
+                source_span.note_date,
+            )
+            for source_span in source_spans
+        ]
+        if source_spans
+        else [(raw_text, None)]
+    )
     chunks: list[_NoteChunk] = []
     stride = chunk_size - chunk_overlap
-    for chunk_number, start in enumerate(range(0, len(token_ids), stride)):
-        end = min(start + chunk_size, len(token_ids))
-        if offsets is not None and len(offsets) == len(token_ids):
-            char_start = int(offsets[start][0])
-            char_end = int(offsets[end - 1][1])
-            chunk_text = raw_text[char_start:char_end]
-        else:
-            chunk_text = tokenizer.decode(
-                token_ids[start:end],
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False,
-            )
-        chunk_text = str(chunk_text).strip()
-        if chunk_text:
-            chunks.append(
-                _NoteChunk(
-                    chunk_id=f"chunk_{chunk_number:04d}",
-                    text=chunk_text,
-                    token_start=start,
-                    token_end=end,
+    for source_text, note_date in chunk_sources:
+        token_ids, offsets = _tokenize_with_offsets(tokenizer, source_text)
+        if not token_ids:
+            continue
+        if offsets and isinstance(offsets[0], list):
+            offsets = offsets[0]
+        has_offsets = offsets is not None and len(offsets) == len(token_ids)
+
+        for start in range(0, len(token_ids), stride):
+            end = min(start + chunk_size, len(token_ids))
+            if has_offsets:
+                char_start = int(offsets[start][0])
+                char_end = int(offsets[end - 1][1])
+                chunk_text = source_text[char_start:char_end]
+            else:
+                chunk_text = tokenizer.decode(
+                    token_ids[start:end],
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=False,
                 )
-            )
-        if end >= len(token_ids):
-            break
+            chunk_text = str(chunk_text).strip()
+            if chunk_text:
+                chunks.append(
+                    _NoteChunk(
+                        chunk_id=f"chunk_{len(chunks):04d}",
+                        text=chunk_text,
+                        token_start=start,
+                        token_end=end,
+                        note_date=note_date,
+                    )
+                )
+            if end >= len(token_ids):
+                break
     if not chunks:
         raise ValueError("patient_notes could not be split into non-empty chunks.")
     return chunks
@@ -434,10 +483,10 @@ def _validate_evidence(
     *,
     chunk_lookup: dict[str, _NoteChunk],
     visible_chunk_ids: set[str],
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if not isinstance(raw_evidence, list):
         raise RawPatientNoteQuestionError("evidence must be a JSON array.")
-    evidence: list[dict[str, str]] = []
+    evidence: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for item in raw_evidence:
         if not isinstance(item, dict):
@@ -462,6 +511,7 @@ def _validate_evidence(
                 "chunk_id": chunk_id,
                 "quote": quote,
                 "reason": reason,
+                "note_date": chunk_lookup[chunk_id].note_date,
             }
         )
     return evidence
@@ -601,7 +651,11 @@ def answer_question_with_raw_patient_notes(
     patient_notes
         Either one pre-concatenated raw EHR string or a DataFrame containing
         notes for one patient. DataFrame notes are stably sorted by
-        ``date_column`` and concatenated with dated headers before chunking.
+        ``date_column`` and concatenated with dated headers. Each note is then
+        chunked independently so chunks never cross note boundaries, and its
+        date is propagated to retrieved chunks and exact-quote evidence.
+        String input has no structured date provenance, so its evidence items
+        contain ``note_date: null``.
         If a ``patient_id`` column is present, multiple distinct IDs are
         rejected.
     embedding_model_name
@@ -624,7 +678,8 @@ def answer_question_with_raw_patient_notes(
     -------
     dict
         JSON-compatible object with ``question``, ``answer``, exact-quote
-        ``evidence``, and ``limitations``.
+        ``evidence`` (including a code-derived ``note_date``), and
+        ``limitations``.
     tuple[dict, dict]
         The answer plus non-note metadata when ``return_metadata=True``.
 
@@ -646,11 +701,12 @@ def answer_question_with_raw_patient_notes(
         raise ValueError("Config is missing raw_patient_note_qa settings.")
 
     _emit_progress(progress_callback, "prepare", 0, 1, "Preparing raw notes")
-    raw_text, input_type = _prepare_raw_text(
+    prepared_notes = _prepare_raw_text(
         patient_notes,
         text_column=text_column,
         date_column=date_column,
     )
+    raw_text = prepared_notes.raw_text
     _emit_progress(progress_callback, "prepare", 1, 1, "Raw notes prepared")
 
     resolved_embedding_model = str(
@@ -680,6 +736,7 @@ def answer_question_with_raw_patient_notes(
         tokenizer,
         chunk_size=effective_chunk_size,
         chunk_overlap=chunk_overlap,
+        source_spans=prepared_notes.source_spans,
     )
 
     _emit_progress(
@@ -896,7 +953,8 @@ def answer_question_with_raw_patient_notes(
             ),
         },
         "retrieval": {
-            "input_type": input_type,
+            "input_type": prepared_notes.input_type,
+            "source_note_count": len(prepared_notes.source_spans),
             "chunk_count": len(chunks),
             "embedding_dimension": int(chunk_embeddings.shape[1]),
             "configured_chunk_size": configured_chunk_size,

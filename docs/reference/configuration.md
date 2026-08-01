@@ -231,7 +231,10 @@ The agent can request additional semantic retrieval or a separately grounded
 answer to a narrower related question. Both tools operate only on the in-memory
 raw-note index. Retrieved excerpts are sent to the configured LLM backend; no
 web-search tool is used. Final citations are checked against retrieved chunks
-and must contain exact source substrings.
+and must contain exact source substrings. With DataFrame input, each note is
+chunked independently, and retrieved chunks and final evidence receive one
+code-derived `note_date`. String input returns `note_date: null` because it has
+no structured note-to-date provenance.
 
 ## `patient_structuring`
 

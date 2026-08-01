@@ -13,7 +13,8 @@
 string or a DataFrame for one patient. For DataFrame input, `note_text` and
 `note_date` are the default columns. The function parses and stably sorts note
 dates, adds dated note headers, and concatenates every non-empty note without
-deduplicating the record.
+deduplicating the record. It chunks each note independently, so a chunk never
+crosses a note boundary and carries exactly one source `note_date`.
 
 The selected Hugging Face SentenceTransformer model supplies both the chunking
 tokenizer and embeddings. The LLM agent starts with semantic retrieval for the
@@ -21,6 +22,10 @@ original question, then can request focused `pull_relevant_input_text` searches
 or ask narrower related questions. These tools only query the in-memory note
 index; they do not call web search. A final evidence item is accepted only when
 its chunk was retrieved and its quote is an exact substring of that chunk.
+For DataFrame input, each accepted evidence object also receives the chunk's
+code-derived `note_date`. This field is not trusted from LLM output.
+Pre-concatenated string input has no structured source-date mapping and therefore
+returns `note_date: null`.
 
 ```python
 from matchminer_ai import load_default_preset

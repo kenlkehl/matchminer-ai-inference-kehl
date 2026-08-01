@@ -146,13 +146,25 @@ def test_dataframe_notes_are_sorted_and_concatenated_before_embedding() -> None:
             progress_callback=lambda *args: progress.append(args),
         )
 
-    document = embedding_model.encoded_batches[0][0]
+    embedded_notes = embedding_model.encoded_batches[0]
+    assert len(embedded_notes) == 2
+    document = "\n".join(embedded_notes)
     assert document.index("2026-01-05") < document.index("2026-03-02")
     assert document.index("Earlier finding.") < document.index("Later finding.")
     get_model.assert_called_once_with("override/model", "cpu")
     assert result["evidence"][0]["quote"] == "Earlier finding."
+    assert result["evidence"][0]["note_date"] == "2026-01-05"
+    initial_prompt = backend.prompts[0]
+    assert initial_prompt.messages is not None
+    initial_payload = json.loads(initial_prompt.messages[-1]["content"])
+    retrieved = initial_payload["initial_pull_relevant_input_text_result"]
+    assert [chunk["note_date"] for chunk in retrieved] == [
+        "2026-01-05",
+        "2026-03-02",
+    ]
     assert metadata["retrieval"]["input_type"] == "dataframe"
-    assert metadata["retrieval"]["chunk_count"] == 1
+    assert metadata["retrieval"]["source_note_count"] == 2
+    assert metadata["retrieval"]["chunk_count"] == 2
     assert metadata["config_snapshot"]["raw_patient_note_qa"]
     assert progress[-1][0] == "complete"
     json.dumps(result)
@@ -225,6 +237,7 @@ def test_agent_can_retrieve_then_ask_related_question_before_answering() -> None
         "The tumor shrank after therapy.",
         "A grade 2 rash was documented.",
     ]
+    assert [item["note_date"] for item in result["evidence"]] == [None, None]
     assert len(backend.prompts) == 4
     related_prompt = backend.prompts[2]
     assert related_prompt.messages is not None
@@ -287,6 +300,7 @@ def test_embedding_tokenizer_defines_overlapping_chunk_boundaries() -> None:
     assert metadata["retrieval"]["chunk_count"] == 3
     assert metadata["retrieval"]["effective_chunk_size"] == 5
     assert result["evidence"][0]["chunk_id"] == "chunk_0001"
+    assert result["evidence"][0]["note_date"] is None
 
 
 def test_invented_evidence_quote_is_rejected_and_agent_can_correct_it() -> None:
