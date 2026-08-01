@@ -87,6 +87,23 @@ def _normalize_for_source_check(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip().casefold()
 
 
+def _build_criterion_sources(
+    eligibility_criteria: str,
+) -> list[dict[str, str]]:
+    """Assign stable IDs to exact non-empty lines of the supplied criteria."""
+
+    return [
+        {
+            "source_id": f"source_{index:04d}",
+            "criterion_text": line.strip(),
+        }
+        for index, line in enumerate(
+            (line for line in eligibility_criteria.splitlines() if line.strip()),
+            start=1,
+        )
+    ]
+
+
 def _normalize_limitations(value: Any) -> list[str]:
     if isinstance(value, str):
         value = [value]
@@ -99,6 +116,7 @@ def _validate_question_payload(
     payload: dict[str, Any],
     *,
     eligibility_criteria: str,
+    criterion_sources: list[dict[str, str]] | None = None,
     max_questions: int,
 ) -> list[dict[str, str]]:
     if payload.get("coverage_complete") is not True:
@@ -115,6 +133,10 @@ def _validate_question_payload(
         )
 
     normalized_source = _normalize_for_source_check(eligibility_criteria)
+    source_lookup = {
+        item["source_id"]: item["criterion_text"]
+        for item in (criterion_sources or [])
+    }
     questions: list[dict[str, str]] = []
     seen_ids: set[str] = set()
     seen_questions: set[str] = set()
@@ -127,12 +149,23 @@ def _validate_question_payload(
         criterion_type = str(
             raw_question.get("criterion_type") or ""
         ).strip().casefold()
-        criterion_text = str(raw_question.get("criterion_text") or "").strip()
+        source_id = str(raw_question.get("source_id") or "").strip()
+        model_criterion_text = str(
+            raw_question.get("criterion_text") or ""
+        ).strip()
+        criterion_text = source_lookup.get(source_id, model_criterion_text)
         question = str(raw_question.get("question") or "").strip()
-        if not criterion_id or not criterion_text or not question:
+        if not criterion_id or not question:
             raise FullPatientScreenError(
-                f"question {index} is missing criterion_id, criterion_text, or "
-                "question."
+                f"question {index} is missing criterion_id or question."
+            )
+        if source_lookup and source_id not in source_lookup:
+            raise FullPatientScreenError(
+                f"question {criterion_id!r} does not reference a supplied source_id."
+            )
+        if not criterion_text:
+            raise FullPatientScreenError(
+                f"question {criterion_id!r} is missing criterion_text."
             )
         if criterion_type not in _CRITERION_TYPES:
             raise FullPatientScreenError(
@@ -162,6 +195,7 @@ def _validate_question_payload(
                 "criterion_type": criterion_type,
                 "criterion_text": criterion_text,
                 "question": question,
+                **({"source_id": source_id} if source_id else {}),
             }
         )
     return questions
@@ -263,7 +297,8 @@ def _generate_validated_payload(
                 ]
             )
     raise FullPatientScreenError(
-        f"the LLM did not return a valid {stage_name} payload after retries."
+        f"the LLM did not return a valid {stage_name} payload after retries. "
+        f"Last validation error: {last_error}"
     ) from last_error
 
 
@@ -556,7 +591,11 @@ def full_patient_screen(
             "content": json.dumps(
                 {
                     "maximum_question_count": max_questions,
-                    "complete_eligibility_criteria": eligibility_criteria,
+                    "criterion_sources": (
+                        criterion_sources := _build_criterion_sources(
+                            eligibility_criteria
+                        )
+                    ),
                 },
                 ensure_ascii=False,
             ),
@@ -568,6 +607,7 @@ def full_patient_screen(
         validator=lambda payload: _validate_question_payload(
             payload,
             eligibility_criteria=eligibility_criteria,
+            criterion_sources=criterion_sources,
             max_questions=max_questions,
         ),
         retry_limit=retry_limit,

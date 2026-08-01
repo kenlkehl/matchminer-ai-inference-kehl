@@ -61,6 +61,15 @@ def test_default_preset_matches_training_runtime_defaults():
         config.full_patient_screen["remote"]["request_params"]["max_tokens"]
         == 12000
     )
+    assert config.full_patient_screen["local"]["chat_template_kwargs"] == {
+        "enable_thinking": False
+    }
+    assert config.full_patient_screen["remote"]["request_params"][
+        "response_format"
+    ] == {"type": "json_object"}
+    assert config.full_patient_screen["remote"]["extra_body"][
+        "chat_template_kwargs"
+    ] == {"enable_thinking": False}
     assert config.patient_structuring["oncotree_version"] == "stable-2026-07-31"
     assert config.patient_structuring["ncit_version"] == "26.07d"
     assert config.patient_structuring["ncit_candidate_limit"] == 8

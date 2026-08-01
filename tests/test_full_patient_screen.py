@@ -83,15 +83,13 @@ def _decomposition() -> dict:
             {
                 "criterion_id": "inclusion_001",
                 "criterion_type": "inclusion",
-                "criterion_text": (
-                    "Histologically confirmed lung adenocarcinoma."
-                ),
+                "source_id": "source_0001",
                 "question": "Do the notes document lung adenocarcinoma?",
             },
             {
                 "criterion_id": "exclusion_001",
                 "criterion_type": "exclusion",
-                "criterion_text": "Active brain metastases.",
+                "source_id": "source_0002",
                 "question": "Do the notes document active brain metastases?",
             },
         ],
@@ -216,7 +214,21 @@ def test_parallel_screen_uses_raw_note_qa_and_preserves_result_order() -> None:
     decomposition_payload = json.loads(
         decomposition_prompt.messages[-1]["content"]
     )
-    assert decomposition_payload["complete_eligibility_criteria"] == CRITERIA
+    assert decomposition_payload["criterion_sources"] == [
+        {
+            "source_id": "source_0001",
+            "criterion_text": (
+                "Inclusion: Histologically confirmed lung adenocarcinoma."
+            ),
+        },
+        {
+            "source_id": "source_0002",
+            "criterion_text": "Exclusion: Active brain metastases.",
+        },
+    ]
+    assert result["criteria"][0]["criterion_text"] == (
+        "Inclusion: Histologically confirmed lung adenocarcinoma."
+    )
     synthesis_prompt = backend.prompts[-1]
     assert synthesis_prompt.messages is not None
     synthesis_payload = json.loads(synthesis_prompt.messages[-1]["content"])
@@ -286,7 +298,7 @@ def test_parallel_mode_rejects_in_process_llm_before_patient_questions() -> None
 
 def test_rejects_decomposition_criteria_not_present_in_source() -> None:
     invalid = _decomposition()
-    invalid["questions"][0]["criterion_text"] = "Invented ECOG requirement."
+    invalid["questions"][0]["source_id"] = "invented_source"
     backend = _FakeBackend([invalid])
     config = _config()
     config.full_patient_screen["response_retry_limit"] = 0
@@ -295,7 +307,10 @@ def test_rejects_decomposition_criteria_not_present_in_source() -> None:
         "matchminer_ai.patients.raw_note_qa.get_llm_backend",
         return_value=backend,
     ):
-        with pytest.raises(ValueError, match="valid criterion decomposition"):
+        with pytest.raises(
+            ValueError,
+            match="does not reference a supplied source_id",
+        ):
             full_patient_screen(
                 "Synthetic note text.",
                 CRITERIA,

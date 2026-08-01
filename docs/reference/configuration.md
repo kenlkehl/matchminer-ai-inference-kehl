@@ -255,6 +255,12 @@ the same LLM backend pattern used by other tasks.
 - `response_retry_limit`: malformed JSON and schema-validation retry bound for
   criterion decomposition and final synthesis.
 
+The default decomposition prompt sends code-assigned source IDs with exact
+criterion text. The model returns those IDs, and the package reattaches the
+source text after validation instead of trusting the model to copy it. The
+default remote request also uses JSON-object response formatting and disables
+the thinking template for this bounded schema-generation task.
+
 Process parallelism requires `remote.enabled: true` and
 `raw_patient_note_qa.embedding_device: cpu`. Use `max_workers=1` with local
 in-process vLLM. This workflow performs no web search, but retrieved patient

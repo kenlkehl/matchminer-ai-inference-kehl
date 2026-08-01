@@ -153,7 +153,7 @@ full_patient_screen:
       gpu_memory_utilization: 0.9
       language_model_only: true
     chat_template_kwargs:
-      enable_thinking: true
+      enable_thinking: false
     generation:
       temperature: 0.0
       top_k: 1
@@ -168,13 +168,15 @@ full_patient_screen:
       max_tokens: 12000
       temperature: 0.0
       top_p: 1.0
+      response_format:
+        type: json_object
     extra_body:
       top_k: 1
       min_p: 0.0
       repetition_penalty: 1.05
       skip_special_tokens: false
       chat_template_kwargs:
-        enable_thinking: true
+        enable_thinking: false
 patient_structuring:
   oncotree_resource: oncotree_stable_7-31-26.json
   oncotree_version: stable-2026-07-31

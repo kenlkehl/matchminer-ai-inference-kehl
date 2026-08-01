@@ -61,6 +61,9 @@ unchanged.
 one-patient DataFrame as raw-note question answering plus the complete
 eligibility-criteria text for one trial. An LLM first converts every
 independently assessable protocol requirement into a focused raw-note question.
+Each exact non-empty criteria line receives a code-assigned source ID before the
+LLM call. The LLM references that ID, and the package attaches the original text
+after validation, so harmless model rewriting cannot break source grounding.
 The package then calls `answer_question_with_raw_patient_notes` for every
 question and retains each grounded answer, exact-quote evidence item, limitation,
 and code-derived `note_date`.
