@@ -5,6 +5,7 @@ import inspect
 from unittest.mock import patch
 
 import httpx
+import pytest
 
 from matchminer_ai.help_me_choose import (
     DrugIntervention,
@@ -13,6 +14,8 @@ from matchminer_ai.help_me_choose import (
     build_comparison_messages,
     build_drug_search_queries,
     extract_drug_interventions,
+    extract_trial_eligibility_criteria,
+    fetch_trial_eligibility_criteria,
     research_trial_drugs,
     research_trials,
 )
@@ -21,9 +24,21 @@ from matchminer_ai.help_me_choose import (
 STUDY = {
     "protocolSection": {
         "identificationModule": {"briefTitle": "Drug A plus Drug B study"},
-        "statusModule": {"overallStatus": "RECRUITING"},
         "designModule": {"phases": ["PHASE2"]},
         "descriptionModule": {"briefSummary": "A combination study."},
+        "eligibilityModule": {
+            "eligibilityCriteria": (
+                "Inclusion Criteria:\r\n\r\n* EGFR &amp; ALK testing required.\r\n"
+                "\r\nExclusion Criteria:\r\n\r\n* Active brain metastases."
+            )
+        },
+        "statusModule": {
+            "overallStatus": "RECRUITING",
+            "lastUpdatePostDateStruct": {
+                "date": "2026-07-15",
+                "type": "ACTUAL",
+            },
+        },
         "armsInterventionsModule": {
             "interventions": [
                 {
@@ -53,6 +68,33 @@ def test_extracts_only_non_placebo_drug_interventions():
         "DRUG",
         "BIOLOGICAL",
     ]
+
+
+def test_extracts_and_fetches_complete_eligibility_criteria():
+    criteria = extract_trial_eligibility_criteria(STUDY)
+    assert "EGFR & ALK testing required" in criteria
+    assert "\n\n" in criteria
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).endswith("/api/v2/studies/NCT12345678")
+        return httpx.Response(200, json=STUDY)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = fetch_trial_eligibility_criteria(
+            "nct12345678",
+            client=client,
+        )
+
+    assert result.nct_id == "NCT12345678"
+    assert result.eligibility_criteria == criteria
+    assert result.source_url.endswith("/study/NCT12345678")
+    assert result.last_update_post_date == "2026-07-15"
+    assert result.fetched_at_utc
+
+
+def test_missing_complete_eligibility_criteria_is_rejected():
+    with pytest.raises(ValueError, match="does not provide complete"):
+        extract_trial_eligibility_criteria({"protocolSection": {}})
 
 
 def test_search_query_api_has_no_patient_parameter():

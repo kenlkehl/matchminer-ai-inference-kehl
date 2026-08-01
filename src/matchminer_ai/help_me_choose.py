@@ -16,6 +16,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from urllib.parse import urlparse
 
@@ -70,6 +71,17 @@ class TrialDrugResearch:
 
 
 @dataclass(frozen=True)
+class TrialEligibilityCriteria:
+    """Current complete eligibility criteria fetched from ClinicalTrials.gov."""
+
+    nct_id: str
+    eligibility_criteria: str
+    source_url: str
+    fetched_at_utc: str
+    last_update_post_date: str = ""
+
+
+@dataclass(frozen=True)
 class ReportSource:
     """A source link appended to a generated report."""
 
@@ -93,6 +105,86 @@ def _clean_text(value: Any, *, max_chars: int) -> str:
     if len(text) > max_chars:
         return f"{text[: max_chars - 1].rstrip()}…"
     return text
+
+
+def _clean_multiline_text(value: Any) -> str:
+    text = html.unescape(str(value or ""))
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text)
+    lines = [re.sub(r"[ \t]+$", "", line) for line in text.split("\n")]
+    text = "\n".join(lines)
+    text = re.sub(r"\n{4,}", "\n\n\n", text)
+    return text.strip()
+
+
+def extract_trial_eligibility_criteria(study: Mapping[str, Any]) -> str:
+    """Extract complete eligibility text from one API v2 study payload."""
+
+    protocol = study.get("protocolSection") or {}
+    if not isinstance(protocol, Mapping):
+        raise ValueError("ClinicalTrials.gov study is missing protocolSection.")
+    eligibility = protocol.get("eligibilityModule") or {}
+    if not isinstance(eligibility, Mapping):
+        raise ValueError("ClinicalTrials.gov study is missing eligibilityModule.")
+    criteria = _clean_multiline_text(eligibility.get("eligibilityCriteria"))
+    if not criteria:
+        raise ValueError(
+            "ClinicalTrials.gov does not provide complete eligibility criteria "
+            "for this study."
+        )
+    return criteria
+
+
+def _last_update_post_date(study: Mapping[str, Any]) -> str:
+    protocol = study.get("protocolSection") or {}
+    if not isinstance(protocol, Mapping):
+        return ""
+    status = protocol.get("statusModule") or {}
+    if not isinstance(status, Mapping):
+        return ""
+    value = status.get("lastUpdatePostDateStruct") or {}
+    if isinstance(value, Mapping):
+        value = value.get("date")
+    return _clean_text(value, max_chars=40)
+
+
+def fetch_trial_eligibility_criteria(
+    nct_id: str,
+    *,
+    client: httpx.Client | None = None,
+    timeout: float = 30.0,
+) -> TrialEligibilityCriteria:
+    """Fetch current complete eligibility criteria for one NCT ID."""
+
+    normalized_id = normalize_nct_id(nct_id)
+    owns_client = client is None
+    resolved_client = client or httpx.Client(
+        timeout=max(1.0, float(timeout)),
+        follow_redirects=True,
+    )
+    try:
+        response = resolved_client.get(f"{CLINICAL_TRIALS_API}/{normalized_id}")
+        if response.status_code == 404:
+            raise ValueError(
+                f"{normalized_id} was not found on ClinicalTrials.gov."
+            )
+        response.raise_for_status()
+        study = response.json()
+        if not isinstance(study, Mapping):
+            raise ValueError(
+                f"ClinicalTrials.gov returned invalid data for {normalized_id}."
+            )
+        criteria = extract_trial_eligibility_criteria(study)
+        return TrialEligibilityCriteria(
+            nct_id=normalized_id,
+            eligibility_criteria=criteria,
+            source_url=f"{CLINICAL_TRIALS_STUDY}/{normalized_id}",
+            fetched_at_utc=datetime.now(timezone.utc).isoformat(),
+            last_update_post_date=_last_update_post_date(study),
+        )
+    finally:
+        if owns_client:
+            resolved_client.close()
 
 
 def _is_placebo(name: str) -> bool:
@@ -620,9 +712,12 @@ __all__ = [
     "DrugSearchResult",
     "ReportSource",
     "TrialDrugResearch",
+    "TrialEligibilityCriteria",
     "build_comparison_messages",
     "build_drug_search_queries",
     "extract_drug_interventions",
+    "extract_trial_eligibility_criteria",
+    "fetch_trial_eligibility_criteria",
     "fetch_trial_study",
     "format_report",
     "generate_trial_comparison",

@@ -14,9 +14,17 @@ treatment. Every per-trial section discusses drug mechanism, efficacy, and
 safety before patient-specific advantages, concerns, evidence gaps, and
 questions for the trial team.
 
+`fetch_trial_eligibility_criteria` is a separate ClinicalTrials.gov helper used
+by consumers that have an NCT ID but not the complete eligibility text. It reads
+`protocolSection.eligibilityModule.eligibilityCriteria` from the API v2 study,
+preserves multiline criteria formatting, and returns the NCT ID, public study
+URL, retrieval timestamp, and registry last-update date with the text. It
+accepts no patient context.
+
 ::: matchminer_ai.help_me_choose
     options:
       members:
+        - fetch_trial_eligibility_criteria
         - research_trials
         - build_comparison_messages
         - generate_trial_comparison
