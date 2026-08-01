@@ -16,6 +16,8 @@ from matchminer_ai.help_me_choose import (
     extract_drug_interventions,
     extract_trial_eligibility_criteria,
     fetch_trial_eligibility_criteria,
+    fetch_trial_registry_document,
+    normalize_nct_reference,
     research_trial_drugs,
     research_trials,
 )
@@ -23,9 +25,15 @@ from matchminer_ai.help_me_choose import (
 
 STUDY = {
     "protocolSection": {
-        "identificationModule": {"briefTitle": "Drug A plus Drug B study"},
+        "identificationModule": {
+            "briefTitle": "Drug A plus Drug B study",
+            "officialTitle": "Official Drug A plus Drug B Study",
+        },
         "designModule": {"phases": ["PHASE2"]},
-        "descriptionModule": {"briefSummary": "A combination study."},
+        "descriptionModule": {
+            "briefSummary": "A combination study.",
+            "detailedDescription": "A detailed registry description.",
+        },
         "eligibilityModule": {
             "eligibilityCriteria": (
                 "Inclusion Criteria:\r\n\r\n* EGFR &amp; ALK testing required.\r\n"
@@ -95,6 +103,33 @@ def test_extracts_and_fetches_complete_eligibility_criteria():
 def test_missing_complete_eligibility_criteria_is_rejected():
     with pytest.raises(ValueError, match="does not provide complete"):
         extract_trial_eligibility_criteria({"protocolSection": {}})
+
+
+def test_nct_url_fetch_is_wrangled_for_trial_space_extraction():
+    assert normalize_nct_reference(
+        "https://clinicaltrials.gov/study/NCT12345678?format=json"
+    ) == "NCT12345678"
+    assert normalize_nct_reference(
+        "clinicaltrials.gov/ct2/show/nct12345678"
+    ) == "NCT12345678"
+    with pytest.raises(ValueError, match="ClinicalTrials.gov"):
+        normalize_nct_reference("https://example.test/study/NCT12345678")
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).endswith("/api/v2/studies/NCT12345678")
+        return httpx.Response(200, json=STUDY)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        document = fetch_trial_registry_document(
+            "https://clinicaltrials.gov/study/NCT12345678",
+            client=client,
+        )
+
+    assert document.nct_id == "NCT12345678"
+    assert document.trial_title == "Official Drug A plus Drug B Study"
+    assert document.brief_summary == "A combination study."
+    assert document.detailed_description == "A detailed registry description."
+    assert "Active brain metastases" in document.eligibility_criteria
 
 
 def test_search_query_api_has_no_patient_parameter():

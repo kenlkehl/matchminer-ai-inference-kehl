@@ -3,6 +3,8 @@
 The privacy boundary in this module is structural:
 
 * :func:`research_trials` accepts ClinicalTrials.gov identifiers only.
+* :func:`fetch_trial_registry_document` accepts an NCT ID or official study URL
+  and returns only registry fields needed by trial-space extraction.
 * Search queries contain only structured drug/biological intervention names.
 * Patient text first enters the workflow in :func:`build_comparison_messages`,
   after web research is complete.
@@ -82,6 +84,20 @@ class TrialEligibilityCriteria:
 
 
 @dataclass(frozen=True)
+class TrialRegistryDocument:
+    """ClinicalTrials.gov fields used by trial-space extraction."""
+
+    nct_id: str
+    trial_title: str
+    brief_summary: str
+    detailed_description: str
+    eligibility_criteria: str
+    source_url: str
+    fetched_at_utc: str
+    last_update_post_date: str = ""
+
+
+@dataclass(frozen=True)
 class ReportSource:
     """A source link appended to a generated report."""
 
@@ -97,6 +113,31 @@ def normalize_nct_id(value: Any) -> str:
     if not NCT_ID_PATTERN.fullmatch(nct_id):
         raise ValueError(f"Invalid ClinicalTrials.gov identifier: {value!r}")
     return nct_id
+
+
+def normalize_nct_reference(value: Any) -> str:
+    """Normalize an NCT ID or an official ClinicalTrials.gov study URL."""
+
+    raw_value = str(value or "").strip()
+    if NCT_ID_PATTERN.fullmatch(raw_value):
+        return normalize_nct_id(raw_value)
+    if raw_value.casefold().startswith(
+        ("clinicaltrials.gov/", "www.clinicaltrials.gov/")
+    ):
+        raw_value = f"https://{raw_value}"
+    parsed = urlparse(raw_value)
+    hostname = (parsed.hostname or "").casefold()
+    if parsed.scheme not in {"http", "https"} or hostname not in {
+        "clinicaltrials.gov",
+        "www.clinicaltrials.gov",
+    }:
+        raise ValueError(
+            "Enter an NCT ID or a ClinicalTrials.gov study URL."
+        )
+    for segment in parsed.path.split("/"):
+        if NCT_ID_PATTERN.fullmatch(segment):
+            return normalize_nct_id(segment)
+    raise ValueError("ClinicalTrials.gov URL does not contain a valid NCT ID.")
 
 
 def _clean_text(value: Any, *, max_chars: int) -> str:
@@ -148,15 +189,48 @@ def _last_update_post_date(study: Mapping[str, Any]) -> str:
     return _clean_text(value, max_chars=40)
 
 
-def fetch_trial_eligibility_criteria(
+def extract_trial_registry_document(
     nct_id: str,
-    *,
-    client: httpx.Client | None = None,
-    timeout: float = 30.0,
-) -> TrialEligibilityCriteria:
-    """Fetch current complete eligibility criteria for one NCT ID."""
+    study: Mapping[str, Any],
+) -> TrialRegistryDocument:
+    """Wrangle an API v2 study into the trial summarization input fields."""
 
     normalized_id = normalize_nct_id(nct_id)
+    protocol = study.get("protocolSection") or {}
+    if not isinstance(protocol, Mapping):
+        raise ValueError("ClinicalTrials.gov study is missing protocolSection.")
+    identification = protocol.get("identificationModule") or {}
+    description = protocol.get("descriptionModule") or {}
+    if not isinstance(identification, Mapping):
+        identification = {}
+    if not isinstance(description, Mapping):
+        description = {}
+    title = _clean_multiline_text(
+        identification.get("officialTitle") or identification.get("briefTitle")
+    )
+    brief_summary = _clean_multiline_text(description.get("briefSummary"))
+    detailed_description = _clean_multiline_text(
+        description.get("detailedDescription")
+    )
+    return TrialRegistryDocument(
+        nct_id=normalized_id,
+        trial_title=title,
+        brief_summary=brief_summary,
+        detailed_description=detailed_description,
+        eligibility_criteria=extract_trial_eligibility_criteria(study),
+        source_url=f"{CLINICAL_TRIALS_STUDY}/{normalized_id}",
+        fetched_at_utc=datetime.now(timezone.utc).isoformat(),
+        last_update_post_date=_last_update_post_date(study),
+    )
+
+
+def _fetch_trial_study_sync(
+    nct_reference: str,
+    *,
+    client: httpx.Client | None,
+    timeout: float,
+) -> tuple[str, Mapping[str, Any]]:
+    normalized_id = normalize_nct_reference(nct_reference)
     owns_client = client is None
     resolved_client = client or httpx.Client(
         timeout=max(1.0, float(timeout)),
@@ -174,17 +248,48 @@ def fetch_trial_eligibility_criteria(
             raise ValueError(
                 f"ClinicalTrials.gov returned invalid data for {normalized_id}."
             )
-        criteria = extract_trial_eligibility_criteria(study)
-        return TrialEligibilityCriteria(
-            nct_id=normalized_id,
-            eligibility_criteria=criteria,
-            source_url=f"{CLINICAL_TRIALS_STUDY}/{normalized_id}",
-            fetched_at_utc=datetime.now(timezone.utc).isoformat(),
-            last_update_post_date=_last_update_post_date(study),
-        )
+        return normalized_id, study
     finally:
         if owns_client:
             resolved_client.close()
+
+
+def fetch_trial_registry_document(
+    nct_reference: str,
+    *,
+    client: httpx.Client | None = None,
+    timeout: float = 30.0,
+) -> TrialRegistryDocument:
+    """Fetch and wrangle one NCT ID or ClinicalTrials.gov study URL."""
+
+    normalized_id, study = _fetch_trial_study_sync(
+        nct_reference,
+        client=client,
+        timeout=timeout,
+    )
+    return extract_trial_registry_document(normalized_id, study)
+
+
+def fetch_trial_eligibility_criteria(
+    nct_id: str,
+    *,
+    client: httpx.Client | None = None,
+    timeout: float = 30.0,
+) -> TrialEligibilityCriteria:
+    """Fetch current complete eligibility criteria for one NCT ID."""
+
+    document = fetch_trial_registry_document(
+        nct_id,
+        client=client,
+        timeout=timeout,
+    )
+    return TrialEligibilityCriteria(
+        nct_id=document.nct_id,
+        eligibility_criteria=document.eligibility_criteria,
+        source_url=document.source_url,
+        fetched_at_utc=document.fetched_at_utc,
+        last_update_post_date=document.last_update_post_date,
+    )
 
 
 def _is_placebo(name: str) -> bool:
@@ -713,15 +818,19 @@ __all__ = [
     "ReportSource",
     "TrialDrugResearch",
     "TrialEligibilityCriteria",
+    "TrialRegistryDocument",
     "build_comparison_messages",
     "build_drug_search_queries",
     "extract_drug_interventions",
     "extract_trial_eligibility_criteria",
+    "extract_trial_registry_document",
     "fetch_trial_eligibility_criteria",
+    "fetch_trial_registry_document",
     "fetch_trial_study",
     "format_report",
     "generate_trial_comparison",
     "normalize_nct_id",
+    "normalize_nct_reference",
     "request_vllm_comparison",
     "research_trial_drugs",
     "research_trials",

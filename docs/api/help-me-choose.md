@@ -21,10 +21,18 @@ preserves multiline criteria formatting, and returns the NCT ID, public study
 URL, retrieval timestamp, and registry last-update date with the text. It
 accepts no patient context.
 
+`fetch_trial_registry_document` also accepts an official ClinicalTrials.gov
+study URL. It downloads the API v2 study and wrangles the official/brief title,
+brief summary, detailed description, and eligibility criteria into explicit
+fields for `summarize_trials` consumers. URL parsing never changes the request
+host: the actual API request is always sent to ClinicalTrials.gov using the
+normalized NCT ID.
+
 ::: matchminer_ai.help_me_choose
     options:
       members:
         - fetch_trial_eligibility_criteria
+        - fetch_trial_registry_document
         - research_trials
         - build_comparison_messages
         - generate_trial_comparison
