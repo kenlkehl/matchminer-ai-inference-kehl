@@ -4,6 +4,7 @@
     options:
       members:
         - exclusion_criteria_check
+        - interpret_exclusion_criteria
 
 ::: matchminer_ai.matching.llm_checks
     options:

@@ -9,6 +9,8 @@ from matchminer_ai.matching import (
     exclusion_criteria_check,
     exclusion_criteria_check_with_llm,
     generate_candidate_matches,
+    interpret_exclusion_criteria,
+    interpret_match_quality,
     score_match_quality,
     score_match_quality_with_llm,
 )
@@ -328,6 +330,260 @@ def test_exclusion_criteria_check_return_metadata(monkeypatch):
     assert metadata["model_metadata"]["exclusion_criteria_checker"]["model_name"] == (
         "ksg-dfci/BoilerPlateChecker-1225"
     )
+
+
+def test_interpret_match_quality_returns_source_relative_attributions(monkeypatch):
+    """Expose a selected TrialChecker result and source-relative token spans."""
+    config = MMAIConfig(
+        preset_name="default",
+        debug_mode=False,
+        trial={},
+        patient={},
+        local={},
+        remote={},
+        embedding={},
+        model_metadata_cache_dir=None,
+        raw={
+            "match_quality": {
+                "model_name": "checker/trial",
+                "device": "cpu",
+                "prompt_file": "match_quality_checker_template.txt",
+                "score_cutoff": 0.8,
+            }
+        },
+    )
+    pairs = pd.DataFrame(
+        [
+            {
+                "patient_id": "synthetic-patient",
+                "space_trial_id": "NCT00000000-1",
+                "cancer_history_summary": "EGFR-mutant lung cancer",
+                "clinical_space_summary": "EGFR-mutant lung cancer trial",
+            }
+        ]
+    )
+    captured = {}
+
+    def fake_checker(prompts, *, checker_config, model_metadata_cache_dir=None):
+        del model_metadata_cache_dir
+        captured["prompts"] = prompts
+        captured["checker_config"] = checker_config
+        return [{"label": "LABEL_0", "score": 0.0}], {"model_name": "checker/trial"}
+
+    def fake_attribution(
+        prompts,
+        *,
+        component_ranges,
+        checker_config,
+        target_labels,
+        target_directions,
+        top_k,
+        model_metadata_cache_dir=None,
+    ):
+        del prompts, checker_config, model_metadata_cache_dir
+        captured["ranges"] = component_ranges
+        captured["directions"] = target_directions
+        captured["labels"] = target_labels
+        captured["top_k"] = top_k
+        return [
+            {
+                "method": "gradient_x_input",
+                "token_attributions": {
+                    "cancer_history_summary": [
+                        {
+                            "text": "EGFR",
+                            "start": 0,
+                            "end": 4,
+                            "raw_score": -0.2,
+                            "normalized_score": -1.0,
+                            "importance": 1.0,
+                            "direction": "opposes_prediction",
+                        }
+                    ],
+                    "clinical_space_summary": [],
+                },
+                "coverage": {
+                    "cancer_history_summary": {"truncated": False},
+                    "clinical_space_summary": {"truncated": False},
+                },
+            }
+        ]
+
+    monkeypatch.setattr(
+        "matchminer_ai.matching.rerank.run_checker",
+        fake_checker,
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.matching.rerank.attribute_checker_tokens",
+        fake_attribution,
+    )
+
+    result, metadata = interpret_match_quality(
+        pairs,
+        config=config,
+        top_k=12,
+        return_metadata=True,
+    )
+
+    assert result.loc[0, "match_quality_score"] == pytest.approx(0.5)
+    assert bool(result.loc[0, "match_quality_pass"]) is False
+    assert result.loc[0, "attribution_target"] == "match_quality_fail"
+    assert result.loc[0, "token_attributions"]["cancer_history_summary"][0][
+        "start"
+    ] == 0
+    assert captured["directions"] == [-1.0]
+    assert captured["labels"] == ["LABEL_0"]
+    assert captured["top_k"] == 12
+    assert metadata["interpretability"] == {
+        "method": "gradient_x_input",
+        "top_k_per_source": 12,
+    }
+    assert metadata["model_metadata"]["match_quality_checker"] == {
+        "model_name": "checker/trial"
+    }
+    prompt = captured["prompts"][0]
+    patient_start, patient_end = captured["ranges"][0][
+        "cancer_history_summary"
+    ]
+    trial_start, trial_end = captured["ranges"][0]["clinical_space_summary"]
+    assert prompt[patient_start:patient_end] == "EGFR-mutant lung cancer"
+    assert prompt[trial_start:trial_end] == "EGFR-mutant lung cancer trial"
+
+
+def test_interpret_exclusion_criteria_targets_reported_label(monkeypatch):
+    """Interpret the BoilerplateChecker class reported for a selected pair."""
+    config = MMAIConfig(
+        preset_name="default",
+        debug_mode=False,
+        trial={},
+        patient={},
+        local={},
+        remote={},
+        embedding={},
+        model_metadata_cache_dir=None,
+        raw={
+            "exclusion_criteria": {
+                "model_name": "checker/boilerplate",
+                "device": "cpu",
+                "prompt_file": "exclusion_criteria_checker_template.txt",
+            }
+        },
+    )
+    matches = pd.DataFrame(
+        [
+            {
+                "patient_id": "synthetic-patient",
+                "trial_id": "NCT00000000",
+                "general_exclusion_criteria_evidence": "History of pneumonitis",
+                "general_exclusion_criteria": "Exclude prior pneumonitis",
+            }
+        ]
+    )
+    captured = {}
+
+    monkeypatch.setattr(
+        "matchminer_ai.matching.exclusion_check.run_checker",
+        lambda *_args, **_kwargs: (
+            [{"label": "POSITIVE", "score": 0.91}],
+            {"model_name": "checker/boilerplate"},
+        ),
+    )
+
+    def fake_attribution(_prompts, **kwargs):
+        captured.update(kwargs)
+        return [
+            {
+                "method": "gradient_x_input",
+                "token_attributions": {
+                    "general_exclusion_criteria_evidence": [],
+                    "general_exclusion_criteria": [],
+                },
+                "coverage": {
+                    "general_exclusion_criteria_evidence": {"truncated": False},
+                    "general_exclusion_criteria": {"truncated": False},
+                },
+            }
+        ]
+
+    monkeypatch.setattr(
+        "matchminer_ai.matching.exclusion_check.attribute_checker_tokens",
+        fake_attribution,
+    )
+
+    result = interpret_exclusion_criteria(matches, config=config)
+
+    assert bool(result.loc[0, "exclusion_criteria_pass"]) is False
+    assert result.loc[0, "attribution_target"] == "exclusion_criteria_fail"
+    assert captured["target_labels"] == ["POSITIVE"]
+    assert captured["target_directions"] == [1.0]
+    assert set(captured["component_ranges"][0]) == {
+        "general_exclusion_criteria_evidence",
+        "general_exclusion_criteria",
+    }
+
+
+def test_attribute_checker_tokens_uses_gradient_and_tracks_truncation(monkeypatch):
+    """Compute signed gradient-times-input scores without a model download."""
+    import torch
+
+    from matchminer_ai.matching import inference
+
+    class FakeTokenizer:
+        def __call__(self, prompt, **_kwargs):
+            retained = prompt[:4]
+            return {
+                "input_ids": torch.tensor(
+                    [[(ord(char) % 31) + 1 for char in retained]],
+                    dtype=torch.long,
+                ),
+                "attention_mask": torch.ones((1, len(retained)), dtype=torch.long),
+                "offset_mapping": torch.tensor(
+                    [[[index, index + 1] for index in range(len(retained))]],
+                    dtype=torch.long,
+                ),
+            }
+
+    class FakeModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.embedding = torch.nn.Embedding(64, 2)
+            torch.nn.init.constant_(self.embedding.weight, 1.0)
+            self.config = SimpleNamespace(id2label={0: "LABEL_0"})
+
+        def get_input_embeddings(self):
+            return self.embedding
+
+        def forward(self, input_ids, attention_mask):
+            embeddings = self.embedding(input_ids)
+            masked = embeddings * attention_mask.unsqueeze(-1)
+            return SimpleNamespace(logits=masked.sum(dim=(1, 2)).unsqueeze(-1))
+
+    fake_pipeline = SimpleNamespace(
+        tokenizer=FakeTokenizer(),
+        model=FakeModel(),
+        device=torch.device("cpu"),
+    )
+    monkeypatch.setattr(
+        inference,
+        "_get_checker_pipeline",
+        lambda *_args, **_kwargs: fake_pipeline,
+    )
+
+    result = inference.attribute_checker_tokens(
+        ["abcdef"],
+        component_ranges=[{"source": (0, 6)}],
+        checker_config={"model_name": "fake", "device": "cpu", "max_length": 4},
+        target_labels=["LABEL_0"],
+        target_directions=[-1.0],
+        top_k=2,
+    )[0]
+
+    tokens = result["token_attributions"]["source"]
+    assert len(tokens) == 2
+    assert all(token["direction"] == "opposes_prediction" for token in tokens)
+    assert all(token["normalized_score"] == pytest.approx(-1.0) for token in tokens)
+    assert result["coverage"]["source"]["retained_token_count"] == 4
+    assert result["coverage"]["source"]["truncated"] is True
 
 
 def test_run_checker_reuses_cached_pipeline(monkeypatch):

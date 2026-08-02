@@ -8,6 +8,8 @@ from matchminer_ai.embedding import embed_for_matching
 from matchminer_ai.matching import (
     exclusion_criteria_check,
     generate_candidate_matches,
+    interpret_exclusion_criteria,
+    interpret_match_quality,
     score_match_quality,
 )
 from matchminer_ai.patients import (
@@ -34,5 +36,7 @@ def test_imports():
     assert generate_candidate_matches is not None
     assert score_match_quality is not None
     assert exclusion_criteria_check is not None
+    assert interpret_match_quality is not None
+    assert interpret_exclusion_criteria is not None
     assert contextualize_trial_spaces is not None
     assert personalize_trial_space_context is not None

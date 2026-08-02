@@ -4,6 +4,13 @@
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
+For a specific TrialChecker or BoilerplateChecker prediction,
+`interpret_match_quality` and `interpret_exclusion_criteria` provide on-demand
+gradient-times-input token attribution mapped back to the original patient and
+trial fields. These local sensitivity scores are intended for model debugging
+and human review. They are not a clinical rationale, eligibility evidence, or
+proof that a highlighted token caused the prediction.
+
 Optional source-grounded extensions can also:
 
 - answer a focused question over one patient's raw notes through local

@@ -4,6 +4,7 @@
     options:
       members:
         - score_match_quality
+        - interpret_match_quality
 
 ::: matchminer_ai.matching.llm_checks
     options:
