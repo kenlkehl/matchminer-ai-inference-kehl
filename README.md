@@ -13,6 +13,12 @@ proof that a highlighted token caused the prediction.
 
 Optional source-grounded extensions can also:
 
+- extract text from local PDFs with page-aware embedded-text preservation and
+  OCR fallback, producing a UTF-8 text file without sending document content to
+  an external service;
+- extract complete, source-grounded inclusion and exclusion criteria relevant
+  to one trial space from an OCR eligibility-checklist text file using the
+  configured LLM backend;
 - answer a focused question over one patient's raw notes through local
   embedding retrieval and a bounded, evidence-citing LLM agent, with one
   code-derived source date per chunk when note-level dated input is available;

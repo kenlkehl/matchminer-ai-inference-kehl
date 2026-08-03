@@ -7,6 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 from types import ModuleType
 
 from .config import load_config, load_default_preset, load_preset
+from .documents import PDFOCRError, PDFOCRNoTextError, ocr_pdf
 from .pipeline import MMAIPipeline
 
 _LAZY_SUBMODULES = {
@@ -26,10 +27,13 @@ except PackageNotFoundError:
 
 __all__ = [
     "MMAIPipeline",
+    "PDFOCRError",
+    "PDFOCRNoTextError",
     "__version__",
     "load_config",
     "load_default_preset",
     "load_preset",
+    "ocr_pdf",
 ]
 
 

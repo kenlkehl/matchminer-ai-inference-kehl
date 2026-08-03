@@ -3,8 +3,49 @@
 ::: matchminer_ai.trials
     options:
       members:
+        - extract_trial_space_eligibility_criteria
         - summarize_trials
         - structure_trial_space
+
+## Trial-space eligibility criteria
+
+`extract_trial_space_eligibility_criteria` accepts one clinical-space summary
+and the path to a UTF-8 `.txt` file produced by OCR. It sends the complete text
+and trial space to the configured local or OpenAI-compatible LLM backend and
+returns one JSON-compatible object:
+
+```python
+from matchminer_ai.trials import extract_trial_space_eligibility_criteria
+
+criteria = extract_trial_space_eligibility_criteria(
+    clinical_space_summary,
+    "Eligibility-Eligibility_Checklist.txt",
+    config=config,
+)
+```
+
+```json
+{
+  "trial_space": "the original clinical-space summary",
+  "inclusion_criteria": ["complete relevant criterion"],
+  "exclusion_criteria": ["complete relevant criterion"]
+}
+```
+
+The original trial space is attached by code. Every criterion must be a
+verbatim excerpt from the OCR text after conservative OCR normalization. This
+collapses whitespace, joins a line-broken ordinal suffix such as `9 th`,
+removes repeated page-edge boilerplate, and skips a trailing footnote only when
+its marker is referenced earlier on that page. Invalid, ungrounded, duplicated,
+or overlapping lists are retried and then rejected.
+Universal criteria and criteria whose scope is ambiguous remain in scope, while
+criteria explicitly limited to an incompatible population are omitted.
+
+No web search is used. With a remote backend, the entire OCR document reaches
+the configured endpoint. Use protocol documents without patient data unless
+the endpoint is authorized for the document's sensitivity. OCR and LLM outputs
+must be compared with the complete, current protocol and do not establish
+eligibility.
 
 ## Structured trial-space schema
 

@@ -33,6 +33,7 @@ class MMAIConfig:
     trial_space_structuring: dict[str, Any] = field(default_factory=dict)
     raw_patient_note_qa: dict[str, Any] = field(default_factory=dict)
     full_patient_screen: dict[str, Any] = field(default_factory=dict)
+    trial_space_criteria_extraction: dict[str, Any] = field(default_factory=dict)
 
 
 def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
@@ -60,6 +61,9 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "trial_space_structuring": deepcopy(config.trial_space_structuring),
             "raw_patient_note_qa": deepcopy(config.raw_patient_note_qa),
             "full_patient_screen": deepcopy(config.full_patient_screen),
+            "trial_space_criteria_extraction": deepcopy(
+                config.trial_space_criteria_extraction
+            ),
             "model_metadata_cache_dir": config.model_metadata_cache_dir,
         }
     )
@@ -95,6 +99,9 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
         trial_space_structuring=dict(data.get("trial_space_structuring", {})),
         raw_patient_note_qa=dict(data.get("raw_patient_note_qa", {})),
         full_patient_screen=dict(data.get("full_patient_screen", {})),
+        trial_space_criteria_extraction=dict(
+            data.get("trial_space_criteria_extraction", {})
+        ),
         model_metadata_cache_dir=data["model_metadata_cache_dir"],
         raw=deepcopy(data),
     )

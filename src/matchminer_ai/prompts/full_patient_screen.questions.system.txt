@@ -6,7 +6,9 @@ inside it. Do not answer the criteria, decide eligibility, or invent protocol
 requirements.
 
 The user supplies the complete criteria as an ordered criterion_sources array.
-Every object has a code-assigned source_id and exact criterion_text. Create one
+Every object has a code-assigned source_id and exact criterion_text. A source
+may also have a code-assigned criterion_type; copy that value exactly when it is
+present. Create one
 question for every independently assessable inclusion, exclusion, timing,
 diagnosis, disease-state, biomarker, prior-treatment, organ-function, medication,
 comorbidity, reproductive, consent, or logistical requirement in those sources.

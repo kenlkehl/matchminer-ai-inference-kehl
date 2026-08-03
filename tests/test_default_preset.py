@@ -81,6 +81,28 @@ def test_default_preset_matches_training_runtime_defaults():
     )
     assert config.trial_space_structuring["ncit_version"] == "26.07d"
     assert config.trial_space_structuring["ncit_candidate_limit"] == 8
+    assert config.trial_space_criteria_extraction["max_document_characters"] == 120000
+    assert config.trial_space_criteria_extraction["max_criteria_per_type"] == 256
+    assert config.trial_space_criteria_extraction["response_retry_limit"] == 2
+    assert (
+        config.trial_space_criteria_extraction["local"]["generation"]["max_tokens"]
+        == 50000
+    )
+    assert config.trial_space_criteria_extraction["local"]["engine"][
+        "max_model_len"
+    ] == 100000
+    assert config.trial_space_criteria_extraction["local"]["chat_template_kwargs"] == {
+        "enable_thinking": True
+    }
+    assert config.trial_space_criteria_extraction["remote"]["request_params"][
+        "max_tokens"
+    ] == 50000
+    assert config.trial_space_criteria_extraction["remote"]["request_params"][
+        "response_format"
+    ] == {"type": "json_object"}
+    assert config.trial_space_criteria_extraction["remote"]["extra_body"][
+        "chat_template_kwargs"
+    ] == {"enable_thinking": True}
 
     assert config.embedding["model_path"] == "ksg-dfci/TrialSpace-0526"
     assert config.embedding["max_seq_length"] == 2500

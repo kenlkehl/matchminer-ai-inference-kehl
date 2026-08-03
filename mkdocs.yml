@@ -28,6 +28,7 @@ nav:
       - Contributing: development/contributing.md
   - Package API:
       - Config Loading: api/config.md
+      - PDF Document OCR: api/documents.md
       - Trial Summarization: api/trials.md
       - Patient Summarization: api/patients.md
       - Embedding: api/embedding.md

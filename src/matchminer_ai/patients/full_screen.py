@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ProcessPoolExecutor, as_completed
 from copy import deepcopy
 from importlib import resources
@@ -104,6 +104,68 @@ def _build_criterion_sources(
     ]
 
 
+def _prepare_eligibility_criteria(
+    eligibility_criteria: str | Mapping[str, Any],
+) -> tuple[str, list[dict[str, str]]]:
+    if isinstance(eligibility_criteria, str):
+        criteria_text = eligibility_criteria.strip()
+        if not criteria_text:
+            raise ValueError("eligibility_criteria must be non-empty.")
+        return criteria_text, _build_criterion_sources(criteria_text)
+
+    if not isinstance(eligibility_criteria, Mapping):
+        raise TypeError(
+            "eligibility_criteria must be a string or a mapping containing "
+            "inclusion_criteria and exclusion_criteria lists."
+        )
+
+    criterion_sources: list[dict[str, str]] = []
+    criteria_by_type: dict[str, list[str]] = {}
+    seen: set[str] = set()
+    for criterion_type, field_name in (
+        ("inclusion", "inclusion_criteria"),
+        ("exclusion", "exclusion_criteria"),
+    ):
+        values = eligibility_criteria.get(field_name)
+        if not isinstance(values, list):
+            raise TypeError(f"eligibility_criteria[{field_name!r}] must be a list.")
+        criteria_by_type[criterion_type] = []
+        for position, value in enumerate(values):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"eligibility_criteria[{field_name!r}][{position}] must be "
+                    "a non-empty string."
+                )
+            criterion_text = value.strip()
+            normalized = _normalize_for_source_check(criterion_text)
+            if normalized in seen:
+                raise ValueError(
+                    "eligibility_criteria contains a duplicated inclusion or "
+                    "exclusion criterion."
+                )
+            seen.add(normalized)
+            criteria_by_type[criterion_type].append(criterion_text)
+            criterion_sources.append(
+                {
+                    "source_id": f"source_{len(criterion_sources) + 1:04d}",
+                    "criterion_type": criterion_type,
+                    "criterion_text": criterion_text,
+                }
+            )
+
+    if not criterion_sources:
+        raise ValueError("eligibility_criteria must contain at least one criterion.")
+    criteria_text = "\n".join(
+        [
+            "INCLUSION CRITERIA",
+            *criteria_by_type["inclusion"],
+            "EXCLUSION CRITERIA",
+            *criteria_by_type["exclusion"],
+        ]
+    )
+    return criteria_text, criterion_sources
+
+
 def _normalize_limitations(value: Any) -> list[str]:
     if isinstance(value, str):
         value = [value]
@@ -134,7 +196,7 @@ def _validate_question_payload(
 
     normalized_source = _normalize_for_source_check(eligibility_criteria)
     source_lookup = {
-        item["source_id"]: item["criterion_text"]
+        item["source_id"]: item
         for item in (criterion_sources or [])
     }
     questions: list[dict[str, str]] = []
@@ -153,13 +215,18 @@ def _validate_question_payload(
         model_criterion_text = str(
             raw_question.get("criterion_text") or ""
         ).strip()
-        criterion_text = source_lookup.get(source_id, model_criterion_text)
+        source = source_lookup.get(source_id)
+        criterion_text = (
+            str(source["criterion_text"])
+            if source is not None
+            else model_criterion_text
+        )
         question = str(raw_question.get("question") or "").strip()
         if not criterion_id or not question:
             raise FullPatientScreenError(
                 f"question {index} is missing criterion_id or question."
             )
-        if source_lookup and source_id not in source_lookup:
+        if source_lookup and source is None:
             raise FullPatientScreenError(
                 f"question {criterion_id!r} does not reference a supplied source_id."
             )
@@ -172,6 +239,8 @@ def _validate_question_payload(
                 f"question {criterion_id!r} has unsupported criterion_type "
                 f"{criterion_type!r}."
             )
+        if source is not None and source.get("criterion_type") in _CRITERION_TYPES:
+            criterion_type = str(source["criterion_type"])
         if criterion_id in seen_ids:
             raise FullPatientScreenError(
                 f"criterion_id {criterion_id!r} appears more than once."
@@ -507,7 +576,7 @@ def _synthesis_question_results(
 
 def full_patient_screen(
     patient_notes: str | pd.DataFrame,
-    eligibility_criteria: str,
+    eligibility_criteria: str | Mapping[str, Any],
     *,
     embedding_model_name: str | None = None,
     text_column: str = "note_text",
@@ -531,18 +600,20 @@ def full_patient_screen(
 
     ``patient_notes`` accepts the same concatenated string or one-patient
     DataFrame contract as raw-note question answering. ``eligibility_criteria``
-    must contain the complete criteria text for one clinical trial. Retrieved
-    patient excerpts and the final aggregated question results reach the
-    configured LLM backend; no web search is used.
+    can be the complete criteria text for one clinical trial or the structured
+    mapping returned by
+    :func:`matchminer_ai.trials.extract_trial_space_eligibility_criteria`.
+    Retrieved patient excerpts and the final aggregated question results reach
+    the configured LLM backend; no web search is used.
 
     Parallel process mode intentionally requires ``remote.enabled=True`` and
     ``raw_patient_note_qa.embedding_device=cpu``. Set ``max_workers=1`` for an
     in-process local vLLM backend. The result is not an eligibility
     determination and requires review against the current complete protocol.
     """
-    if not isinstance(eligibility_criteria, str) or not eligibility_criteria.strip():
-        raise ValueError("eligibility_criteria must be a non-empty string.")
-    eligibility_criteria = eligibility_criteria.strip()
+    eligibility_criteria_text, criterion_sources = _prepare_eligibility_criteria(
+        eligibility_criteria
+    )
     if not isinstance(patient_notes, (str, pd.DataFrame)):
         raise TypeError("patient_notes must be a string or pandas DataFrame.")
     _prepare_raw_text(
@@ -591,11 +662,7 @@ def full_patient_screen(
             "content": json.dumps(
                 {
                     "maximum_question_count": max_questions,
-                    "criterion_sources": (
-                        criterion_sources := _build_criterion_sources(
-                            eligibility_criteria
-                        )
-                    ),
+                    "criterion_sources": criterion_sources,
                 },
                 ensure_ascii=False,
             ),
@@ -606,7 +673,7 @@ def full_patient_screen(
         decomposition_messages,
         validator=lambda payload: _validate_question_payload(
             payload,
-            eligibility_criteria=eligibility_criteria,
+            eligibility_criteria=eligibility_criteria_text,
             criterion_sources=criterion_sources,
             max_questions=max_questions,
         ),
@@ -682,7 +749,7 @@ def full_patient_screen(
             "role": "user",
             "content": json.dumps(
                 {
-                    "complete_eligibility_criteria": eligibility_criteria,
+                    "complete_eligibility_criteria": eligibility_criteria_text,
                     "grounded_question_results": synthesis_input,
                 },
                 ensure_ascii=False,

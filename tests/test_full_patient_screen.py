@@ -236,6 +236,64 @@ def test_parallel_screen_uses_raw_note_qa_and_preserves_result_order() -> None:
     json.dumps(result)
 
 
+def test_screen_accepts_structured_trial_space_criteria() -> None:
+    structured_criteria = {
+        "trial_space": "Synthetic lung cancer trial space.",
+        "inclusion_criteria": [
+            "Histologically confirmed lung adenocarcinoma."
+        ],
+        "exclusion_criteria": ["Active brain metastases."],
+    }
+    decomposition = _decomposition()
+    decomposition["questions"][0]["criterion_type"] = "other"
+    backend = _FakeBackend([decomposition, _final_screen()])
+
+    with (
+        patch(
+            "matchminer_ai.patients.raw_note_qa.get_llm_backend",
+            return_value=backend,
+        ),
+        patch(
+            "matchminer_ai.patients.full_screen."
+            "answer_question_with_raw_patient_notes",
+            return_value={
+                "question": "Synthetic question.",
+                "answer": "The synthetic note was reviewed.",
+                "evidence": [],
+                "limitations": [],
+            },
+        ),
+    ):
+        result = full_patient_screen(
+            "Synthetic note text.",
+            structured_criteria,
+            config=_config(),
+            max_workers=1,
+        )
+
+    decomposition_prompt = backend.prompts[0]
+    assert decomposition_prompt.messages is not None
+    decomposition_payload = json.loads(
+        decomposition_prompt.messages[-1]["content"]
+    )
+    assert decomposition_payload["criterion_sources"] == [
+        {
+            "source_id": "source_0001",
+            "criterion_type": "inclusion",
+            "criterion_text": "Histologically confirmed lung adenocarcinoma.",
+        },
+        {
+            "source_id": "source_0002",
+            "criterion_type": "exclusion",
+            "criterion_text": "Active brain metastases.",
+        },
+    ]
+    assert [item["criterion_type"] for item in result["criteria"]] == [
+        "inclusion",
+        "exclusion",
+    ]
+
+
 def test_question_failure_is_retained_and_cannot_produce_no_concern_signal() -> None:
     final = _final_screen()
     final["overall_signal"] = "no_concern_identified"

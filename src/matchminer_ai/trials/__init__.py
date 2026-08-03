@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING
 
 from matchminer_ai.config import MMAIConfig, config_snapshot
 
+from .eligibility import (
+    TrialSpaceCriteriaExtractionError,
+    TrialSpaceCriteriaProgress,
+    extract_trial_space_eligibility_criteria,
+)
 from .structure import structure_trial_space
 
 if TYPE_CHECKING:
@@ -150,4 +155,10 @@ def summarize_trials(
     return result
 
 
-__all__ = ["structure_trial_space", "summarize_trials"]
+__all__ = [
+    "TrialSpaceCriteriaExtractionError",
+    "TrialSpaceCriteriaProgress",
+    "extract_trial_space_eligibility_criteria",
+    "structure_trial_space",
+    "summarize_trials",
+]

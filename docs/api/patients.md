@@ -59,8 +59,9 @@ unchanged.
 ## Full patient screen
 
 `full_patient_screen` accepts the same concatenated-note string or dated,
-one-patient DataFrame as raw-note question answering plus the complete
-eligibility-criteria text for one trial. An LLM first converts every
+one-patient DataFrame as raw-note question answering plus either the complete
+eligibility-criteria text for one trial or the structured mapping returned by
+`extract_trial_space_eligibility_criteria`. An LLM first converts every
 independently assessable protocol requirement into a focused raw-note question.
 Each exact non-empty criteria line receives a code-assigned source ID before the
 LLM call. The LLM references that ID, and the package attaches the original text
@@ -87,6 +88,12 @@ screen = full_patient_screen(
     max_workers=4,
 )
 ```
+
+For an uploaded eligibility PDF, applications can keep all reusable behavior
+inside the package by composing `ocr_pdf`,
+`extract_trial_space_eligibility_criteria`, and `full_patient_screen`. When the
+structured mapping is supplied, criterion type and exact criterion text are
+attached from code-assigned sources rather than copied from model output.
 
 The final JSON-compatible object includes an overall research signal, a concise
 summary, one result per criterion with the complete raw-note QA response, known

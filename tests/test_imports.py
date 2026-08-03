@@ -1,5 +1,5 @@
 import matchminer_ai
-from matchminer_ai import MMAIPipeline, load_config
+from matchminer_ai import MMAIPipeline, load_config, ocr_pdf
 from matchminer_ai.contextualization import (
     contextualize_trial_spaces,
     personalize_trial_space_context,
@@ -19,7 +19,11 @@ from matchminer_ai.patients import (
     structure_patient_summary,
     summarize_patients,
 )
-from matchminer_ai.trials import structure_trial_space, summarize_trials
+from matchminer_ai.trials import (
+    extract_trial_space_eligibility_criteria,
+    structure_trial_space,
+    summarize_trials,
+)
 
 
 def test_imports():
@@ -27,7 +31,9 @@ def test_imports():
     assert isinstance(matchminer_ai.__version__, str)
     assert MMAIPipeline is not None
     assert load_config is not None
+    assert ocr_pdf is not None
     assert summarize_trials is not None
+    assert extract_trial_space_eligibility_criteria is not None
     assert structure_trial_space is not None
     assert summarize_patients is not None
     assert structure_patient_summaries is not None

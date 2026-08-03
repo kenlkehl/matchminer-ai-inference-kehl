@@ -90,6 +90,8 @@ Request timeout in seconds.
 ### `remote.max_retries`
 
 Maximum retry attempts for a failed remote request.
+The package disables the OpenAI SDK's separate internal retry loop so this
+setting is the single retry bound.
 
 ### `remote.batch_size`
 
@@ -266,6 +268,27 @@ Process parallelism requires `remote.enabled: true` and
 in-process vLLM. This workflow performs no web search, but retrieved patient
 excerpts and aggregated answers reach the configured LLM backend.
 
+## `trial_space_criteria_extraction`
+
+Configuration for extracting the complete inclusion and exclusion criteria
+relevant to one trial space from a UTF-8 OCR text file. Its `local`, `remote`,
+and `reasoning_parser` fields select the same LLM backend pattern as other
+tasks.
+
+- `max_document_characters`: hard input bound. Oversized documents fail rather
+  than being silently truncated and losing criteria.
+- `max_criteria_per_type`: maximum number of inclusion criteria and maximum
+  number of exclusion criteria accepted from the model.
+- `response_retry_limit`: retry bound for malformed JSON, invalid schemas,
+  duplicate criteria, and criteria that are not grounded in the OCR text.
+
+The default extraction task keeps model thinking enabled and allows up to
+50,000 completion tokens. The default remote request uses JSON-object response
+formatting. The entire OCR document and trial space reach the configured LLM
+backend; no web search is used. Every accepted criterion must match a source
+excerpt after conservative whitespace, ordinal-suffix, repeated page-edge, and
+referenced trailing-footnote normalization.
+
 ## `patient_structuring`
 
 Configuration for ontology-grounded JSON conversion of an existing patient
@@ -278,6 +301,9 @@ LLM task sections.
 - `ontology_retry_limit` bounds malformed JSON and invalid-index retries.
 - `ncit_candidate_limit` bounds each locally searched candidate page.
 - `ncit_max_agent_steps` bounds revised NCIt search attempts.
+- `local.generation.max_tokens` and `remote.request_params.max_tokens` default
+  to 30,000 completion tokens so reasoning-capable endpoints retain enough
+  budget to emit the required JSON answer after their reasoning trace.
 
 Complete ontology contents remain local. Only immediate OncoTree children,
 bounded NCIt candidate labels, and selected NCIt definitions are sent to the
