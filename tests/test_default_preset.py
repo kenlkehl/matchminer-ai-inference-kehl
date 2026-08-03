@@ -48,6 +48,7 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.raw_patient_note_qa["embedding_model_name"] == (
         "Qwen/Qwen3-Embedding-0.6B"
     )
+    assert config.raw_patient_note_qa["embedding_device"] == "cuda"
     assert config.raw_patient_note_qa["chunk_size"] == 220
     assert config.raw_patient_note_qa["chunk_overlap"] == 32
     assert config.raw_patient_note_qa["query_prefix"].startswith("Instruct:")

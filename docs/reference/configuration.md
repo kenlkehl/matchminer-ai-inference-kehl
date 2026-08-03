@@ -266,6 +266,8 @@ or OpenAI-compatible backend used by other LLM tasks.
   path. The function argument of the same name overrides this setting. The
   default is `Qwen/Qwen3-Embedding-0.6B`, independently of TrialSpace.
 - `embedding_device` and `embedding_batch_size`: embedding runtime settings.
+  The default device is `cuda` for both focused Q&A and one-time full-screen
+  index construction.
 - `chunk_size` and `chunk_overlap`: raw-note chunk sizes in tokens from the
   embedding model's own tokenizer. The effective chunk size is capped so the
   document prefix and special tokens fit the model's sequence limit.
@@ -313,10 +315,15 @@ source text after validation instead of trusting the model to copy it. The
 default remote request also uses JSON-object response formatting and disables
 the thinking template for this bounded schema-generation task.
 
-Process parallelism requires `remote.enabled: true` and
-`raw_patient_note_qa.embedding_device: cpu`. Use `max_workers=1` with local
-in-process vLLM. This workflow performs no web search, but retrieved patient
-excerpts and aggregated answers reach the configured LLM backend.
+Process parallelism requires `remote.enabled: true`. The package embeds all
+raw-note chunks once on `raw_patient_note_qa.embedding_device`, transfers the
+normalized index to CPU, and gives the worker processes access to that prepared
+index. The parent-owned embedding model serves the much smaller original and
+agent-generated query vectors; cosine retrieval runs inside each worker on CPU.
+The workers therefore neither re-embed the note record nor load their own copy
+of the embedding model. Use `max_workers=1` with local in-process vLLM. This
+workflow performs no web search, but retrieved patient excerpts and aggregated
+answers reach the configured LLM backend.
 
 ## `trial_space_criteria_extraction`
 

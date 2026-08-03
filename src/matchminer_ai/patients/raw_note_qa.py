@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import secrets
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib import resources
+from multiprocessing.connection import Client, Listener
 from pathlib import Path
+from threading import Thread
 from typing import Any
 
 import numpy as np
@@ -65,6 +68,32 @@ class _RetrievedChunk:
             "note_date": self.chunk.note_date,
             "text": self.chunk.text,
         }
+
+
+@dataclass(frozen=True)
+class _PreparedRawNoteIndex:
+    """CPU-resident note chunks and vectors reusable across QA agents."""
+
+    chunks: tuple[_NoteChunk, ...]
+    embeddings: np.ndarray
+    input_type: str
+    source_note_count: int
+    embedding_model_name: str
+    embedding_device: str
+    embedding_batch_size: int
+    query_prefix: str
+    min_similarity: float
+    configured_chunk_size: int
+    effective_chunk_size: int
+    chunk_overlap: int
+
+
+@dataclass(frozen=True)
+class _QueryEmbeddingEndpoint:
+    """Authenticated loopback endpoint for the parent-owned embedding model."""
+
+    address: tuple[str, int]
+    authkey: bytes
 
 
 def _load_prompt_text(filename: str) -> str:
@@ -353,12 +382,106 @@ def _encode(model: Any, texts: list[str], *, batch_size: int) -> np.ndarray:
     return values / np.maximum(norms, np.finfo(np.float32).eps)
 
 
+def _request_query_embeddings(
+    endpoint: _QueryEmbeddingEndpoint,
+    texts: list[str],
+) -> np.ndarray:
+    """Ask the parent process to encode queries with its CUDA model."""
+    connection = Client(endpoint.address, authkey=endpoint.authkey)
+    try:
+        connection.send({"texts": list(texts)})
+        status, payload = connection.recv()
+    finally:
+        connection.close()
+    if status != "ok":
+        raise RawPatientNoteQuestionError(
+            f"The shared query embedding service failed: {payload}"
+        )
+    values = np.asarray(payload, dtype=np.float32)
+    if values.ndim != 2 or values.shape[0] != len(texts):
+        raise RawPatientNoteQuestionError(
+            "The shared query embedding service returned an unexpected array shape."
+        )
+    return values
+
+
+class _QueryEmbeddingServer:
+    """Serve one parent-owned embedding model to spawned QA workers."""
+
+    def __init__(self, model: Any, *, batch_size: int) -> None:
+        self._model = model
+        self._batch_size = max(1, int(batch_size))
+        self._authkey = secrets.token_bytes(32)
+        self._listener = Listener(
+            ("127.0.0.1", 0),
+            backlog=128,
+            authkey=self._authkey,
+        )
+        address = self._listener.address
+        if not isinstance(address, tuple) or len(address) != 2:
+            self._listener.close()
+            raise RuntimeError("Could not create the query embedding loopback service.")
+        self.endpoint = _QueryEmbeddingEndpoint(
+            address=(str(address[0]), int(address[1])),
+            authkey=self._authkey,
+        )
+        self._thread = Thread(
+            target=self._serve,
+            name="mmai-query-embedding-server",
+            daemon=True,
+        )
+
+    def __enter__(self) -> _QueryEmbeddingEndpoint:
+        self._thread.start()
+        return self.endpoint
+
+    def __exit__(self, *_args: Any) -> None:
+        try:
+            connection = Client(self.endpoint.address, authkey=self.endpoint.authkey)
+            try:
+                connection.send({"stop": True})
+                connection.recv()
+            finally:
+                connection.close()
+        finally:
+            self._thread.join(timeout=10)
+            self._listener.close()
+
+    def _serve(self) -> None:
+        while True:
+            connection = self._listener.accept()
+            try:
+                request_payload = connection.recv()
+                if not isinstance(request_payload, dict):
+                    raise TypeError("query embedding requests must be mappings.")
+                if bool(request_payload.get("stop", False)):
+                    connection.send(("ok", None))
+                    return
+                texts = request_payload.get("texts")
+                if not isinstance(texts, list) or not all(
+                    isinstance(text, str) for text in texts
+                ):
+                    raise TypeError("query embedding texts must be a list of strings.")
+                values = _encode(
+                    self._model,
+                    texts,
+                    batch_size=self._batch_size,
+                )
+                connection.send(("ok", values))
+            except Exception as exc:  # noqa: BLE001 - report service errors to worker
+                try:
+                    connection.send(("error", f"{type(exc).__name__}: {exc}"))
+                except (BrokenPipeError, EOFError, OSError):
+                    pass
+            finally:
+                connection.close()
+
+
 @dataclass
 class _RawNoteIndex:
     chunks: list[_NoteChunk]
     embeddings: np.ndarray
-    model: Any
-    batch_size: int
+    query_encoder: Callable[[list[str]], np.ndarray]
     query_prefix: str
     min_similarity: float
 
@@ -366,11 +489,7 @@ class _RawNoteIndex:
         query = str(query).strip()
         if not query:
             raise ValueError("retrieval query must be non-empty.")
-        query_vector = _encode(
-            self.model,
-            [f"{self.query_prefix}{query}"],
-            batch_size=1,
-        )[0]
+        query_vector = self.query_encoder([f"{self.query_prefix}{query}"])[0]
         scores = self.embeddings @ query_vector
         order = np.argsort(-scores, kind="stable")[: max(1, int(top_k))]
         return [
@@ -630,73 +749,17 @@ def _embedding_metadata(
         }
 
 
-def answer_question_with_raw_patient_notes(
-    question: str,
+def _prepare_raw_note_index(
     patient_notes: str | pd.DataFrame,
     *,
-    embedding_model_name: str | None = None,
-    text_column: str = "note_text",
-    date_column: str = "note_date",
-    config: MMAIConfig | None = None,
-    return_metadata: bool = False,
+    embedding_model_name: str | None,
+    text_column: str,
+    date_column: str,
+    config: MMAIConfig,
     progress_callback: RawPatientNoteQAProgress | None = None,
-) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]:
-    """
-    Answer one patient question from embedding-retrieved raw note excerpts.
-
-    Parameters
-    ----------
-    question
-        Non-empty question about the patient represented by ``patient_notes``.
-    patient_notes
-        Either one pre-concatenated raw EHR string or a DataFrame containing
-        notes for one patient. DataFrame notes are stably sorted by
-        ``date_column`` and concatenated with dated headers. Each note is then
-        chunked independently so chunks never cross note boundaries, and its
-        date is propagated to retrieved chunks and exact-quote evidence.
-        String input has no structured date provenance, so its evidence items
-        contain ``note_date: null``.
-        If a ``patient_id`` column is present, multiple distinct IDs are
-        rejected.
-    embedding_model_name
-        Optional Hugging Face / SentenceTransformer model identifier or local
-        model path. It overrides ``raw_patient_note_qa.embedding_model_name``.
-        The model's own tokenizer defines chunk boundaries.
-    text_column, date_column
-        DataFrame column names for note text and note date. Ignored for string
-        input.
-    config
-        MatchMiner-AI configuration. The ``raw_patient_note_qa`` block controls
-        embedding runtime, chunking, retrieval, agent limits, and the same local
-        or remote LLM backends used elsewhere in the package.
-    return_metadata
-        Return a metadata dictionary alongside the JSON-compatible answer.
-    progress_callback
-        Optional ``(stage, completed, total, detail)`` callback.
-
-    Returns
-    -------
-    dict
-        JSON-compatible object with ``question``, ``answer``, exact-quote
-        ``evidence`` (including a code-derived ``note_date``), and
-        ``limitations``.
-    tuple[dict, dict]
-        The answer plus non-note metadata when ``return_metadata=True``.
-
-    Notes
-    -----
-    Embedding retrieval is local to this function. Retrieved patient text is
-    sent to the configured LLM backend. Configure only an endpoint authorized
-    for the sensitivity of the input. This research workflow does not establish
-    diagnosis, treatment recommendations, or clinical-trial eligibility.
-    """
-    if not isinstance(question, str) or not question.strip():
-        raise ValueError("question must be a non-empty string.")
-    question = question.strip()
-    resolved_config = config or load_default_preset()
-    if not isinstance(resolved_config, MMAIConfig):
-        raise TypeError("config must be an MMAIConfig instance or None.")
-    qa_config = dict(resolved_config.raw_patient_note_qa)
+) -> tuple[_PreparedRawNoteIndex, Any]:
+    """Chunk and embed a patient's notes once, returning CPU-resident vectors."""
+    qa_config = dict(config.raw_patient_note_qa)
     if not qa_config:
         raise ValueError("Config is missing raw_patient_note_qa settings.")
 
@@ -706,7 +769,6 @@ def answer_question_with_raw_patient_notes(
         text_column=text_column,
         date_column=date_column,
     )
-    raw_text = prepared_notes.raw_text
     _emit_progress(progress_callback, "prepare", 1, 1, "Raw notes prepared")
 
     resolved_embedding_model = str(
@@ -717,7 +779,7 @@ def answer_question_with_raw_patient_notes(
             "embedding_model_name must be provided as an argument or in "
             "raw_patient_note_qa config."
         )
-    embedding_device = str(qa_config.get("embedding_device", "cpu")).strip() or "cpu"
+    embedding_device = str(qa_config.get("embedding_device", "cuda")).strip() or "cuda"
     embedding_batch_size = max(1, int(qa_config.get("embedding_batch_size", 32)))
     model = _get_embedding_model(resolved_embedding_model, embedding_device)
     tokenizer = _embedding_tokenizer(model, resolved_embedding_model)
@@ -732,7 +794,7 @@ def answer_question_with_raw_patient_notes(
         document_prefix=document_prefix,
     )
     chunks = _chunk_raw_text(
-        raw_text,
+        prepared_notes.raw_text,
         tokenizer,
         chunk_size=effective_chunk_size,
         chunk_overlap=chunk_overlap,
@@ -744,28 +806,72 @@ def answer_question_with_raw_patient_notes(
         "embed",
         0,
         len(chunks),
-        f"Embedding {len(chunks)} raw-note chunks",
+        f"Embedding {len(chunks)} raw-note chunks on {embedding_device}",
     )
-    chunk_embeddings = _encode(
-        model,
-        [f"{document_prefix}{chunk.text}" for chunk in chunks],
-        batch_size=embedding_batch_size,
+    chunk_embeddings = np.ascontiguousarray(
+        _encode(
+            model,
+            [f"{document_prefix}{chunk.text}" for chunk in chunks],
+            batch_size=embedding_batch_size,
+        ),
+        dtype=np.float32,
     )
     _emit_progress(
         progress_callback,
         "embed",
         len(chunks),
         len(chunks),
-        "Raw-note chunks embedded",
+        "Raw-note chunk embeddings transferred to CPU",
     )
+    return (
+        _PreparedRawNoteIndex(
+            chunks=tuple(chunks),
+            embeddings=chunk_embeddings,
+            input_type=prepared_notes.input_type,
+            source_note_count=len(prepared_notes.source_spans),
+            embedding_model_name=resolved_embedding_model,
+            embedding_device=embedding_device,
+            embedding_batch_size=embedding_batch_size,
+            query_prefix=str(qa_config.get("query_prefix", "")),
+            min_similarity=float(qa_config.get("min_similarity", -1.0)),
+            configured_chunk_size=configured_chunk_size,
+            effective_chunk_size=effective_chunk_size,
+            chunk_overlap=chunk_overlap,
+        ),
+        model,
+    )
+
+
+def _answer_question_with_prepared_raw_note_index(
+    question: str,
+    *,
+    prepared_index: _PreparedRawNoteIndex,
+    query_encoder: Callable[[list[str]], np.ndarray],
+    config: MMAIConfig,
+    return_metadata: bool = False,
+    progress_callback: RawPatientNoteQAProgress | None = None,
+) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]:
+    """Run one bounded QA agent against an already prepared raw-note index."""
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError("question must be a non-empty string.")
+    question = question.strip()
+    resolved_config = config
+    if not isinstance(resolved_config, MMAIConfig):
+        raise TypeError("config must be an MMAIConfig instance.")
+    qa_config = dict(resolved_config.raw_patient_note_qa)
+    if not qa_config:
+        raise ValueError("Config is missing raw_patient_note_qa settings.")
+
+    chunks = list(prepared_index.chunks)
+    chunk_embeddings = prepared_index.embeddings
+    resolved_embedding_model = prepared_index.embedding_model_name
 
     index = _RawNoteIndex(
         chunks=chunks,
         embeddings=chunk_embeddings,
-        model=model,
-        batch_size=embedding_batch_size,
-        query_prefix=str(qa_config.get("query_prefix", "")),
-        min_similarity=float(qa_config.get("min_similarity", -1.0)),
+        query_encoder=query_encoder,
+        query_prefix=prepared_index.query_prefix,
+        min_similarity=prepared_index.min_similarity,
     )
     chunk_lookup = {chunk.chunk_id: chunk for chunk in chunks}
     initial_hits = index.search(
@@ -953,16 +1059,74 @@ def answer_question_with_raw_patient_notes(
             ),
         },
         "retrieval": {
-            "input_type": prepared_notes.input_type,
-            "source_note_count": len(prepared_notes.source_spans),
+            "input_type": prepared_index.input_type,
+            "source_note_count": prepared_index.source_note_count,
             "chunk_count": len(chunks),
             "embedding_dimension": int(chunk_embeddings.shape[1]),
-            "configured_chunk_size": configured_chunk_size,
-            "effective_chunk_size": effective_chunk_size,
-            "chunk_overlap": chunk_overlap,
+            "embedding_device": prepared_index.embedding_device,
+            "configured_chunk_size": prepared_index.configured_chunk_size,
+            "effective_chunk_size": prepared_index.effective_chunk_size,
+            "chunk_overlap": prepared_index.chunk_overlap,
             "agent_steps": agent_steps,
         },
     }
+
+
+def answer_question_with_raw_patient_notes(
+    question: str,
+    patient_notes: str | pd.DataFrame,
+    *,
+    embedding_model_name: str | None = None,
+    text_column: str = "note_text",
+    date_column: str = "note_date",
+    config: MMAIConfig | None = None,
+    return_metadata: bool = False,
+    progress_callback: RawPatientNoteQAProgress | None = None,
+) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Answer one focused question from embedding-retrieved raw patient notes.
+
+    ``patient_notes`` may be a concatenated string or a dated, one-patient
+    DataFrame. DataFrame notes are stably sorted and chunked independently so
+    each retrieved chunk and validated exact-quote evidence item retains one
+    code-derived note date. String input has no per-note date provenance.
+
+    The configured ``raw_patient_note_qa`` SentenceTransformer performs local
+    chunk and query embedding on ``embedding_device`` (CUDA by default). Only
+    retrieved excerpts reach the configured LLM backend. The returned object
+    contains ``question``, ``answer``, validated ``evidence``, and
+    ``limitations``; it is a research aid, not an eligibility, diagnostic, or
+    treatment determination.
+    """
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError("question must be a non-empty string.")
+    resolved_config = config or load_default_preset()
+    if not isinstance(resolved_config, MMAIConfig):
+        raise TypeError("config must be an MMAIConfig instance or None.")
+    prepared_index, model = _prepare_raw_note_index(
+        patient_notes,
+        embedding_model_name=embedding_model_name,
+        text_column=text_column,
+        date_column=date_column,
+        config=resolved_config,
+        progress_callback=progress_callback,
+    )
+
+    def query_encoder(texts: list[str]) -> np.ndarray:
+        return _encode(
+            model,
+            texts,
+            batch_size=prepared_index.embedding_batch_size,
+        )
+
+    return _answer_question_with_prepared_raw_note_index(
+        question,
+        prepared_index=prepared_index,
+        query_encoder=query_encoder,
+        config=resolved_config,
+        return_metadata=return_metadata,
+        progress_callback=progress_callback,
+    )
 
 
 __all__ = [

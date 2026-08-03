@@ -4,12 +4,18 @@ import json
 from concurrent.futures import Future
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from matchminer_ai.config import load_default_preset
 from matchminer_ai.llm.backends import LLMGenerationResult
 from matchminer_ai.patients import full_patient_screen
+from matchminer_ai.patients.raw_note_qa import (
+    _NoteChunk,
+    _PreparedRawNoteIndex,
+    _QueryEmbeddingEndpoint,
+)
 
 
 CRITERIA = (
@@ -63,6 +69,17 @@ class _InlineProcessPool:
         return future
 
 
+class _InlineQueryEmbeddingServer:
+    def __init__(self, *_args, **_kwargs) -> None:
+        self.endpoint = _QueryEmbeddingEndpoint(("127.0.0.1", 1), b"test")
+
+    def __enter__(self):
+        return self.endpoint
+
+    def __exit__(self, *_args) -> None:
+        return None
+
+
 def _config(*, remote: bool = True):
     config = load_default_preset()
     config.remote["enabled"] = remote
@@ -74,6 +91,43 @@ def _config(*, remote: bool = True):
         }
     )
     return config
+
+
+@pytest.fixture(autouse=True)
+def _stub_prepared_raw_note_index():
+    prepared_index = _PreparedRawNoteIndex(
+        chunks=(
+            _NoteChunk(
+                chunk_id="chunk_0000",
+                text="Biopsy showed lung adenocarcinoma.",
+                token_start=0,
+                token_end=4,
+                note_date="2026-05-01",
+            ),
+        ),
+        embeddings=np.asarray([[1.0, 0.0]], dtype=np.float32),
+        input_type="dataframe",
+        source_note_count=1,
+        embedding_model_name="synthetic-embedding-model",
+        embedding_device="cuda",
+        embedding_batch_size=8,
+        query_prefix="",
+        min_similarity=-1.0,
+        configured_chunk_size=100,
+        effective_chunk_size=100,
+        chunk_overlap=5,
+    )
+    with (
+        patch(
+            "matchminer_ai.patients.full_screen._prepare_raw_note_index",
+            return_value=(prepared_index, object()),
+        ),
+        patch(
+            "matchminer_ai.patients.full_screen._QueryEmbeddingServer",
+            _InlineQueryEmbeddingServer,
+        ),
+    ):
+        yield
 
 
 def _decomposition() -> dict:
@@ -125,15 +179,16 @@ def test_parallel_screen_uses_raw_note_qa_and_preserves_result_order() -> None:
         }
     )
     backend = _FakeBackend([_decomposition(), _final_screen()])
-    calls: list[tuple[str, pd.DataFrame]] = []
+    calls: list[str] = []
+    prepared_index_ids: list[int] = []
     progress = []
     _InlineProcessPool.instances.clear()
 
-    def fake_answer(question, patient_notes, **kwargs):
+    def fake_answer(question, **kwargs):
         assert kwargs["config"].remote["enabled"] is True
-        assert kwargs["text_column"] == "note_text"
-        assert kwargs["date_column"] == "note_date"
-        calls.append((question, patient_notes.copy()))
+        prepared_index_ids.append(id(kwargs["prepared_index"]))
+        assert callable(kwargs["query_encoder"])
+        calls.append(question)
         if "adenocarcinoma" in question:
             answer = "The biopsy documents lung adenocarcinoma."
             quote = "Biopsy showed lung adenocarcinoma."
@@ -165,7 +220,7 @@ def test_parallel_screen_uses_raw_note_qa_and_preserves_result_order() -> None:
         ),
         patch(
             "matchminer_ai.patients.full_screen."
-            "answer_question_with_raw_patient_notes",
+            "_answer_question_with_prepared_raw_note_index",
             side_effect=fake_answer,
         ),
     ):
@@ -182,38 +237,47 @@ def test_parallel_screen_uses_raw_note_qa_and_preserves_result_order() -> None:
     pool = _InlineProcessPool.instances[0]
     assert pool.kwargs["max_workers"] == 2
     assert len(pool.submitted) == 2
-    assert [call[0] for call in calls] == [
+    assert calls == [
         "Do the notes document lung adenocarcinoma?",
         "Do the notes document active brain metastases?",
     ]
+    assert len(set(prepared_index_ids)) == 1
     assert [item["criterion_id"] for item in result["criteria"]] == [
         "inclusion_001",
         "exclusion_001",
     ]
-    assert result["criteria"][0]["patient_note_response"]["evidence"][0][
-        "note_date"
-    ] == "2026-05-01"
+    assert (
+        result["criteria"][0]["patient_note_response"]["evidence"][0]["note_date"]
+        == "2026-05-01"
+    )
     assert result["workflow"] == {
         "question_count": 2,
         "answered_count": 2,
         "failed_count": 0,
         "process_workers": 2,
         "process_start_method": "spawn",
+        "raw_note_index_reused": True,
+        "raw_note_embedding_device": "cuda",
+        "cosine_retrieval_device": "cpu",
     }
-    assert "does not establish clinical-trial eligibility" in result[
-        "research_use_notice"
-    ]
+    assert (
+        "does not establish clinical-trial eligibility" in result["research_use_notice"]
+    )
     assert metadata["model_metadata"]["full_patient_screen_llm"]["model_name"] == (
         "synthetic-full-screen-model"
     )
+    assert metadata["retrieval"] == {
+        "chunk_count": 1,
+        "embedding_dimension": 2,
+        "embedding_device": "cuda",
+        "cosine_retrieval_device": "cpu",
+    }
     assert progress[-1][0] == "complete"
     assert backend.responses == []
 
     decomposition_prompt = backend.prompts[0]
     assert decomposition_prompt.messages is not None
-    decomposition_payload = json.loads(
-        decomposition_prompt.messages[-1]["content"]
-    )
+    decomposition_payload = json.loads(decomposition_prompt.messages[-1]["content"])
     assert decomposition_payload["criterion_sources"] == [
         {
             "source_id": "source_0001",
@@ -239,9 +303,7 @@ def test_parallel_screen_uses_raw_note_qa_and_preserves_result_order() -> None:
 def test_screen_accepts_structured_trial_space_criteria() -> None:
     structured_criteria = {
         "trial_space": "Synthetic lung cancer trial space.",
-        "inclusion_criteria": [
-            "Histologically confirmed lung adenocarcinoma."
-        ],
+        "inclusion_criteria": ["Histologically confirmed lung adenocarcinoma."],
         "exclusion_criteria": ["Active brain metastases."],
     }
     decomposition = _decomposition()
@@ -255,7 +317,7 @@ def test_screen_accepts_structured_trial_space_criteria() -> None:
         ),
         patch(
             "matchminer_ai.patients.full_screen."
-            "answer_question_with_raw_patient_notes",
+            "_answer_question_with_prepared_raw_note_index",
             return_value={
                 "question": "Synthetic question.",
                 "answer": "The synthetic note was reviewed.",
@@ -273,9 +335,7 @@ def test_screen_accepts_structured_trial_space_criteria() -> None:
 
     decomposition_prompt = backend.prompts[0]
     assert decomposition_prompt.messages is not None
-    decomposition_payload = json.loads(
-        decomposition_prompt.messages[-1]["content"]
-    )
+    decomposition_payload = json.loads(decomposition_prompt.messages[-1]["content"])
     assert decomposition_payload["criterion_sources"] == [
         {
             "source_id": "source_0001",
@@ -320,7 +380,7 @@ def test_question_failure_is_retained_and_cannot_produce_no_concern_signal() -> 
         ),
         patch(
             "matchminer_ai.patients.full_screen."
-            "answer_question_with_raw_patient_notes",
+            "_answer_question_with_prepared_raw_note_index",
             side_effect=fake_answer,
         ),
     ):

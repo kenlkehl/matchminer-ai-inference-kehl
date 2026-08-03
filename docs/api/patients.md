@@ -38,6 +38,8 @@ config.remote["enabled"] = True
 config.remote["server_urls"] = ["http://localhost:8002/v1"]
 # Set this to the model ID reported by the configured endpoint.
 config.raw_patient_note_qa["remote"]["model_name"] = "my-vllm-model"
+# Qwen raw-note retrieval uses CUDA by default.
+config.raw_patient_note_qa["embedding_device"] = "cuda"
 
 answer = answer_question_with_raw_patient_notes(
     "What treatment response is documented, and when?",
@@ -70,13 +72,15 @@ The package then calls `answer_question_with_raw_patient_notes` for every
 question and retains each grounded answer, exact-quote evidence item, limitation,
 and code-derived `note_date`.
 
-With the remote/OpenAI-compatible backend enabled and raw-note embeddings on
-CPU, independent questions run in spawned CPU processes. This lets the bounded
-question agents issue simultaneous requests to a vLLM server or another
-configured endpoint. The configured worker count is capped by the question
-count and available CPUs. For an in-process local vLLM backend, set
-`max_workers=1`; the package will not duplicate a local GPU engine across
-workers.
+With a remote backend enabled, the package embeds the raw-note chunks once on
+the configured device (CUDA by default), transfers the normalized index to CPU,
+and runs independent questions in spawned processes. A single parent-owned
+embedding model supplies the small dynamic query vectors, while each worker
+performs cosine retrieval against the prepared CPU index and issues its own LLM
+requests. Workers do not re-embed the note record or load duplicate embedding
+models. The configured worker count is capped by the question count and
+available CPUs. For an in-process local vLLM backend, set `max_workers=1`; the
+package will not duplicate a local GPU engine across workers.
 
 ```python
 from matchminer_ai.patients import full_patient_screen

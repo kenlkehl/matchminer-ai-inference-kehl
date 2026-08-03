@@ -19,8 +19,14 @@ from matchminer_ai.llm.backends import build_llm_runtime_config
 
 from .raw_note_qa import (
     _JsonLLMRunner,
+    _PreparedRawNoteIndex,
+    _QueryEmbeddingEndpoint,
+    _QueryEmbeddingServer,
+    _answer_question_with_prepared_raw_note_index,
+    _encode,
+    _prepare_raw_note_index,
     _prepare_raw_text,
-    answer_question_with_raw_patient_notes,
+    _request_query_embeddings,
 )
 
 FullPatientScreenProgress = Callable[[str, int, int, str], None]
@@ -195,26 +201,19 @@ def _validate_question_payload(
         )
 
     normalized_source = _normalize_for_source_check(eligibility_criteria)
-    source_lookup = {
-        item["source_id"]: item
-        for item in (criterion_sources or [])
-    }
+    source_lookup = {item["source_id"]: item for item in (criterion_sources or [])}
     questions: list[dict[str, str]] = []
     seen_ids: set[str] = set()
     seen_questions: set[str] = set()
     for index, raw_question in enumerate(raw_questions, start=1):
         if not isinstance(raw_question, dict):
-            raise FullPatientScreenError(
-                f"question {index} must be a JSON object."
-            )
+            raise FullPatientScreenError(f"question {index} must be a JSON object.")
         criterion_id = str(raw_question.get("criterion_id") or "").strip()
-        criterion_type = str(
-            raw_question.get("criterion_type") or ""
-        ).strip().casefold()
+        criterion_type = (
+            str(raw_question.get("criterion_type") or "").strip().casefold()
+        )
         source_id = str(raw_question.get("source_id") or "").strip()
-        model_criterion_text = str(
-            raw_question.get("criterion_text") or ""
-        ).strip()
+        model_criterion_text = str(raw_question.get("criterion_text") or "").strip()
         source = source_lookup.get(source_id)
         criterion_text = (
             str(source["criterion_text"])
@@ -278,9 +277,7 @@ def _validate_final_payload(
     overall_signal = str(payload.get("overall_signal") or "").strip()
     summary = str(payload.get("summary") or "").strip()
     if overall_signal not in _OVERALL_SIGNALS:
-        raise FullPatientScreenError(
-            f"unsupported overall_signal {overall_signal!r}."
-        )
+        raise FullPatientScreenError(f"unsupported overall_signal {overall_signal!r}.")
     if not summary:
         raise FullPatientScreenError("the final summary must be non-empty.")
     raw_assessments = payload.get("criteria_assessments")
@@ -295,9 +292,7 @@ def _validate_final_payload(
                 "every criteria_assessments item must be an object."
             )
         criterion_id = str(raw_assessment.get("criterion_id") or "").strip()
-        signal = str(
-            raw_assessment.get("eligibility_signal") or ""
-        ).strip()
+        signal = str(raw_assessment.get("eligibility_signal") or "").strip()
         rationale = str(raw_assessment.get("rationale") or "").strip()
         if criterion_id not in expected_ids:
             raise FullPatientScreenError(
@@ -371,49 +366,37 @@ def _generate_validated_payload(
     ) from last_error
 
 
-_WORKER_PATIENT_NOTES: str | pd.DataFrame | None = None
 _WORKER_CONFIG: MMAIConfig | None = None
-_WORKER_EMBEDDING_MODEL_NAME: str | None = None
-_WORKER_TEXT_COLUMN = "note_text"
-_WORKER_DATE_COLUMN = "note_date"
+_WORKER_PREPARED_INDEX: _PreparedRawNoteIndex | None = None
+_WORKER_QUERY_ENDPOINT: _QueryEmbeddingEndpoint | None = None
 
 
 def _initialize_question_worker(
-    patient_notes: str | pd.DataFrame,
     config: MMAIConfig,
-    embedding_model_name: str | None,
-    text_column: str,
-    date_column: str,
+    prepared_index: _PreparedRawNoteIndex,
+    query_endpoint: _QueryEmbeddingEndpoint,
 ) -> None:
-    global _WORKER_PATIENT_NOTES
     global _WORKER_CONFIG
-    global _WORKER_EMBEDDING_MODEL_NAME
-    global _WORKER_TEXT_COLUMN
-    global _WORKER_DATE_COLUMN
+    global _WORKER_PREPARED_INDEX
+    global _WORKER_QUERY_ENDPOINT
 
-    _WORKER_PATIENT_NOTES = patient_notes
     _WORKER_CONFIG = config
-    _WORKER_EMBEDDING_MODEL_NAME = embedding_model_name
-    _WORKER_TEXT_COLUMN = text_column
-    _WORKER_DATE_COLUMN = date_column
+    _WORKER_PREPARED_INDEX = prepared_index
+    _WORKER_QUERY_ENDPOINT = query_endpoint
 
 
 def _answer_one_question(
     question_spec: dict[str, str],
     *,
-    patient_notes: str | pd.DataFrame,
     config: MMAIConfig,
-    embedding_model_name: str | None,
-    text_column: str,
-    date_column: str,
+    prepared_index: _PreparedRawNoteIndex,
+    query_encoder: Callable[[list[str]], Any],
 ) -> dict[str, Any]:
-    answer = answer_question_with_raw_patient_notes(
+    answer = _answer_question_with_prepared_raw_note_index(
         question_spec["question"],
-        patient_notes,
-        embedding_model_name=embedding_model_name,
-        text_column=text_column,
-        date_column=date_column,
         config=config,
+        prepared_index=prepared_index,
+        query_encoder=query_encoder,
     )
     return {
         **question_spec,
@@ -423,15 +406,21 @@ def _answer_one_question(
 
 
 def _question_worker(question_spec: dict[str, str]) -> dict[str, Any]:
-    if _WORKER_PATIENT_NOTES is None or _WORKER_CONFIG is None:
+    if (
+        _WORKER_CONFIG is None
+        or _WORKER_PREPARED_INDEX is None
+        or _WORKER_QUERY_ENDPOINT is None
+    ):
         raise RuntimeError("full-patient-screen worker was not initialized.")
+
+    def query_encoder(texts: list[str]) -> Any:
+        return _request_query_embeddings(_WORKER_QUERY_ENDPOINT, texts)
+
     return _answer_one_question(
         question_spec,
-        patient_notes=_WORKER_PATIENT_NOTES,
         config=_WORKER_CONFIG,
-        embedding_model_name=_WORKER_EMBEDDING_MODEL_NAME,
-        text_column=_WORKER_TEXT_COLUMN,
-        date_column=_WORKER_DATE_COLUMN,
+        prepared_index=_WORKER_PREPARED_INDEX,
+        query_encoder=query_encoder,
     )
 
 
@@ -450,11 +439,9 @@ def _failed_question_result(
 def _run_questions(
     questions: list[dict[str, str]],
     *,
-    patient_notes: str | pd.DataFrame,
     config: MMAIConfig,
-    embedding_model_name: str | None,
-    text_column: str,
-    date_column: str,
+    prepared_index: _PreparedRawNoteIndex,
+    embedding_model: Any,
     max_workers: int,
     process_start_method: str,
     progress_callback: FullPatientScreenProgress | None,
@@ -468,16 +455,22 @@ def _run_questions(
         f"Starting {total} raw-note eligibility question(s)",
     )
     if max_workers <= 1 or total <= 1:
+
+        def query_encoder(texts: list[str]) -> Any:
+            return _encode(
+                embedding_model,
+                texts,
+                batch_size=prepared_index.embedding_batch_size,
+            )
+
         results: list[dict[str, Any]] = []
         for completed, question_spec in enumerate(questions, start=1):
             try:
                 result = _answer_one_question(
                     question_spec,
-                    patient_notes=patient_notes,
                     config=config,
-                    embedding_model_name=embedding_model_name,
-                    text_column=text_column,
-                    date_column=date_column,
+                    prepared_index=prepared_index,
+                    query_encoder=query_encoder,
                 )
             except Exception as exc:  # noqa: BLE001 - retain partial screen results
                 result = _failed_question_result(question_spec, exc)
@@ -500,35 +493,39 @@ def _run_questions(
         ) from exc
 
     ordered_results: list[dict[str, Any] | None] = [None] * total
-    with ProcessPoolExecutor(
-        max_workers=max_workers,
-        mp_context=mp_context,
-        initializer=_initialize_question_worker,
-        initargs=(
-            patient_notes,
-            config,
-            embedding_model_name,
-            text_column,
-            date_column,
-        ),
-    ) as executor:
-        future_indexes: dict[Future[dict[str, Any]], int] = {
-            executor.submit(_question_worker, question_spec): index
-            for index, question_spec in enumerate(questions)
-        }
-        for completed, future in enumerate(as_completed(future_indexes), start=1):
-            index = future_indexes[future]
-            try:
-                ordered_results[index] = future.result()
-            except Exception as exc:  # noqa: BLE001 - retain partial screen results
-                ordered_results[index] = _failed_question_result(questions[index], exc)
-            _emit_progress(
-                progress_callback,
-                "questions",
-                completed,
-                total,
-                f"Completed raw-note question {completed}/{total}",
-            )
+    with _QueryEmbeddingServer(
+        embedding_model,
+        batch_size=prepared_index.embedding_batch_size,
+    ) as query_endpoint:
+        with ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=mp_context,
+            initializer=_initialize_question_worker,
+            initargs=(
+                config,
+                prepared_index,
+                query_endpoint,
+            ),
+        ) as executor:
+            future_indexes: dict[Future[dict[str, Any]], int] = {
+                executor.submit(_question_worker, question_spec): index
+                for index, question_spec in enumerate(questions)
+            }
+            for completed, future in enumerate(as_completed(future_indexes), start=1):
+                index = future_indexes[future]
+                try:
+                    ordered_results[index] = future.result()
+                except Exception as exc:  # noqa: BLE001 - retain partial screen results
+                    ordered_results[index] = _failed_question_result(
+                        questions[index], exc
+                    )
+                _emit_progress(
+                    progress_callback,
+                    "questions",
+                    completed,
+                    total,
+                    f"Completed raw-note question {completed}/{total}",
+                )
 
     return [
         result
@@ -561,9 +558,7 @@ def _synthesis_question_results(
         if result["status"] == "answered":
             response = dict(result.get("patient_note_response") or {})
             item["answer"] = str(response.get("answer") or "").strip()
-            item["limitations"] = _normalize_limitations(
-                response.get("limitations")
-            )
+            item["limitations"] = _normalize_limitations(response.get("limitations"))
             evidence = response.get("evidence")
             item["validated_evidence"] = (
                 evidence[:evidence_limit] if isinstance(evidence, list) else []
@@ -593,10 +588,12 @@ def full_patient_screen(
     into a focused question. Each question is answered through
     :func:`answer_question_with_raw_patient_notes`, preserving its local
     embedding retrieval, exact-quote validation, and DataFrame date provenance.
-    With a remote LLM backend and CPU raw-note embeddings, independent questions
-    run concurrently in spawned CPU processes so multiple mini-agents can call
-    the configured endpoint at the same time. A final LLM pass synthesizes the
-    grounded answers into a JSON-compatible research screen.
+    The raw-note chunks are embedded once on the configured device and retained
+    as CPU vectors. With a remote LLM backend, independent questions run in
+    spawned processes that perform cosine retrieval over those prepared vectors
+    while one parent-owned embedding model serves small dynamic query vectors.
+    A final LLM pass synthesizes the grounded answers into a JSON-compatible
+    research screen.
 
     ``patient_notes`` accepts the same concatenated string or one-patient
     DataFrame contract as raw-note question answering. ``eligibility_criteria``
@@ -606,10 +603,10 @@ def full_patient_screen(
     Retrieved patient excerpts and the final aggregated question results reach
     the configured LLM backend; no web search is used.
 
-    Parallel process mode intentionally requires ``remote.enabled=True`` and
-    ``raw_patient_note_qa.embedding_device=cpu``. Set ``max_workers=1`` for an
-    in-process local vLLM backend. The result is not an eligibility
-    determination and requires review against the current complete protocol.
+    Parallel process mode requires ``remote.enabled=True``. Set
+    ``max_workers=1`` for an in-process local vLLM backend. The result is not an
+    eligibility determination and requires review against the current complete
+    protocol.
     """
     eligibility_criteria_text, criterion_sources = _prepare_eligibility_criteria(
         eligibility_criteria
@@ -700,26 +697,37 @@ def full_patient_screen(
                 "LLM backend. Set config.remote['enabled']=True or max_workers=1 "
                 "for local in-process vLLM."
             )
-        embedding_device = str(
-            resolved_config.raw_patient_note_qa.get("embedding_device", "cpu")
-        ).strip().casefold()
-        if embedding_device != "cpu":
-            raise ValueError(
-                "Parallel full_patient_screen requires "
-                "raw_patient_note_qa.embedding_device='cpu' to avoid duplicating "
-                "a GPU embedding model across worker processes."
-            )
 
-    process_start_method = str(
-        screen_config.get("process_start_method", "spawn")
-    ).strip() or "spawn"
-    question_results = _run_questions(
-        questions,
-        patient_notes=patient_notes,
-        config=resolved_config,
+    _emit_progress(
+        progress_callback,
+        "index",
+        0,
+        1,
+        "Embedding the raw-note index once",
+    )
+    prepared_index, embedding_model = _prepare_raw_note_index(
+        patient_notes,
         embedding_model_name=embedding_model_name,
         text_column=text_column,
         date_column=date_column,
+        config=resolved_config,
+    )
+    _emit_progress(
+        progress_callback,
+        "index",
+        1,
+        1,
+        "Raw-note vectors are ready for CPU retrieval",
+    )
+
+    process_start_method = (
+        str(screen_config.get("process_start_method", "spawn")).strip() or "spawn"
+    )
+    question_results = _run_questions(
+        questions,
+        config=resolved_config,
+        prepared_index=prepared_index,
+        embedding_model=embedding_model,
         max_workers=effective_workers,
         process_start_method=process_start_method,
         progress_callback=progress_callback,
@@ -804,6 +812,9 @@ def full_patient_screen(
             "process_start_method": (
                 process_start_method if effective_workers > 1 else "not_used"
             ),
+            "raw_note_index_reused": True,
+            "raw_note_embedding_device": prepared_index.embedding_device,
+            "cosine_retrieval_device": "cpu",
         },
         "research_use_notice": _RESEARCH_USE_NOTICE,
     }
@@ -826,7 +837,18 @@ def full_patient_screen(
         return result
     return result, {
         "config_snapshot": config_snapshot(resolved_config),
-        "model_metadata": {"full_patient_screen_llm": runner.model_metadata},
+        "model_metadata": {
+            "full_patient_screen_llm": runner.model_metadata,
+            "raw_note_embedding_model": {
+                "model_name": prepared_index.embedding_model_name,
+            },
+        },
+        "retrieval": {
+            "chunk_count": len(prepared_index.chunks),
+            "embedding_dimension": int(prepared_index.embeddings.shape[1]),
+            "embedding_device": prepared_index.embedding_device,
+            "cosine_retrieval_device": "cpu",
+        },
         "execution": dict(result["workflow"]),
     }
 

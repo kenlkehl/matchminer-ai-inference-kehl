@@ -23,9 +23,9 @@ Optional source-grounded extensions can also:
   embedding retrieval and a bounded, evidence-citing LLM agent, with one
   code-derived source date per chunk when note-level dated input is available;
 - screen complete trial eligibility criteria by decomposing them into grounded
-  raw-note questions, running independent question agents concurrently through
-  CPU processes against an authorized endpoint, and synthesizing a
-  human-reviewable JSON result;
+  raw-note questions, embedding the note index once on CUDA, reusing its CPU
+  vectors across concurrent question processes against an authorized endpoint,
+  and synthesizing a human-reviewable JSON result;
 - transform one or a batch of free-text cancer histories into JSON with one
   record per active cancer, dependency-ready LLM batching, hierarchical
   OncoTree coding, and locally searched NCIt drug normalization;

@@ -11,6 +11,13 @@ import pytest
 from matchminer_ai.config import load_default_preset
 from matchminer_ai.llm.backends import LLMGenerationResult
 from matchminer_ai.patients import answer_question_with_raw_patient_notes
+from matchminer_ai.patients.raw_note_qa import (
+    _NoteChunk,
+    _PreparedRawNoteIndex,
+    _QueryEmbeddingServer,
+    _answer_question_with_prepared_raw_note_index,
+    _request_query_embeddings,
+)
 
 
 class _WhitespaceTokenizer:
@@ -245,6 +252,78 @@ def test_agent_can_retrieve_then_ask_related_question_before_answering() -> None
         "Was a rash documented after therapy?" in related_prompt.messages[-1]["content"]
     )
     assert backend.responses == []
+
+
+def test_prepared_cpu_index_is_reused_without_reembedding_note_chunks() -> None:
+    prepared_index = _PreparedRawNoteIndex(
+        chunks=(
+            _NoteChunk(
+                chunk_id="chunk_0000",
+                text="A grade 2 rash was documented.",
+                token_start=0,
+                token_end=7,
+            ),
+        ),
+        embeddings=np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
+        input_type="string",
+        source_note_count=0,
+        embedding_model_name="synthetic-embedding-model",
+        embedding_device="cuda",
+        embedding_batch_size=8,
+        query_prefix="query: ",
+        min_similarity=-1.0,
+        configured_chunk_size=100,
+        effective_chunk_size=100,
+        chunk_overlap=5,
+    )
+    query_batches: list[list[str]] = []
+
+    def encode_queries(texts: list[str]) -> np.ndarray:
+        query_batches.append(list(texts))
+        return np.asarray([[1.0, 0.0, 0.0] for _text in texts], dtype=np.float32)
+
+    backend = _FakeBackend(
+        [
+            {
+                "action": "final_answer",
+                "answer": "A grade 2 rash was documented.",
+                "evidence": [
+                    {
+                        "chunk_id": "chunk_0000",
+                        "quote": "A grade 2 rash was documented.",
+                        "reason": "Exact note text.",
+                    }
+                ],
+                "limitations": [],
+            }
+        ]
+    )
+
+    with patch(
+        "matchminer_ai.patients.raw_note_qa.get_llm_backend",
+        return_value=backend,
+    ):
+        result, metadata = _answer_question_with_prepared_raw_note_index(
+            "Was a rash documented?",
+            prepared_index=prepared_index,
+            query_encoder=encode_queries,
+            config=_qa_config(),
+            return_metadata=True,
+        )
+
+    assert result["answer"] == "A grade 2 rash was documented."
+    assert query_batches == [["query: Was a rash documented?"]]
+    assert metadata["retrieval"]["embedding_device"] == "cuda"
+
+
+def test_query_embedding_server_keeps_the_model_in_its_owner_process() -> None:
+    embedding_model = _FakeEmbeddingModel()
+
+    with _QueryEmbeddingServer(embedding_model, batch_size=4) as endpoint:
+        vectors = _request_query_embeddings(endpoint, ["rash", "response"])
+
+    assert vectors.shape == (2, 3)
+    assert embedding_model.encoded_batches == [["rash", "response"]]
 
 
 def test_embedding_tokenizer_defines_overlapping_chunk_boundaries() -> None:

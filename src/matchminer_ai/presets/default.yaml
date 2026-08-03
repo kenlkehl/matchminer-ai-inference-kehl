@@ -94,7 +94,7 @@ patient:
   text_token_threshold: 95000
 raw_patient_note_qa:
   embedding_model_name: Qwen/Qwen3-Embedding-0.6B
-  embedding_device: cpu
+  embedding_device: cuda
   embedding_batch_size: 32
   chunk_size: 220
   chunk_overlap: 32
