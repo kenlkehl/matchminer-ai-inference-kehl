@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Dict, TypeVar, cast
 from urllib.parse import urlparse
 
-from matchminer_ai.llm.prompt_rendering import Prompt
+import httpx
 
+from matchminer_ai.llm.prompt_rendering import Prompt
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -130,10 +131,20 @@ def connect_to_remote_servers(
     logger.info("Using %d external server(s): %s", len(server_urls), server_urls)
     server_clients: list[tuple[Any, int]] = []
     for url in server_urls:
+        # Supplying an explicit HTTP client avoids the OpenAI SDK wrapper's
+        # destructor scheduling a late aclose() task after asyncio.run() has
+        # already closed this wave's event loop. The OpenAI client closes this
+        # owned HTTP client in generate_remote_llm_outputs_async's finally block.
+        http_client = httpx.AsyncClient(
+            timeout=request_timeout + 60,
+            follow_redirects=True,
+        )
         client = AsyncOpenAI(
             base_url=url,
             api_key=api_key or "not-needed",
             timeout=request_timeout + 60,
+            max_retries=0,
+            http_client=http_client,
         )
         server_clients.append((client, urlparse(url).port or 0))
 
