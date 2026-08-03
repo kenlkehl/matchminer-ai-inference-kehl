@@ -17,7 +17,7 @@ from .raw_note_qa import (
     RawPatientNoteQuestionError,
     answer_question_with_raw_patient_notes,
 )
-from .structure import structure_patient_summary
+from .structure import structure_patient_summaries, structure_patient_summary
 from .summarize import summarize_patient_notes
 
 if TYPE_CHECKING:
@@ -164,6 +164,7 @@ __all__ = [
     "RawPatientNoteQuestionError",
     "answer_question_with_raw_patient_notes",
     "full_patient_screen",
+    "structure_patient_summaries",
     "structure_patient_summary",
     "summarize_patient_notes",
     "summarize_patients",

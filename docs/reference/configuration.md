@@ -283,6 +283,12 @@ Complete ontology contents remain local. Only immediate OncoTree children,
 bounded NCIt candidate labels, and selected NCIt definitions are sent to the
 configured LLM backend.
 
+`structure_patient_summaries` batches every dependency-ready prompt wave. In
+remote mode, the root-level `remote.max_concurrent_requests`, `batch_size`, and
+`server_urls` settings control request concurrency, chunking, and server
+distribution. `batch_size` is a scheduler chunk size, not one multi-prompt HTTP
+payload; an OpenAI-compatible chat-completion request is made for each prompt.
+
 ## `trial_space_structuring`
 
 Configuration for ontology-grounded JSON conversion of an existing clinical

@@ -20,9 +20,9 @@ Optional source-grounded extensions can also:
   raw-note questions, running independent question agents concurrently through
   CPU processes against an authorized endpoint, and synthesizing a
   human-reviewable JSON result;
-- transform free-text cancer histories into JSON with one record per active
-  cancer, hierarchical OncoTree coding, and locally searched NCIt drug
-  normalization;
+- transform one or a batch of free-text cancer histories into JSON with one
+  record per active cancer, dependency-ready LLM batching, hierarchical
+  OncoTree coding, and locally searched NCIt drug normalization;
 - transform a clinical-space summary into JSON while preserving age, sex,
   disease burden, treatment, response, and biomarker requirements;
 - research matched trials using ClinicalTrials.gov drug/biological intervention

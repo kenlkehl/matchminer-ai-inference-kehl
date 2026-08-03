@@ -6,6 +6,7 @@
         - answer_question_with_raw_patient_notes
         - full_patient_screen
         - summarize_patients
+        - structure_patient_summaries
         - structure_patient_summary
 
 ## Raw-note question answering
@@ -112,3 +113,35 @@ returns a JSON-compatible dictionary. `age` and `sex` are patient-level. The
 The OncoTree agent sees only one hierarchy level at a time. The NCIt agent sees
 only bounded search candidates and pulls full definitions only for candidate
 indices it selects. A complete ontology is never placed in LLM context.
+
+For large-scale conversion, `structure_patient_summaries` accepts an ordered
+sequence of summary strings and returns the corresponding dictionaries in the
+same order. It batches all prompts whose dependencies are ready: initial fact
+extraction across patients, each active OncoTree traversal level, and each NCIt
+candidate-selection or definition-resolution step. Repeated normalized drug
+mentions are resolved once per batch and retain each patient's original source
+name in the final records.
+
+```python
+from matchminer_ai import load_default_preset
+from matchminer_ai.patients import structure_patient_summaries
+
+config = load_default_preset()
+config.remote["enabled"] = True
+config.remote["server_urls"] = ["http://localhost:8002/v1"]
+config.patient_structuring["remote"]["model_name"] = "my-vllm-model"
+
+structured = structure_patient_summaries(
+    patient_table["cancer_history_summary"].tolist(),
+    config=config,
+)
+patient_table["structured_patient_summary"] = structured
+```
+
+Remote mode uses `remote.max_concurrent_requests` per server,
+`remote.batch_size`, and round-robin distribution across `remote.server_urls`.
+These settings bound concurrent OpenAI-compatible chat requests; the endpoint
+may then apply its own continuous batching. Local mode passes each ready prompt
+wave directly to the in-process vLLM engine as one prompt list. Later ontology
+steps remain dependent on earlier model outputs, so the workflow uses several
+batched waves rather than one flat request.

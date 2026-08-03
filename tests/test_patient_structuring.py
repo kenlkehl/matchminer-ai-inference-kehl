@@ -7,7 +7,10 @@ import pytest
 
 from matchminer_ai.config import load_default_preset
 from matchminer_ai.llm.backends import LLMGenerationResult
-from matchminer_ai.patients import structure_patient_summary
+from matchminer_ai.patients import (
+    structure_patient_summaries,
+    structure_patient_summary,
+)
 from matchminer_ai.patients.ontology import (
     NCItDrugRecord,
     OncoTreeNode,
@@ -17,19 +20,23 @@ from matchminer_ai.patients.ontology import (
 
 
 class _FakeBackend:
-    def __init__(self, responses: list[dict]) -> None:
+    def __init__(self, responses: list[object]) -> None:
         self.responses = [json.dumps(response) for response in responses]
         self.prompts = []
+        self.batch_sizes = []
 
     def generate_llm_outputs(self, *, prompt_list, **_kwargs):
-        self.prompts.append(prompt_list[0])
-        if not self.responses:
+        self.prompts.extend(prompt_list)
+        self.batch_sizes.append(len(prompt_list))
+        if len(self.responses) < len(prompt_list):
             raise AssertionError("Unexpected extra LLM request")
+        responses = self.responses[: len(prompt_list)]
+        del self.responses[: len(prompt_list)]
         return LLMGenerationResult(
-            final_outputs=[self.responses.pop(0)],
+            final_outputs=responses,
             model_metadata={"model_name": "synthetic-structurer"},
-            finish_reasons=["stop"],
-            reasoning_outputs=[""],
+            finish_reasons=["stop"] * len(prompt_list),
+            reasoning_outputs=[""] * len(prompt_list),
             raw_outputs=[],
         )
 
@@ -150,17 +157,17 @@ def test_structures_every_active_cancer_with_bounded_ontology_prompts() -> None:
             ],
         },
         {"selected_index": 0, "stop": False},
-        {"selected_index": 0, "stop": True},
         {"selected_index": 1, "stop": False},
         {"selected_index": 0, "stop": True},
+        {"selected_index": 0, "stop": True},
         {"selected_indices": [0], "retry_queries": []},
+        {"selected_indices": [], "retry_queries": ["Yervoy"]},
         {
             "status": "matched",
             "selected_index": 0,
             "target": "PD-1",
             "mechanism_of_action": "PD-1 blockade",
         },
-        {"selected_indices": [], "retry_queries": ["Yervoy"]},
         {"selected_indices": [0], "retry_queries": []},
         {
             "status": "matched",
@@ -265,3 +272,133 @@ def test_bundled_ontologies_load_and_find_synonymous_ncit_drug() -> None:
 def test_rejects_empty_summary() -> None:
     with pytest.raises(ValueError, match="non-empty"):
         structure_patient_summary("   ")
+
+
+def test_batches_dependency_ready_patient_structuring_prompts() -> None:
+    def extracted_patient(
+        age: int,
+        cancer_description: str,
+        histology_description: str,
+        drug_name: str,
+    ) -> dict:
+        return {
+            "age": age,
+            "sex": "female",
+            "cancers": [
+                {
+                    "cancer_description": cancer_description,
+                    "histology_description": histology_description,
+                    "biomarkers": [],
+                    "treatment_history": [
+                        {
+                            "treatment": drug_name,
+                            "start_date": None,
+                            "end_date": None,
+                            "drug_mentions": [drug_name],
+                            "response": None,
+                        }
+                    ],
+                    "cancer_burden": "advanced_or_palliative_intent",
+                }
+            ],
+        }
+
+    backend = _FakeBackend(
+        [
+            extracted_patient(61, "Lung cancer", "adenocarcinoma", "pembrolizumab"),
+            extracted_patient(72, "Melanoma", "cutaneous melanoma", "Pembrolizumab"),
+            {"selected_index": 0, "stop": False},
+            {"selected_index": 1, "stop": False},
+            {"selected_index": 0, "stop": True},
+            {"selected_index": 0, "stop": True},
+            {"selected_indices": [0], "retry_queries": []},
+            {
+                "status": "matched",
+                "selected_index": 0,
+                "target": "PD-1",
+                "mechanism_of_action": "PD-1 blockade",
+            },
+        ]
+    )
+    config = load_default_preset()
+    config.remote["enabled"] = True
+    progress_updates = []
+
+    with (
+        patch(
+            "matchminer_ai.patients.structure.get_llm_backend",
+            return_value=backend,
+        ),
+        patch(
+            "matchminer_ai.patients.structure.load_oncotree",
+            return_value=_fake_oncotree(),
+        ),
+        patch(
+            "matchminer_ai.patients.structure.load_ncit_drug_index",
+            return_value=_FakeNCItIndex(),
+        ),
+    ):
+        structured, metadata = structure_patient_summaries(
+            ["Synthetic lung summary", "Synthetic melanoma summary"],
+            config=config,
+            return_metadata=True,
+            progress_callback=lambda *args: progress_updates.append(args),
+        )
+
+    assert [patient["age"] for patient in structured] == [61, 72]
+    assert [
+        patient["cancers"][0]["histology"]["oncotree_code"] for patient in structured
+    ] == ["LUAD", "MEL"]
+    assert (
+        structured[0]["cancers"][0]["treatment_history"][0]["drugs"][0]["source_name"]
+        == "pembrolizumab"
+    )
+    assert (
+        structured[1]["cancers"][0]["treatment_history"][0]["drugs"][0]["source_name"]
+        == "Pembrolizumab"
+    )
+    assert backend.batch_sizes == [2, 2, 2, 1, 1]
+    assert metadata["batch_statistics"] == {
+        "patient_count": 2,
+        "cancer_count": 2,
+        "unique_drug_count": 1,
+        "llm_generation_calls": 5,
+        "llm_prompt_count": 8,
+    }
+    assert progress_updates[-1] == (
+        "complete",
+        2,
+        2,
+        "Structured summary 2 ready",
+    )
+    assert backend.responses == []
+
+
+def test_batch_json_retry_resubmits_only_failed_prompts() -> None:
+    backend = _FakeBackend(
+        [
+            "not JSON",
+            {"age": 72, "sex": "female", "cancers": []},
+            {"age": 61, "sex": "male", "cancers": []},
+        ]
+    )
+    config = load_default_preset()
+    config.remote["enabled"] = True
+
+    with patch(
+        "matchminer_ai.patients.structure.get_llm_backend",
+        return_value=backend,
+    ):
+        structured = structure_patient_summaries(
+            ["First synthetic summary", "Second synthetic summary"],
+            config=config,
+        )
+
+    assert [patient["age"] for patient in structured] == [61, 72]
+    assert backend.batch_sizes == [2, 1]
+    assert backend.responses == []
+
+
+def test_plural_structuring_api_rejects_one_bare_string() -> None:
+    with pytest.raises(TypeError, match="sequence of strings"):
+        structure_patient_summaries("one summary")
