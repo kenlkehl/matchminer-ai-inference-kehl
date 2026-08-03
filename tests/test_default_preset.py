@@ -74,6 +74,8 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.patient_structuring["ncit_version"] == "26.07d"
     assert config.patient_structuring["ncit_candidate_limit"] == 8
     assert config.patient_structuring["ncit_max_agent_steps"] == 3
+    assert config.patient_structuring["local"]["generation"]["max_tokens"] == 30000
+    assert config.patient_structuring["remote"]["request_params"]["max_tokens"] == 30000
     assert config.trial_space_structuring["oncotree_version"] == (
         "stable-2026-07-31"
     )

@@ -201,13 +201,13 @@ patient_structuring:
       top_k: 1
       top_p: 1.0
       min_p: 0.0
-      max_tokens: 6000
+      max_tokens: 30000
       repetition_penalty: 1.05
       skip_special_tokens: false
   remote:
     model_name: google/gemma-4-31B-it
     request_params:
-      max_tokens: 6000
+      max_tokens: 30000
       temperature: 0.0
       top_p: 1.0
     extra_body:
