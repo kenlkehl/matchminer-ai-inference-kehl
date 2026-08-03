@@ -72,8 +72,16 @@ class _FakeEmbeddingModel:
 
 
 class _FakeBackend:
-    def __init__(self, responses: list[dict]) -> None:
+    def __init__(
+        self,
+        responses: list[dict],
+        *,
+        finish_reasons: list[str] | None = None,
+    ) -> None:
         self.responses = [json.dumps(response) for response in responses]
+        self.finish_reasons = list(
+            finish_reasons or ["stop"] * len(self.responses)
+        )
         self.prompts = []
 
     def generate_llm_outputs(self, *, prompt_list, **_kwargs):
@@ -83,7 +91,7 @@ class _FakeBackend:
         return LLMGenerationResult(
             final_outputs=[self.responses.pop(0)],
             model_metadata={"model_name": "synthetic-qa-model"},
-            finish_reasons=["stop"],
+            finish_reasons=[self.finish_reasons.pop(0)],
             reasoning_outputs=[""],
             raw_outputs=[],
         )
@@ -432,6 +440,167 @@ def test_invented_evidence_quote_is_rejected_and_agent_can_correct_it() -> None:
     correction_prompt = backend.prompts[1]
     assert correction_prompt.messages is not None
     assert "FINAL ANSWER VALIDATION ERROR" in correction_prompt.messages[-1]["content"]
+
+
+def test_tool_exhaustion_restarts_with_compact_final_only_prompt() -> None:
+    backend = _FakeBackend(
+        [
+            {
+                "action": "pull_relevant_input_text",
+                "query": "rash severity",
+            },
+            {
+                "action": "final_answer",
+                "answer": "A severe rash was documented.",
+                "evidence": [
+                    {
+                        "chunk_id": "chunk_0000",
+                        "quote": "A severe rash was documented.",
+                        "reason": "Purported evidence.",
+                    }
+                ],
+                "limitations": [],
+            },
+            {
+                "action": "final_answer",
+                "answer": "A grade 2 rash was documented.",
+                "evidence": [
+                    {
+                        "chunk_id": "chunk_0000",
+                        "quote": "A grade 2 rash was documented.",
+                        "reason": "Exact note text.",
+                    }
+                ],
+                "limitations": [],
+            },
+        ]
+    )
+    config = _qa_config()
+    config.raw_patient_note_qa.update(
+        {"max_agent_steps": 1, "response_retry_limit": 1}
+    )
+
+    with (
+        patch(
+            "matchminer_ai.patients.raw_note_qa._get_embedding_model",
+            return_value=_FakeEmbeddingModel(),
+        ),
+        patch(
+            "matchminer_ai.patients.raw_note_qa.get_llm_backend",
+            return_value=backend,
+        ),
+    ):
+        result = answer_question_with_raw_patient_notes(
+            "Was a rash documented?",
+            "A grade 2 rash was documented.",
+            config=config,
+        )
+
+    assert result["evidence"][0]["quote"] == "A grade 2 rash was documented."
+    assert len(backend.prompts) == 3
+    compact_prompt = backend.prompts[1]
+    assert compact_prompt.messages is not None
+    assert len(compact_prompt.messages) == 2
+    assert "Do not call a tool" in compact_prompt.messages[0]["content"]
+    compact_payload = json.loads(compact_prompt.messages[1]["content"])
+    assert compact_payload["original_question"] == "Was a rash documented?"
+    assert compact_payload["retrieved_chunks"] == [
+        {
+            "chunk_id": "chunk_0000",
+            "note_date": None,
+            "text": "A grade 2 rash was documented.",
+        }
+    ]
+    assert "LOCAL TOOL RESULT" not in compact_prompt.prompt_text
+    correction_prompt = backend.prompts[2]
+    assert correction_prompt.messages is not None
+    assert "FINAL ANSWER VALIDATION ERROR" in correction_prompt.messages[-1]["content"]
+
+
+def test_terminal_error_reports_safe_validation_and_finish_reason() -> None:
+    backend = _FakeBackend(
+        [
+            {
+                "action": "pull_relevant_input_text",
+                "query": "rash severity",
+            },
+            {
+                "action": "final_answer",
+                "answer": "A severe rash was documented.",
+                "evidence": [
+                    {
+                        "chunk_id": "chunk_0000",
+                        "quote": "A severe rash was documented.",
+                        "reason": "Purported evidence.",
+                    }
+                ],
+                "limitations": [],
+            },
+        ]
+    )
+    config = _qa_config()
+    config.raw_patient_note_qa.update(
+        {"max_agent_steps": 1, "response_retry_limit": 0}
+    )
+
+    with (
+        patch(
+            "matchminer_ai.patients.raw_note_qa._get_embedding_model",
+            return_value=_FakeEmbeddingModel(),
+        ),
+        patch(
+            "matchminer_ai.patients.raw_note_qa.get_llm_backend",
+            return_value=backend,
+        ),
+        pytest.raises(
+            ValueError,
+            match=(
+                "evidence quote is not an exact substring of chunk_0000.*"
+                "finish_reason: stop"
+            ),
+        ),
+    ):
+        answer_question_with_raw_patient_notes(
+            "Was a rash documented?",
+            "A grade 2 rash was documented.",
+            config=config,
+        )
+
+
+def test_token_limited_json_is_retried_instead_of_accepted() -> None:
+    backend = _FakeBackend(
+        [
+            {
+                "action": "final_answer",
+                "answer": "A grade 2 rash was documented.",
+                "evidence": [],
+                "limitations": [],
+            }
+        ],
+        finish_reasons=["length"],
+    )
+    config = _qa_config()
+    config.raw_patient_note_qa["response_retry_limit"] = 0
+
+    with (
+        patch(
+            "matchminer_ai.patients.raw_note_qa._get_embedding_model",
+            return_value=_FakeEmbeddingModel(),
+        ),
+        patch(
+            "matchminer_ai.patients.raw_note_qa.get_llm_backend",
+            return_value=backend,
+        ),
+        pytest.raises(
+            ValueError,
+            match="output token limit.*finish_reason: length",
+        ),
+    ):
+        answer_question_with_raw_patient_notes(
+            "Was a rash documented?",
+            "A grade 2 rash was documented.",
+            config=config,
+        )
 
 
 @pytest.mark.parametrize(

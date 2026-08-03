@@ -540,6 +540,7 @@ class _JsonLLMRunner:
     runtime_config: dict[str, Any]
     retry_limit: int
     model_metadata: dict[str, Any] = field(default_factory=dict)
+    last_finish_reason: str = ""
     backend: Any = field(init=False)
 
     def __post_init__(self) -> None:
@@ -569,6 +570,16 @@ class _JsonLLMRunner:
                 )
             response_text = str(generation.final_outputs[0]).strip()
             try:
+                finish_reason = (
+                    str(generation.finish_reasons[0]).strip().casefold()
+                    if generation.finish_reasons
+                    else ""
+                )
+                self.last_finish_reason = finish_reason
+                if finish_reason in {"length", "max_tokens"}:
+                    raise RawPatientNoteQuestionError(
+                        "The LLM response reached its output token limit."
+                    )
                 return _extract_json_object(response_text), response_text
             except RawPatientNoteQuestionError as exc:
                 last_error = exc
@@ -578,14 +589,16 @@ class _JsonLLMRunner:
                         {
                             "role": "user",
                             "content": (
-                                "The response was not a valid JSON object. Return "
-                                "only one JSON object matching the requested schema."
+                                f"RESPONSE VALIDATION ERROR: {exc} Return only one "
+                                "concise JSON object matching the requested schema."
                             ),
                         },
                     ]
                 )
         raise RawPatientNoteQuestionError(
-            "The LLM did not return valid JSON after retries."
+            "The LLM did not return valid JSON within its output budget after "
+            f"retries. Last validation error: {last_error} Last model "
+            f"finish_reason: {self.last_finish_reason or 'unavailable'}."
         ) from last_error
 
 
@@ -727,6 +740,40 @@ def _build_final_result(
         ),
         "limitations": _normalize_limitations(payload.get("limitations")),
     }
+
+
+def _forced_finalization_messages(
+    question: str,
+    *,
+    chunks: list[_NoteChunk],
+    visible_chunk_ids: set[str],
+) -> list[dict[str, str]]:
+    """Build a fresh final-only prompt without the accumulated agent transcript."""
+    retrieved_chunks = [
+        {
+            "chunk_id": chunk.chunk_id,
+            "note_date": chunk.note_date,
+            "text": chunk.text,
+        }
+        for chunk in chunks
+        if chunk.chunk_id in visible_chunk_ids
+    ]
+    return [
+        {
+            "role": "system",
+            "content": _load_prompt_text("raw_patient_note_qa.final.system.txt"),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "original_question": question,
+                    "retrieved_chunks": retrieved_chunks,
+                },
+                ensure_ascii=False,
+            ),
+        },
+    ]
 
 
 def _embedding_metadata(
@@ -1011,19 +1058,17 @@ def _answer_question_with_prepared_raw_note_index(
         )
 
     if final_result is None:
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    "The tool budget is exhausted. Return final_answer now, using "
-                    "only retrieved exact quotes."
-                ),
-            }
+        finalization_messages = _forced_finalization_messages(
+            question,
+            chunks=chunks,
+            visible_chunk_ids=visible_chunk_ids,
         )
         last_error: Exception | None = None
         for _attempt in range(runner.retry_limit + 1):
-            payload, response_text = runner.generate(messages)
-            messages.append({"role": "assistant", "content": response_text})
+            payload, response_text = runner.generate(finalization_messages)
+            finalization_messages.append(
+                {"role": "assistant", "content": response_text}
+            )
             try:
                 final_result = _build_final_result(
                     question,
@@ -1034,15 +1079,21 @@ def _answer_question_with_prepared_raw_note_index(
                 break
             except RawPatientNoteQuestionError as exc:
                 last_error = exc
-                messages.append(
+                finalization_messages.append(
                     {
                         "role": "user",
-                        "content": f"FINAL ANSWER VALIDATION ERROR: {exc}",
+                        "content": (
+                            f"FINAL ANSWER VALIDATION ERROR: {exc} Return only "
+                            "one concise final_answer JSON object. Copy each "
+                            "evidence quote exactly from the supplied chunks."
+                        ),
                     }
                 )
         if final_result is None:
             raise RawPatientNoteQuestionError(
-                "The agent did not return a grounded final answer."
+                "The agent did not return a grounded final answer after compact "
+                f"finalization. Last validation error: {last_error} Last model "
+                f"finish_reason: {runner.last_finish_reason or 'unavailable'}."
             ) from last_error
 
     _emit_progress(progress_callback, "complete", 1, 1, "Grounded answer ready")
