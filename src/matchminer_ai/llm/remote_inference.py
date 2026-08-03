@@ -12,6 +12,12 @@ from urllib.parse import urlparse
 import httpx
 
 from matchminer_ai.llm.prompt_rendering import Prompt
+from matchminer_ai.llm.remote_auth import (
+    AsyncAPIKey,
+    GOOGLE_AGENT_PLATFORM_PROVIDER,
+    prepare_messages_for_provider,
+    remote_provider_name,
+)
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -71,10 +77,10 @@ def build_remote_request_config(
     send. ``request_params`` and ``extra_body`` are pass-through mappings.
     """
     task_remote_config = dict(llm_config.get("remote", {}))
-    return (
-        dict(task_remote_config.get("request_params", {})),
-        dict(task_remote_config.get("extra_body", {})),
-    )
+    extra_body = dict(task_remote_config.get("extra_body", {}))
+    if remote_provider_name(llm_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
+        extra_body = {}
+    return (dict(task_remote_config.get("request_params", {})), extra_body)
 
 
 def request_params_for_prompt(
@@ -105,7 +111,7 @@ def _run_sync(awaitable_factory: Callable[[], Coroutine[Any, Any, T]]) -> T:
 def connect_to_remote_servers(
     server_urls: list[str],
     request_timeout: float = 600.0,
-    api_key: str = "not-needed",
+    api_key: AsyncAPIKey = "not-needed",
 ) -> list[tuple[Any, int]]:
     """
     Create AsyncOpenAI clients for externally managed vLLM servers.
@@ -252,6 +258,7 @@ async def run_inference_batch(
     base_timeout: float = 600.0,
     port: int = 0,
     retry_backoff_base: float = 1.0,
+    remote_config: Dict[str, Any] | None = None,
 ) -> list[ModelResult]:
     """
     Send prompts to one remote server with bounded concurrency.
@@ -280,6 +287,10 @@ async def run_inference_batch(
                 messages = prompt.messages or [
                     {"role": "user", "content": prompt.prompt_text}
                 ]
+                messages = prepare_messages_for_provider(
+                    messages,
+                    remote_config or {},
+                )
                 return await single_inference_request(
                     client=client,
                     row_idx=prompt.row_idx,
@@ -306,7 +317,7 @@ async def generate_remote_llm_outputs_async(
     prompts: list[Prompt],
     llm_config: Dict[str, Any],
     server_urls: list[str],
-    api_key: str,
+    api_key: AsyncAPIKey,
 ) -> tuple[list[str], list[str], list[str]]:
     """
     Run remote generation across one or more servers.
@@ -368,6 +379,7 @@ async def generate_remote_llm_outputs_async(
                         base_timeout=request_timeout,
                         port=port,
                         retry_backoff_base=retry_backoff_base,
+                        remote_config=llm_config,
                     )
                 )
 
@@ -396,7 +408,7 @@ def generate_remote_llm_outputs(
     prompts: list[Prompt],
     llm_config: Dict[str, Any],
     server_urls: list[str],
-    api_key: str,
+    api_key: AsyncAPIKey,
 ) -> tuple[list[str], list[str], list[str]]:
     """Synchronous wrapper around ``generate_remote_llm_outputs_async``."""
     return _run_sync(

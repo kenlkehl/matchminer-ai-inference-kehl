@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
@@ -18,6 +19,7 @@ from matchminer_ai.help_me_choose import (
     fetch_trial_eligibility_criteria,
     fetch_trial_registry_document,
     normalize_nct_reference,
+    request_vllm_comparison,
     research_trial_drugs,
     research_trials,
 )
@@ -253,3 +255,62 @@ def test_patient_marker_reaches_llm_prompt_but_not_web_query():
     assert prompt.index("#### Drug mechanism, efficacy, and safety") < prompt.index(
         "#### Potential advantages for this patient"
     )
+
+
+def test_google_comparison_preserves_openapi_url_and_omits_vllm_extensions():
+    captured: dict[str, object] = {}
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            captured["request"] = kwargs
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content="Comparison report")
+                    )
+                ]
+            )
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured["client"] = kwargs
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+        async def close(self):
+            return None
+
+    async def token_provider():
+        return "google-token"
+
+    base_url = (
+        "https://aiplatform.googleapis.com/v1/projects/profile-notes/"
+        "locations/global/endpoints/openapi"
+    )
+    with patch("matchminer_ai.help_me_choose.AsyncOpenAI", FakeClient):
+        report = asyncio.run(
+            request_vllm_comparison(
+                messages=[
+                    {"role": "system", "content": "Follow the evidence."},
+                    {"role": "user", "content": "Compare the trials."},
+                ],
+                base_url=base_url,
+                model="google/gemma-4-26b-a4b-it-maas",
+                api_key=token_provider,
+                send_vllm_extra_body=True,
+                remote_config={"provider": "google_agent_platform"},
+            )
+        )
+
+    assert report == "Comparison report"
+    assert captured["client"]["base_url"] == base_url
+    request = captured["request"]
+    assert request["extra_body"] is None
+    assert request["messages"] == [
+        {
+            "role": "user",
+            "content": (
+                "Instructions:\nFollow the evidence.\n\n"
+                "Request:\nCompare the trials."
+            ),
+        }
+    ]

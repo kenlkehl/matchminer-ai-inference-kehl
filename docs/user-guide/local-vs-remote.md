@@ -66,6 +66,12 @@ The model host manages GPU resources and the inference server; you only
 configure the [endpoint URL](../reference/configuration.md). It doesn't have
 to be a vLLM server.
 
+The remote backend includes a `google_agent_platform` provider profile for
+managed open-model MaaS endpoints. These endpoints expose OpenAI-compatible
+Chat Completions but use refreshable Google ADC OAuth tokens instead of a static
+OpenAI API key. See the configuration reference for the endpoint and model
+settings. vLLM-only `extra_body` fields are omitted automatically.
+
 Remote mode expects the endpoint to return the final answer text in
 `message.content`. The default tested setup is a vLLM server with a compatible
 reasoning parser, which separates reasoning text from final answer text. Other

@@ -54,9 +54,59 @@ Task-specific request payload settings live under each task's `remote` block.
 The remote backend reads the API key from the `OPENAI_API_KEY` environment
 variable. API keys are not stored in preset files.
 
+Google Agent Platform MaaS is also supported through its OpenAI-compatible Chat
+Completions route. Set `remote.provider` to `google_agent_platform`; the package
+then uses Google Application Default Credentials (ADC), refreshes the OAuth
+access token for each request, converts a leading system message to the
+user-first form required by managed open models, and omits vLLM-only
+`extra_body` values. Install-time dependencies include `google-auth`; credential
+files and tokens are never stored in package configuration.
+
 ### `remote.enabled`
 
 Selects the remote LLM backend when true.
+
+### `remote.provider`
+
+Authentication and message-compatibility profile. `openai` is the default and
+reads `OPENAI_API_KEY`. `google_agent_platform` uses ADC and ignores
+`OPENAI_API_KEY`.
+
+For example, Gemma 4 26B A4B IT MaaS in a project named `profile-notes` uses:
+
+```python
+config.remote.update(
+    {
+        "enabled": True,
+        "provider": "google_agent_platform",
+        "google_project_id": "profile-notes",
+        "server_urls": [
+            "https://aiplatform.googleapis.com/v1/projects/profile-notes/"
+            "locations/global/endpoints/openapi"
+        ],
+    }
+)
+for task in (
+    config.trial,
+    config.patient,
+    config.llm_match_quality,
+    config.llm_exclusion_criteria,
+):
+    task["remote"]["model_name"] = "google/gemma-4-26b-a4b-it-maas"
+```
+
+Set up ADC through the runtime environment, an attached service account, or
+`gcloud auth application-default login`. The selected endpoint must still be
+authorized for the sensitivity of any clinical text sent to it.
+
+`check_openai_endpoint()` uses a minimal patient-free chat completion for this
+provider because the MaaS OpenAI route does not document `/models`.
+
+### `remote.google_project_id`
+
+Optional Google Cloud quota project supplied when `remote.provider` is
+`google_agent_platform`. The endpoint URL still determines the project that
+receives the inference request.
 
 ### `remote.server_urls`
 

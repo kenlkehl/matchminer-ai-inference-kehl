@@ -3,6 +3,7 @@ debug_mode: false
 model_metadata_cache_dir: ".mmai_cache/model_metadata"
 remote:
   enabled: false
+  provider: openai
   server_urls:
     - http://localhost:8000/v1
   max_concurrent_requests: 16

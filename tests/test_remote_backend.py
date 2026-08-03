@@ -375,6 +375,64 @@ def test_remote_backend_uses_env_var_api_key(monkeypatch):
     assert FakeAsyncOpenAI.clients[0].api_key == "env-key"
 
 
+def test_google_agent_platform_uses_adc_callback_and_user_first_messages(
+    monkeypatch,
+):
+    """Google MaaS uses refreshable ADC and its documented user-first chat form."""
+
+    _install_fakes(monkeypatch)
+
+    class FakeTokenProvider:
+        async def async_token(self):
+            return "fresh-google-token"
+
+    monkeypatch.setattr(
+        "matchminer_ai.llm.remote_auth._google_adc_token_provider",
+        lambda project_id: FakeTokenProvider(),
+    )
+    prompt = Prompt(
+        row_idx=0,
+        prompt_text="unused",
+        max_tokens=10,
+        messages=[
+            {"role": "system", "content": "Follow the schema."},
+            {"role": "user", "content": "Summarize this record."},
+        ],
+    )
+
+    result = RemoteBackend().generate_llm_outputs(
+        prompt_list=[prompt],
+        llm_config=_llm_config(
+            provider="google_agent_platform",
+            google_project_id="profile-notes",
+            remote={
+                "model_name": "google/gemma-4-26b-a4b-it-maas",
+                "request_params": {"max_tokens": 10},
+                "extra_body": {"chat_template_kwargs": {"enable_thinking": True}},
+            },
+            model_name="google/gemma-4-26b-a4b-it-maas",
+        ),
+    )
+
+    client = FakeAsyncOpenAI.clients[0]
+    assert callable(client.api_key)
+    assert asyncio.run(client.api_key()) == "fresh-google-token"
+    assert client.calls[0]["messages"] == [
+        {
+            "role": "user",
+            "content": (
+                "Instructions:\nFollow the schema.\n\n"
+                "Request:\nSummarize this record."
+            ),
+        }
+    ]
+    assert "extra_body" not in client.calls[0]
+    assert result.final_outputs == [
+        "http://server-a/v1:Instructions:\nFollow the schema.\n\n"
+        "Request:\nSummarize this record."
+    ]
+
+
 def test_remote_backend_allows_multiple_in_flight_and_respects_limit(monkeypatch):
     """Remote backend allows concurrent requests but respects configured limits."""
     _install_fakes(monkeypatch)

@@ -12,6 +12,11 @@ from urllib import error, request
 from urllib.parse import urlparse
 
 from matchminer_ai.config import MMAIConfig, load_default_preset
+from matchminer_ai.llm.remote_auth import (
+    GOOGLE_AGENT_PLATFORM_PROVIDER,
+    remote_bearer_token,
+    remote_provider_name,
+)
 from matchminer_ai.llm.remote_inference import normalize_openai_base_url
 from matchminer_ai.llm.reasoning import resolve_reasoning_parser
 
@@ -180,9 +185,16 @@ def check_openai_endpoint(
     *,
     api_key: str | None = None,
     timeout: float = 10.0,
+    provider: str = "openai",
+    google_project_id: str = "",
+    model_name: str = "",
 ) -> list[tuple[str, int | None, str]]:
     """
-    Check one or more OpenAI-compatible endpoints by requesting ``/models``.
+    Check one or more OpenAI-compatible endpoints.
+
+    Ordinary endpoints are checked with ``GET /models``. Google Agent Platform
+    MaaS does not document that route, so its provider profile sends a minimal
+    ``POST /chat/completions`` request using the configured model instead.
 
     Returns ``(base_url, status_code, message)`` tuples. Failed requests use
     ``None`` for the status code and the exception string as the message.
@@ -192,19 +204,56 @@ def check_openai_endpoint(
     else:
         raw_urls = [str(url).strip() for url in server_urls]
     urls = [normalize_openai_base_url(url) for url in raw_urls if url]
-    api_key = api_key or os.environ.get("OPENAI_API_KEY", "not-needed")
+    remote_config = {
+        "provider": provider,
+        "google_project_id": google_project_id,
+    }
+    token = remote_bearer_token(remote_config, explicit_api_key=api_key)
+    normalized_provider = remote_provider_name(remote_config)
+    if normalized_provider == GOOGLE_AGENT_PLATFORM_PROVIDER and not model_name:
+        raise ValueError(
+            "Google Agent Platform endpoint checks require a model_name."
+        )
     results: list[tuple[str, int | None, str]] = []
     for base_url in urls:
-        models_url = f"{base_url.rstrip('/')}/models"
+        headers = {"Authorization": f"Bearer {token}"}
+        if normalized_provider == GOOGLE_AGENT_PLATFORM_PROVIDER:
+            headers["Content-Type"] = "application/json; charset=utf-8"
+            target_url = f"{base_url.rstrip('/')}/chat/completions"
+            payload = json.dumps(
+                {
+                    "model": model_name,
+                    "messages": [
+                        {"role": "user", "content": "Reply with OK."}
+                    ],
+                    "max_tokens": 8,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            method = "POST"
+        else:
+            target_url = f"{base_url.rstrip('/')}/models"
+            payload = None
+            method = "GET"
         req = request.Request(
-            models_url,
-            headers={"Authorization": f"Bearer {api_key}"},
-            method="GET",
+            target_url,
+            data=payload,
+            headers=headers,
+            method=method,
         )
         try:
             with request.urlopen(req, timeout=timeout) as response:
+                message = (
+                    f"HTTP {response.status} (chat completion)"
+                    if normalized_provider == GOOGLE_AGENT_PLATFORM_PROVIDER
+                    else f"HTTP {response.status}"
+                )
                 results.append(
-                    (base_url, int(response.status), f"HTTP {response.status}")
+                    (
+                        base_url,
+                        int(response.status),
+                        message,
+                    )
                 )
         except (OSError, error.URLError, error.HTTPError) as exc:
             results.append((base_url, None, str(exc)))

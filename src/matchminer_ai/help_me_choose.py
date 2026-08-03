@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import html
 import json
-import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,6 +24,14 @@ from urllib.parse import urlparse
 import httpx
 from ddgs import DDGS
 from openai import AsyncOpenAI
+
+from matchminer_ai.llm.remote_auth import (
+    AsyncAPIKey,
+    GOOGLE_AGENT_PLATFORM_PROVIDER,
+    prepare_messages_for_provider,
+    remote_provider_name,
+)
+from matchminer_ai.llm.remote_inference import normalize_openai_base_url
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
@@ -692,18 +699,21 @@ async def request_vllm_comparison(
     messages: Sequence[Mapping[str, str]],
     base_url: str,
     model: str,
-    api_key: str = "not-needed",
+    api_key: AsyncAPIKey = "not-needed",
     timeout: float = 600.0,
     max_retries: int = 2,
     send_vllm_extra_body: bool = True,
+    remote_config: Mapping[str, Any] | None = None,
 ) -> str:
     """Request a comparison directly from an OpenAI-compatible endpoint."""
 
-    normalized_url = base_url.rstrip("/")
-    if not normalized_url.endswith("/v1"):
-        normalized_url = f"{normalized_url}/v1"
+    normalized_url = normalize_openai_base_url(base_url)
     extra_body: dict[str, Any] | None = None
-    if send_vllm_extra_body:
+    if (
+        send_vllm_extra_body
+        and remote_provider_name(remote_config or {})
+        != GOOGLE_AGENT_PLATFORM_PROVIDER
+    ):
         extra_body = {
             "top_k": 20,
             "repetition_penalty": 1.05,
@@ -718,7 +728,10 @@ async def request_vllm_comparison(
     try:
         response = await client.chat.completions.create(
             model=model,
-            messages=list(messages),
+            messages=prepare_messages_for_provider(
+                [dict(message) for message in messages],
+                remote_config or {},
+            ),
             temperature=0.2,
             top_p=0.95,
             max_tokens=6000,

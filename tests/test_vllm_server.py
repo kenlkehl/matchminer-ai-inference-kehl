@@ -310,3 +310,47 @@ def test_check_openai_endpoint_returns_statuses(monkeypatch):
         {"Authorization": "Bearer key"},
         3,
     )
+
+
+def test_check_google_agent_platform_uses_minimal_chat_completion(monkeypatch):
+    """Google MaaS diagnostics use ADC and the documented chat route."""
+
+    calls = []
+
+    class FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+    def fake_urlopen(req, timeout):
+        calls.append((req, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "matchminer_ai.llm.vllm_server.remote_bearer_token",
+        lambda *_args, **_kwargs: "google-token",
+    )
+    monkeypatch.setattr("matchminer_ai.llm.vllm_server.request.urlopen", fake_urlopen)
+
+    result = check_openai_endpoint(
+        (
+            "https://aiplatform.googleapis.com/v1/projects/profile-notes/"
+            "locations/global/endpoints/openapi"
+        ),
+        provider="google_agent_platform",
+        google_project_id="profile-notes",
+        model_name="google/gemma-4-26b-a4b-it-maas",
+        timeout=4,
+    )
+
+    request_object, timeout = calls[0]
+    assert request_object.method == "POST"
+    assert request_object.full_url.endswith("/endpoints/openapi/chat/completions")
+    assert request_object.headers["Authorization"] == "Bearer google-token"
+    assert b'"model": "google/gemma-4-26b-a4b-it-maas"' in request_object.data
+    assert timeout == 4
+    assert result[0][1:] == (200, "HTTP 200 (chat completion)")
