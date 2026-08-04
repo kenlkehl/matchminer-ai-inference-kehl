@@ -250,6 +250,100 @@ def test_generate_embeddings_applies_configured_max_seq_length(monkeypatch):
     assert loaded_models[0].max_seq_length == 2500
 
 
+def test_generate_embeddings_retries_cudnn_plan_failure_without_cudnn(
+    monkeypatch, caplog
+):
+    """Retry unsupported cuDNN attention plans and remember the model fallback."""
+    import torch
+
+    model_path = "embedder/cudnn-incompatible-model"
+    fallback_key = (model_path, "cuda")
+    embedding_inference._CUDNN_SDPA_FALLBACK_MODELS.discard(fallback_key)
+
+    class FakeModel:
+        def __init__(self):
+            self.cudnn_states = []
+
+        def encode(self, texts, prompt):
+            assert texts == ["abc"]
+            assert prompt == "query"
+            self.cudnn_states.append(torch.backends.cuda.cudnn_sdp_enabled())
+            if len(self.cudnn_states) == 1:
+                raise RuntimeError(
+                    "cuDNN Frontend error: [cudnn_frontend] Error: "
+                    "No valid execution plans built."
+                )
+            return [[3.0]]
+
+    model = FakeModel()
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference._get_embedding_model",
+        lambda *_args: model,
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference._load_prompt_text",
+        lambda _filename: "query prompt",
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference.get_model_metadata",
+        lambda model_name, cache_dir=None: {"model_name": model_name},
+    )
+    config = {
+        "model_path": model_path,
+        "device": "cuda",
+        "prompt_file": "embedding.txt",
+        "max_seq_length": 2500,
+    }
+
+    cudnn_was_enabled = torch.backends.cuda.cudnn_sdp_enabled()
+    torch.backends.cuda.enable_cudnn_sdp(True)
+    try:
+        embeddings, _metadata = generate_embeddings(["abc"], embedding_config=config)
+        second_embeddings, _metadata = generate_embeddings(
+            ["abc"], embedding_config=config
+        )
+    finally:
+        embedding_inference._CUDNN_SDPA_FALLBACK_MODELS.discard(fallback_key)
+        torch.backends.cuda.enable_cudnn_sdp(cudnn_was_enabled)
+
+    assert embeddings == [[3.0]]
+    assert second_embeddings == [[3.0]]
+    assert model.cudnn_states == [True, False, False]
+    assert "retrying with non-cuDNN" in caplog.text
+
+
+def test_generate_embeddings_does_not_mask_other_runtime_errors(monkeypatch):
+    """Propagate CUDA failures that are not the known cuDNN plan error."""
+
+    class FakeModel:
+        def encode(self, texts, prompt):
+            raise RuntimeError("CUDA out of memory")
+
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference._get_embedding_model",
+        lambda *_args: FakeModel(),
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference._load_prompt_text",
+        lambda _filename: "query prompt",
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference.get_model_metadata",
+        lambda model_name, cache_dir=None: {"model_name": model_name},
+    )
+
+    with pytest.raises(RuntimeError, match="CUDA out of memory"):
+        generate_embeddings(
+            ["abc"],
+            embedding_config={
+                "model_path": "embedder/model",
+                "device": "cuda",
+                "prompt_file": "embedding.txt",
+                "max_seq_length": 2500,
+            },
+        )
+
+
 def test_count_embedding_tokens_uses_tokenizer_without_loading_model(monkeypatch):
     """Token counting should not allocate the embedding model on CUDA."""
     embedding_inference._get_embedding_tokenizer.cache_clear()

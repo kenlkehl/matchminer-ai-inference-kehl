@@ -401,6 +401,12 @@ Sentence-transformer model path passed to `SentenceTransformer(...)`.
 
 Device string passed to `SentenceTransformer(...)`.
 
+On CUDA, embedding first uses PyTorch's default scaled-dot-product-attention
+dispatcher. If cuDNN reports that it cannot build a valid attention execution
+plan, the package retries with the CUDA flash, memory-efficient, or math
+attention backends and remembers that fallback for the same model and device.
+Other runtime errors are not retried.
+
 ### `embedding.prompt_file`
 
 Prompt filename loaded from `matchminer_ai.prompts` and used as the embedding

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from importlib import resources
 from typing import Any, Dict, cast
 
 from matchminer_ai.llm.backends import get_model_metadata
+
+
+logger = logging.getLogger(__name__)
+_CUDNN_SDPA_FALLBACK_MODELS: set[tuple[str, str]] = set()
 
 
 def _load_prompt_text(filename: str) -> str:
@@ -53,6 +58,55 @@ def _get_embedding_tokenizer(model_path: str):
     return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
+def _encode_without_cudnn_sdpa(model: Any, texts: list[str]) -> Any:
+    """Encode with CUDA SDPA implementations that do not use cuDNN."""
+    import torch
+
+    backends = [
+        torch.nn.attention.SDPBackend.FLASH_ATTENTION,
+        torch.nn.attention.SDPBackend.EFFICIENT_ATTENTION,
+        torch.nn.attention.SDPBackend.MATH,
+    ]
+    with torch.nn.attention.sdpa_kernel(backends):
+        return model.encode(texts, prompt="query")
+
+
+def _is_cudnn_sdpa_plan_error(exc: RuntimeError, device: str) -> bool:
+    """Return whether a CUDA embedding failed in cuDNN attention planning."""
+    message = str(exc).lower()
+    return (
+        device.partition(":")[0].lower() == "cuda"
+        and "cudnn frontend error" in message
+        and "no valid execution plans built" in message
+    )
+
+
+def _encode_with_cudnn_sdpa_fallback(
+    model: Any,
+    texts: list[str],
+    *,
+    model_path: str,
+    device: str,
+) -> Any:
+    """Prefer the default attention dispatcher, then remember a safe fallback."""
+    fallback_key = (model_path, device)
+    if fallback_key in _CUDNN_SDPA_FALLBACK_MODELS:
+        return _encode_without_cudnn_sdpa(model, texts)
+
+    try:
+        return model.encode(texts, prompt="query")
+    except RuntimeError as exc:
+        if not _is_cudnn_sdpa_plan_error(exc, device):
+            raise
+        _CUDNN_SDPA_FALLBACK_MODELS.add(fallback_key)
+        logger.warning(
+            "cuDNN could not build an attention execution plan for "
+            f"{model_path} on {device}; retrying with non-cuDNN CUDA attention "
+            "backends.",
+        )
+        return _encode_without_cudnn_sdpa(model, texts)
+
+
 def generate_embeddings(
     texts: list[str],
     *,
@@ -68,7 +122,12 @@ def generate_embeddings(
         model_path,
         cache_dir=model_metadata_cache_dir,
     )
-    embeddings = model.encode(texts, prompt="query")
+    embeddings = _encode_with_cudnn_sdpa_fallback(
+        model,
+        texts,
+        model_path=model_path,
+        device=device,
+    )
     embedding_list = (
         embeddings.tolist() if hasattr(embeddings, "tolist") else embeddings
     )
