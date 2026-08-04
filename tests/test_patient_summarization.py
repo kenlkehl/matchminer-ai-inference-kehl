@@ -8,6 +8,7 @@ from matchminer_ai.llm.backends import LLMGenerationResult, LocalBackend
 from matchminer_ai.llm.prompt_rendering import Prompt
 from matchminer_ai.llm.remote_inference import generate_remote_llm_outputs
 from matchminer_ai.patients import summarize_patients
+from matchminer_ai.patients.prepare import prepare_patient_notes
 from matchminer_ai.patients.postprocess import parse_boilerplate
 from matchminer_ai.patients.prompt_builder import (
     PromptWorkItem,
@@ -161,6 +162,28 @@ def test_parse_boilerplate_accepts_final_only_v22_output():
         parsed.loc[0, "general_exclusion_criteria_evidence"]
         == "Remote inactive prostate cancer."
     )
+
+
+def test_prepare_patient_notes_labels_missing_pdf_date_as_unavailable():
+    notes = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "note_text": "OCR patient record text.",
+                "note_date": pd.NaT,
+            }
+        ]
+    )
+
+    patients, chunks = prepare_patient_notes(
+        notes,
+        MockTokenizer(),
+        chunk_size=100,
+        chunk_overlap=5,
+    )
+
+    assert patients.loc[0, "last_note_date"] == "date unavailable"
+    assert "=== Clinical Note dated date unavailable ===" in chunks.loc[0, "chunk_text"]
 
 
 def test_local_backend_truncate_texts_splits_long_inputs(monkeypatch):
@@ -723,3 +746,53 @@ def test_summarize_patients_does_not_request_qc_by_default(monkeypatch):
 
     assert result.equals(summaries_df)
     assert summarize_mock.call_args.kwargs["return_qc"] is False
+
+
+def test_summarize_patients_accepts_multiple_pdf_paths(monkeypatch, tmp_path):
+    pdf_paths = [tmp_path / "record-1.pdf", tmp_path / "record-2.pdf"]
+    for path in pdf_paths:
+        path.write_bytes(b"%PDF synthetic patient record")
+
+    captured = {}
+    summaries_df = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "cancer_history_summary": "Summary",
+                "general_exclusion_criteria_evidence": "None",
+            }
+        ]
+    )
+
+    def fake_concatenate(paths, *, progress_callback):
+        captured["paths"] = paths
+        captured["progress_callback"] = progress_callback
+        return "Combined OCR patient record"
+
+    def fake_summarize(notes, **kwargs):
+        captured["notes"] = notes.copy()
+        return summaries_df, {"model_metadata": {}}
+
+    progress_callback = MagicMock()
+    monkeypatch.setattr(
+        "matchminer_ai.patients.concatenate_patient_note_pdfs",
+        fake_concatenate,
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.patients.summarize_patient_notes",
+        fake_summarize,
+    )
+
+    result = summarize_patients(
+        pdf_paths,
+        config=_config(),
+        patient_id="P1",
+        pdf_progress_callback=progress_callback,
+    )
+
+    assert result.equals(summaries_df)
+    assert captured["paths"] == pdf_paths
+    assert captured["progress_callback"] is progress_callback
+    assert captured["notes"].loc[0, "patient_id"] == "P1"
+    assert captured["notes"].loc[0, "note_text"] == "Combined OCR patient record"
+    assert pd.isna(captured["notes"].loc[0, "note_date"])

@@ -4,10 +4,47 @@
     options:
       members:
         - answer_question_with_raw_patient_notes
+        - concatenate_patient_note_pdfs
         - full_patient_screen
         - summarize_patients
         - structure_patient_summaries
         - structure_patient_summary
+
+## PDF patient records
+
+`summarize_patients` accepts its existing note-level DataFrame or one local PDF
+path (or an ordered sequence of PDF paths) for a single patient. PDF input uses
+the same local, page-aware embedded-text extraction and RapidOCR fallback as
+`ocr_pdf`, combines the documents into one long note string, and then runs the
+existing serial summarization workflow.
+
+```python
+from matchminer_ai.patients import summarize_patients
+
+summary = summarize_patients(
+    ["record-part-1.pdf", "record-part-2.pdf"],
+    patient_id="research-patient-1",
+    config=config,
+)
+```
+
+To inspect or edit the extracted long note before summarization, call the
+preparation function directly:
+
+```python
+from matchminer_ai.patients import concatenate_patient_note_pdfs
+
+long_note = concatenate_patient_note_pdfs(
+    ["record-part-1.pdf", "record-part-2.pdf"]
+)
+```
+
+Document order is the order supplied by the caller. Numbered boundary markers
+are inserted, but filenames and filesystem timestamps are not copied into the
+patient text and no clinical dates are inferred. OCR is probabilistic; compare
+important content with the original PDFs. OCR runs locally, while subsequent
+summarization sends the extracted patient text to the configured LLM backend.
+Use only an endpoint authorized for the records' sensitivity.
 
 ## Raw-note question answering
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import cast
+
+import pandas as pd
 
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 
@@ -17,22 +19,24 @@ from .raw_note_qa import (
     RawPatientNoteQuestionError,
     answer_question_with_raw_patient_notes,
 )
+from .pdf import (
+    PatientPDFInput,
+    PatientPDFProgress,
+    concatenate_patient_note_pdfs,
+)
 from .structure import structure_patient_summaries, structure_patient_summary
 from .summarize import summarize_patient_notes
 
-if TYPE_CHECKING:
-    import pandas as pd
-else:
-    import pandas as pd
-
 
 def summarize_patients(
-    notes: pd.DataFrame,
+    notes: pd.DataFrame | PatientPDFInput,
     *,
     config: MMAIConfig | None = None,
     existing_summaries: pd.DataFrame | None = None,
     return_metadata: bool = False,
     return_qc: bool = False,
+    patient_id: str = "pdf-patient",
+    pdf_progress_callback: PatientPDFProgress | None = None,
 ) -> (
     pd.DataFrame
     | tuple[pd.DataFrame, dict]
@@ -45,8 +49,11 @@ def summarize_patients(
 
     Parameters
     ----------
-    notes : pd.DataFrame
-        Note-level input. One row per note.
+    notes : pd.DataFrame, path-like, or sequence of path-like values
+        Note-level input with one row per note, or one/more ordered local PDF
+        paths for a single patient. PDF pages are converted locally with
+        embedded-text extraction and RapidOCR fallback, then combined into one
+        long patient-note string before serial summarization.
 
         Expected columns
         ----------------
@@ -71,6 +78,13 @@ def summarize_patients(
         and model metadata for this run.
     return_qc : bool, optional
         When True, also return a QC report DataFrame for this run.
+    patient_id : str, optional
+        Patient identifier assigned when ``notes`` contains PDF path(s). Ignored
+        for DataFrame input.
+    pdf_progress_callback : callable or None, optional
+        For PDF input, called after each processed page as
+        ``callback(document_number, document_count, page_number, page_count,
+        method)``.
 
     Returns
     -------
@@ -109,6 +123,26 @@ def summarize_patients(
     resolved_config = config or load_default_preset()
     if not isinstance(resolved_config, MMAIConfig):
         raise TypeError("config must be an MMAIConfig instance or None.")
+
+    if not isinstance(notes, pd.DataFrame):
+        normalized_patient_id = str(patient_id).strip()
+        if not normalized_patient_id:
+            raise ValueError("patient_id must not be empty for PDF input.")
+        long_note = concatenate_patient_note_pdfs(
+            notes,
+            progress_callback=pdf_progress_callback,
+        )
+        notes = pd.DataFrame(
+            [
+                {
+                    "patient_id": normalized_patient_id,
+                    "note_text": long_note,
+                    # PDFs can contain many internally dated records. Do not
+                    # invent a clinical note date from a filename or mtime.
+                    "note_date": pd.NaT,
+                }
+            ]
+        )
 
     required_columns = [
         "patient_id",
@@ -162,7 +196,10 @@ __all__ = [
     "FullPatientScreenProgress",
     "RawPatientNoteQAProgress",
     "RawPatientNoteQuestionError",
+    "PatientPDFInput",
+    "PatientPDFProgress",
     "answer_question_with_raw_patient_notes",
+    "concatenate_patient_note_pdfs",
     "full_patient_screen",
     "structure_patient_summaries",
     "structure_patient_summary",

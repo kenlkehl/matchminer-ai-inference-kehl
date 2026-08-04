@@ -14,6 +14,7 @@ from matchminer_ai.matching import (
 )
 from matchminer_ai.patients import (
     answer_question_with_raw_patient_notes,
+    concatenate_patient_note_pdfs,
     full_patient_screen,
     structure_patient_summaries,
     structure_patient_summary,
@@ -39,6 +40,7 @@ def test_imports():
     assert structure_patient_summaries is not None
     assert structure_patient_summary is not None
     assert answer_question_with_raw_patient_notes is not None
+    assert concatenate_patient_note_pdfs is not None
     assert full_patient_screen is not None
     assert embed_for_matching is not None
     assert generate_candidate_matches is not None

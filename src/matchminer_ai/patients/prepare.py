@@ -10,6 +10,13 @@ import pandas as pd
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 _DATE_HEADER_RE = re.compile(r"=== Clinical Note dated (.+?) ===")
+_UNKNOWN_NOTE_DATE = "date unavailable"
+
+
+def _format_note_date(value: Any) -> str:
+    if pd.isna(value):
+        return _UNKNOWN_NOTE_DATE
+    return str(value.date().isoformat())
 
 
 def validate_note_inputs(
@@ -122,9 +129,11 @@ def prepare_patient_notes(
     Convert note-level input into patient-level and chunk-level prepared tables.
     """
     normalized = validate_note_inputs(notes)
-    normalized = normalized.sort_values(["patient_id", "note_date"]).reset_index(
-        drop=True
-    )
+    normalized = normalized.sort_values(
+        ["patient_id", "note_date"],
+        kind="mergesort",
+        na_position="last",
+    ).reset_index(drop=True)
 
     patient_rows: list[dict[str, object]] = []
     chunk_rows: list[dict[str, object]] = []
@@ -132,7 +141,7 @@ def prepare_patient_notes(
     for patient_id, group in normalized.groupby("patient_id", sort=False):
         patient_notes = [
             (
-                row["note_date"].date().isoformat(),
+                _format_note_date(row["note_date"]),
                 str(row["note_text"]),
             )
             for _, row in group.iterrows()

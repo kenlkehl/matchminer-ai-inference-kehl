@@ -16,6 +16,9 @@ Optional source-grounded extensions can also:
 - extract text from local PDFs with page-aware embedded-text preservation and
   OCR fallback, producing a UTF-8 text file without sending document content to
   an external service;
+- accept one or more patient-record PDFs, combine their locally extracted text
+  in caller-supplied order, and pass that long note through the existing serial
+  patient summarization workflow;
 - extract complete, source-grounded inclusion and exclusion criteria relevant
   to one trial space from an OCR eligibility-checklist text file using the
   configured LLM backend;
