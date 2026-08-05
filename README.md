@@ -4,6 +4,16 @@
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
+For trial-centric matching, `find_trial_centric_cutoff` can start from a
+complete TrialSpace-ranked patient list and use cached, boundary-centered
+TrialChecker or LLM probes to estimate how many leading patients should proceed
+to both full checker stages. Its default pass thresholds are 0.20 on
+TrialChecker's 0-1 sigmoid scale and 1 on the LLM checker's 0-5 scale. This is a
+compute-allocation heuristic, not an eligibility threshold.
+The first probe defaults to 50% down the ranking and can be moved with
+`initial_cutoff_proportion` when the expected qualifying fraction is known to
+be much smaller or larger.
+
 For a specific TrialChecker or BoilerplateChecker prediction,
 `interpret_match_quality` and `interpret_exclusion_criteria` provide on-demand
 gradient-times-input token attribution mapped back to the original patient and
