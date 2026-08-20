@@ -11,7 +11,9 @@
     options:
       members:
         - TrialCentricCutoffResult
+        - TrialCentricCutoffStabilityResult
         - find_trial_centric_cutoff
+        - assess_trial_centric_cutoff_stability
 
 Rank the entire patient corpus, attach the package-format patient and trial
 summary columns, then select the leading prefix reported by the search:
@@ -41,3 +43,25 @@ pairs_for_both_checkers = candidate_pairs.sort_values("rank", kind="stable").ilo
 
 LLM probes send the probe patient and trial summaries to the configured LLM
 backend. Use only endpoints authorized for the sensitivity of those inputs.
+
+To test whether the adaptive result depends on the first boundary position,
+run the offline stability helper on synthetic or otherwise explicitly
+authorized data:
+
+```python
+from matchminer_ai.matching import assess_trial_centric_cutoff_stability
+
+stability = assess_trial_centric_cutoff_stability(
+    candidate_pairs,
+    initial_cutoff_proportions=(0.10, 0.25, 0.50, 0.75, 0.90),
+    score_threshold=0.20,
+    patients_per_side=10,
+)
+print(stability.cutoff_runs)
+```
+
+This diagnostic scores the complete ranking once with TrialChecker and reuses
+those scores for every start. `selected_cutoff_spread` measures allocation
+sensitivity; `reasonable_consideration_count_spread` measures how many
+threshold-passing patients that sensitivity adds or omits. These are research
+QA signals, not patient eligibility determinations.

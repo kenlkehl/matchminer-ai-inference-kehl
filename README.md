@@ -13,6 +13,12 @@ compute-allocation heuristic, not an eligibility threshold.
 The first probe defaults to 50% down the ranking and can be moved with
 `initial_cutoff_proportion` when the expected qualifying fraction is known to
 be much smaller or larger.
+For offline QA, `assess_trial_centric_cutoff_stability` scores a complete
+authorized ranking once with TrialChecker and replays the cutoff search from
+10%, 25%, 50%, 75%, and 90%. It reports the spread in selected cutoffs and in
+threshold-passing patients retained by those cutoffs. The full-corpus scoring
+cost makes this a stability diagnostic rather than the production allocation
+path.
 
 For a specific TrialChecker or BoilerplateChecker prediction,
 `interpret_match_quality` and `interpret_exclusion_criteria` provide on-demand

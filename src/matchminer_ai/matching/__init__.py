@@ -6,8 +6,11 @@ from .adaptive_cutoff import (
     DEFAULT_CUTOFF_PATIENTS_PER_SIDE,
     DEFAULT_INITIAL_CUTOFF_PROPORTION,
     DEFAULT_LLM_CUTOFF_THRESHOLD,
+    DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS,
     DEFAULT_TRIAL_CHECKER_CUTOFF_THRESHOLD,
     TrialCentricCutoffResult,
+    TrialCentricCutoffStabilityResult,
+    assess_trial_centric_cutoff_stability,
     find_trial_centric_cutoff,
 )
 from .exclusion_check import exclusion_criteria_check, interpret_exclusion_criteria
@@ -20,8 +23,11 @@ __all__ = [
     "DEFAULT_CUTOFF_PATIENTS_PER_SIDE",
     "DEFAULT_INITIAL_CUTOFF_PROPORTION",
     "DEFAULT_LLM_CUTOFF_THRESHOLD",
+    "DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS",
     "DEFAULT_TRIAL_CHECKER_CUTOFF_THRESHOLD",
     "TrialCentricCutoffResult",
+    "TrialCentricCutoffStabilityResult",
+    "assess_trial_centric_cutoff_stability",
     "exclusion_criteria_check",
     "exclusion_criteria_check_with_llm",
     "generate_candidate_matches",

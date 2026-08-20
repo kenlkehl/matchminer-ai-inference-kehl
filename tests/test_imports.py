@@ -6,6 +6,7 @@ from matchminer_ai.contextualization import (
 )
 from matchminer_ai.embedding import embed_for_matching
 from matchminer_ai.matching import (
+    assess_trial_centric_cutoff_stability,
     exclusion_criteria_check,
     find_trial_centric_cutoff,
     generate_candidate_matches,
@@ -46,6 +47,7 @@ def test_imports():
     assert embed_for_matching is not None
     assert generate_candidate_matches is not None
     assert find_trial_centric_cutoff is not None
+    assert assess_trial_centric_cutoff_stability is not None
     assert score_match_quality is not None
     assert exclusion_criteria_check is not None
     assert interpret_match_quality is not None
