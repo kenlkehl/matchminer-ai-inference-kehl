@@ -50,6 +50,9 @@ Optional source-grounded extensions can also:
   OncoTree coding, and locally searched NCIt drug normalization;
 - transform a clinical-space summary into JSON while preserving age, sex,
   disease burden, treatment, response, and biomarker requirements;
+- roll a patient summary's TrialSpace/TrialChecker-ranked spaces up through an
+  exact caller-supplied space-to-paradigm membership graph, while preserving
+  one-to-many mappings and paradigm caveat metadata;
 - research matched trials using ClinicalTrials.gov drug/biological intervention
   names and compare them after that patient-free web step; and
 - contextualize a trial space using heading-aware NCI PDQ, FDA
@@ -61,6 +64,11 @@ Trial-space retrieval rejects patient-bearing columns. Patient personalization
 is a separate API that sends patient context only to the configured LLM
 backend. These extensions produce research considerations, not treatment
 recommendations, guideline compliance, or eligibility determinations.
+
+The optional space-paradigm roll-up does not bundle a canonical paradigm
+catalog. It consumes caller-supplied trial spaces, exact membership edges, and
+one-line paradigm descriptors. Its ranking is a transparent roll-up of matching
+signals, not a new eligibility or treatment score.
 
 For detailed instructions, please see the
 [documentation website](https://dfci.github.io/matchminer-ai-inference/).

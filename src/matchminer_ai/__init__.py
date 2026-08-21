@@ -16,6 +16,7 @@ _LAZY_SUBMODULES = {
     "help_me_choose",
     "llm",
     "matching",
+    "paradigms",
     "patients",
     "trials",
 }
