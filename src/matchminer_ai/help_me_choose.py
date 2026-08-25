@@ -6,19 +6,22 @@ The privacy boundary in this module is structural:
 * :func:`fetch_trial_registry_document` accepts an NCT ID or official study URL
   and returns only registry fields needed by trial-space extraction.
 * Search queries contain only structured drug/biological intervention names.
-* Patient text first enters the workflow in :func:`build_comparison_messages`,
-  after web research is complete.
+* Patient text first enters either Good Option scoring or
+  :func:`build_comparison_messages`, after web research is complete.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import html
 import json
+import math
 import re
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
@@ -111,6 +114,52 @@ class ReportSource:
     label: str
     title: str
     url: str
+
+
+def _prefix_good_option_evidence_labels(value: Any, trial_index: int) -> Any:
+    """Map scorer-local CT/S# labels to Help Me Choose report labels."""
+
+    if isinstance(value, Mapping):
+        return {
+            key: _prefix_good_option_evidence_labels(item, trial_index)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _prefix_good_option_evidence_labels(item, trial_index) for item in value
+        ]
+    if isinstance(value, tuple):
+        return [
+            _prefix_good_option_evidence_labels(item, trial_index) for item in value
+        ]
+    if isinstance(value, str):
+        label = value.strip().upper()
+        if label == "CT":
+            return f"T{trial_index}-CT"
+        if re.fullmatch(r"S[1-9]\d{0,2}", label):
+            return f"T{trial_index}-{label}"
+    return value
+
+
+def _good_option_prompt_value(value: Any) -> Any:
+    """Convert pandas/numpy missing scalars into JSON null values."""
+
+    if value is None:
+        return None
+    if isinstance(value, Mapping):
+        return {key: _good_option_prompt_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_good_option_prompt_value(item) for item in value]
+    scalar = value
+    item_method = getattr(value, "item", None)
+    if callable(item_method):
+        with contextlib.suppress(ValueError, TypeError):
+            scalar = item_method()
+    if str(scalar).strip().casefold() in {"<na>", "nan", "nat"}:
+        return None
+    if isinstance(scalar, float) and not math.isfinite(scalar):
+        return None
+    return scalar
 
 
 def normalize_nct_id(value: Any) -> str:
@@ -581,10 +630,16 @@ def build_comparison_messages(
     patient_exclusion_evidence: str,
     match_contexts: Sequence[Mapping[str, Any]],
     research: Sequence[TrialDrugResearch],
+    good_option_results: Sequence[Mapping[str, Any]] | None = None,
 ) -> tuple[list[dict[str, str]], tuple[ReportSource, ...]]:
     """Build the first Help Me Choose artifact that contains patient text."""
 
     research_by_id = {item.nct_id: item for item in research}
+    good_options_by_id: dict[str, Mapping[str, Any]] = {}
+    for result in good_option_results or ():
+        raw_id = result.get("trial_id") or result.get("nct_id")
+        with contextlib.suppress(ValueError):
+            good_options_by_id[normalize_nct_id(raw_id)] = result
     prompt_trials: list[dict[str, Any]] = []
     sources: list[ReportSource] = []
     for index, context in enumerate(match_contexts, start=1):
@@ -596,6 +651,17 @@ def build_comparison_messages(
                 notices=("No drug research record was available.",),
             ),
         )
+        good_option = good_options_by_id.get(nct_id)
+        good_option_assessments = (
+            _prefix_good_option_evidence_labels(
+                _good_option_prompt_value(
+                    good_option.get("good_option_drug_assessments")
+                ),
+                index,
+            )
+            if good_option is not None
+            else []
+        ) or []
         clinicaltrials_label = f"T{index}-CT"
         sources.append(
             ReportSource(
@@ -646,6 +712,47 @@ def build_comparison_messages(
                 "similarity_score": context.get("similarity_score"),
                 "research_notices": list(trial_research.notices),
                 "untrusted_web_evidence": web_evidence,
+                "good_option_evidence_score": (
+                    {
+                        "method": str(
+                            _good_option_prompt_value(
+                                good_option.get("good_option_method")
+                            )
+                            or ""
+                        ),
+                        "score_0_to_1": _good_option_prompt_value(
+                            good_option.get("good_option_score")
+                        ),
+                        "points": _good_option_prompt_value(
+                            good_option.get("good_option_points")
+                        ),
+                        "maximum_points": _good_option_prompt_value(
+                            good_option.get("good_option_max_points")
+                        ),
+                        "drug_count": _good_option_prompt_value(
+                            good_option.get("good_option_drug_count")
+                        ),
+                        "status": str(
+                            _good_option_prompt_value(
+                                good_option.get("good_option_status")
+                            )
+                            or ""
+                        ),
+                        "patient_disease_type": str(
+                            _good_option_prompt_value(
+                                good_option.get("good_option_patient_disease_type")
+                            )
+                            or ""
+                        ),
+                        "per_drug_assessments": good_option_assessments,
+                        "uncertainties": _good_option_prompt_value(
+                            good_option.get("good_option_uncertainties")
+                        )
+                        or [],
+                    }
+                    if good_option is not None
+                    else None
+                ),
             }
         )
 
@@ -659,6 +766,10 @@ def build_comparison_messages(
         "such as [T1-CT] or [T1-S1], and never invent citations. For every trial, "
         "present drug mechanism, efficacy, and safety before patient-specific "
         "advantages, concerns, or evidence gaps."
+        " Treat the supplied good-option score as a count or classifier estimate "
+        "of four evidence criteria per investigational drug, not as a response "
+        "probability. Use it explicitly when ranking, while preserving its method, "
+        "status, per-drug evidence, and uncertainty."
     )
     user_payload = {
         "patient_context_private_to_configured_llm": {
@@ -681,7 +792,9 @@ def build_comparison_messages(
         "The drug mechanism, efficacy, and safety subsection must always be first. "
         "Discuss efficacy and safety only to the extent supported by supplied "
         "evidence. If evidence is missing or conflicting, say so. Conclude with a "
-        "short decision-oriented summary. This is research decision support, not "
+        "short decision-oriented summary. Explain how each available good-option "
+        "evidence score affected the ranking without converting it into predicted "
+        "benefit. This is research decision support, not "
         "medical advice.\n\n"
         + json.dumps(user_payload, ensure_ascii=False, indent=2, default=str)
     )
@@ -716,7 +829,7 @@ async def request_vllm_comparison(
     ):
         extra_body = {
             "top_k": 20,
-            "repetition_penalty": 1.05,
+            "repetition_penalty": 1.1,
             "chat_template_kwargs": {"enable_thinking": True},
         }
     client = AsyncOpenAI(
@@ -773,6 +886,8 @@ async def generate_trial_comparison(
     patient_exclusion_evidence: str,
     match_contexts: Sequence[Mapping[str, Any]],
     research: Sequence[TrialDrugResearch],
+    good_option_method: str = "llm",
+    good_option_results: Sequence[Mapping[str, Any]] | None = None,
     config: MMAIConfig | None = None,
     return_metadata: bool = False,
 ) -> str | tuple[str, dict[str, Any]]:
@@ -795,11 +910,47 @@ async def generate_trial_comparison(
     llm_config = dict(resolved_config.help_me_choose)
     if not llm_config:
         raise ValueError("Config is missing 'help_me_choose' settings.")
+    normalized_method = str(good_option_method or "").strip().casefold()
+    if normalized_method not in {"llm", "classifier", "none"}:
+        raise ValueError("good_option_method must be 'llm', 'classifier', or 'none'.")
+    resolved_good_options = list(good_option_results or ())
+    good_option_metadata: dict[str, Any] = {}
+    if not resolved_good_options and normalized_method != "none":
+        import pandas as pd
+
+        from matchminer_ai.good_options import evaluate_good_options
+
+        scoring_rows = []
+        seen_trials: set[str] = set()
+        for context in match_contexts:
+            nct_id = normalize_nct_id(
+                context.get("nct_id") or context.get("trial_id")
+            )
+            if nct_id in seen_trials:
+                continue
+            seen_trials.add(nct_id)
+            scoring_rows.append(
+                {
+                    "patient_id": "help-me-choose-patient",
+                    "trial_id": nct_id,
+                    "cancer_history_summary": patient_summary,
+                }
+            )
+        evaluation, good_option_metadata = await asyncio.to_thread(
+            evaluate_good_options,
+            pd.DataFrame(scoring_rows),
+            research=research,
+            method=normalized_method,
+            config=resolved_config,
+            return_metadata=True,
+        )
+        resolved_good_options = evaluation.to_dict(orient="records")
     messages, sources = build_comparison_messages(
         patient_summary=patient_summary,
         patient_exclusion_evidence=patient_exclusion_evidence,
         match_contexts=match_contexts,
         research=research,
+        good_option_results=resolved_good_options,
     )
     runtime_config = build_llm_runtime_config(
         "help_me_choose", llm_config, config=resolved_config
@@ -822,6 +973,9 @@ async def generate_trial_comparison(
         "model_metadata": generation.model_metadata,
         "finish_reason": generation.finish_reasons[0],
         "source_count": len(sources),
+        "good_option_method": normalized_method,
+        "good_option_results": resolved_good_options,
+        "good_option_metadata": good_option_metadata,
     }
 
 

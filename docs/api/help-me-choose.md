@@ -1,12 +1,20 @@
 # Help Me Choose
 
-Help Me Choose researches structured `DRUG` and `BIOLOGICAL` interventions for
-matched ClinicalTrials.gov records, then builds a patient-specific comparison.
-Its APIs enforce this ordering:
+Help Me Choose identifies and researches experimental `DRUG` and `BIOLOGICAL`
+interventions for matched ClinicalTrials.gov records, scores how well supported
+each option is for one patient, then builds a patient-specific comparison. Its
+APIs enforce this ordering:
 
-1. `research_trials` receives NCT IDs and constructs drug-name-only web queries.
-2. `build_comparison_messages` introduces patient context after web research.
-3. `generate_trial_comparison` uses the configured package LLM backend and
+1. `research_good_options` receives NCT IDs, uses registry arm metadata to
+   exclude standard-of-care/control-only interventions, and constructs
+   experimental-drug-only web queries.
+2. `evaluate_good_options` introduces one patient's context after web research
+   and uses either the four-point-per-drug LLM rubric or a configured local
+   GoodOptionChecker classifier.
+3. `build_comparison_messages` includes the resulting evidence score and
+   remaps research citation labels into the report's per-trial namespace.
+4. `generate_trial_comparison` runs the selected scorer when results were not
+   precomputed, uses the configured package LLM backend for comparison, and
    appends code-generated source links.
 
 The report ranks trials, but does not establish eligibility or recommend a
@@ -33,7 +41,6 @@ normalized NCT ID.
       members:
         - fetch_trial_eligibility_criteria
         - fetch_trial_registry_document
-        - research_trials
         - build_comparison_messages
         - generate_trial_comparison
         - format_report

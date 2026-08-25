@@ -381,6 +381,42 @@ llm_exclusion_criteria:
       chat_template_kwargs:
         enable_thinking: true
   prompt_file: llm_exclusion_criteria.user.txt
+llm_good_option:
+  reasoning_parser: auto
+  local:
+    model_name: google/gemma-4-31B-it
+    engine:
+      max_model_len: 131072
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      temperature: 0.0
+      top_k: 1
+      top_p: 1.0
+      min_p: 0.0
+      max_tokens: 100000
+      repetition_penalty: 1.1
+      skip_special_tokens: false
+  remote:
+    model_name: google/gemma-4-31B-it
+    request_params:
+      max_tokens: 100000
+      temperature: 0.0
+      top_p: 1.0
+    extra_body:
+      top_k: 1
+      min_p: 0.0
+      repetition_penalty: 1.1
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
+good_option_checker:
+  model_name: ""
+  device: cuda
+  max_length: 8192
 help_me_choose:
   reasoning_parser: auto
   local:
@@ -398,7 +434,7 @@ help_me_choose:
       top_p: 0.95
       min_p: 0.0
       max_tokens: 6000
-      repetition_penalty: 1.05
+      repetition_penalty: 1.1
       skip_special_tokens: false
   remote:
     model_name: google/gemma-4-31B-it
@@ -409,7 +445,7 @@ help_me_choose:
     extra_body:
       top_k: 20
       min_p: 0.0
-      repetition_penalty: 1.05
+      repetition_penalty: 1.1
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true

@@ -53,8 +53,10 @@ Optional source-grounded extensions can also:
 - roll a patient summary's TrialSpace/TrialChecker-ranked spaces up through an
   exact caller-supplied space-to-paradigm membership graph, while preserving
   one-to-many mappings and paradigm caveat metadata;
-- research matched trials using ClinicalTrials.gov drug/biological intervention
-  names and compare them after that patient-free web step; and
+- identify experimental drugs from ClinicalTrials.gov arm/intervention data,
+  research drug efficacy, safety, mechanism, and biomarker prevalence without
+  patient context, then estimate patient-specific option quality with either a
+  four-point-per-drug LLM rubric or a trained GoodOptionChecker; and
 - contextualize a trial space using heading-aware NCI PDQ, FDA
   companion-diagnostic and DailyMed material, accepted CIViC evidence, focused
   PubMed searches, and permissively licensed Europe PMC guideline/consensus

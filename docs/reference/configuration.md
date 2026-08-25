@@ -91,6 +91,7 @@ for task in (
     config.patient,
     config.llm_match_quality,
     config.llm_exclusion_criteria,
+    config.llm_good_option,
 ):
     task["remote"]["model_name"] = "google/gemma-4-26b-a4b-it-maas"
 ```
@@ -516,6 +517,24 @@ LLM task configuration for the optional matched-trial comparison. Its
 `local` and `remote` blocks follow the same structure as `trial.local` and
 `trial.remote`. Drug-information retrieval is intentionally separate from this
 LLM block and never accepts patient text.
+
+## `llm_good_option`
+
+Configuration for experimental-drug selection during patient-free research and
+for the patient-specific four-point-per-drug LLM scorer. Its `local` and
+`remote` blocks follow the same structure as `trial.local` and `trial.remote`.
+The default request enables model thinking, permits up to 100,000 completion
+tokens within a 131,072-token local context, and uses a repetition penalty of
+1.1. Each scoring message describes exactly one patient; the backend may batch
+many independent messages in one run.
+
+## `good_option_checker`
+
+Configuration for the optional local GoodOptionChecker regression model. Its
+input is the patient summary followed by the web research extract and registry
+investigational-drug context. `model_name` is empty by default until a versioned
+trained artifact is configured. `device` and `max_length` are passed to the
+text-classification checker pipeline.
 
 ## `trial_space_contextualization`
 

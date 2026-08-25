@@ -128,6 +128,26 @@ def test_default_preset_matches_training_runtime_defaults():
     )
     assert config.llm_exclusion_criteria["local"]["generation"]["temperature"] == 0.0
     assert config.llm_exclusion_criteria["local"]["generation"]["max_tokens"] == 20000
+    assert config.llm_good_option["local"]["engine"]["max_model_len"] == 131072
+    assert config.llm_good_option["local"]["generation"]["max_tokens"] == 100000
+    assert config.llm_good_option["local"]["generation"][
+        "repetition_penalty"
+    ] == 1.1
+    assert config.llm_good_option["local"]["chat_template_kwargs"] == {
+        "enable_thinking": True
+    }
+    assert config.llm_good_option["remote"]["request_params"]["max_tokens"] == 100000
+    assert config.llm_good_option["remote"]["extra_body"][
+        "repetition_penalty"
+    ] == 1.1
+    assert config.llm_good_option["remote"]["extra_body"][
+        "chat_template_kwargs"
+    ] == {"enable_thinking": True}
+    assert config.raw["good_option_checker"] == {
+        "model_name": "",
+        "device": "cuda",
+        "max_length": 8192,
+    }
     assert config.llm_match_quality["remote"]["request_params"] == {
         "max_tokens": 15000,
         "temperature": 0.0,
@@ -137,6 +157,8 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.llm_match_quality["remote"]["extra_body"]["top_k"] == 1
     assert config.help_me_choose["local"]["generation"]["max_tokens"] == 6000
     assert config.help_me_choose["remote"]["request_params"]["max_tokens"] == 6000
+    assert config.help_me_choose["local"]["generation"]["repetition_penalty"] == 1.1
+    assert config.help_me_choose["remote"]["extra_body"]["repetition_penalty"] == 1.1
     assert config.trial_space_contextualization["sources"] == [
         "nci_pdq",
         "fda",

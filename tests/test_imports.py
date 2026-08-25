@@ -5,6 +5,12 @@ from matchminer_ai.contextualization import (
     personalize_trial_space_context,
 )
 from matchminer_ai.embedding import embed_for_matching
+from matchminer_ai.good_options import (
+    evaluate_good_options,
+    research_good_options,
+    score_good_options,
+    score_good_options_with_llm,
+)
 from matchminer_ai.matching import (
     assess_trial_centric_cutoff_stability,
     exclusion_criteria_check,
@@ -49,6 +55,10 @@ def test_imports():
     assert concatenate_patient_note_pdfs is not None
     assert full_patient_screen is not None
     assert embed_for_matching is not None
+    assert research_good_options is not None
+    assert score_good_options is not None
+    assert score_good_options_with_llm is not None
+    assert evaluate_good_options is not None
     assert generate_candidate_matches is not None
     assert find_trial_centric_cutoff is not None
     assert assess_trial_centric_cutoff_stability is not None

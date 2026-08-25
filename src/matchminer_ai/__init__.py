@@ -13,6 +13,7 @@ from .pipeline import MMAIPipeline
 _LAZY_SUBMODULES = {
     "embedding",
     "contextualization",
+    "good_options",
     "help_me_choose",
     "llm",
     "matching",
