@@ -1,140 +1,144 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
+import httpx
 import pandas as pd
 import pytest
 
+import matchminer_ai.good_options.catalog as catalog_module
 from matchminer_ai.config import load_default_preset
 from matchminer_ai.good_options import (
-    BIOMARKER_EXPRESSION_QUERY_SUFFIX,
-    build_biomarker_expression_search_queries,
+    RUBRIC_CRITERIA,
+    DrugIdentity,
+    DrugSummary,
+    EvidencePassage,
+    GoodOptionCatalog,
+    ResearchSettings,
+    TrialDrugAssignment,
+    build_good_option_catalog,
     build_good_option_checker_text,
+    build_good_option_messages,
     evaluate_good_options,
-    extract_registry_drug_interventions,
-    parse_experimental_drug_selection,
-    research_good_options,
+    load_good_option_catalog,
+    parse_good_option_response,
+    research_drug,
     score_good_options,
     score_good_options_with_llm,
 )
-from matchminer_ai.help_me_choose import (
-    DrugIntervention,
-    DrugSearchResult,
-    TrialDrugResearch,
-    build_comparison_messages,
-    generate_trial_comparison,
-)
-
-STUDY = {
-    "protocolSection": {
-        "identificationModule": {"briefTitle": "Investigational agent study"},
-        "statusModule": {"overallStatus": "RECRUITING"},
-        "designModule": {"phases": ["PHASE1"]},
-        "descriptionModule": {"briefSummary": "A first-in-human study."},
-        "armsInterventionsModule": {
-            "armGroups": [
-                {
-                    "label": "Experimental arm",
-                    "type": "EXPERIMENTAL",
-                    "description": "Novel Agent with standard carboplatin.",
-                },
-                {
-                    "label": "Control arm",
-                    "type": "ACTIVE_COMPARATOR",
-                    "description": "Standard Drug alone.",
-                },
-            ],
-            "interventions": [
-                {
-                    "type": "DRUG",
-                    "name": "Novel Agent 10 mg IV",
-                    "otherNames": ["Novel Agent"],
-                    "armGroupLabels": ["Experimental arm"],
-                },
-                {
-                    "type": "DRUG",
-                    "name": "Carboplatin",
-                    "armGroupLabels": ["Experimental arm"],
-                },
-                {
-                    "type": "DRUG",
-                    "name": "Standard Drug",
-                    "armGroupLabels": ["Control arm"],
-                },
-            ],
-        },
-    }
-}
+from matchminer_ai.good_options.research import GeneralWebEvidenceSource
 
 
-def _research() -> TrialDrugResearch:
-    return TrialDrugResearch(
-        nct_id="NCT12345678",
-        title="Novel Agent trial",
-        phases=("PHASE1",),
-        brief_summary="Novel Agent is being evaluated.",
-        interventions=(
-            DrugIntervention(
-                name="Novel Agent",
-                intervention_type="DRUG",
-                description="Investigational targeted agent.",
-            ),
-            DrugIntervention(
-                name="Second Agent",
-                intervention_type="BIOLOGICAL",
-                description="Investigational antibody.",
-            ),
+def _summary(drug_id: str, name: str, *, status: str = "complete") -> DrugSummary:
+    return DrugSummary(
+        drug_id=drug_id,
+        preferred_name=name,
+        ncit_code="",
+        research_status=status,
+        synthesis_status="ok" if status == "complete" else "blocked",
+        structured_facts={},
+        good_option_summary=(
+            f"Drug: {name}\nMechanism and targets:\n- TARGET_MARKER inhibition.\n"
+            "Human efficacy by tumor type:\n- Responses in synthetic cancer.\n"
+            "Biomarker prevalence:\n- TARGET_MARKER occurs in 30% of the full population.\n"
+            "Biomarker-directed human efficacy:\n- Human responses were observed."
+            if status == "complete"
+            else ""
         ),
-        search_results=(
-            DrugSearchResult(
-                query='"Novel Agent" oncology mechanism efficacy safety clinical trial',
-                title="Clinical evidence",
-                snippet="RESEARCH_EXTRACT reported human responses.",
-                url="https://example.test/efficacy",
-            ),
-            DrugSearchResult(
-                query=(f'"Novel Agent" {BIOMARKER_EXPRESSION_QUERY_SUFFIX}'),
-                title="Biomarker prevalence",
-                snippet="The target occurs in 30% of the disease population.",
-                url="https://example.test/prevalence",
-            ),
+        help_me_choose_summary=(
+            f"Drug: {name}\nMechanism, efficacy, and safety synthesis."
+            if status == "complete"
+            else ""
         ),
+        evidence_count=4,
     )
 
 
-def _six_of_eight_response() -> str:
+def _catalog(*, blocked_second: bool = False) -> GoodOptionCatalog:
+    summaries = [
+        _summary("D1", "Novel Agent"),
+        _summary("D2", "Second Agent", status="blocked" if blocked_second else "complete"),
+        _summary("D3", "Control Agent"),
+    ]
+    assignments = [
+        TrialDrugAssignment(
+            trial_id="NCT12345678",
+            drug_id="D1",
+            preferred_name="Novel Agent",
+            registry_name="Novel Agent",
+            intervention_type="DRUG",
+            role="investigational",
+            role_confidence="high",
+            scoreable=True,
+        ),
+        TrialDrugAssignment(
+            trial_id="NCT12345678",
+            drug_id="D2",
+            preferred_name="Second Agent",
+            registry_name="Second Agent",
+            intervention_type="BIOLOGICAL",
+            role="uncertain",
+            role_confidence="low",
+            scoreable=True,
+        ),
+        TrialDrugAssignment(
+            trial_id="NCT12345678",
+            drug_id="D3",
+            preferred_name="Control Agent",
+            registry_name="Control Agent",
+            intervention_type="DRUG",
+            role="control",
+            role_confidence="high",
+            scoreable=False,
+        ),
+    ]
+    return GoodOptionCatalog(
+        path=Path("/tmp/test-catalog"),
+        manifest={"compatibility_id": "compat-v2"},
+        trial_registry=pd.DataFrame(
+            [
+                {
+                    "trial_id": "NCT12345678",
+                    "title": "Trial",
+                    "registry_status": "ok",
+                    "phases_json": "[]",
+                    "brief_summary": "",
+                }
+            ]
+        ),
+        trial_drug_index=pd.DataFrame([item.to_record() for item in assignments]),
+        drug_summaries=pd.DataFrame([item.to_record() for item in summaries]),
+        drug_evidence=pd.DataFrame(
+            [
+                {
+                    "drug_id": "D1",
+                    "title": "Evidence",
+                    "url": "https://example.test/evidence",
+                }
+            ]
+        ),
+        drug_research_attempts=pd.DataFrame(),
+    )
+
+
+def _response() -> str:
     assessments = []
     for index, drug in enumerate(("Novel Agent", "Second Agent")):
         points = (1, 1, 1, 1) if index == 0 else (1, 0, 1, 0)
-        assessments.append(
-            {
-                "drug_name": drug,
-                "targeted_biomarkers": ["Marker A"],
-                "disease_type_benefit": {
-                    "point": points[0],
-                    "rationale": "Human benefit evidence is supplied.",
-                    "evidence_labels": ["S1"] if points[0] else [],
-                },
-                "common_biomarker_in_disease": {
-                    "point": points[1],
-                    "rationale": "Population prevalence evidence is supplied.",
-                    "evidence_labels": ["S2"] if points[1] else [],
-                },
-                "patient_biomarker_targeted": {
-                    "point": points[2],
-                    "rationale": "The patient marker and target are supplied.",
-                    "evidence_labels": ["PATIENT", "S1"] if points[2] else [],
-                },
-                "biomarker_targeted_benefit": {
-                    "point": points[3],
-                    "rationale": "Human target-benefit evidence is supplied.",
-                    "evidence_labels": ["PATIENT", "S1"] if points[3] else [],
-                },
+        assessment: dict[str, Any] = {
+            "drug_name": drug,
+            "targeted_biomarkers": ["TARGET_MARKER"],
+        }
+        for criterion, point in zip(RUBRIC_CRITERIA, points, strict=True):
+            assessment[criterion] = {
+                "point": point,
+                "rationale": f"Synthetic rationale for {criterion}.",
             }
-        )
+        assessments.append(assessment)
     return json.dumps(
         {
             "patient_disease_type": "Synthetic cancer",
@@ -144,307 +148,463 @@ def _six_of_eight_response() -> str:
     )
 
 
-def test_selection_uses_llm_roles_but_code_excludes_control_only_drug() -> None:
-    registry_interventions = extract_registry_drug_interventions(STUDY)
-    registry = TrialDrugResearch(
-        nct_id="NCT12345678",
-        interventions=registry_interventions,
+def test_prompt_is_patient_first_metadata_free_and_omits_control() -> None:
+    catalog = _catalog()
+    messages = build_good_option_messages(
+        patient_summary="PRIVATE_PATIENT TARGET_MARKER synthetic cancer",
+        drug_summaries=catalog.scoreable_summaries_for_trial("NCT12345678"),
     )
-    response = json.dumps(
-        {
-            "interventions": [
-                {
-                    "source_index": 0,
-                    "experimental_role": "investigational",
-                    "canonical_drug_names": ["Novel Agent"],
-                    "rationale": "The agent is evaluated in the experimental arm.",
-                },
-                {
-                    "source_index": 1,
-                    "experimental_role": "not_investigational",
-                    "canonical_drug_names": [],
-                    "rationale": "Carboplatin is the standard backbone.",
-                },
-                {
-                    "source_index": 2,
-                    "experimental_role": "investigational",
-                    "canonical_drug_names": ["Standard Drug"],
-                    "rationale": "Incorrectly selected by the model.",
-                },
-            ]
-        }
+    prompt = messages[1]["content"]
+
+    assert prompt.index("PATIENT CANCER HISTORY") < prompt.index(
+        "SCOREABLE DRUG SUMMARIES"
+    ) < prompt.index("RUBRIC")
+    assert "PRIVATE_PATIENT" in prompt
+    assert "Novel Agent" in prompt and "Second Agent" in prompt
+    assert "Control Agent" not in prompt
+    for forbidden in (
+        "https://",
+        "NCT12345678",
+        "drug_only_query",
+        "source_id",
+        "research_notices",
+        "overall_status",
+    ):
+        assert forbidden not in prompt
+    assert "evidence_labels" not in prompt
+    assert "control, background" in messages[0]["content"]
+
+
+def test_response_parser_keeps_four_binary_criteria_without_evidence_ids() -> None:
+    summaries = _catalog().scoreable_summaries_for_trial("NCT12345678")
+    parsed = parse_good_option_response(_response(), drug_summaries=summaries)
+
+    assert parsed.status == "ok"
+    assert parsed.points == 6
+    assert parsed.max_points == 8
+    assert parsed.score == pytest.approx(0.75)
+    assert all(
+        "evidence_labels" not in assessment[criterion]
+        for assessment in parsed.drug_assessments
+        for criterion in RUBRIC_CRITERIA
     )
 
-    selected, status, notices = parse_experimental_drug_selection(
-        response,
-        research=registry,
-    )
 
-    assert [item.name for item in selected] == ["Novel Agent"]
-    assert status == "ok"
-    assert any("control arm" in notice for notice in notices)
-
-
-def test_research_queries_are_drug_only_and_include_biomarker_prevalence(
+def test_llm_scoring_uses_catalog_and_marks_blocked_trial_unscored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured_queries: list[str] = []
-
-    async def fake_fetch(_nct_id, *, client):
-        del client
-        study = json.loads(json.dumps(STUDY))
-        study["protocolSection"]["armsInterventionsModule"]["interventions"] = [
-            study["protocolSection"]["armsInterventionsModule"]["interventions"][0]
-        ]
-        return study
-
-    def fake_search(queries):
-        captured_queries.extend(queries)
-        return (), ()
-
-    async def run_inline(function, *args, **kwargs):
-        return function(*args, **kwargs)
-
-    monkeypatch.setattr("matchminer_ai.good_options.fetch_trial_study", fake_fetch)
-    monkeypatch.setattr("matchminer_ai.good_options.asyncio.to_thread", run_inline)
-    results = asyncio.run(
-        research_good_options(
-            ["NCT12345678"],
-            use_llm_drug_selection=False,
-            search_function=fake_search,
-        )
-    )
-
-    assert [item.name for item in results[0].interventions] == ["Novel Agent 10 mg IV"]
-    assert captured_queries
-    assert any(BIOMARKER_EXPRESSION_QUERY_SUFFIX in query for query in captured_queries)
-    assert all("PRIVATE_PATIENT" not in query for query in captured_queries)
-    assert (
-        "patient"
-        not in inspect.signature(build_biomarker_expression_search_queries).parameters
-    )
-    assert "patient" not in inspect.signature(research_good_options).parameters
-
-
-def test_llm_scoring_batches_independent_single_patient_prompts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured_messages: list[list[dict[str, str]]] = []
+    captured: list[list[dict[str, str]]] = []
 
     def fake_run(messages_list, *, config):
         del config
-        captured_messages.extend(messages_list)
+        captured.extend(messages_list)
         return SimpleNamespace(
-            final_outputs=[_six_of_eight_response(), _six_of_eight_response()],
-            reasoning_outputs=["reasoning-a", "reasoning-b"],
-            finish_reasons=["stop", "stop"],
+            final_outputs=[_response()],
+            reasoning_outputs=[""],
+            finish_reasons=["stop"],
             model_metadata={"model_name": "teacher"},
         )
 
-    monkeypatch.setattr("matchminer_ai.good_options._run_good_option_llm", fake_run)
+    monkeypatch.setattr(
+        "matchminer_ai.good_options.scoring._run_good_option_llm", fake_run
+    )
     pairs = pd.DataFrame(
         [
             {
                 "patient_id": "P1",
                 "trial_id": "NCT12345678",
-                "cancer_history_summary": "PATIENT_ONE_MARKER synthetic cancer.",
-                "clinical_space_summary": "Must not be used.",
-            },
-            {
-                "patient_id": "P2",
-                "trial_id": "NCT12345678",
-                "cancer_history_summary": "PATIENT_TWO_MARKER synthetic cancer.",
-                "clinical_space_summary": "Must not be used.",
-            },
+                "cancer_history_summary": "Synthetic TARGET_MARKER cancer",
+                "clinical_space_summary": "MUST_NOT_APPEAR",
+            }
         ]
     )
-
     output = score_good_options_with_llm(
-        pairs,
-        research=[_research()],
-        config=load_default_preset(),
+        pairs, catalog=_catalog(), config=load_default_preset()
     )
 
-    assert output["good_option_score"].tolist() == pytest.approx([0.75, 0.75])
-    assert output["good_option_points"].tolist() == [6, 6]
-    assert output["good_option_max_points"].tolist() == [8, 8]
-    assert len(captured_messages) == 2
-    assert "PATIENT_ONE_MARKER" in captured_messages[0][1]["content"]
-    assert "PATIENT_TWO_MARKER" not in captured_messages[0][1]["content"]
-    assert "PATIENT_TWO_MARKER" in captured_messages[1][1]["content"]
-    assert "PATIENT_ONE_MARKER" not in captured_messages[1][1]["content"]
-    assert all(
-        "Must not be used" not in messages[1]["content"]
-        for messages in captured_messages
+    assert output.loc[0, "good_option_score"] == pytest.approx(0.75)
+    assert "MUST_NOT_APPEAR" not in captured[0][1]["content"]
+
+    blocked = score_good_options_with_llm(
+        pairs, catalog=_catalog(blocked_second=True), config=load_default_preset()
     )
+    assert blocked.loc[0, "good_option_status"] == "drug_research_blocked"
+    assert pd.isna(blocked.loc[0, "good_option_score"])
 
 
-def test_classifier_receives_patient_research_extract_and_registry_context(
+def test_classifier_aggregates_every_drug_by_criterion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: dict[str, object] = {}
+    captured: list[str] = []
 
-    def fake_checker(prompts, *, checker_config, model_metadata_cache_dir=None):
-        captured["prompts"] = prompts
-        captured["config"] = checker_config
-        captured["cache"] = model_metadata_cache_dir
-        return [{"score": 0.0}], {"model_name": checker_config["model_name"]}
+    def fake_checker(
+        prompts,
+        *,
+        checker_config,
+        model_metadata_cache_dir=None,
+        return_all_scores=False,
+    ):
+        del checker_config, model_metadata_cache_dir
+        assert return_all_scores
+        captured.extend(prompts)
+        first = [
+            {"label": criterion, "score": 1.0}
+            for criterion in RUBRIC_CRITERIA
+        ]
+        second = [
+            {"label": criterion, "score": value}
+            for criterion, value in zip(
+                RUBRIC_CRITERIA, (1.0, 0.0, 1.0, 0.0), strict=True
+            )
+        ]
+        return [first, second], {"model_name": "checker"}
 
     config = load_default_preset()
-    config.raw["good_option_checker"]["model_name"] = "local/good-option-checker"
-    monkeypatch.setattr("matchminer_ai.good_options.run_checker", fake_checker)
+    config.raw["good_option_checker"]["model_name"] = "local/checker"
+    monkeypatch.setattr("matchminer_ai.good_options.scoring.run_checker", fake_checker)
     pairs = pd.DataFrame(
         [
             {
                 "patient_id": "P1",
                 "trial_id": "NCT12345678",
-                "cancer_history_summary": "SYNTHETIC_PATIENT_MARKER",
-                "clinical_space_summary": "SPACE_TEXT_MUST_NOT_APPEAR",
+                "cancer_history_summary": "Synthetic patient",
             }
         ]
     )
-
     output, metadata = score_good_options(
-        pairs,
-        research=[_research()],
-        config=config,
-        return_metadata=True,
+        pairs, catalog=_catalog(), config=config, return_metadata=True
     )
 
-    prompt = captured["prompts"][0]
-    assert "SYNTHETIC_PATIENT_MARKER" in prompt
-    assert "RESEARCH_EXTRACT" in prompt
-    assert "Registry investigational-drug context:" in prompt
-    assert "SPACE_TEXT_MUST_NOT_APPEAR" not in prompt
-    assert output["good_option_score"].tolist() == pytest.approx([0.5])
-    assert output["good_option_method"].tolist() == ["classifier"]
-    assert metadata["checker_input_version"] == (
-        "patient-drug-research-plus-registry-v1"
-    )
+    assert output.loc[0, "good_option_score"] == pytest.approx(0.75)
+    assert len(captured) == 2
+    assert all("Control Agent" not in prompt for prompt in captured)
+    assert metadata["checker_input_version"].endswith("four-logit")
 
 
-def test_dispatch_rejects_unknown_method() -> None:
-    with pytest.raises(ValueError, match="method must be"):
+def test_legacy_research_argument_is_rejected() -> None:
+    with pytest.raises(ValueError, match="Legacy snippet research"):
         evaluate_good_options(
-            pd.DataFrame(),
-            research=[],
-            method="guess",
+            pd.DataFrame(), catalog=None, research=[object()], method="llm"
         )
 
 
-def test_help_me_choose_prompt_receives_auditable_good_option_result() -> None:
-    messages, _sources = build_comparison_messages(
-        patient_summary="Synthetic patient",
-        patient_exclusion_evidence="No evidence",
-        match_contexts=[{"nct_id": "NCT12345678"}],
-        research=[_research()],
-        good_option_results=[
-            {
-                "trial_id": "NCT12345678",
-                "good_option_method": "llm",
-                "good_option_score": 0.75,
-                "good_option_points": 6,
-                "good_option_max_points": 8,
-                "good_option_drug_count": 2,
-                "good_option_status": "ok",
-                "good_option_drug_assessments": [
-                    {
-                        "drug_name": "Novel Agent",
-                        "disease_type_benefit": {
-                            "point": 1,
-                            "evidence_labels": ["S1", "CT"],
-                        },
-                    }
-                ],
-                "good_option_uncertainties": ["Small studies"],
-            }
-        ],
+class _FlakySource:
+    name = "flaky"
+    source_type = "authoritative"
+
+    def __init__(self, *, always_fail: bool = False, empty: bool = False) -> None:
+        self.calls = 0
+        self.always_fail = always_fail
+        self.empty = empty
+
+    async def fetch(self, drug, *, facet, query, client, settings):
+        del client, settings
+        self.calls += 1
+        if self.always_fail or self.calls == 1:
+            request = httpx.Request("GET", "https://example.test")
+            raise httpx.ReadTimeout("temporary", request=request)
+        if self.empty:
+            return []
+        passage = f"{drug.preferred_name} {facet} human evidence"
+        return [
+            EvidencePassage(
+                evidence_id=f"fake:{facet}",
+                drug_id=drug.drug_id,
+                facet=facet,
+                source=self.name,
+                source_type=self.source_type,
+                title="Evidence",
+                passage=passage,
+                url="https://example.test/evidence",
+                source_locator=facet,
+                query=query,
+                content_sha256=facet,
+            )
+        ]
+
+
+def test_research_retries_and_distinguishes_empty_from_technical_failure() -> None:
+    drug = DrugIdentity(drug_id="D1", preferred_name="Novel Agent")
+    flaky = _FlakySource()
+
+    async def no_sleep(_seconds: float) -> None:
+        return None
+
+    evidence, attempts, status, failures = asyncio.run(
+        research_drug(
+            drug,
+            sources=[flaky],
+            settings=ResearchSettings(max_attempts=2),
+            sleep=no_sleep,
+        )
     )
+    assert status == "complete"
+    assert evidence
+    assert {item.status for item in attempts} >= {"failed", "ok"}
+    assert not any("Unresolved technical facet" in item for item in failures)
 
-    prompt = messages[1]["content"]
-    assert '"score_0_to_1": 0.75' in prompt
-    assert '"points": 6' in prompt
-    assert '"T1-S1"' in prompt
-    assert '"T1-CT"' in prompt
-    assert "without converting it into predicted benefit" in prompt
+    empty = _FlakySource(empty=True)
+    _, empty_attempts, empty_status, _ = asyncio.run(
+        research_drug(
+            drug,
+            sources=[empty],
+            settings=ResearchSettings(max_attempts=2),
+            sleep=no_sleep,
+        )
+    )
+    assert empty_status == "complete"
+    assert any(item.status == "empty" for item in empty_attempts)
+
+    failed = _FlakySource(always_fail=True)
+    _, _, failed_status, failed_messages = asyncio.run(
+        research_drug(
+            drug,
+            sources=[failed],
+            settings=ResearchSettings(max_attempts=2),
+            sleep=no_sleep,
+        )
+    )
+    assert failed_status == "blocked"
+    assert any("Unresolved technical facet" in item for item in failed_messages)
 
 
-def test_generate_trial_comparison_runs_selected_good_option_method(
+class _FlakyWebProvider:
+    name = "flaky-web"
+
+    def __init__(self) -> None:
+        self.max_results: list[int] = []
+
+    def search(self, _query: str, *, max_results: int):
+        self.max_results.append(max_results)
+        if len(self.max_results) == 1:
+            raise RuntimeError("temporary search outage")
+        return []
+
+
+def test_general_web_search_failures_retry_with_a_bounded_result_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: dict[str, object] = {}
+    provider = _FlakyWebProvider()
 
-    def fake_evaluate(frame, *, research, method, config, return_metadata):
-        del research, config
-        captured["method"] = method
-        assert return_metadata
-        return (
-            pd.DataFrame(
-                [
-                    {
-                        "patient_id": frame.iloc[0]["patient_id"],
-                        "trial_id": "NCT12345678",
-                        "good_option_method": method,
-                        "good_option_score": 0.5,
-                        "good_option_status": "ok",
-                    }
-                ]
-            ),
-            {"method": method},
-        )
-
-    def fake_prompts(messages_list, *, llm_config):
-        del llm_config
-        captured["comparison_messages"] = messages_list
-        return [SimpleNamespace(prompt_text="rendered", max_tokens=100)]
-
-    class Backend:
-        def generate_llm_outputs(self, **_kwargs):
-            return SimpleNamespace(
-                final_outputs=["## Trial ranking\n\n1. NCT12345678"],
-                reasoning_outputs=[""],
-                finish_reasons=["stop"],
-                model_metadata={"model_name": "comparison-model"},
-            )
+    async def no_sleep(_seconds: float) -> None:
+        return None
 
     async def run_inline(function, *args, **kwargs):
         return function(*args, **kwargs)
 
     monkeypatch.setattr(
-        "matchminer_ai.good_options.evaluate_good_options",
-        fake_evaluate,
+        "matchminer_ai.good_options.research.asyncio.to_thread", run_inline
     )
-    monkeypatch.setattr(
-        "matchminer_ai.llm.prompt_rendering.build_prompt_list", fake_prompts
-    )
-    monkeypatch.setattr(
-        "matchminer_ai.llm.backends.get_llm_backend", lambda _config: Backend()
-    )
-    monkeypatch.setattr("matchminer_ai.help_me_choose.asyncio.to_thread", run_inline)
 
-    report, metadata = asyncio.run(
-        generate_trial_comparison(
-            patient_summary="Synthetic patient",
-            patient_exclusion_evidence="",
-            match_contexts=[{"nct_id": "NCT12345678"}],
-            research=[_research()],
-            good_option_method="classifier",
-            config=load_default_preset(),
-            return_metadata=True,
+    _, attempts, status, _ = asyncio.run(
+        research_drug(
+            DrugIdentity(drug_id="D1", preferred_name="Novel Agent"),
+            sources=[GeneralWebEvidenceSource(provider)],
+            settings=ResearchSettings(
+                max_attempts=2,
+                web_results_per_query=10,
+                max_web_results_per_drug=60,
+            ),
+            sleep=no_sleep,
         )
     )
 
-    assert captured["method"] == "classifier"
-    assert '"score_0_to_1": 0.5' in captured["comparison_messages"][0][1]["content"]
-    assert metadata["good_option_method"] == "classifier"
-    assert "NCT12345678" in report
+    assert status == "complete"
+    assert any(item.status == "failed" for item in attempts)
+    assert any(item.status == "empty" for item in attempts)
+    assert provider.max_results
+    assert max(provider.max_results) == 4  # 60 results across at most 15 queries.
 
 
-def test_classifier_text_orders_patient_then_research_then_registry() -> None:
-    text = build_good_option_checker_text("Synthetic patient", _research())
+def test_synthesis_retries_invalid_json_and_preserves_ledger_support_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
 
-    assert (
-        text.index("Patient cancer history:")
-        < text.index("Investigational-drug public research evidence:")
-        < text.index("Registry investigational-drug context:")
+    def fake_run(_messages, *, config, stage):
+        nonlocal calls
+        del config
+        assert stage == "synthesis"
+        calls += 1
+        if calls == 1:
+            return ["not valid synthesis JSON"]
+        return [
+            json.dumps(
+                {
+                    "mechanism_and_targets": [
+                        {"claim": "Targets Marker A.", "support_ids": ["P1"]}
+                    ],
+                    "efficacy_by_tumor": [],
+                    "biomarker_prevalence": [],
+                    "biomarker_directed_efficacy": [],
+                    "safety": [],
+                    "limitations": [],
+                }
+            )
+        ]
+
+    async def run_inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    monkeypatch.setattr(catalog_module.asyncio, "to_thread", run_inline)
+    config = load_default_preset()
+    config.good_option_catalog["synthesis_max_attempts"] = 2
+    evidence = EvidencePassage(
+        evidence_id="ledger:E1",
+        drug_id="D1",
+        facet="mechanism_targets",
+        source="test",
+        source_type="authoritative",
+        title="Evidence",
+        passage="Novel Agent targets Marker A.",
+        url="https://example.test/evidence",
+        source_locator="E1",
     )
+
+    result = asyncio.run(
+        catalog_module._default_synthesize_many(
+            [(DrugIdentity(drug_id="D1", preferred_name="Novel Agent"), [evidence])],
+            config=config,
+        )
+    )
+
+    assert calls == 2
+    assert result["D1"]["__passage_id_map__"] == {"P1": "ledger:E1"}
+
+
+STUDY = {
+    "protocolSection": {
+        "identificationModule": {"briefTitle": "Novel agent study"},
+        "statusModule": {
+            "overallStatus": "RECRUITING",
+            "lastUpdatePostDateStruct": {"date": "2026-08-01"},
+        },
+        "designModule": {"phases": ["PHASE1"]},
+        "descriptionModule": {"briefSummary": "A synthetic public trial."},
+        "armsInterventionsModule": {
+            "armGroups": [
+                {"label": "Experimental", "type": "EXPERIMENTAL"},
+                {"label": "Control", "type": "ACTIVE_COMPARATOR"},
+            ],
+            "interventions": [
+                {
+                    "type": "DRUG",
+                    "name": "Novel Agent",
+                    "armGroupLabels": ["Experimental"],
+                },
+                {
+                    "type": "DRUG",
+                    "name": "Control Agent",
+                    "armGroupLabels": ["Control"],
+                },
+            ],
+        },
+    }
+}
+
+
+class _NoNCIt:
+    def search(self, _query: str, *, limit: int):
+        del limit
+        return []
+
+
+class _EvidenceSource:
+    name = "fake"
+    source_type = "authoritative"
+
+    async def fetch(self, drug, *, facet, query, client, settings):
+        del client, settings
+        passage = f"{drug.preferred_name} has human {facet} evidence."
+        return [
+            EvidencePassage(
+                evidence_id=f"{drug.drug_id}:{facet}",
+                drug_id=drug.drug_id,
+                facet=facet,
+                source=self.name,
+                source_type=self.source_type,
+                title="Synthetic evidence",
+                passage=passage,
+                url="https://example.test/source",
+                source_locator=facet,
+                query=query,
+                content_sha256=f"{drug.drug_id}:{facet}",
+            )
+        ]
+
+
+def test_catalog_build_deduplicates_drugs_and_indexes_control_roles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_fetch(_nct_id: str, *, client):
+        del client
+        return json.loads(json.dumps(STUDY))
+
+    def role_resolver(_trial_id, interventions):
+        assert len(interventions) == 1
+        return {
+            "0": {
+                "role": "investigational",
+                "confidence": "high",
+                "rationale": "The contribution is tested.",
+                "active_entity_names": ["Novel Agent"],
+            }
+        }
+
+    def synthesize(_drug, evidence):
+        support = ["P1"] if evidence else []
+        return {
+            "mechanism_and_targets": [
+                {"claim": "Targets TARGET_MARKER.", "support_ids": support}
+            ],
+            "efficacy_by_tumor": [],
+            "biomarker_prevalence": [],
+            "biomarker_directed_efficacy": [],
+            "safety": [],
+            "limitations": [],
+        }
+
+    monkeypatch.setattr(
+        "matchminer_ai.good_options.catalog.fetch_trial_study", fake_fetch
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.good_options.catalog.load_ncit_drug_index",
+        lambda _resource: _NoNCIt(),
+    )
+    output = tmp_path / "catalog"
+    catalog = asyncio.run(
+        build_good_option_catalog(
+            ["NCT12345678", "NCT87654321"],
+            output,
+            config=load_default_preset(),
+            sources=[_EvidenceSource()],
+            settings=ResearchSettings(max_attempts=1),
+            role_resolver=role_resolver,
+            synthesizer=synthesize,
+        )
+    )
+
+    assert len(catalog.drug_summaries) == 2  # Novel + control, deduplicated by name.
+    scoreable = catalog.assignments_for_trial(
+        "NCT12345678", scoreable_only=True
+    )
+    assert [item.preferred_name for item in scoreable] == ["Novel Agent"]
+    all_roles = {item.preferred_name: item.role for item in catalog.assignments_for_trial("NCT12345678")}
+    assert all_roles["Control Agent"] == "control"
+    novel_summary = catalog.summary_for_drug(scoreable[0].drug_id)
+    assert novel_summary is not None
+    support_ids = novel_summary.structured_facts["mechanism_and_targets"][0][
+        "support_ids"
+    ]
+    assert support_ids == [f"{scoreable[0].drug_id}:mechanism_targets"]
+    assert support_ids != ["P1"]
+    assert load_good_option_catalog(output).compatibility_id
+
+
+def test_checker_text_contains_only_patient_and_clean_drug_summary() -> None:
+    text = build_good_option_checker_text("Synthetic patient", _summary("D1", "Novel"))
+    assert text.index("Patient cancer history") < text.index(
+        "Investigational drug evidence summary"
+    )
+    assert "https://" not in text

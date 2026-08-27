@@ -53,10 +53,11 @@ Optional source-grounded extensions can also:
 - roll a patient summary's TrialSpace/TrialChecker-ranked spaces up through an
   exact caller-supplied space-to-paradigm membership graph, while preserving
   one-to-many mappings and paradigm caveat metadata;
-- identify experimental drugs from ClinicalTrials.gov arm/intervention data,
-  research drug efficacy, safety, mechanism, and biomarker prevalence without
-  patient context, then estimate patient-specific option quality with either a
-  four-point-per-drug LLM rubric or a trained GoodOptionChecker; and
+- build a versioned patient-free evidence catalog from a list of NCT IDs,
+  deduplicate NCIt-normalized active drugs across trials, synthesize mechanism,
+  efficacy, biomarker prevalence, biomarker-directed benefit, and safety, then
+  estimate patient-specific option quality from clean drug summaries with either
+  a four-point-per-drug LLM rubric or a four-logit GoodOptionChecker; and
 - contextualize a trial space using heading-aware NCI PDQ, FDA
   companion-diagnostic and DailyMed material, accepted CIViC evidence, focused
   PubMed searches, and permissively licensed Europe PMC guideline/consensus

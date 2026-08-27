@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
+import pandas as pd
 import pytest
 
+from matchminer_ai.good_options import (
+    DrugSummary,
+    GoodOptionCatalog,
+    TrialDrugAssignment,
+)
 from matchminer_ai.help_me_choose import (
     DrugIntervention,
-    DrugSearchResult,
     TrialDrugResearch,
     build_comparison_messages,
     build_drug_search_queries,
@@ -20,7 +26,6 @@ from matchminer_ai.help_me_choose import (
     fetch_trial_registry_document,
     normalize_nct_reference,
     request_vllm_comparison,
-    research_trial_drugs,
     research_trials,
 )
 
@@ -183,50 +188,41 @@ def test_research_reports_progress_as_each_trial_finishes():
     assert all(item[1] == 2 for item in updates)
 
 
-def test_patient_marker_reaches_llm_prompt_but_not_web_query():
-    captured_queries: list[str] = []
-
-    async def fake_fetch(_nct_id: str, *, client: httpx.AsyncClient):
-        del client
-        return STUDY
-
-    def fake_search(queries):
-        captured_queries.extend(queries)
-        return (
-            (
-                DrugSearchResult(
-                    query=queries[0],
-                    title="Drug A results",
-                    snippet="Reported findings.",
-                    url="https://example.org/drug-a",
-                ),
-            ),
-            (),
-        )
-
-    async def run_inline(function, *args):
-        return function(*args)
-
-    async def run():
-        async with httpx.AsyncClient() as client:
-            with (
-                patch(
-                    "matchminer_ai.help_me_choose.fetch_trial_study",
-                    new=fake_fetch,
-                ),
-                patch(
-                    "matchminer_ai.help_me_choose.asyncio.to_thread",
-                    new=run_inline,
-                ),
-            ):
-                return await research_trial_drugs(
-                    "NCT12345678",
-                    client=client,
-                    search_function=fake_search,
-                )
-
-    research = asyncio.run(run())
-
+def test_patient_marker_reaches_comparison_only_after_catalog_load():
+    assignment = TrialDrugAssignment(
+        trial_id="NCT12345678",
+        drug_id="D1",
+        preferred_name="Drug A",
+        registry_name="Drug A",
+        intervention_type="DRUG",
+        role="investigational",
+        role_confidence="high",
+        scoreable=True,
+    )
+    summary = DrugSummary(
+        drug_id="D1",
+        preferred_name="Drug A",
+        ncit_code="",
+        research_status="complete",
+        synthesis_status="ok",
+        structured_facts={},
+        good_option_summary="Drug A evidence summary.",
+        help_me_choose_summary="Drug A mechanism, efficacy, and safety summary.",
+        evidence_count=1,
+    )
+    catalog = GoodOptionCatalog(
+        path=Path("/tmp/catalog"),
+        manifest={"compatibility_id": "v2"},
+        trial_registry=pd.DataFrame(
+            [{"trial_id": "NCT12345678", "title": "Trial", "registry_status": "ok", "phases_json": "[]", "brief_summary": ""}]
+        ),
+        trial_drug_index=pd.DataFrame([assignment.to_record()]),
+        drug_summaries=pd.DataFrame([summary.to_record()]),
+        drug_evidence=pd.DataFrame(
+            [{"drug_id": "D1", "title": "Drug A results", "url": "https://example.org/drug-a"}]
+        ),
+        drug_research_attempts=pd.DataFrame(),
+    )
     marker = "PRIVATE_PATIENT_MARKER"
     messages, sources = build_comparison_messages(
         patient_summary=f"Patient summary {marker}",
@@ -240,14 +236,14 @@ def test_patient_marker_reaches_llm_prompt_but_not_web_query():
                 "similarity_score": 0.8,
             }
         ],
-        research=[research],
+        catalog=catalog,
     )
 
-    assert captured_queries
-    assert all(marker not in query for query in captured_queries)
     assert marker in messages[1]["content"]
     assert [source.label for source in sources] == ["T1-CT", "T1-S1"]
     prompt = messages[1]["content"]
+    assert "https://example.org" not in prompt
+    assert "drug_only_query" not in prompt
     assert (
         "The drug mechanism, efficacy, and safety subsection must always be first"
         in prompt

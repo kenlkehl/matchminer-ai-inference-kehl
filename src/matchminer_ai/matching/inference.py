@@ -59,7 +59,8 @@ def run_checker(
     *,
     checker_config: Dict[str, Any],
     model_metadata_cache_dir: str | None = None,
-) -> tuple[list[dict[str, Any]], Dict[str, Any]]:
+    return_all_scores: bool = False,
+) -> tuple[list[Any], Dict[str, Any]]:
     """Run a text-classification checker model on prompts."""
     model_name = checker_config["model_name"]
     device = checker_config["device"]
@@ -74,10 +75,8 @@ def run_checker(
         model_name,
         cache_dir=model_metadata_cache_dir,
     )
-    outputs = cast(
-        list[dict[str, Any]],
-        checker_pipeline(prompts),
-    )
+    pipeline_kwargs = {"top_k": None} if return_all_scores else {}
+    outputs = cast(list[Any], checker_pipeline(prompts, **pipeline_kwargs))
     return outputs, model_metadata
 
 

@@ -413,6 +413,27 @@ llm_good_option:
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
+good_option_catalog:
+  ncit_resource: Thesaurus_26.07d.FLAT.zip
+  ncit_version: 26.07d
+  good_option_summary_max_tokens: 1500
+  help_me_choose_summary_max_tokens: 3000
+  synthesis_evidence_max_tokens: 64000
+  synthesis_max_attempts: 3
+  role_llm:
+    local:
+      generation:
+        max_tokens: 8000
+    remote:
+      request_params:
+        max_tokens: 8000
+  synthesis_llm:
+    local:
+      generation:
+        max_tokens: 12000
+    remote:
+      request_params:
+        max_tokens: 12000
 good_option_checker:
   model_name: ""
   device: cuda
