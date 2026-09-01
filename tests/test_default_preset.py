@@ -143,6 +143,16 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.llm_good_option["remote"]["extra_body"][
         "chat_template_kwargs"
     ] == {"enable_thinking": True}
+    assert (
+        config.good_option_catalog["synthesis_llm"]["local"]["generation"]["max_tokens"]
+        == 32000
+    )
+    assert (
+        config.good_option_catalog["synthesis_llm"]["remote"]["request_params"][
+            "max_tokens"
+        ]
+        == 32000
+    )
     assert config.raw["good_option_checker"] == {
         "model_name": "",
         "device": "cuda",

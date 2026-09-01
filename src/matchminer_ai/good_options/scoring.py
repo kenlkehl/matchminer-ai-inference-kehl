@@ -7,6 +7,7 @@ import json
 import math
 import re
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -155,6 +156,13 @@ def parse_good_option_response(
     assessments: list[dict[str, Any]] = []
     for name in expected:
         raw = by_name[name.casefold()]
+        flat_criteria_present = any(criterion in raw for criterion in RUBRIC_CRITERIA)
+        nested_criteria = raw.get("criteria")
+        criterion_results = (
+            nested_criteria
+            if not flat_criteria_present and isinstance(nested_criteria, Mapping)
+            else raw
+        )
         biomarkers = raw.get("targeted_biomarkers", [])
         if not isinstance(biomarkers, Sequence) or isinstance(biomarkers, (str, bytes)):
             biomarkers = []
@@ -167,7 +175,7 @@ def parse_good_option_response(
             ],
         }
         for criterion in RUBRIC_CRITERIA:
-            result = raw.get(criterion)
+            result = criterion_results.get(criterion)
             if not isinstance(result, Mapping):
                 return ParsedGoodOptionResult(
                     drug_count=len(expected),
@@ -280,22 +288,122 @@ def _run_good_option_llm(
     )
 
 
+_TOKEN_LIMIT_FINISH_REASONS = frozenset({"length", "max_tokens"})
+_RETRY_RESPONSE_MAX_CHARS = 12_000
+
+
+def _parse_good_option_generation(
+    response: str,
+    *,
+    finish_reason: str,
+    drug_summaries: Sequence[DrugSummary],
+) -> ParsedGoodOptionResult:
+    """Parse one generation, rejecting output explicitly stopped by its limit."""
+
+    if finish_reason.strip().casefold() in _TOKEN_LIMIT_FINISH_REASONS:
+        return ParsedGoodOptionResult(
+            drug_count=len(drug_summaries),
+            max_points=4 * len(drug_summaries),
+            parse_error=(
+                "The GoodOption teacher response reached its output token limit "
+                f"(finish_reason={finish_reason})."
+            ),
+        )
+    return parse_good_option_response(response, drug_summaries=drug_summaries)
+
+
+def _bounded_retry_response(response: str) -> str:
+    """Bound malformed assistant text before placing it in a correction turn."""
+
+    text = str(response or "")
+    if len(text) <= _RETRY_RESPONSE_MAX_CHARS:
+        return text
+    half = (_RETRY_RESPONSE_MAX_CHARS - 80) // 2
+    return (
+        text[:half]
+        + "\n...[middle of previous response omitted for retry context]...\n"
+        + text[-half:]
+    )
+
+
+def _append_good_option_retry_feedback(
+    messages: Sequence[Mapping[str, str]],
+    *,
+    response: str,
+    parse_error: str,
+    finish_reason: str,
+) -> list[dict[str, str]]:
+    """Return a follow-up conversation containing the exact validator failure."""
+
+    retry_messages = [
+        {"role": str(message["role"]), "content": str(message["content"])}
+        for message in messages
+    ]
+    previous_response = _bounded_retry_response(response)
+    if previous_response.strip():
+        retry_messages.append({"role": "assistant", "content": previous_response})
+    details = [
+        "Your previous response could not be accepted by the JSON validator.",
+        f"Validation error: {str(parse_error or 'unknown parse failure').strip()}",
+    ]
+    if str(finish_reason or "").strip():
+        details.append(f"Finish reason: {str(finish_reason).strip()}")
+    details.extend(
+        [
+            "Return a complete replacement JSON object that fixes this exact error.",
+            "Do not return a patch, explanation, Markdown fence, or hidden reasoning.",
+        ]
+    )
+    retry_messages.append({"role": "user", "content": "\n".join(details)})
+    return retry_messages
+
+
+def _good_option_reasoning_disabled_config(config: MMAIConfig) -> MMAIConfig:
+    """Clone config and disable thinking for one final parse-recovery attempt."""
+
+    fallback = deepcopy(config)
+    local = fallback.llm_good_option.setdefault("local", {})
+    local_template = dict(local.get("chat_template_kwargs", {}))
+    local_template["enable_thinking"] = False
+    local["chat_template_kwargs"] = local_template
+
+    remote = fallback.llm_good_option.setdefault("remote", {})
+    extra_body = dict(remote.get("extra_body", {}))
+    remote_template = dict(extra_body.get("chat_template_kwargs", {}))
+    remote_template["enable_thinking"] = False
+    extra_body["chat_template_kwargs"] = remote_template
+    remote["extra_body"] = extra_body
+    return fallback
+
+
 def score_good_options_with_llm(
     candidate_pairs: pd.DataFrame,
     *,
     catalog: GoodOptionCatalog | None = None,
     research: Any = None,
     config: MMAIConfig | None = None,
+    max_parse_attempts: int = 1,
+    reasoning_off_fallback: bool = False,
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
-    """Apply the four-point rubric using only pre-synthesized catalog summaries."""
+    """Apply the four-point rubric using only pre-synthesized catalog summaries.
+
+    Parse retries are selective: only invalid generations are submitted again.
+    Each retry includes the prior invalid answer and the code validator's exact
+    error. If requested, one additional attempt disables model thinking after
+    all ordinary parse attempts have failed.
+    """
 
     resolved_catalog = _require_catalog(catalog, research=research)
     resolved_config = config or load_default_preset()
+    parse_attempts = int(max_parse_attempts)
+    if parse_attempts < 1:
+        raise ValueError("max_parse_attempts must be at least 1.")
     frame = _candidate_records(candidate_pairs)
     rows: list[dict[str, Any] | None] = [None] * len(frame)
-    messages: list[list[dict[str, str]]] = []
     message_indices: list[int] = []
+    base_messages_by_index: dict[int, list[dict[str, str]]] = {}
+    messages_by_index: dict[int, list[dict[str, str]]] = {}
     summaries_by_index: dict[int, tuple[DrugSummary, ...]] = {}
     for index, source in frame.iterrows():
         trial_id = str(source["trial_id"])
@@ -314,52 +422,113 @@ def score_good_options_with_llm(
             continue
         summaries = resolved_catalog.scoreable_summaries_for_trial(trial_id)
         summaries_by_index[index] = summaries
-        messages.append(
-            build_good_option_messages(
-                patient_summary=str(source["cancer_history_summary"]),
-                drug_summaries=summaries,
-            )
+        base_messages = build_good_option_messages(
+            patient_summary=str(source["cancer_history_summary"]),
+            drug_summaries=summaries,
         )
+        base_messages_by_index[index] = base_messages
+        messages_by_index[index] = base_messages
         message_indices.append(index)
     generation: LLMGenerationResult | None = None
-    if messages:
-        generation = _run_good_option_llm(messages, config=resolved_config)
-        if len(generation.final_outputs) != len(messages):
+    latest_by_index: dict[
+        int, tuple[ParsedGoodOptionResult, str, str, str]
+    ] = {}
+    pending_indices = list(message_indices)
+
+    def run_pending(
+        indices: Sequence[int], *, generation_config: MMAIConfig
+    ) -> list[int]:
+        nonlocal generation
+        wave_messages = [messages_by_index[index] for index in indices]
+        generation = _run_good_option_llm(
+            wave_messages,
+            config=generation_config,
+        )
+        if len(generation.final_outputs) != len(wave_messages):
             raise RuntimeError("GoodOption LLM returned an unexpected output count.")
-        for output_index, (frame_index, response) in enumerate(
-            zip(message_indices, generation.final_outputs, strict=True)
-        ):
-            source = frame.iloc[frame_index]
-            parsed = parse_good_option_response(
-                response, drug_summaries=summaries_by_index[frame_index]
+        failed: list[int] = []
+        for output_index, frame_index in enumerate(indices):
+            response = str(generation.final_outputs[output_index] or "")
+            reasoning = (
+                str(generation.reasoning_outputs[output_index] or "")
+                if output_index < len(generation.reasoning_outputs)
+                else ""
             )
-            row = _empty_result_row(
-                patient_id=str(source["patient_id"]),
-                trial_id=str(source["trial_id"]),
-                method="llm",
-                status=parsed.status,
-                drug_count=parsed.drug_count,
+            finish_reason = (
+                str(generation.finish_reasons[output_index] or "")
+                if output_index < len(generation.finish_reasons)
+                else ""
             )
+            parsed = _parse_good_option_generation(
+                response,
+                finish_reason=finish_reason,
+                drug_summaries=summaries_by_index[frame_index],
+            )
+            latest_by_index[frame_index] = (
+                parsed,
+                response,
+                reasoning,
+                finish_reason,
+            )
+            if parsed.status == "ok":
+                continue
+            messages_by_index[frame_index] = _append_good_option_retry_feedback(
+                base_messages_by_index[frame_index],
+                response=response,
+                parse_error=parsed.parse_error,
+                finish_reason=finish_reason,
+            )
+            failed.append(frame_index)
+        return failed
+
+    for _attempt in range(parse_attempts):
+        if not pending_indices:
+            break
+        pending_indices = run_pending(
+            pending_indices,
+            generation_config=resolved_config,
+        )
+
+    if pending_indices and reasoning_off_fallback:
+        pending_indices = run_pending(
+            pending_indices,
+            generation_config=_good_option_reasoning_disabled_config(
+                resolved_config
+            ),
+        )
+
+    for frame_index in message_indices:
+        source = frame.iloc[frame_index]
+        parsed, response, reasoning, finish_reason = latest_by_index[frame_index]
+        row = _empty_result_row(
+            patient_id=str(source["patient_id"]),
+            trial_id=str(source["trial_id"]),
+            method="llm",
+            status=parsed.status,
+            drug_count=parsed.drug_count,
+        )
+        row.update(
+            {
+                "good_option_score": parsed.score,
+                "good_option_points": (
+                    parsed.points if parsed.status == "ok" else pd.NA
+                ),
+                "good_option_max_points": parsed.max_points or pd.NA,
+                "good_option_patient_disease_type": parsed.patient_disease_type,
+                "good_option_drug_assessments": list(parsed.drug_assessments),
+                "good_option_uncertainties": list(parsed.uncertainties),
+            }
+        )
+        if resolved_config.debug_mode:
             row.update(
                 {
-                    "good_option_score": parsed.score,
-                    "good_option_points": parsed.points if parsed.status == "ok" else pd.NA,
-                    "good_option_max_points": parsed.max_points or pd.NA,
-                    "good_option_patient_disease_type": parsed.patient_disease_type,
-                    "good_option_drug_assessments": list(parsed.drug_assessments),
-                    "good_option_uncertainties": list(parsed.uncertainties),
+                    "good_option_answer_text": response,
+                    "good_option_reasoning_text": reasoning,
+                    "good_option_finish_reason": finish_reason,
+                    "good_option_parse_error": parsed.parse_error,
                 }
             )
-            if resolved_config.debug_mode:
-                row.update(
-                    {
-                        "good_option_answer_text": response,
-                        "good_option_reasoning_text": generation.reasoning_outputs[output_index],
-                        "good_option_finish_reason": generation.finish_reasons[output_index],
-                        "good_option_parse_error": parsed.parse_error,
-                    }
-                )
-            rows[frame_index] = row
+        rows[frame_index] = row
     output = pd.DataFrame([row for row in rows if row is not None])
     metadata = {
         "config_snapshot": config_snapshot(resolved_config),
@@ -367,6 +536,8 @@ def score_good_options_with_llm(
         "catalog_compatibility_id": resolved_catalog.compatibility_id,
         "prompt_version": GOOD_OPTION_PROMPT_VERSION,
         "rubric_criteria": list(RUBRIC_CRITERIA),
+        "max_parse_attempts": parse_attempts,
+        "reasoning_off_fallback": bool(reasoning_off_fallback),
         "model_metadata": (
             {"llm_good_option": generation.model_metadata} if generation else {}
         ),

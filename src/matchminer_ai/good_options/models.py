@@ -11,8 +11,8 @@ from typing import Any, Mapping
 import pandas as pd
 
 
-CATALOG_SCHEMA_VERSION = "good-option-catalog-v2"
-ROLE_POLICY_VERSION = "ctgov-arms-active-entity-v2"
+CATALOG_SCHEMA_VERSION = "good-option-catalog-v3"
+ROLE_POLICY_VERSION = "ctgov-cancer-treatment-agent-screen-v3"
 SYNTHESIS_SCHEMA_VERSION = "drug-evidence-summary-v2"
 GOOD_OPTION_PROJECTION_VERSION = "good-option-drug-summary-v2"
 HELP_ME_CHOOSE_PROJECTION_VERSION = "help-me-choose-drug-summary-v2"
@@ -201,6 +201,7 @@ class GoodOptionCatalog:
     drug_summaries: pd.DataFrame
     drug_evidence: pd.DataFrame
     drug_research_attempts: pd.DataFrame
+    trial_intervention_screening: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     @property
     def compatibility_id(self) -> str:

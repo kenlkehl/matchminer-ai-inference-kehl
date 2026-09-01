@@ -54,8 +54,11 @@ Optional source-grounded extensions can also:
   exact caller-supplied space-to-paradigm membership graph, while preserving
   one-to-many mappings and paradigm caveat metadata;
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
-  deduplicate NCIt-normalized active drugs across trials, synthesize mechanism,
-  efficacy, biomarker prevalence, biomarker-directed benefit, and safety, then
+  LLM-screen registry entries for concrete agents with direct anticancer
+  treatment intent, deduplicate NCIt-normalized drugs across trials, synthesize
+  mechanism, efficacy, biomarker prevalence, biomarker-directed benefit, and
+  safety, then resume compatible atomic screening, research, and synthesis
+  checkpoints, and
   estimate patient-specific option quality from clean drug summaries with either
   a four-point-per-drug LLM rubric or a four-logit GoodOptionChecker; and
 - contextualize a trial space using heading-aware NCI PDQ, FDA

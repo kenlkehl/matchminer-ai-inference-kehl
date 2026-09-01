@@ -7,6 +7,7 @@ from matchminer_ai.contextualization import (
 from matchminer_ai.embedding import embed_for_matching
 from matchminer_ai.good_options import (
     build_good_option_catalog,
+    build_intervention_screening_messages,
     evaluate_good_options,
     load_good_option_catalog,
     score_good_options,
@@ -57,6 +58,7 @@ def test_imports():
     assert full_patient_screen is not None
     assert embed_for_matching is not None
     assert build_good_option_catalog is not None
+    assert build_intervention_screening_messages is not None
     assert load_good_option_catalog is not None
     assert score_good_options is not None
     assert score_good_options_with_llm is not None

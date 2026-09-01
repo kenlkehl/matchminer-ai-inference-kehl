@@ -526,15 +526,33 @@ for the patient-specific four-point-per-drug LLM scorer. Its `local` and
 The default request enables model thinking, permits up to 100,000 completion
 tokens within a 131,072-token local context, and uses a repetition penalty of
 1.1. Each scoring message describes exactly one patient; the backend may batch
-many independent messages in one run.
+many independent messages in one run. `score_good_options_with_llm` can
+selectively retry code-validation failures with `max_parse_attempts`; each
+follow-up includes the prior invalid answer, exact parser error, and finish
+reason. Set `reasoning_off_fallback=True` to add one final attempt with thinking
+disabled after the ordinary attempts are exhausted.
+
+## `good_option_catalog`
+
+Configuration for patient-free trial drug extraction, evidence synthesis, and
+clean task-specific projections. `synthesis_evidence_max_tokens` bounds the raw
+evidence packed for one drug. The stage-specific `synthesis_llm` override
+defaults to a 32,000-token completion budget so reasoning-enabled models can
+finish the final JSON; token-limited and blank final outputs are retried.
+`screening_max_attempts` and `synthesis_max_attempts` control structured-output retries.
+`screening_checkpoint_batch_size` and `synthesis_checkpoint_batch_size` bound
+LLM batches so successfully returned batches can be checkpointed throughout
+long catalog builds. Screening and synthesis LLM overrides inherit from
+`llm_good_option`.
 
 ## `good_option_checker`
 
 Configuration for the optional local GoodOptionChecker regression model. Its
-input is the patient summary followed by the web research extract and registry
-investigational-drug context. `model_name` is empty by default until a versioned
-trained artifact is configured. `device` and `max_length` are passed to the
-text-classification checker pipeline.
+input is the patient summary followed by one clean synthesized investigational-
+drug summary; URLs, registry metadata, and raw evidence are excluded.
+`model_name` is empty by default until a versioned trained artifact is
+configured. `device` and `max_length` are passed to the text-classification
+checker pipeline.
 
 ## `trial_space_contextualization`
 

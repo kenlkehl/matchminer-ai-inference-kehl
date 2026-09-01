@@ -733,7 +733,7 @@ def build_facet_query(drug: DrugIdentity, facet: str, *, round_index: int) -> st
         suffix += " review phase 1 phase 2 phase 3"
     elif round_index >= 2:
         suffix += " tumor subtype mutation amplification overexpression antigen"
-    return f"({quoted}) {suffix}".strip()
+    return f"({quoted}) cancer treatment {suffix}".strip()
 
 
 def _retry_after_seconds(error: Exception) -> float | None:

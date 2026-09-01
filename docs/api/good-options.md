@@ -7,29 +7,60 @@ patient scoring are separate, versioned stages.
 ## Build the patient-free catalog
 
 `build_good_option_catalog` accepts a list of NCT IDs. It fetches each current
-ClinicalTrials.gov record, resolves `DRUG` and `BIOLOGICAL` active entities and
-their investigational, uncertain, control, background, or supportive roles,
-normalizes drug identities with the bundled NCIt snapshot, and deduplicates the
-drugs across the complete run.
+ClinicalTrials.gov record, then uses the configured LLM to screen every `DRUG`
+and `BIOLOGICAL` entry in its public trial and arm context. Only concrete named
+agents with direct anticancer treatment intent proceed to normalization and
+research. Antitumor medicines, biologics, cell/gene therapies, therapeutic
+radiopharmaceuticals, and genuine named anticancer comparators are retained;
+supportive/procedural medicines, anesthetics, hemostatic agents, diagnostic
+tracers, prevention-only agents, dosing/cohort labels, and unnamed standard-of-
+care placeholders are excluded fail-closed. The screen also resolves retained
+agents' investigational, uncertain, control, background, or supportive roles.
+
+Every decision is retained in `trial_intervention_screening.parquet`, including
+the disposition, exclusion category, confidence, rationale, and supported
+active-entity names. Excluded entries never enter `trial_drug_index.parquet`,
+the unique-drug set, web queries, evidence retrieval, or synthesis. Retained
+identities are normalized with the bundled NCIt snapshot and deduplicated across
+the complete run.
 
 Each unique drug is researched once across mechanism and targets, human efficacy
 by tumor type and histology, biomarker prevalence, biomarker-directed human
 efficacy, and safety. The retriever uses bounded authoritative-source adapters
-plus full-text general-web documents. Technical failures are retried with
+plus full-text general-web documents. General-web queries include the explicit
+phrase `cancer treatment` to reduce name-collision results. Technical failures
+are retried with
 `Retry-After` or exponential backoff; successful empty results remain distinct
 from exhausted technical failures. Searches accept drug identity only and can
 never receive patient text.
 
 The configured LLM synthesizes the evidence ledger into structured facts with
-validated passage support IDs. The bundle stores two clean projections: a
+validated passage support IDs. A matched bundled NCIt definition is materialized
+as its own citable ledger passage rather than supplied as uncitable side context.
+Synthesis retains supported evidence across maturity levels—including ontology,
+preclinical, first-in-human, phase 1, registry, and mature clinical evidence—and
+labels its level without requiring approval, randomization, publication, or
+mature outcomes. Token-limited or blank final responses are retried, and the
+default synthesis completion budget is 32,000 tokens. The bundle stores two
+clean projections: a
 GoodOption summary without safety and a Help Me Choose summary with safety.
 URLs, queries, source labels, registry metadata, and failure notices remain in
 the internal Parquet ledger and do not appear in either patient-bearing prompt.
 
-Catalog writes are atomic. `validate_good_option_catalog` verifies hashes,
-component versions, NCIt compatibility, trial-drug references, terminal research
-states, and structured-fact evidence support. `load_good_option_catalog`
-validates by default.
+Catalog publication and its intermediate JSON checkpoints are atomic. By
+default, checkpoints are stored beside the requested catalog in
+`<catalog>_checkpoints`. Completed registry fetches, intervention screens, drug
+research, and drug syntheses are reused when the same build is restarted.
+Technically blocked fetches are retried. The checkpoint manifest fingerprints
+the NCT list, source/research settings, ontology version, prompt/schema versions,
+and teacher configuration; incompatible checkpoints fail explicitly instead of
+silently mixing evidence generations. Pass `checkpoint_path` to select another
+directory or `reset_checkpoint=True` to discard a recognized checkpoint bundle.
+
+`validate_good_option_catalog` verifies hashes, component versions, NCIt
+compatibility, intervention-screen decisions, trial-drug references, terminal
+research states, and structured-fact evidence support.
+`load_good_option_catalog` validates by default.
 
 ## Score a patient-trial candidate
 
@@ -64,6 +95,7 @@ trained model to use classifier mode; LLM mode is available through
         - build_good_option_catalog
         - validate_good_option_catalog
         - load_good_option_catalog
+        - build_intervention_screening_messages
         - build_role_resolution_messages
         - build_synthesis_messages
         - build_good_option_messages
