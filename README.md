@@ -130,6 +130,29 @@ uv pip install matchminer-ai
 See the example notebook for a full walkthrough using sample input data:
 [example notebook](https://github.com/dfci/matchminer-ai-inference/blob/main/examples/run_examples.ipynb)
 
+### Terminal LLM trial check
+
+After installing the package, point the interactive checker at a running vLLM
+OpenAI-compatible endpoint:
+
+```shell
+matchminer-ai-llm-trial-check http://localhost:8000/v1
+```
+
+From a source checkout, the equivalent direct script invocation is:
+
+```shell
+python llm_trial_check.py http://localhost:8000/v1
+```
+
+The command discovers the endpoint's model through `/v1/models`, then prompts
+for a multiline patient summary and trial space. End each paste with a line
+containing only `.done`. It prints the endpoint's complete separate reasoning
+trace, complete final answer, and the parsed 0-5 MatchMiner-AI score. If the
+server requires an API key, set `OPENAI_API_KEY` before running the command.
+The patient summary is sent to the specified endpoint, so use only an endpoint
+authorized for the sensitivity of the input data.
+
 ## Citation
 
 If you use `matchminer-ai`, please cite:

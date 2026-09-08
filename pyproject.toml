@@ -51,6 +51,9 @@ dependencies = [
   "transformers>=5.8.0",
 ]
 
+[project.scripts]
+matchminer-ai-llm-trial-check = "matchminer_ai.cli.llm_trial_check:main"
+
 [project.optional-dependencies]
 dev = [
   "pre-commit>=3.7",
