@@ -61,3 +61,23 @@ generation changes, regenerate the entire trial embedding corpus.
 
 These outputs are research prioritization signals. They do not establish a
 diagnosis, trial eligibility, or a treatment recommendation.
+
+## Trial-space numbering compatibility
+
+After the upstream integration, `summarize_trials` numbers new spaces from zero
+(`NCT12345678-0`, `NCT12345678-1`, ...). Earlier Kehl runs numbered them from one.
+The ranking API treats supplied IDs as opaque keys: existing one-based spaces,
+embeddings, and membership edges can still be used together without renumbering.
+
+Keep the original trial-space snapshot with its embeddings and membership graph.
+Do not join newly summarized zero-based spaces to an older one-based graph:
+overlapping IDs can silently refer to different spaces, even when every join
+key exists. ID validation alone cannot detect this mismatch.
+
+To migrate an unchanged snapshot, build an explicit old-to-new ID mapping and
+apply it together to the space table, embedding keys, and every membership edge,
+preserving one-to-many memberships. Verify the trial ID and exact space text
+before reusing a vector. If trials are summarized again, establish correspondence
+from their content and review memberships again; subtracting one from a suffix
+does not establish that regenerated spaces have the same meaning or order.
+This integration does not rewrite existing catalogs or membership files.

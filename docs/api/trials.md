@@ -7,6 +7,17 @@
         - summarize_trials
         - structure_trial_space
 
+`summarize_trials` preserves source-field formatting and starts newly generated
+clinical-space numbers at zero. With the remote backend, exhausted requests are
+reported in `trials_failed_inference` QC and excluded from the returned spaces,
+while successful trials remain available. Run metadata includes the installed
+package name and version.
+
+Earlier Kehl snapshots used one-based space IDs. Keep saved spaces, embeddings,
+and paradigm memberships from the same snapshot together; see
+[trial-space numbering compatibility](space-paradigms.md#trial-space-numbering-compatibility)
+before combining old artifacts with newly summarized trials.
+
 ## Trial-space eligibility criteria
 
 `extract_trial_space_eligibility_criteria` accepts one clinical-space summary

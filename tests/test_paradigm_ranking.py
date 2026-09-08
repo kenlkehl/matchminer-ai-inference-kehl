@@ -5,6 +5,7 @@ import pytest
 
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.paradigms import rank_patient_space_paradigms
+from matchminer_ai.trials.postprocess import postprocess_trial_summaries
 
 
 def _config() -> MMAIConfig:
@@ -203,6 +204,65 @@ def test_rank_patient_space_paradigms_reranks_and_preserves_fanout(monkeypatch):
         "trialspace-sha"
     )
     assert result.metadata["trial_embeddings_reused"] is False
+
+
+def test_new_zero_based_spaces_join_exact_memberships(
+    monkeypatch, mock_summarized_data, default_config
+):
+    """Postprocessed spaces retain their identity through ranking and fan-out."""
+    spaces, _ = postprocess_trial_summaries(mock_summarized_data, default_config)
+    assert spaces["space_trial_id"].tolist() == ["T1-0", "T1-1", "T1-2", "T2-0"]
+    patients, _, _, catalog = _inputs()
+    memberships = pd.DataFrame(
+        [
+            {"space_trial_id": "T1-0", "paradigm_id": "paradigm-a"},
+            {"space_trial_id": "T1-1", "paradigm_id": "paradigm-a"},
+            {"space_trial_id": "T1-1", "paradigm_id": "paradigm-b"},
+        ]
+    )
+
+    def fake_embed(frame, *, entity_type, **kwargs):
+        key = "patient_id" if entity_type == "patient" else "space_trial_id"
+        output = frame[[key]].copy()
+        output["embedding"] = [[1.0, 0.0] for _ in range(len(output))]
+        return output, _embedding_metadata()
+
+    def fake_score(frame, **kwargs):
+        output = frame[["patient_id", "space_trial_id"]].copy()
+        output["match_quality_score"] = output["space_trial_id"].map(
+            {"T1-0": 0.8, "T1-1": 0.9, "T1-2": 0.1, "T2-0": 0.1}
+        )
+        output["match_quality_pass"] = output["match_quality_score"] >= 0.2
+        return output, {"model_metadata": {}}
+
+    monkeypatch.setattr(
+        "matchminer_ai.paradigms.ranking.embed_for_matching", fake_embed
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.paradigms.ranking.score_match_quality", fake_score
+    )
+    result = rank_patient_space_paradigms(
+        patients,
+        spaces,
+        memberships,
+        catalog,
+        config=_config(),
+        retrieval_k=4,
+        top_space_count=2,
+    )
+
+    assert result.space_matches["space_trial_id"].tolist() == ["T1-1", "T1-0"]
+    mapped = result.space_paradigm_matches
+    assert list(zip(mapped["space_trial_id"], mapped["paradigm_id"])) == [
+        ("T1-1", "paradigm-a"),
+        ("T1-1", "paradigm-b"),
+        ("T1-0", "paradigm-a"),
+    ]
+    assert result.space_matches["clinical_space_summary"].tolist() == (
+        spaces.set_index("space_trial_id")
+        .loc[["T1-1", "T1-0"], "clinical_space_summary"]
+        .tolist()
+    )
 
 
 def test_rank_patient_space_paradigms_allows_shared_spaces_across_patients(

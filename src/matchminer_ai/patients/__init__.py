@@ -7,6 +7,7 @@ from typing import cast
 
 import pandas as pd
 
+from matchminer_ai._metadata import package_metadata
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 
 from .full_screen import (
@@ -178,6 +179,7 @@ def summarize_patients(
 
     if return_metadata:
         metadata_payload = {
+            "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
                 "patient_summarizer": metadata["model_metadata"],
