@@ -1,0 +1,5 @@
+Patient cancer history:
+{patient_summary}
+
+Investigational drug evidence summary:
+{drug_summary}

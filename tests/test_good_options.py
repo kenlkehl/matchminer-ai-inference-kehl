@@ -10,10 +10,18 @@ import httpx
 import pandas as pd
 import pytest
 
-import matchminer_ai.good_options.catalog as catalog_module
+import matchminer_ai.trials.drug_catalog as catalog_module
 from matchminer_ai.config import load_default_preset
-from matchminer_ai.good_options import (
+from matchminer_ai.matching import (
     RUBRIC_CRITERIA,
+    build_good_option_checker_text,
+    build_good_option_messages,
+    evaluate_good_options,
+    parse_good_option_response,
+    score_good_options,
+    score_good_options_with_llm,
+)
+from matchminer_ai.trials import (
     DrugIdentity,
     DrugSummary,
     EvidencePassage,
@@ -21,16 +29,10 @@ from matchminer_ai.good_options import (
     ResearchSettings,
     TrialDrugAssignment,
     build_good_option_catalog,
-    build_good_option_checker_text,
-    build_good_option_messages,
-    evaluate_good_options,
     load_good_option_catalog,
-    parse_good_option_response,
     research_drug,
-    score_good_options,
-    score_good_options_with_llm,
 )
-from matchminer_ai.good_options.research import (
+from matchminer_ai.trials.drug_research import (
     GeneralWebEvidenceSource,
     build_facet_query,
 )
@@ -64,7 +66,9 @@ def _summary(drug_id: str, name: str, *, status: str = "complete") -> DrugSummar
 def _catalog(*, blocked_second: bool = False) -> GoodOptionCatalog:
     summaries = [
         _summary("D1", "Novel Agent"),
-        _summary("D2", "Second Agent", status="blocked" if blocked_second else "complete"),
+        _summary(
+            "D2", "Second Agent", status="blocked" if blocked_second else "complete"
+        ),
         _summary("D3", "Control Agent"),
     ]
     assignments = [
@@ -159,9 +163,11 @@ def test_prompt_is_patient_first_metadata_free_and_omits_control() -> None:
     )
     prompt = messages[1]["content"]
 
-    assert prompt.index("PATIENT CANCER HISTORY") < prompt.index(
-        "SCOREABLE DRUG SUMMARIES"
-    ) < prompt.index("RUBRIC")
+    assert (
+        prompt.index("PATIENT CANCER HISTORY")
+        < prompt.index("SCOREABLE DRUG SUMMARIES")
+        < prompt.index("RUBRIC")
+    )
     assert "PRIVATE_PATIENT" in prompt
     assert "Novel Agent" in prompt and "Second Agent" in prompt
     assert "Control Agent" not in prompt
@@ -223,9 +229,7 @@ def test_response_parser_keeps_nested_criteria_validation_strict() -> None:
         assessment["criteria"] = {
             criterion: assessment.pop(criterion) for criterion in RUBRIC_CRITERIA
         }
-    response["drug_assessments"][0]["criteria"]["disease_type_benefit"][
-        "point"
-    ] = 2
+    response["drug_assessments"][0]["criteria"]["disease_type_benefit"]["point"] = 2
 
     parsed = parse_good_option_response(
         json.dumps(response),
@@ -252,7 +256,7 @@ def test_llm_scoring_uses_catalog_and_marks_blocked_trial_unscored(
         )
 
     monkeypatch.setattr(
-        "matchminer_ai.good_options.scoring._run_good_option_llm", fake_run
+        "matchminer_ai.matching.good_options._run_good_option_llm", fake_run
     )
     pairs = pd.DataFrame(
         [
@@ -291,7 +295,7 @@ def test_llm_scoring_rejects_token_limited_json(
         )
 
     monkeypatch.setattr(
-        "matchminer_ai.good_options.scoring._run_good_option_llm", fake_run
+        "matchminer_ai.matching.good_options._run_good_option_llm", fake_run
     )
     config = load_default_preset()
     config.debug_mode = True
@@ -346,7 +350,7 @@ def test_llm_scoring_retries_parse_failures_with_feedback_then_disables_reasonin
         )
 
     monkeypatch.setattr(
-        "matchminer_ai.good_options.scoring._run_good_option_llm", fake_run
+        "matchminer_ai.matching.good_options._run_good_option_llm", fake_run
     )
     config = load_default_preset()
     config.debug_mode = True
@@ -375,15 +379,15 @@ def test_llm_scoring_retries_parse_failures_with_feedback_then_disables_reasonin
     assert [len(call["messages"]) for call in calls] == [2, 1, 1, 1]
     assert [len(calls[index]["messages"][0]) for index in (1, 2, 3)] == [4, 4, 4]
     assert calls[1]["messages"][0][-2] == {"role": "assistant", "content": "{}"}
-    assert "No JSON object containing drug_assessments" in calls[1]["messages"][0][
-        -1
-    ]["content"]
-    assert "patient_disease_type must be non-empty" in calls[2]["messages"][0][
-        -1
-    ]["content"]
-    assert "reached its output token limit" in calls[3]["messages"][0][-1][
-        "content"
-    ]
+    assert (
+        "No JSON object containing drug_assessments"
+        in calls[1]["messages"][0][-1]["content"]
+    )
+    assert (
+        "patient_disease_type must be non-empty"
+        in calls[2]["messages"][0][-1]["content"]
+    )
+    assert "reached its output token limit" in calls[3]["messages"][0][-1]["content"]
     assert [call["local_thinking"] for call in calls] == [True, True, True, False]
     assert [call["remote_thinking"] for call in calls] == [True, True, True, False]
     assert config.llm_good_option["local"]["chat_template_kwargs"] == {
@@ -406,10 +410,7 @@ def test_classifier_aggregates_every_drug_by_criterion(
         del checker_config, model_metadata_cache_dir
         assert return_all_scores
         captured.extend(prompts)
-        first = [
-            {"label": criterion, "score": 1.0}
-            for criterion in RUBRIC_CRITERIA
-        ]
+        first = [{"label": criterion, "score": 1.0} for criterion in RUBRIC_CRITERIA]
         second = [
             {"label": criterion, "score": value}
             for criterion, value in zip(
@@ -420,7 +421,7 @@ def test_classifier_aggregates_every_drug_by_criterion(
 
     config = load_default_preset()
     config.raw["good_option_checker"]["model_name"] = "local/checker"
-    monkeypatch.setattr("matchminer_ai.good_options.scoring.run_checker", fake_checker)
+    monkeypatch.setattr("matchminer_ai.matching.good_options.run_checker", fake_checker)
     pairs = pd.DataFrame(
         [
             {
@@ -554,7 +555,7 @@ def test_general_web_search_failures_retry_with_a_bounded_result_budget(
         return function(*args, **kwargs)
 
     monkeypatch.setattr(
-        "matchminer_ai.good_options.research.asyncio.to_thread", run_inline
+        "matchminer_ai.trials.drug_research.asyncio.to_thread", run_inline
     )
 
     _, attempts, status, _ = asyncio.run(
@@ -858,10 +859,10 @@ def test_catalog_build_deduplicates_drugs_and_indexes_control_roles(
         }
 
     monkeypatch.setattr(
-        "matchminer_ai.good_options.catalog.fetch_trial_study", fake_fetch
+        "matchminer_ai.trials.drug_catalog.fetch_trial_study", fake_fetch
     )
     monkeypatch.setattr(
-        "matchminer_ai.good_options.catalog.load_ncit_drug_index",
+        "matchminer_ai.trials.drug_catalog.load_ncit_drug_index",
         lambda _resource: _NoNCIt(),
     )
     output = tmp_path / "catalog"
@@ -878,11 +879,12 @@ def test_catalog_build_deduplicates_drugs_and_indexes_control_roles(
     )
 
     assert len(catalog.drug_summaries) == 2  # Novel + control, deduplicated by name.
-    scoreable = catalog.assignments_for_trial(
-        "NCT12345678", scoreable_only=True
-    )
+    scoreable = catalog.assignments_for_trial("NCT12345678", scoreable_only=True)
     assert [item.preferred_name for item in scoreable] == ["Novel Agent"]
-    all_roles = {item.preferred_name: item.role for item in catalog.assignments_for_trial("NCT12345678")}
+    all_roles = {
+        item.preferred_name: item.role
+        for item in catalog.assignments_for_trial("NCT12345678")
+    }
     assert all_roles["Control Agent"] == "control"
     novel_summary = catalog.summary_for_drug(scoreable[0].drug_id)
     assert novel_summary is not None
@@ -1022,9 +1024,10 @@ def test_default_intervention_screen_retries_invalid_schema(
         assert stage == "screening"
         assert len(messages_list) == 1
         if calls == 1:
-            assert "previous response failed validation" not in messages_list[0][-1][
-                "content"
-            ]
+            assert (
+                "previous response failed validation"
+                not in messages_list[0][-1]["content"]
+            )
             return ["not valid screening JSON"]
         assert "previous response failed validation" in messages_list[0][-1]["content"]
         assert "expected intervention indexes" in messages_list[0][-1]["content"]
@@ -1105,9 +1108,7 @@ def test_intervention_screen_accepts_active_entities_explicit_in_description() -
             "armGroupLabels": ["Experimental"],
         }
     ]
-    interventions = catalog_module._extract_registry_interventions(
-        "NCT12345678", study
-    )
+    interventions = catalog_module._extract_registry_interventions("NCT12345678", study)
     output = {
         "0": {
             "research_disposition": "include",
@@ -1395,9 +1396,9 @@ def test_catalog_resumes_completed_drug_synthesis(
     with pytest.raises(SimulatedDisconnect):
         asyncio.run(build_good_option_catalog(**arguments))
     assert synthesizer.calls == ["Novel Agent", "Control Agent"]
-    assert len(
-        list((tmp_path / "catalog-checkpoints" / "synthesis").glob("*.json"))
-    ) == 1
+    assert (
+        len(list((tmp_path / "catalog-checkpoints" / "synthesis").glob("*.json"))) == 1
+    )
 
     asyncio.run(build_good_option_catalog(**arguments))
     assert synthesizer.calls == [

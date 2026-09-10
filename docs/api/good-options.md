@@ -4,6 +4,47 @@ Good Option scoring is a patient-trial ranking signal, not an eligibility
 determination, response probability, or treatment recommendation. Research and
 patient scoring are separate, versioned stages.
 
+Use the existing trial and matching stage namespaces:
+
+```python
+from matchminer_ai.trials import build_good_option_catalog, load_good_option_catalog
+from matchminer_ai.matching import score_good_options_with_llm, score_good_options
+
+# Public-only research stage; run once before patient scoring.
+catalog = await build_good_option_catalog(nct_ids, "drug_catalog", config=config)
+# For subsequent runs: catalog = load_good_option_catalog("drug_catalog")
+
+# candidate_pairs: patient_id, trial_id, cancer_history_summary
+scores = score_good_options_with_llm(candidate_pairs, catalog=catalog, config=config)
+# With a configured compatible classifier:
+# scores = score_good_options(candidate_pairs, catalog=catalog, config=config)
+```
+
+Patient summaries reach the configured LLM endpoint in LLM mode. Use an
+endpoint authorized for the sensitivity of the input. Catalog construction
+accepts NCT IDs only and never receives patient context.
+
+The old `matchminer_ai.good_options` namespace and its submodules remain
+compatibility aliases. Trial research is implemented in `trials/drug_catalog.py`,
+`trials/drug_research.py`, and `trials/drug_evidence.py`; patient scoring is in
+`matching/good_options.py`.
+
+## Prompt resources
+
+All templates below are bundled under `src/matchminer_ai/prompts/`:
+
+| Files | Purpose |
+| --- | --- |
+| `trial_drug_screen.system.txt`, `.user.txt`, `.retry.txt` | Identify anticancer agents and classify their roles in each trial. |
+| `trial_drug_synthesis.system.txt`, `.user.txt`, `.retry.txt` | Synthesize passage-grounded drug evidence. |
+| `llm_good_option.system.txt`, `.user.txt`, `.rubric.txt`, `.retry.txt` | Apply the four-criterion patient-drug rubric and correct invalid responses. |
+| `good_option_checker_template.txt` | Format the identical patient-drug input for classifier training and inference. |
+
+This relocation preserves the rendered prompts, rubric versions, catalog
+compatibility IDs, and checkpoint source fingerprints. Existing compatible
+catalogs, label shards, and classifier inputs do not require regeneration.
+Future prompt changes still require the usual prompt/artifact-version review.
+
 ## Build the patient-free catalog
 
 `build_good_option_catalog` accepts a list of NCT IDs. It fetches each current
@@ -89,7 +130,7 @@ versioned public v2 checker artifact is bundled yet. Configure a compatible
 trained model to use classifier mode; LLM mode is available through
 `llm_good_option`.
 
-::: matchminer_ai.good_options
+::: matchminer_ai.trials
     options:
       members:
         - build_good_option_catalog
@@ -98,6 +139,10 @@ trained model to use classifier mode; LLM mode is available through
         - build_intervention_screening_messages
         - build_role_resolution_messages
         - build_synthesis_messages
+
+::: matchminer_ai.matching
+    options:
+      members:
         - build_good_option_messages
         - build_good_option_checker_text
         - score_good_options_with_llm

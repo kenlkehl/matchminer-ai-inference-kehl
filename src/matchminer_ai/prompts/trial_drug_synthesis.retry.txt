@@ -1,0 +1,3 @@
+{previous_content}
+
+RETRY {attempt}/{max_attempts}: The previous response was not usable because {previous_error}. Re-review all supplied passages, retain supported early-stage evidence, cite only P# identifiers, and return the complete concise JSON object within the output budget.

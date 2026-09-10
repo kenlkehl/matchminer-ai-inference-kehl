@@ -169,3 +169,46 @@ __all__ = [
     "structure_trial_space",
     "summarize_trials",
 ]
+
+
+# Resolve optional drug research/scoring APIs without eager cross-stage imports.
+_GOOD_OPTION_EXPORTS = {
+    "CATALOG_CHECKPOINT_SCHEMA_VERSION": "trials.drug_catalog",
+    "INTERVENTION_EXCLUSION_CATEGORIES": "trials.drug_catalog",
+    "INTERVENTION_SCREENING_DISPOSITIONS": "trials.drug_catalog",
+    "ROLE_PROMPT_VERSION": "trials.drug_catalog",
+    "SYNTHESIS_PROMPT_VERSION": "trials.drug_catalog",
+    "build_good_option_catalog": "trials.drug_catalog",
+    "build_intervention_screening_messages": "trials.drug_catalog",
+    "build_role_resolution_messages": "trials.drug_catalog",
+    "build_synthesis_messages": "trials.drug_catalog",
+    "load_good_option_catalog": "trials.drug_catalog",
+    "validate_good_option_catalog": "trials.drug_catalog",
+    "CATALOG_SCHEMA_VERSION": "trials.drug_evidence",
+    "DrugIdentity": "trials.drug_evidence",
+    "DrugSummary": "trials.drug_evidence",
+    "EvidencePassage": "trials.drug_evidence",
+    "GoodOptionCatalog": "trials.drug_evidence",
+    "ResearchAttempt": "trials.drug_evidence",
+    "TrialDrugAssignment": "trials.drug_evidence",
+    "DDGSWebProvider": "trials.drug_research",
+    "DrugEvidenceSource": "trials.drug_research",
+    "GeneralWebProvider": "trials.drug_research",
+    "ResearchSettings": "trials.drug_research",
+    "build_facet_query": "trials.drug_research",
+    "default_sources": "trials.drug_research",
+    "research_drug": "trials.drug_research",
+}
+__all__ += list(_GOOD_OPTION_EXPORTS)
+
+
+def __getattr__(name: str):
+    if name in _GOOD_OPTION_EXPORTS:
+        from importlib import import_module
+
+        value = getattr(
+            import_module(f"matchminer_ai.{_GOOD_OPTION_EXPORTS[name]}"), name
+        )
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

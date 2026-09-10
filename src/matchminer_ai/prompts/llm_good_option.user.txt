@@ -1,0 +1,10 @@
+PATIENT CANCER HISTORY
+{patient}
+
+SCOREABLE DRUG SUMMARIES
+{drug_sections}
+
+RUBRIC
+{rubric}
+
+Score exactly these drug names in order: {names_json}. Return one object with patient_disease_type, drug_assessments, and key_uncertainties. Each drug assessment must contain drug_name, targeted_biomarkers, and one object for each criterion. Each criterion object contains only point (integer 0 or 1) and a concise drug-specific rationale. Do not return totals; code computes them.

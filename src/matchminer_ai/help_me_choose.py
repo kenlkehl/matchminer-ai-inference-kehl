@@ -41,7 +41,7 @@ from matchminer_ai.llm.remote_inference import normalize_openai_base_url
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
-    from matchminer_ai.good_options import GoodOptionCatalog
+    from matchminer_ai.trials import GoodOptionCatalog
 
 
 CLINICAL_TRIALS_API = "https://clinicaltrials.gov/api/v2/studies"
@@ -638,7 +638,7 @@ def build_comparison_messages(
 ) -> tuple[list[dict[str, str]], tuple[ReportSource, ...]]:
     """Build the first patient-bearing artifact from clean catalog summaries."""
 
-    from matchminer_ai.good_options import GoodOptionCatalog
+    from matchminer_ai.trials import GoodOptionCatalog
 
     if not isinstance(catalog, GoodOptionCatalog):
         raise TypeError("catalog must be a loaded, validated GoodOptionCatalog.")
@@ -935,7 +935,7 @@ async def generate_trial_comparison(
     if not resolved_good_options and normalized_method != "none":
         import pandas as pd
 
-        from matchminer_ai.good_options import evaluate_good_options
+        from matchminer_ai.matching import evaluate_good_options
 
         scoring_rows = []
         seen_trials: set[str] = set()

@@ -71,6 +71,16 @@ is a separate API that sends patient context only to the configured LLM
 backend. These extensions produce research considerations, not treatment
 recommendations, guideline compliance, or eligibility determinations.
 
+Good Option APIs follow the same stage boundaries as the other matching
+components: import `build_good_option_catalog`, `load_good_option_catalog`, and
+`validate_good_option_catalog` from `matchminer_ai.trials`, and import
+`score_good_options`, `score_good_options_with_llm`, or `evaluate_good_options`
+from `matchminer_ai.matching`. Screening, synthesis, scoring, retry, and checker
+input templates live in `src/matchminer_ai/prompts/`. The former
+`matchminer_ai.good_options` imports remain compatibility aliases. This source
+refactor preserves prompt text, score semantics, and existing artifact and
+checkpoint compatibility.
+
 The optional space-paradigm roll-up does not bundle a canonical paradigm
 catalog. It consumes caller-supplied trial spaces, exact membership edges, and
 one-line paradigm descriptors. Its ranking is a transparent roll-up of matching

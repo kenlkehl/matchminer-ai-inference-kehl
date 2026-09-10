@@ -1,0 +1,4 @@
+Your previous response could not be accepted by the JSON validator.
+Validation error: {parse_error}{finish_reason_line}
+Return a complete replacement JSON object that fixes this exact error.
+Do not return a patch, explanation, Markdown fence, or hidden reasoning.

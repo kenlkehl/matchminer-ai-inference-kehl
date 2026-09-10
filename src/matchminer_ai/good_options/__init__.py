@@ -1,4 +1,6 @@
-"""Catalog-backed GoodOption drug research, synthesis, and scoring APIs."""
+"""Compatibility exports; use :mod:`matchminer_ai.trials` and
+:mod:`matchminer_ai.matching` for trial drug research and patient scoring.
+"""
 
 from .catalog import (
     CATALOG_CHECKPOINT_SCHEMA_VERSION,
