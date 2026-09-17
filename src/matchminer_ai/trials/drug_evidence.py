@@ -13,10 +13,10 @@ import pandas as pd
 
 CATALOG_SCHEMA_VERSION = "good-option-catalog-v3"
 ROLE_POLICY_VERSION = "ctgov-cancer-treatment-agent-screen-v3"
-SYNTHESIS_SCHEMA_VERSION = "drug-evidence-summary-v2"
-GOOD_OPTION_PROJECTION_VERSION = "good-option-drug-summary-v2"
-HELP_ME_CHOOSE_PROJECTION_VERSION = "help-me-choose-drug-summary-v2"
-GOOD_OPTION_PROMPT_VERSION = "good-option-patient-drug-summaries-v8"
+SYNTHESIS_SCHEMA_VERSION = "drug-evidence-summary-v3"
+GOOD_OPTION_PROJECTION_VERSION = "good-option-drug-summary-v3"
+HELP_ME_CHOOSE_PROJECTION_VERSION = "help-me-choose-drug-summary-v3"
+GOOD_OPTION_PROMPT_VERSION = "good-option-patient-drug-summaries-v9"
 GOOD_OPTION_INPUT_VERSION = "patient-plus-drug-summary-v2-four-logit"
 GOOD_OPTION_LABEL_SCHEMA_VERSION = "good-option-four-binary-per-drug-v9"
 

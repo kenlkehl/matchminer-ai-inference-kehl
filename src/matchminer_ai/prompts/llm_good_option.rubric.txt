@@ -1,5 +1,21 @@
-Four binary criteria for each drug:
-1. disease_type_benefit: 1 only for human clinical benefit from this drug, alone or in a regimen containing it, in the patient's active disease and relevant histology/subtype. Qualifying outcomes include objective response, durable disease control, PFS, or OS. A combination result must acknowledge that this drug's individual contribution is unresolved. Score 0 regardless of that published evidence whenever the patient's treatment history shows this drug was already given or is being given now, because an agent the patient has already received is not a new option for them. Match on the active agent rather than a trade name, count a named regimen as receipt of every agent it contains, and count ongoing or current use as receipt. Do not infer receipt that the treatment history does not state.
-2. common_biomarker_in_disease: 1 only if this drug directly targets a biomarker and the exact biomarker form has prevalence at least 20% in the full relevant disease/histology population, or an authoritative source calls it common, frequent, or highly expressed in that full population. Enriched or already biomarker-positive denominators do not qualify.
-3. patient_biomarker_targeted: 1 only if the patient's own tumor summary explicitly documents the exact biomarker, alteration, antigen, or expression state directly targeted by this drug.
-4. biomarker_targeted_benefit: 1 only for human benefit from therapeutically targeting that same biomarker documented in the patient's tumor. An explicit prior patient benefit qualifies only when the target relationship is supplied. Preclinical evidence does not qualify.
+Four yes-or-no questions, each worth one point, asked separately about each drug. They are independent: a drug can earn the first and none of the others, or the reverse. Give each a rationale of a sentence or two naming the specific evidence, or the specific gap, that decided it, and saying whether that evidence concerns this agent or its class.
+
+Whenever biomarkers or "targets" are mentioned, this can mean a specific protein or gene target, but it could also mean a more general molecular signature.
+
+1. disease_type_benefit — Has this drug, or its class, helped people who have what this patient has?
+
+Score 1 when the supplied evidence documents human clinical benefit in the patient's active disease and its relevant histology or subtype, from this drug or from agents sharing its target or mechanism, given alone or in a regimen. Objective response, durable disease control, PFS, and OS all count. Where the result comes from a combination, say so, since this drug's individual contribution stays unresolved.
+
+Score 0 whatever the literature shows if the patient's treatment history says they already received this drug or are on it now. An agent someone has already had is a spent option for them. Match on the active agent rather than a brand name, count a named regimen as receipt of every agent in it, and count ongoing use as receipt. Never infer a receipt the history omits. Prior receipt of a different agent from the same class leaves the point intact; mention it in the rationale, because it bears on whether this trial adds anything for this patient.
+
+2. common_biomarker_in_disease — Is the feature this drug, or its class, goes after common in this disease?
+
+This asks whether the trial is broadly relevant to people with this diagnosis, setting aside what this particular tumor was tested for. Score 1 when the drug or its class acts on a specific biomarker and the supplied evidence puts that exact biomarker form at 20% or more of the full relevant disease or histology population, or has an authoritative source call it common, frequent, or highly expressed there. A prevalence measured in an enriched or already biomarker-positive cohort describes a selected group and fails this bar. A drug with no specific molecular target scores 0.
+
+3. patient_biomarker_targeted — Does this patient's tumor have that feature?
+
+Score 1 when the patient's tumor summary explicitly documents the molecular feature this drug or its class acts on: the direct target, or a biomarker the supplied evidence establishes as predicting benefit from this drug or its mechanism. The feature has to appear in this patient's summary. A diagnosis that commonly carries the feature stands in for nothing here. Absent or untested scores 0.
+
+4. biomarker_targeted_benefit — Has targeting that feature helped people?
+
+Score 1 when the supplied evidence documents human benefit from therapeutically targeting the same feature you credited in criterion 3, in patients whose tumors had it, whether that benefit was shown with this drug or with agents of its class. A benefit reported in this patient counts when the evidence also supplies the target relationship. Preclinical and mechanistic support fall short, as does a target relationship with no human outcome attached.

@@ -1,10 +1,33 @@
+Here is the case.
+
 PATIENT CANCER HISTORY
 {patient}
 
-SCOREABLE DRUG SUMMARIES
+EXPERIMENTAL DRUGS IN THIS TRIAL, AND THE LITERATURE RETRIEVED FOR EACH
 {drug_sections}
 
-RUBRIC
+HOW TO SCORE
 {rubric}
 
-Score exactly these drug names in order: {names_json}. Return one object with patient_disease_type, drug_assessments, and key_uncertainties. Each drug assessment must contain drug_name, targeted_biomarkers, and one object for each criterion. Each criterion object contains only point (integer 0 or 1) and a concise drug-specific rationale. Do not return totals; code computes them.
+Score exactly these drugs, in this order: {names_json}. Use each name exactly as written there, so the answers can be matched back.
+
+Start by naming the patient's disease as you read it from the history, including the histology or subtype if stated, since the first two criteria turn on what counts as "this disease." Then work through the four criteria for each drug in turn. List the biomarkers each drug is described as going after, whether or not this patient has them. Use key_uncertainties for anything a reviewer should know that the four criteria cannot carry: a relevant trial that reports no outcome yet, a biomarker the patient was never tested for, prior exposure to a same-class agent, a point that rests on class evidence where agent-specific data is absent.
+
+Return exactly this shape, with no prose around it and no Markdown fence:
+
+{{
+  "patient_disease_type": "<disease, with histology or subtype if the history states one>",
+  "drug_assessments": [
+    {{
+      "drug_name": "<exactly as given above>",
+      "targeted_biomarkers": ["<biomarker this drug acts on>"],
+      "disease_type_benefit":        {{"point": 0, "rationale": "<the evidence or gap that decided it>"}},
+      "common_biomarker_in_disease": {{"point": 0, "rationale": "..."}},
+      "patient_biomarker_targeted":  {{"point": 0, "rationale": "..."}},
+      "biomarker_targeted_benefit":  {{"point": 0, "rationale": "..."}}
+    }}
+  ],
+  "key_uncertainties": ["<what a reviewer should know that the four criteria miss>"]
+}}
+
+Every point must be the integer 0 or 1, never true or false, and every rationale must be non-empty and specific to that drug. Do not add totals or scores; code computes those from your points.

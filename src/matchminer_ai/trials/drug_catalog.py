@@ -7,6 +7,7 @@ import contextlib
 import hashlib
 import inspect
 import json
+import logging
 import os
 import re
 import shutil
@@ -1008,16 +1009,16 @@ def _synthesis_fact_validation_error(
             if not isinstance(raw, Mapping):
                 invalid += 1
                 continue
-            claim = clean_text(raw.get("claim"), max_chars=3000)
+            text = clean_text(raw.get("text"), max_chars=3000)
             support_ids = _supported_passage_ids(
                 raw.get("support_ids", []), passage_id_map=passage_id_map
             )
-            if not claim or (evidence and not support_ids):
+            if not text or (evidence and not support_ids):
                 invalid += 1
     if invalid:
         return (
-            f"{invalid} fact item(s) lacked a non-empty claim or a supported P# "
-            "citation; every non-limitation fact must cite supplied passage IDs"
+            f"{invalid} fact item(s) lacked a non-empty text field or a supported "
+            "P# citation; every non-limitation fact needs both"
         )
     return None
 
@@ -1046,13 +1047,13 @@ def _validate_structured_facts(
         for raw in raw_items:
             if not isinstance(raw, Mapping):
                 continue
-            claim = re.sub(
+            text = re.sub(
                 r"https?://\S+|www\.\S+",
                 "",
-                clean_text(raw.get("claim"), max_chars=3000),
+                clean_text(raw.get("text"), max_chars=3000),
                 flags=re.IGNORECASE,
             ).strip()
-            if not claim:
+            if not text:
                 continue
             support_ids = _supported_passage_ids(
                 raw.get("support_ids", []), passage_id_map=passage_id_map
@@ -1063,13 +1064,49 @@ def _validate_structured_facts(
             record = {
                 str(key): value
                 for key, value in raw.items()
-                if key not in {"claim", "support_ids"}
+                if key not in {"text", "support_ids"}
             }
-            record["claim"] = claim
+            record["text"] = text
             record["support_ids"] = [passage_id_map[item] for item in support_ids]
             items.append(record)
         validated[category] = items
     return validated
+
+
+_ATTRIBUTION_FIELDS = {
+    "efficacy_by_tumor": ("tumor_type", "histology", "regimen", "evidence_level"),
+    "biomarker_directed_efficacy": (
+        "biomarker",
+        "tumor_type",
+        "histology",
+        "regimen",
+        "evidence_level",
+    ),
+    "biomarker_prevalence": ("biomarker", "tumor_type", "prevalence", "denominator"),
+}
+
+
+def _attribution_prefix(
+    category: str, item: Mapping[str, Any], *, max_chars: int
+) -> str:
+    """Render the fields that say who a statement is about, where they exist.
+
+    The synthesis schema carries tumor type, histology, regimen, biomarker and
+    prevalence denominator alongside each statement. They are what makes a
+    statement answerable for one patient, so they belong in the projection.
+    """
+    fields = _ATTRIBUTION_FIELDS.get(category)
+    if not fields or max_chars < 8:
+        return ""
+    parts = [
+        f"{field.replace('_', ' ')}: {value}"
+        for field in fields
+        if (value := clean_text(item.get(field), max_chars=200))
+    ]
+    if not parts:
+        return ""
+    prefix = " | ".join(parts)
+    return prefix if len(prefix) <= max_chars else f"{prefix[: max_chars - 1].rstrip()}…"
 
 
 def _render_summary(
@@ -1113,10 +1150,15 @@ def _render_summary(
             remaining = section_budget - used
             if remaining <= 3:
                 break
-            claim = clean_text(item.get("claim"), max_chars=min(1500, remaining - 2))
-            if not claim:
+            text = clean_text(item.get("text"), max_chars=min(1500, remaining - 2))
+            if not text:
                 continue
-            line = f"- {claim}"
+            # Synthesis records which tumor, biomarker and regimen each statement
+            # belongs to. Rendering the text alone strips that attribution, so a
+            # reader sees "prolonged PFS (15.1 vs 10.6 months)" with no disease
+            # attached and cannot tell whether it applies to this patient.
+            prefix = _attribution_prefix(category, item, max_chars=remaining - len(text) - 6)
+            line = f"- [{prefix}] {text}" if prefix else f"- {text}"
             lines.append(line)
             used += len(line) + 1
     rendered = "\n".join(lines)
@@ -1133,7 +1175,7 @@ async def _default_synthesize_many(
     if not drugs_and_evidence:
         return {}
     token_limit = int(
-        config.good_option_catalog.get("synthesis_evidence_max_tokens", 64_000)
+        config.good_option_catalog.get("synthesis_evidence_max_tokens", 190_000)
     )
     character_limit = max(4_000, token_limit * 4)
 
@@ -1166,7 +1208,6 @@ async def _default_synthesize_many(
         (drug, bounded(evidence)) for drug, evidence in drugs_and_evidence
     ]
     parsed: dict[str, Mapping[str, Any]] = {}
-    last_schema_valid: dict[str, Mapping[str, Any]] = {}
     validation_errors: dict[str, str] = {}
     pending = list(bounded_inputs)
     max_attempts = max(
@@ -1227,7 +1268,6 @@ async def _default_synthesize_many(
                 f"P{index}": item.evidence_id
                 for index, item in enumerate(bounded_evidence, start=1)
             }
-            last_schema_valid[drug.drug_id] = raw
             fact_error = _synthesis_fact_validation_error(
                 raw, evidence=bounded_evidence
             )
@@ -1246,9 +1286,15 @@ async def _default_synthesize_many(
                 continue
             parsed[drug.drug_id] = raw
         pending = retry
+    # A response that failed fact validation on every attempt is not a result.
+    # Storing it here previously turned a large silent fact loss into a clean
+    # "0 failures" report; leaving it out marks the drug blocked instead.
     for drug, _evidence in pending:
-        if drug.drug_id in last_schema_valid:
-            parsed.setdefault(drug.drug_id, last_schema_valid[drug.drug_id])
+        logging.warning(
+            "Synthesis for %s failed validation on every attempt: %s",
+            drug.preferred_name,
+            validation_errors.get(drug.drug_id, "unknown error"),
+        )
     return parsed
 
 

@@ -536,9 +536,18 @@ disabled after the ordinary attempts are exhausted.
 
 Configuration for patient-free trial drug extraction, evidence synthesis, and
 clean task-specific projections. `synthesis_evidence_max_tokens` bounds the raw
-evidence packed for one drug. The stage-specific `synthesis_llm` override
-defaults to a 32,000-token completion budget so reasoning-enabled models can
-finish the final JSON; token-limited and blank final outputs are retried.
+evidence packed for one drug, and it bounds passage text only: the JSON
+scaffolding around the passages adds roughly 6.5%, so the real prompt costs
+about 1.08x this value. It defaults to 190,000, which pairs with the 262,144
+`max_model_len` of the local synthesis engine and leaves roughly 50,000 tokens
+for a reasoning trace and the final JSON. Evidence beyond the budget is
+discarded round-robin across sources before the model sees it, so a lower value
+silently drops passages rather than failing; when serving a smaller context,
+reduce it to about `(context - completion budget) / 1.08`. The stage-specific `synthesis_llm` override
+defaults to a 50,000-token completion budget so reasoning-enabled models can
+think over a full evidence ledger and still finish the final JSON; a model that
+exhausts this budget mid-trace returns an empty answer with
+`finish_reason=length`, which is retried rather than silently accepted.
 `screening_max_attempts` and `synthesis_max_attempts` control structured-output retries.
 `screening_checkpoint_batch_size` and `synthesis_checkpoint_batch_size` bound
 LLM batches so successfully returned batches can be checkpointed throughout

@@ -386,7 +386,7 @@ llm_good_option:
   local:
     model_name: google/gemma-4-31B-it
     engine:
-      max_model_len: 131072
+      max_model_len: 262144
       tensor_parallel_size: 1
       gpu_memory_utilization: 0.9
       language_model_only: true
@@ -416,9 +416,11 @@ llm_good_option:
 good_option_catalog:
   ncit_resource: Thesaurus_26.07d.FLAT.zip
   ncit_version: 26.07d
-  good_option_summary_max_tokens: 1500
-  help_me_choose_summary_max_tokens: 3000
-  synthesis_evidence_max_tokens: 64000
+  good_option_summary_max_tokens: 2400
+  help_me_choose_summary_max_tokens: 4200
+  # Bounds passage text only. JSON scaffolding adds ~6.5%, so the real prompt is
+  # about 1.08x this value; 190000 leaves ~50k of a 262144 window for reasoning.
+  synthesis_evidence_max_tokens: 190000
   screening_max_attempts: 3
   synthesis_max_attempts: 3
   screening_checkpoint_batch_size: 64
@@ -433,10 +435,10 @@ good_option_catalog:
   synthesis_llm:
     local:
       generation:
-        max_tokens: 32000
+        max_tokens: 50000
     remote:
       request_params:
-        max_tokens: 32000
+        max_tokens: 50000
 good_option_checker:
   model_name: ""
   device: cuda
