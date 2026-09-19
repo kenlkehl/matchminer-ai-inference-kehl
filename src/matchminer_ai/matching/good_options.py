@@ -30,6 +30,7 @@ from matchminer_ai.trials.drug_evidence import (
     DrugSummary,
     GoodOptionCatalog,
     ParsedGoodOptionResult,
+    TrialClassEvidence,
 )
 
 if TYPE_CHECKING:
@@ -73,8 +74,32 @@ def _require_catalog(
     return catalog
 
 
+def _render_class_sections(class_evidence: Sequence[TrialClassEvidence]) -> str:
+    """Render one labelled block per class, naming the drugs it speaks for.
+
+    Class and agent evidence are synthesized separately and merged only here, so
+    neither crowds the other out of a shared budget. The block says which drugs
+    it covers because a point earned from class evidence belongs to those drugs
+    and to no others in the trial.
+    """
+
+    if not class_evidence:
+        return ""
+    blocks = []
+    for item in class_evidence:
+        covers = ", ".join(item.drug_names) or "the drugs above"
+        blocks.append(
+            f"DRUG CLASS EVIDENCE — {item.class_name} (covers: {covers})\n"
+            f"{item.class_option_summary}"
+        )
+    return "\n\n".join(blocks)
+
+
 def build_good_option_messages(
-    *, patient_summary: str, drug_summaries: Sequence[DrugSummary]
+    *,
+    patient_summary: str,
+    drug_summaries: Sequence[DrugSummary],
+    class_evidence: Sequence[TrialClassEvidence] = (),
 ) -> list[dict[str, str]]:
     """Build a metadata-free patient prompt from clean scoreable-drug summaries."""
 
@@ -87,6 +112,9 @@ def build_good_option_messages(
     drug_sections = "\n\n".join(
         summary.good_option_summary for summary in drug_summaries
     )
+    class_sections = _render_class_sections(class_evidence)
+    if class_sections:
+        drug_sections = f"{drug_sections}\n\n{class_sections}"
     rubric = load_prompt_text("llm_good_option.rubric.txt")
     names_json = json.dumps(
         [summary.preferred_name for summary in drug_summaries], ensure_ascii=False
@@ -402,6 +430,7 @@ def score_good_options_with_llm(
         base_messages = build_good_option_messages(
             patient_summary=str(source["cancer_history_summary"]),
             drug_summaries=summaries,
+            class_evidence=resolved_catalog.class_evidence_for_trial(trial_id),
         )
         base_messages_by_index[index] = base_messages
         messages_by_index[index] = base_messages

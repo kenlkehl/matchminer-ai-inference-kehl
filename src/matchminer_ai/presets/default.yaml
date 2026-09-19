@@ -418,13 +418,21 @@ good_option_catalog:
   ncit_version: 26.07d
   good_option_summary_max_tokens: 2400
   help_me_choose_summary_max_tokens: 4200
+  class_option_summary_max_tokens: 1600
   # Bounds passage text only. JSON scaffolding adds ~6.5%, so the real prompt is
   # about 1.08x this value; 190000 leaves ~50k of a 262144 window for reasoning.
   synthesis_evidence_max_tokens: 190000
+  # Class synthesis is a separate call on its own budget, so a large shared
+  # class corpus can never evict an agent's own passages.
+  class_evidence_max_tokens: 60000
+  class_assignment_evidence_max_tokens: 40000
+  class_max_per_drug: 3
   screening_max_attempts: 3
   synthesis_max_attempts: 3
+  class_assignment_max_attempts: 3
   screening_checkpoint_batch_size: 64
   synthesis_checkpoint_batch_size: 64
+  class_checkpoint_batch_size: 64
   screening_llm:
     local:
       generation:
@@ -439,6 +447,13 @@ good_option_catalog:
     remote:
       request_params:
         max_tokens: 50000
+  class_llm:
+    local:
+      generation:
+        max_tokens: 6000
+    remote:
+      request_params:
+        max_tokens: 6000
 good_option_checker:
   model_name: ""
   device: cuda

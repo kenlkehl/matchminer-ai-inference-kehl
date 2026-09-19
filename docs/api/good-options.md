@@ -75,6 +75,30 @@ are retried with
 from exhausted technical failures. Searches accept drug identity only and can
 never receive patient text.
 
+Retrieval runs on three axes, and every passage records which one found it in
+`query_scope`.
+
+The **drug** axis is the one above: the agent's own name and aliases.
+
+The **indication** axis reruns the efficacy facets with a disease as a required
+clause. The diseases come from the `conditionsModule.conditions` of the trials
+the drug appears in, which the build already fetches and stores, so the axis
+stays patient-free and cacheable. Without it the drug evidence never names the
+patient's cancer for most patient-drug pairs, and the first rubric criterion
+fires far less often when the disease is absent than when it is present. The
+axis is bounded as a whole by `max_indication_passages_per_drug`, interleaved
+across diseases and sources, so it cannot swamp the agent's own corpus.
+
+The **class** axis retrieves literature for the pharmacologic classes a drug
+belongs to, once per class rather than once per drug, so agents that share a
+class share a corpus. A `classify` stage between `research` and `synthesis` reads
+each drug's mechanism passages and names its classes; NCIt is offered only as a
+hint, because it has nothing usable for the first-in-human agents that most need
+class evidence. Class identity is a hash of the normalized class name, so
+"PD-L1 inhibitor", "PD-L1 Inhibitors", and "anti-PD-L1 inhibitor" resolve to one
+corpus. Assignments are stored in `drug_classes.parquet` and the corpus in
+`class_evidence/`.
+
 The configured LLM synthesizes the evidence ledger into structured facts with
 validated passage support IDs. A matched bundled NCIt definition is materialized
 as its own citable ledger passage rather than supplied as uncitable side context.
@@ -82,11 +106,19 @@ Synthesis retains supported evidence across maturity levels—including ontology
 preclinical, first-in-human, phase 1, registry, and mature clinical evidence—and
 labels its level without requiring approval, randomization, publication, or
 mature outcomes. Token-limited or blank final responses are retried, and the
-default synthesis completion budget is 32,000 tokens. The bundle stores two
+default synthesis completion budget is 50,000 tokens. The bundle stores two
 clean projections: a
 GoodOption summary without safety and a Help Me Choose summary with safety.
 URLs, queries, source labels, registry metadata, and failure notices remain in
 the internal Parquet ledger and do not appear in either patient-bearing prompt.
+
+Each class corpus is synthesized in its own call on its own budget, and stored
+in `class_summaries.parquet`. Keeping it separate is deliberate: the drugs that
+most need class evidence already fill the agent budget, so pooling the two would
+let a flood of same-class passages evict the agent's own data. Every fact carries
+a `scope` of `agent` or `class`, assigned in code from the corpus synthesis ran
+over rather than asked of the model, and both projections print it, so the
+rubric's instruction to prefer agent-specific evidence has something to bind to.
 
 Catalog publication and its intermediate JSON checkpoints are atomic. By
 default, checkpoints are stored beside the requested catalog in
@@ -110,6 +142,11 @@ catalog. The prompt contains the patient cancer-history summary first, followed
 only by clean summaries for scoreable investigational or unresolved drugs in
 the trial. Control, background, and supportive drugs are indexed but are never
 scored.
+
+Agent and class evidence are merged only here, at prompt time. After the per-drug
+sections the prompt carries one labelled `DRUG CLASS EVIDENCE` block per distinct
+class across the trial's drugs, naming which drugs each block covers; two drugs
+sharing a class produce one block, not two.
 
 The unchanged rubric awards each scoreable drug up to four binary points:
 

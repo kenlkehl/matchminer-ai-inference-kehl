@@ -4,6 +4,8 @@ PATIENT CANCER HISTORY
 {patient}
 
 EXPERIMENTAL DRUGS IN THIS TRIAL, AND THE LITERATURE RETRIEVED FOR EACH
+Blocks headed "Drug:" carry literature retrieved for that agent by name. Blocks headed "DRUG CLASS EVIDENCE" carry literature retrieved for a pharmacologic class, and apply only to the drugs that block names as covered. Every statement is tagged with the corpus it came from, "scope: agent" or "scope: class", along with the tumor type, biomarker, and regimen it concerns. A class block will not mention the trial's agent by name; that is expected, and does not stop the class evidence from counting for the drugs it covers.
+
 {drug_sections}
 
 HOW TO SCORE

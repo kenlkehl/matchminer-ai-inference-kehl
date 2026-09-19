@@ -1,4 +1,4 @@
-Four yes-or-no questions, each worth one point, asked separately about each drug. They are independent: a drug can earn the first and none of the others, or the reverse. Give each a rationale of a sentence or two naming the specific evidence, or the specific gap, that decided it, and saying whether that evidence concerns this agent or its class.
+Four yes-or-no questions, each worth one point, asked separately about each drug. They are independent: a drug can earn the first and none of the others, or the reverse. Give each a rationale of a sentence or two naming the specific evidence, or the specific gap, that decided it, and saying whether that evidence concerns this agent or its class. Each statement is tagged "scope: agent" or "scope: class", so use those tags rather than guessing; a class-scoped statement counts for a drug only when a class block lists that drug as covered.
 
 Whenever biomarkers or "targets" are mentioned, this can mean a specific protein or gene target, but it could also mean a more general molecular signature.
 

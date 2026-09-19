@@ -38,6 +38,12 @@ from matchminer_ai.trials.drug_research import (
 )
 
 
+def no_classes(_drug, _evidence):
+    """Class assignment double: the class axis is exercised in its own tests."""
+
+    return {"classes": []}
+
+
 def _summary(drug_id: str, name: str, *, status: str = "complete") -> DrugSummary:
     return DrugSummary(
         drug_id=drug_id,
@@ -165,8 +171,8 @@ def test_prompt_is_patient_first_metadata_free_and_omits_control() -> None:
 
     assert (
         prompt.index("PATIENT CANCER HISTORY")
-        < prompt.index("SCOREABLE DRUG SUMMARIES")
-        < prompt.index("RUBRIC")
+        < prompt.index("EXPERIMENTAL DRUGS IN THIS TRIAL")
+        < prompt.index("HOW TO SCORE")
     )
     assert "PRIVATE_PATIENT" in prompt
     assert "Novel Agent" in prompt and "Second Agent" in prompt
@@ -181,7 +187,7 @@ def test_prompt_is_patient_first_metadata_free_and_omits_control() -> None:
     ):
         assert forbidden not in prompt
     assert "evidence_labels" not in prompt
-    assert "control, background" in messages[0]["content"]
+    assert "control arms" in messages[0]["content"]
 
 
 def test_response_parser_keeps_four_binary_criteria_without_evidence_ids() -> None:
@@ -610,7 +616,7 @@ def test_synthesis_retries_invalid_json_and_preserves_ledger_support_ids(
             json.dumps(
                 {
                     "mechanism_and_targets": [
-                        {"claim": "Targets Marker A.", "support_ids": ["P1"]}
+                        {"text": "Targets Marker A.", "support_ids": ["P1"]}
                     ],
                     "efficacy_by_tumor": [],
                     "biomarker_prevalence": [],
@@ -680,7 +686,7 @@ def test_synthesis_retries_token_limited_or_all_empty_outputs(
             json.dumps(
                 {
                     "mechanism_and_targets": [
-                        {"claim": "Targets Marker A.", "support_ids": ["P1"]}
+                        {"text": "Targets Marker A.", "support_ids": ["P1"]}
                     ],
                     "efficacy_by_tumor": [],
                     "biomarker_prevalence": [],
@@ -742,7 +748,7 @@ def test_ncit_definition_is_citable_ledger_evidence() -> None:
         {
             "mechanism_and_targets": [
                 {
-                    "claim": "Phase One Agent inhibits Marker A.",
+                    "text": "Phase One Agent inhibits Marker A.",
                     "support_ids": ["ncit_definition"],
                 }
             ]
@@ -750,6 +756,284 @@ def test_ncit_definition_is_citable_ledger_evidence() -> None:
         evidence=evidence,
     )
     assert facts["mechanism_and_targets"][0]["support_ids"] == ["ncit_definition:C123"]
+
+
+def test_validator_stamps_scope_and_projection_renders_it() -> None:
+    drug = DrugIdentity(drug_id="NCIT:C123", preferred_name="Phase One Agent")
+    evidence = [
+        EvidencePassage(
+            evidence_id="pubmed:1",
+            drug_id=drug.drug_id,
+            facet="efficacy_by_tumor",
+            source="pubmed",
+            source_type="literature_abstract",
+            title="Abstract",
+            passage="Responses were seen.",
+            url="",
+            source_locator="PMID 1",
+            content_sha256="1",
+        )
+    ]
+    raw = {
+        "efficacy_by_tumor": [
+            {
+                "text": "Prolonged PFS (15.1 vs 10.6 months).",
+                "tumor_type": "colon adenocarcinoma",
+                "support_ids": ["P1"],
+            }
+        ]
+    }
+
+    agent_facts = catalog_module._validate_structured_facts(raw, evidence=evidence)
+    class_facts = catalog_module._validate_structured_facts(
+        raw, evidence=evidence, scope="class"
+    )
+
+    assert agent_facts["efficacy_by_tumor"][0]["scope"] == "agent"
+    assert class_facts["efficacy_by_tumor"][0]["scope"] == "class"
+    rendered = catalog_module._render_summary(
+        drug, class_facts, include_safety=False, max_chars=4000
+    )
+    assert "[scope: class | tumor type: colon adenocarcinoma]" in rendered
+    with pytest.raises(ValueError, match="Unknown evidence scope"):
+        catalog_module._validate_structured_facts(raw, evidence=evidence, scope="other")
+
+
+def test_stored_facts_get_a_scope_without_being_revalidated() -> None:
+    stored = {
+        "efficacy_by_tumor": [
+            {"text": "Responses were seen.", "support_ids": ["civic:EID11238"]}
+        ],
+        "limitations": [{"text": "Single arm.", "support_ids": [], "scope": "class"}],
+    }
+
+    stamped = catalog_module.stamp_fact_scope(stored)
+
+    # Resolved evidence IDs survive: re-running the P#-based validator here would
+    # match nothing and drop the fact entirely.
+    assert stamped["efficacy_by_tumor"][0]["support_ids"] == ["civic:EID11238"]
+    assert stamped["efficacy_by_tumor"][0]["scope"] == "agent"
+    assert stamped["limitations"][0]["scope"] == "class"
+    assert stamped["safety"] == []
+
+
+def test_indication_retrieval_is_bounded_across_diseases_and_sources() -> None:
+    from matchminer_ai.trials import drug_research
+
+    class _Source:
+        source_type = "literature_abstract"
+
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def fetch(self, drug, *, facet, query, client, settings):
+            del client, settings
+            return [
+                EvidencePassage(
+                    evidence_id=f"{self.name}:{facet}:{query[:24]}:{index}",
+                    drug_id=drug.drug_id,
+                    facet=facet,
+                    source=self.name,
+                    source_type=self.source_type,
+                    title="Abstract",
+                    passage="Evidence.",
+                    url="",
+                    source_locator=str(index),
+                    query=query,
+                    content_sha256=f"{self.name}:{facet}:{query[:24]}:{index}",
+                )
+                for index in range(20)
+            ]
+
+    settings = ResearchSettings(
+        max_attempts=1,
+        indication_sources=("pubmed", "europe_pmc"),
+        max_indication_passages_per_drug=12,
+    )
+    selected, attempts = asyncio.run(
+        drug_research.research_indications(
+            DrugIdentity(drug_id="D1", preferred_name="Novel Agent"),
+            ["Colon Adenocarcinoma", "Lynch Syndrome", "Colon Adenocarcinoma"],
+            sources=[_Source("pubmed"), _Source("europe_pmc"), _Source("civic")],
+            settings=settings,
+            client=None,
+        )
+    )
+
+    assert len(selected) == 12
+    assert all(item.query_scope == "drug_indication" for item in selected)
+    # Both diseases and both configured sources are represented; the third
+    # source searches by exact agent name and is not on this axis.
+    assert {item.source for item in selected} == {"pubmed", "europe_pmc"}
+    diseases = {
+        "Colon Adenocarcinoma" if "Colon" in item.query else "Lynch Syndrome"
+        for item in selected
+    }
+    assert diseases == {"Colon Adenocarcinoma", "Lynch Syndrome"}
+    assert {item.source for item in attempts} == {"pubmed", "europe_pmc"}
+
+
+def test_projection_gives_a_full_section_the_budget_thin_ones_do_not_use() -> None:
+    drug = DrugIdentity(drug_id="D1", preferred_name="Novel Agent")
+    facts = {
+        "mechanism_and_targets": [
+            {"text": "Targets Marker A.", "scope": "agent", "support_ids": []}
+        ],
+        "efficacy_by_tumor": [
+            {
+                "text": f"Result {index}: " + "detail " * 30,
+                "tumor_type": f"tumor {index}",
+                "scope": "agent",
+                "support_ids": [],
+            }
+            for index in range(12)
+        ],
+        "biomarker_prevalence": [],
+        "biomarker_directed_efficacy": [],
+        "limitations": [{"text": "Single arm.", "scope": "agent", "support_ids": []}],
+    }
+
+    rendered = catalog_module._render_summary(
+        drug, facts, include_safety=False, max_chars=4000
+    )
+
+    # An equal split would give efficacy a quarter of the budget and strand the
+    # rest in sections holding one short line each.
+    kept = sum(1 for index in range(12) if f"Result {index}:" in rendered)
+    assert kept >= 10
+    assert "Targets Marker A." in rendered
+    assert "Single arm." in rendered
+    assert len(rendered) <= 4000
+
+
+def test_class_ids_are_stable_across_wording_of_the_same_class() -> None:
+    same = {
+        catalog_module.class_id_for(name)
+        for name in ("PD-L1 inhibitor", "PD-L1 Inhibitors", "anti-PD-L1 inhibitor")
+    }
+    assert len(same) == 1
+    assert catalog_module.class_id_for("ADC") == catalog_module.class_id_for(
+        "Antibody-Drug Conjugates (ADCs)"
+    )
+    assert catalog_module.class_id_for("PD-L1 inhibitor") != (
+        catalog_module.class_id_for("immune checkpoint inhibitor")
+    )
+    assert catalog_module.class_id_for("   ") == ""
+
+
+def test_class_assignment_rejects_unusable_items_and_caps_the_list() -> None:
+    evidence = [
+        EvidencePassage(
+            evidence_id="pubmed:1",
+            drug_id="D1",
+            facet="mechanism_targets",
+            source="pubmed",
+            source_type="literature_abstract",
+            title="Abstract",
+            passage="An anti-PD-L1 antibody.",
+            url="",
+            source_locator="PMID 1",
+            content_sha256="1",
+        )
+    ]
+    passage_map = {"P1": "pubmed:1"}
+
+    unsupported = {
+        "classes": [{"name": "PD-L1 inhibitor", "basis": "target", "confidence": "high"}],
+        "__passage_id_map__": passage_map,
+    }
+    assert (
+        catalog_module._class_output_validation_error(unsupported, evidence=evidence)
+        == "PD-L1 inhibitor: no supplied P# identifier supports it"
+    )
+    assert catalog_module._class_output_validation_error(
+        {"classes": [], "__passage_id_map__": passage_map}, evidence=evidence
+    ) is None
+
+    valid = {
+        "classes": [
+            {
+                "name": "PD-L1 inhibitor",
+                "basis": "target",
+                "target": "CD274",
+                "aliases": ["anti-PD-L1 antibody"],
+                "confidence": "high",
+                "support_ids": ["P1"],
+            },
+            {
+                "name": "PD-L1 Inhibitors",
+                "basis": "target",
+                "confidence": "low",
+                "support_ids": ["P1"],
+            },
+            {
+                "name": "immune checkpoint inhibitor",
+                "basis": "mechanism",
+                "confidence": "medium",
+                "support_ids": ["P1"],
+            },
+        ],
+        "__passage_id_map__": passage_map,
+    }
+    assert catalog_module._class_output_validation_error(valid, evidence=evidence) is None
+    records = catalog_module._validate_drug_classes("D1", valid, max_classes=3)
+
+    # The duplicate spelling collapses into the first record rather than
+    # consuming one of the three slots.
+    assert [item.class_name for item in records] == [
+        "PD-L1 inhibitor",
+        "immune checkpoint inhibitor",
+    ]
+    assert records[0].support_ids == ("pubmed:1",)
+    assert records[0].aliases == ("anti-PD-L1 antibody",)
+
+
+def test_evidence_bounding_reserves_room_for_every_query_scope() -> None:
+    def passage(index: int, scope: str) -> EvidencePassage:
+        return EvidencePassage(
+            evidence_id=f"{scope}:{index}",
+            drug_id="D1",
+            facet="efficacy_by_tumor",
+            source="pubmed",
+            source_type="literature_abstract",
+            title="Abstract",
+            passage="x" * 100,
+            url="",
+            source_locator=str(index),
+            content_sha256=f"{scope}:{index}",
+            query_scope=scope,
+        )
+
+    items = [passage(index, "drug") for index in range(20)]
+    items += [passage(index, "drug_indication") for index in range(3)]
+    selected = catalog_module.bound_evidence(items, character_limit=500)
+
+    assert len(selected) == 5
+    assert sum(1 for item in selected if item.query_scope == "drug_indication") == 2
+
+
+def test_class_blocks_are_deduplicated_and_name_the_drugs_they_cover() -> None:
+    from matchminer_ai.trials.drug_evidence import TrialClassEvidence
+
+    messages = build_good_option_messages(
+        patient_summary="PRIVATE_PATIENT",
+        drug_summaries=_catalog().scoreable_summaries_for_trial("NCT12345678"),
+        class_evidence=(
+            TrialClassEvidence(
+                class_id="abc",
+                class_name="PD-L1 inhibitor",
+                drug_names=("Novel Agent", "Second Agent"),
+                class_option_summary="Drug class: PD-L1 inhibitor\nEvidence.",
+            ),
+        ),
+    )
+    prompt = messages[1]["content"]
+
+    assert prompt.count("DRUG CLASS EVIDENCE") == 2  # One block, plus the legend.
+    assert "PD-L1 inhibitor (covers: Novel Agent, Second Agent)" in prompt
+    assert prompt.index("Drug: Novel Agent") < prompt.index(
+        "DRUG CLASS EVIDENCE — PD-L1 inhibitor"
+    )
 
 
 STUDY = {
@@ -834,6 +1118,115 @@ class _EvidenceSource:
         ]
 
 
+class _NamedEvidenceSource(_EvidenceSource):
+    """A source the class and indication axes are configured to call."""
+
+    name = "pubmed"
+
+
+def test_catalog_retrieves_and_merges_class_and_indication_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    study = json.loads(json.dumps(STUDY))
+    study["protocolSection"]["conditionsModule"] = {
+        "conditions": ["Colon Adenocarcinoma", "Lynch Syndrome"]
+    }
+
+    async def fake_fetch(_nct_id: str, *, client):
+        del client
+        return json.loads(json.dumps(study))
+
+    def role_resolver(_trial_id, _interventions):
+        return _screening_result()
+
+    def classify(drug, _evidence):
+        return {
+            "classes": [
+                {
+                    "name": "TARGET_MARKER inhibitor",
+                    "basis": "target",
+                    "target": "TARGET_MARKER",
+                    "aliases": ["anti-TARGET_MARKER antibody"],
+                    "confidence": "high",
+                    "support_ids": ["P1"],
+                }
+            ]
+            if drug.preferred_name == "Novel Agent"
+            else []
+        }
+
+    def synthesize(_drug, evidence):
+        return {
+            "mechanism_and_targets": [
+                {"text": "Targets TARGET_MARKER.", "support_ids": ["P1"]}
+            ]
+            if evidence
+            else [],
+            "efficacy_by_tumor": [],
+            "biomarker_prevalence": [],
+            "biomarker_directed_efficacy": [],
+            "safety": [],
+            "limitations": [],
+        }
+
+    monkeypatch.setattr(catalog_module, "fetch_trial_study", fake_fetch)
+    monkeypatch.setattr(catalog_module, "load_ncit_drug_index", lambda _path: _NoNCIt())
+    output = tmp_path / "catalog"
+    catalog = asyncio.run(
+        build_good_option_catalog(
+            ["NCT12345678"],
+            output,
+            config=load_default_preset(),
+            sources=[_NamedEvidenceSource()],
+            settings=ResearchSettings(max_attempts=1),
+            role_resolver=role_resolver,
+            synthesizer=synthesize,
+            class_resolver=classify,
+        )
+    )
+
+    class_id = catalog_module.class_id_for("TARGET_MARKER inhibitor")
+    assert list(catalog.drug_classes["class_id"]) == [class_id]
+    assert list(catalog.class_summaries["class_id"]) == [class_id]
+
+    # The class corpus is retrieved for the class, not for any one drug.
+    assert set(catalog.class_evidence["class_id"]) == {class_id}
+    assert set(catalog.class_evidence["query_scope"]) == {"class"}
+    assert (catalog.class_evidence["drug_id"] == "").all()
+
+    # Both diseases named by the trial reached retrieval, and the passages they
+    # produced are marked with the axis that found them.
+    indication_queries = catalog.drug_evidence.loc[
+        catalog.drug_evidence["query_scope"].eq("drug_indication"), "query"
+    ]
+    assert any("Colon Adenocarcinoma" in value for value in indication_queries)
+    assert any("Lynch Syndrome" in value for value in indication_queries)
+
+    facts = json.loads(
+        catalog.class_summaries.iloc[0]["structured_facts_json"]
+    )
+    assert facts["mechanism_and_targets"][0]["scope"] == "class"
+    novel = next(
+        item
+        for item in catalog.scoreable_summaries_for_trial("NCT12345678")
+        if item.preferred_name == "Novel Agent"
+    )
+    assert novel.structured_facts["mechanism_and_targets"][0]["scope"] == "agent"
+
+    blocks = catalog.class_evidence_for_trial("NCT12345678")
+    assert [item.drug_names for item in blocks] == [("Novel Agent",)]
+    prompt = build_good_option_messages(
+        patient_summary="Synthetic patient",
+        drug_summaries=[novel],
+        class_evidence=blocks,
+    )[1]["content"]
+    assert "DRUG CLASS EVIDENCE — TARGET_MARKER inhibitor (covers: Novel Agent)" in prompt
+    assert "[scope: class]" in prompt
+
+    # Reloading re-runs every contract check over the new tables.
+    load_good_option_catalog(output)
+
+
 def test_catalog_build_deduplicates_drugs_and_indexes_control_roles(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -849,7 +1242,7 @@ def test_catalog_build_deduplicates_drugs_and_indexes_control_roles(
         support = ["P1"] if evidence else []
         return {
             "mechanism_and_targets": [
-                {"claim": "Targets TARGET_MARKER.", "support_ids": support}
+                {"text": "Targets TARGET_MARKER.", "support_ids": support}
             ],
             "efficacy_by_tumor": [],
             "biomarker_prevalence": [],
@@ -875,6 +1268,7 @@ def test_catalog_build_deduplicates_drugs_and_indexes_control_roles(
             settings=ResearchSettings(max_attempts=1),
             role_resolver=role_resolver,
             synthesizer=synthesize,
+            class_resolver=no_classes,
         )
     )
 
@@ -980,6 +1374,7 @@ def test_catalog_screens_non_treatment_registry_entries_before_research(
             settings=ResearchSettings(max_attempts=1),
             role_resolver=screen,
             synthesizer=synthesize,
+            class_resolver=no_classes,
         )
     )
 
@@ -1180,6 +1575,7 @@ def test_catalog_fails_closed_invalid_screen_item_and_continues(
             sources=[_EvidenceSource()],
             settings=ResearchSettings(max_attempts=1),
             synthesizer=synthesize,
+            class_resolver=no_classes,
             progress_callback=lambda stage, _done, _total, label: progress.append(
                 (stage, label)
             ),
@@ -1220,7 +1616,7 @@ def test_catalog_resumes_registry_roles_and_completed_drug_research(
     def synthesize(_drug, evidence):
         return {
             "mechanism_and_targets": [
-                {"claim": "Targets TARGET_MARKER.", "support_ids": ["P1"]}
+                {"text": "Targets TARGET_MARKER.", "support_ids": ["P1"]}
             ]
             if evidence
             else [],
@@ -1274,6 +1670,7 @@ def test_catalog_resumes_registry_roles_and_completed_drug_research(
                 settings=settings,
                 role_resolver=role_resolver,
                 synthesizer=synthesize,
+                class_resolver=no_classes,
             )
         )
 
@@ -1294,6 +1691,7 @@ def test_catalog_resumes_registry_roles_and_completed_drug_research(
                 settings=ResearchSettings(max_attempts=2),
                 role_resolver=role_resolver,
                 synthesizer=synthesize,
+                class_resolver=no_classes,
             )
         )
 
@@ -1310,6 +1708,7 @@ def test_catalog_resumes_registry_roles_and_completed_drug_research(
             settings=settings,
             role_resolver=role_resolver,
             synthesizer=synthesize,
+            class_resolver=no_classes,
             progress_callback=lambda stage, _done, _total, label: progress.append(
                 (stage, label)
             ),
@@ -1369,7 +1768,7 @@ def test_catalog_resumes_completed_drug_synthesis(
                 raise SimulatedDisconnect()
             return {
                 "mechanism_and_targets": [
-                    {"claim": "Targets TARGET_MARKER.", "support_ids": ["P1"]}
+                    {"text": "Targets TARGET_MARKER.", "support_ids": ["P1"]}
                 ],
                 "efficacy_by_tumor": [],
                 "biomarker_prevalence": [],
@@ -1391,6 +1790,7 @@ def test_catalog_resumes_completed_drug_synthesis(
         "settings": ResearchSettings(max_attempts=1),
         "role_resolver": role_resolver,
         "synthesizer": synthesizer,
+        "class_resolver": no_classes,
     }
 
     with pytest.raises(SimulatedDisconnect):

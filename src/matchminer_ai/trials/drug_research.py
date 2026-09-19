@@ -46,6 +46,130 @@ FACET_QUERY_TERMS = {
     "safety": "safety adverse events toxicity prescribing information",
 }
 
+#: Registry condition strings carry staging-manual suffixes that no indexer
+#: knows ("Stage III Colon Cancer AJCC v8"). They only ever shrink the hit set.
+_INDICATION_NOISE = re.compile(
+    r"\b(?:ajcc|uicc|who)\s*(?:v\.?\s*\d+|\d+(?:th|nd|rd|st)?(?:\s+edition)?)\b",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class ResearchSubject:
+    """What a retrieval query is about, and why it was issued.
+
+    Retrieval used to have exactly one axis: the drug's own name. A subject
+    generalizes that to a class name or to a drug conditioned on a disease, so
+    one query builder and one retrieval loop serve all three axes and every
+    passage carries the axis it came from.
+    """
+
+    subject_id: str
+    query_scope: str
+    names: tuple[str, ...]
+    drug_id: str = ""
+    class_id: str = ""
+    indication: str = ""
+
+    @property
+    def preferred_name(self) -> str:
+        return self.names[0] if self.names else ""
+
+    def as_identity(self) -> DrugIdentity:
+        """Adapt to the identity shape the source adapters already accept."""
+
+        return DrugIdentity(
+            drug_id=self.subject_id,
+            preferred_name=self.preferred_name,
+            aliases=tuple(self.names[1:]),
+        )
+
+
+#: Registry conditions that name no disease. Conditioning a query on "Advanced
+#: Solid Tumors" reproduces the drug-name query and wastes one of the few slots
+#: a drug gets, so they are dropped rather than searched.
+_GENERIC_INDICATIONS = frozenset(
+    {
+        "cancer",
+        "cancers",
+        "advanced cancer",
+        "metastatic cancer",
+        "solid tumor",
+        "solid tumors",
+        "solid tumour",
+        "solid tumours",
+        "advanced solid tumor",
+        "advanced solid tumors",
+        "metastatic solid tumor",
+        "metastatic solid tumors",
+        "refractory solid tumor",
+        "refractory solid tumors",
+        "tumor",
+        "tumors",
+        "neoplasm",
+        "neoplasms",
+        "malignant neoplasm",
+        "malignant neoplasms",
+        "malignancy",
+        "malignancies",
+        "unspecified adult solid tumor protocol specific",
+        "healthy",
+    }
+)
+
+
+def clean_indication(value: Any) -> str:
+    """Normalize one registry condition string into a searchable disease phrase."""
+
+    text = clean_text(_INDICATION_NOISE.sub(" ", str(value or "")), max_chars=120)
+    text = re.sub(r"\s+", " ", text.strip(" ,;.-"))
+    normalized = re.sub(r"[^a-z0-9 ]+", " ", text.casefold())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return "" if normalized in _GENERIC_INDICATIONS else text
+
+
+def subject_for_drug(drug: DrugIdentity) -> ResearchSubject:
+    names = tuple(
+        dict.fromkeys(
+            value for value in (drug.preferred_name, *drug.aliases[:3]) if value
+        )
+    )
+    return ResearchSubject(
+        subject_id=drug.drug_id,
+        query_scope="drug",
+        names=names,
+        drug_id=drug.drug_id,
+    )
+
+
+def subject_for_indication(drug: DrugIdentity, indication: str) -> ResearchSubject:
+    disease = clean_indication(indication)
+    return ResearchSubject(
+        subject_id=f"{drug.drug_id}|{disease}",
+        query_scope="drug_indication",
+        names=tuple(value for value in (drug.preferred_name,) if value),
+        drug_id=drug.drug_id,
+        indication=disease,
+    )
+
+
+def subject_for_class(
+    class_id: str, class_name: str, aliases: Sequence[str] = ()
+) -> ResearchSubject:
+    names = tuple(
+        dict.fromkeys(
+            clean_text(value, max_chars=200)
+            for value in (class_name, *list(aliases)[:3])
+            if clean_text(value, max_chars=200)
+        )
+    )
+    return ResearchSubject(
+        subject_id=class_id,
+        query_scope="class",
+        names=names,
+        class_id=class_id,
+    )
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -86,6 +210,40 @@ class ResearchSettings:
     max_europe_pmc_records: int = 12
     max_regulatory_records: int = 8
     max_passage_chars: int = 5000
+
+    # Class axis. Retrieved once per class and shared by every drug in it, so a
+    # class corpus is worth more requests per subject than a single drug is.
+    class_facets: tuple[str, ...] = (
+        "efficacy_by_tumor",
+        "biomarker_prevalence",
+        "biomarker_directed_efficacy",
+    )
+    class_sources: tuple[str, ...] = ("pubmed", "europe_pmc", "nci", "web")
+    class_research_rounds: int = 1
+    max_class_pubmed_records: int = 30
+    max_class_europe_pmc_records: int = 10
+    max_class_web_results_per_subject: int = 24
+    max_class_web_documents_per_subject: int = 12
+
+    # Indication axis. Conditioned on the diseases the drug's own trials name,
+    # so it stays patient-free and cacheable.
+    indication_terms_per_drug: int = 4
+    indication_facets: tuple[str, ...] = (
+        "efficacy_by_tumor",
+        "biomarker_directed_efficacy",
+    )
+    indication_sources: tuple[str, ...] = ("pubmed", "europe_pmc", "nci", "web")
+    max_indication_pubmed_records: int = 20
+    max_indication_europe_pmc_records: int = 8
+    max_indication_regulatory_records: int = 3
+    max_indication_web_results_per_subject: int = 12
+    max_indication_web_documents_per_subject: int = 6
+    # Four diseases across four sources out-retrieve the drug's own name: for
+    # sacituzumab govitecan the uncapped indication axis returned 715k characters
+    # against the agent ledger's 463k. Synthesis round-robins by axis, so leaving
+    # it uncapped would hand the indication axis half the budget and halve the
+    # agent evidence the rubric asks the scorer to prefer.
+    max_indication_passages_per_drug: int = 40
 
 
 class GeneralWebProvider(Protocol):
@@ -292,7 +450,7 @@ class PubMedDrugSource:
         client: httpx.AsyncClient,
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
-        term = f'"{drug.preferred_name}"[Title/Abstract] AND oncology AND ({FACET_QUERY_TERMS[facet]})'
+        term = str(query or "") or build_pubmed_term(subject_for_drug(drug), facet)
         params: dict[str, Any] = {
             "db": "pubmed",
             "term": term,
@@ -438,7 +596,7 @@ class EuropePMCDrugSource:
         client: httpx.AsyncClient,
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
-        term = f'TITLE_ABS:"{drug.preferred_name}" AND (oncology OR cancer) AND ({FACET_QUERY_TERMS[facet]})'
+        term = str(query or "") or build_europe_pmc_term(subject_for_drug(drug), facet)
         response = await client.get(
             "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
             params={
@@ -669,7 +827,7 @@ class NCIDrugSource:
         client: httpx.AsyncClient,
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
-        search_query = f"{drug.preferred_name} cancer drug {FACET_QUERY_TERMS[facet]}"
+        search_query = str(query or "") or build_nci_query(subject_for_drug(drug), facet)
         response = await client.get(
             f"https://webapis.cancer.gov/sitewidesearch/v1/Search/cgov/en/{quote(search_query, safe='')}",
             params={"size": settings.max_regulatory_records, "from": 0, "site": "all"},
@@ -723,19 +881,115 @@ def default_sources(
     )
 
 
-def build_facet_query(drug: DrugIdentity, facet: str, *, round_index: int) -> str:
-    """Build a drug-only adaptive query; no patient input is accepted."""
+def _quote(value: str) -> str:
+    return f'"{value.replace(chr(34), " ")}"'
 
+
+def _require_facet(facet: str) -> str:
     if facet not in FACETS:
         raise ValueError(f"Unknown drug research facet: {facet!r}")
-    names = [drug.preferred_name, *drug.aliases[:3]]
-    quoted = " OR ".join(f'"{name.replace(chr(34), " ")}"' for name in names if name)
-    suffix = FACET_QUERY_TERMS[facet]
+    return FACET_QUERY_TERMS[facet]
+
+
+def build_web_query(subject: ResearchSubject, facet: str, *, round_index: int) -> str:
+    """Build one free-text query for a subject; no patient input is accepted."""
+
+    suffix = _require_facet(facet)
     if round_index == 1:
         suffix += " review phase 1 phase 2 phase 3"
     elif round_index >= 2:
         suffix += " tumor subtype mutation amplification overexpression antigen"
-    return f"({quoted}) cancer treatment {suffix}".strip()
+    quoted = " OR ".join(_quote(name) for name in subject.names if name)
+    disease = f" {_quote(subject.indication)}" if subject.indication else ""
+    return f"({quoted}){disease} cancer treatment {suffix}".strip()
+
+
+def build_facet_query(drug: DrugIdentity, facet: str, *, round_index: int) -> str:
+    """Build a drug-only adaptive query; no patient input is accepted."""
+
+    return build_web_query(subject_for_drug(drug), facet, round_index=round_index)
+
+
+def _loosened_facet_terms(facet: str) -> str:
+    """OR the facet words instead of ANDing them.
+
+    Both indexers AND a bare word list. Adding a required disease clause on top
+    of a nine-word AND-chain drives the hit count to zero: measured on PubMed,
+    atezolizumab AND colon adenocarcinoma AND the chain returns 0 results, and
+    the same pair with the words OR-ed returns 20. The disease is the constraint
+    that matters on this axis, so the facet becomes a relevance hint.
+    """
+
+    return " OR ".join(_require_facet(facet).split())
+
+
+def build_pubmed_term(subject: ResearchSubject, facet: str) -> str:
+    """Build a PubMed boolean term for a drug, class, or drug-plus-indication."""
+
+    names = " OR ".join(f"{_quote(name)}[Title/Abstract]" for name in subject.names)
+    if subject.indication:
+        # Unquoted, so PubMed expands the disease to its MeSH tree rather than
+        # demanding the registry's exact phrasing: quoting "Colon Adenocarcinoma"
+        # drops the same search from 20 hits to 2.
+        return (
+            f"({names}) AND {subject.indication} "
+            f"AND ({_loosened_facet_terms(facet)})"
+        )
+    return f"({names}) AND oncology AND ({_require_facet(facet)})"
+
+
+def build_europe_pmc_term(subject: ResearchSubject, facet: str) -> str:
+    """Build a Europe PMC query for a drug, class, or drug-plus-indication."""
+
+    names = " OR ".join(f"TITLE_ABS:{_quote(name)}" for name in subject.names)
+    if subject.indication:
+        return (
+            f"({names}) AND {_quote(subject.indication)} "
+            f"AND ({_loosened_facet_terms(facet)})"
+        )
+    return f"({names}) AND (oncology OR cancer) AND ({_require_facet(facet)})"
+
+
+def build_nci_query(subject: ResearchSubject, facet: str) -> str:
+    """Build a cancer.gov site-search query for a subject."""
+
+    names = " ".join(subject.names[:2])
+    disease = f" {subject.indication}" if subject.indication else ""
+    return f"{names}{disease} cancer drug {_require_facet(facet)}".strip()
+
+
+def build_source_query(
+    source: DrugEvidenceSource,
+    subject: ResearchSubject,
+    facet: str,
+    *,
+    round_index: int,
+) -> str:
+    """Render the query one source should run for this subject and facet.
+
+    PubMed and Europe PMC need boolean syntax, cancer.gov and the general web
+    need prose, and the registry, label, and curation sources search by exact
+    agent name and ignore the query entirely. Building all of them here is what
+    lets the class and indication axes reach every source that can use them.
+    """
+
+    if source.name == "pubmed":
+        return build_pubmed_term(subject, facet)
+    if source.name == "europe_pmc":
+        return build_europe_pmc_term(subject, facet)
+    if source.name == "nci":
+        return build_nci_query(subject, facet)
+    return build_web_query(subject, facet, round_index=round_index)
+
+
+def source_matches(source: DrugEvidenceSource, selectors: Sequence[str]) -> bool:
+    """Match a source against configured names, treating ``web`` as a prefix."""
+
+    name = str(getattr(source, "name", ""))
+    return any(
+        name == selector or (selector == "web" and name.startswith("web:"))
+        for selector in selectors
+    )
 
 
 def _retry_after_seconds(error: Exception) -> float | None:
@@ -769,7 +1023,7 @@ def _retryable(error: Exception) -> bool:
 
 async def _run_source_with_retries(
     source: DrugEvidenceSource,
-    drug: DrugIdentity,
+    subject: ResearchSubject,
     *,
     facet: str,
     query: str,
@@ -782,12 +1036,13 @@ async def _run_source_with_retries(
         if source.name == "clinicaltrials_gov"
         else settings.max_attempts
     )
+    identity = subject.as_identity()
     attempts: list[ResearchAttempt] = []
     for attempt in range(1, max_attempts + 1):
         started = utc_now()
         try:
             items = await source.fetch(
-                drug,
+                identity,
                 facet=facet,
                 query=query,
                 client=client,
@@ -798,7 +1053,9 @@ async def _run_source_with_retries(
             retry_after = _retry_after_seconds(error)
             attempts.append(
                 ResearchAttempt(
-                    drug_id=drug.drug_id,
+                    drug_id=subject.drug_id,
+                    class_id=subject.class_id,
+                    query_scope=subject.query_scope,
                     facet=facet,
                     source=source.name,
                     query=query,
@@ -822,7 +1079,9 @@ async def _run_source_with_retries(
             continue
         attempts.append(
             ResearchAttempt(
-                drug_id=drug.drug_id,
+                drug_id=subject.drug_id,
+                class_id=subject.class_id,
+                query_scope=subject.query_scope,
                 facet=facet,
                 source=source.name,
                 query=query,
@@ -833,8 +1092,271 @@ async def _run_source_with_retries(
                 result_count=len(items),
             )
         )
-        return items, attempts, "ok" if items else "empty"
+        stamped = [
+            replace(
+                item,
+                drug_id=subject.drug_id,
+                class_id=subject.class_id,
+                query_scope=subject.query_scope,
+            )
+            for item in items
+        ]
+        return stamped, attempts, "ok" if items else "empty"
     raise AssertionError("retry loop terminated unexpectedly")
+
+
+async def research_subject(
+    subject: ResearchSubject,
+    *,
+    sources: Sequence[DrugEvidenceSource],
+    settings: ResearchSettings,
+    facets: Sequence[str],
+    rounds: int,
+    client: httpx.AsyncClient,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    web_results_budget: int | None = None,
+    web_documents_budget: int | None = None,
+) -> tuple[list[EvidencePassage], list[ResearchAttempt], list[str]]:
+    """Run one retrieval axis: every requested facet against every source."""
+
+    evidence: list[EvidencePassage] = []
+    attempts: list[ResearchAttempt] = []
+    failures: list[str] = []
+    if not subject.names or not facets or rounds < 1 or not sources:
+        return evidence, attempts, failures
+    semaphore = asyncio.Semaphore(max(1, settings.max_concurrency))
+    maximum_web_queries = max(1, len(facets) * rounds)
+    web_results_per_operation = max(
+        1,
+        min(
+            settings.web_results_per_query,
+            math.ceil(
+                (
+                    settings.max_web_results_per_drug
+                    if web_results_budget is None
+                    else web_results_budget
+                )
+                / maximum_web_queries
+            ),
+        ),
+    )
+    for round_index in range(rounds):
+        facets_to_run = []
+        for facet in facets:
+            existing = [item for item in evidence if item.facet == facet]
+            if round_index == 0 or len(existing) < 2:
+                facets_to_run.append(facet)
+        if not facets_to_run:
+            break
+
+        async def run_one(
+            source: DrugEvidenceSource, facet: str, round_index: int = round_index
+        ) -> tuple[str, str, list[EvidencePassage], list[ResearchAttempt], str]:
+            query = build_source_query(
+                source, subject, facet, round_index=round_index
+            )
+            operation_settings = settings
+            if source.source_type == "general_web":
+                operation_settings = replace(
+                    settings,
+                    web_results_per_query=web_results_per_operation,
+                    max_web_documents_per_drug=(
+                        settings.max_web_documents_per_drug
+                        if web_documents_budget is None
+                        else web_documents_budget
+                    ),
+                )
+            async with semaphore:
+                items, source_attempts, status = await _run_source_with_retries(
+                    source,
+                    subject,
+                    facet=facet,
+                    query=query,
+                    client=client,
+                    settings=operation_settings,
+                    sleep=sleep,
+                )
+            return facet, source.name, items, source_attempts, status
+
+        round_results = await asyncio.gather(
+            *(
+                run_one(source, facet)
+                for facet in facets_to_run
+                for source in sources
+            )
+        )
+        statuses_by_facet: dict[str, list[tuple[str, str]]] = {
+            facet: [] for facet in facets_to_run
+        }
+        for facet, source_name, items, source_attempts, status in round_results:
+            attempts.extend(source_attempts)
+            statuses_by_facet[facet].append((source_name, status))
+            evidence.extend(items)
+        for facet, statuses in statuses_by_facet.items():
+            if statuses and all(status == "failed" for _, status in statuses):
+                failures.append(
+                    f"{facet}: all sources failed in adaptive round {round_index + 1}"
+                )
+    return evidence, attempts, failures
+
+
+def _deduplicate(items: Sequence[EvidencePassage]) -> list[EvidencePassage]:
+    """Keep the first copy of a passage, so its originating axis is preserved."""
+
+    deduplicated: list[EvidencePassage] = []
+    seen: set[tuple[str, str]] = set()
+    for item in items:
+        key = (item.source, item.content_sha256 or item.evidence_id)
+        if key not in seen:
+            seen.add(key)
+            deduplicated.append(item)
+    return deduplicated
+
+
+async def research_class(
+    class_id: str,
+    class_name: str,
+    *,
+    aliases: Sequence[str] = (),
+    sources: Sequence[DrugEvidenceSource] | None = None,
+    settings: ResearchSettings | None = None,
+    client: httpx.AsyncClient | None = None,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> tuple[list[EvidencePassage], list[ResearchAttempt], str, list[str]]:
+    """Retrieve the corpus for one pharmacologic class, shared by every member.
+
+    Only the query-driven sources run here. The registry, label, and curation
+    adapters search by exact agent name, so a class name returns nothing from
+    them and asking costs a request per class for no evidence.
+    """
+
+    resolved_settings = settings or ResearchSettings()
+    resolved_sources = [
+        source
+        for source in (sources or default_sources())
+        if source_matches(source, resolved_settings.class_sources)
+    ]
+    owns_client = client is None
+    if client is None:
+        client = httpx.AsyncClient(
+            timeout=httpx.Timeout(resolved_settings.request_timeout),
+            follow_redirects=True,
+            headers={"Accept": "application/json, text/html, application/xml"},
+        )
+    try:
+        evidence, attempts, failures = await research_subject(
+            subject_for_class(class_id, class_name, aliases),
+            sources=resolved_sources,
+            settings=replace(
+                resolved_settings,
+                max_pubmed_records=resolved_settings.max_class_pubmed_records,
+                max_europe_pmc_records=(
+                    resolved_settings.max_class_europe_pmc_records
+                ),
+            ),
+            facets=resolved_settings.class_facets,
+            rounds=resolved_settings.class_research_rounds,
+            client=client,
+            sleep=sleep,
+            web_results_budget=resolved_settings.max_class_web_results_per_subject,
+            web_documents_budget=(
+                resolved_settings.max_class_web_documents_per_subject
+            ),
+        )
+        status = "complete" if evidence else _axis_status(attempts)
+        return (
+            _deduplicate(evidence),
+            attempts,
+            status,
+            list(dict.fromkeys(failures)),
+        )
+    finally:
+        if owns_client:
+            await client.aclose()
+
+
+async def research_indications(
+    drug: DrugIdentity,
+    indications: Sequence[str],
+    *,
+    sources: Sequence[DrugEvidenceSource],
+    settings: ResearchSettings,
+    client: httpx.AsyncClient,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> tuple[list[EvidencePassage], list[ResearchAttempt]]:
+    """Retrieve the drug conditioned on each disease its own trials name.
+
+    Returns a bounded set: the passages are interleaved by source and disease
+    and cut to ``max_indication_passages_per_drug``, so every disease and source
+    is represented and none of them can swamp the drug's own corpus.
+    """
+
+    axis_sources = [
+        source for source in sources if source_matches(source, settings.indication_sources)
+    ]
+    axis_settings = replace(
+        settings,
+        max_pubmed_records=settings.max_indication_pubmed_records,
+        max_europe_pmc_records=settings.max_indication_europe_pmc_records,
+        max_regulatory_records=settings.max_indication_regulatory_records,
+    )
+    terms = list(
+        dict.fromkeys(
+            clean_indication(value) for value in indications if clean_indication(value)
+        )
+    )[: max(0, settings.indication_terms_per_drug)]
+    # The diseases are independent queries, so they run together rather than one
+    # after another; serially this axis cost about three minutes per drug, which
+    # is most of a cohort rebuild. Per-subject concurrency is reduced so the
+    # total in flight stays near the configured ceiling.
+    per_subject_settings = replace(
+        axis_settings,
+        max_concurrency=max(1, settings.max_concurrency // max(1, len(terms) or 1)),
+    )
+    results = await asyncio.gather(
+        *(
+            research_subject(
+                subject_for_indication(drug, term),
+                sources=axis_sources,
+                settings=per_subject_settings,
+                facets=settings.indication_facets,
+                rounds=1,
+                client=client,
+                sleep=sleep,
+                web_results_budget=settings.max_indication_web_results_per_subject,
+                web_documents_budget=settings.max_indication_web_documents_per_subject,
+            )
+            for term in terms
+        )
+    )
+    by_subject = [items for items, _attempts, _failures in results]
+    attempts: list[ResearchAttempt] = [
+        attempt for _items, subject_attempts, _failures in results
+        for attempt in subject_attempts
+    ]
+
+    queues: dict[tuple[int, str], list[EvidencePassage]] = {}
+    for index, items in enumerate(by_subject):
+        for item in items:
+            queues.setdefault((index, item.source), []).append(item)
+    selected: list[EvidencePassage] = []
+    limit = max(0, settings.max_indication_passages_per_drug)
+    while queues and len(selected) < limit:
+        for key in list(queues):
+            if len(selected) >= limit:
+                break
+            selected.append(queues[key].pop(0))
+            if not queues[key]:
+                del queues[key]
+    return selected, attempts
+
+
+def _axis_status(attempts: Sequence[ResearchAttempt]) -> str:
+    """Treat an axis as complete unless every attempt it made failed."""
+
+    if not attempts:
+        return "blocked"
+    return "blocked" if all(item.status == "failed" for item in attempts) else "complete"
 
 
 async def research_drug(
@@ -844,8 +1366,14 @@ async def research_drug(
     settings: ResearchSettings | None = None,
     client: httpx.AsyncClient | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    indications: Sequence[str] = (),
 ) -> tuple[list[EvidencePassage], list[ResearchAttempt], str, list[str]]:
-    """Research every required facet, using alternate sources before blocking."""
+    """Research every required facet, using alternate sources before blocking.
+
+    When ``indications`` are supplied, each also gets its own bounded pass with
+    the disease as a required clause. The catalog is still patient-free: those
+    diseases come from the registry records of the trials the drug appears in.
+    """
 
     resolved_settings = settings or ResearchSettings()
     resolved_sources = tuple(sources or default_sources())
@@ -856,91 +1384,50 @@ async def research_drug(
             follow_redirects=True,
             headers={"Accept": "application/json, text/html, application/xml"},
         )
-    evidence: list[EvidencePassage] = []
-    attempts: list[ResearchAttempt] = []
-    failures: list[str] = []
-    semaphore = asyncio.Semaphore(max(1, resolved_settings.max_concurrency))
-    maximum_web_queries = len(FACETS) * 3
-    web_results_per_operation = max(
-        1,
-        min(
-            resolved_settings.web_results_per_query,
-            math.ceil(resolved_settings.max_web_results_per_drug / maximum_web_queries),
-        ),
-    )
     try:
-        for round_index in range(3):
-            facets_to_run = []
-            for facet in FACETS:
-                existing = [item for item in evidence if item.facet == facet]
-                if round_index == 0 or len(existing) < 2:
-                    facets_to_run.append(facet)
-            if not facets_to_run:
-                break
+        evidence, attempts, failures = await research_subject(
+            subject_for_drug(drug),
+            sources=resolved_sources,
+            settings=resolved_settings,
+            facets=FACETS,
+            rounds=3,
+            client=client,
+            sleep=sleep,
+        )
 
-            async def run_one(
-                source: DrugEvidenceSource, facet: str
-            ) -> tuple[str, str, list[EvidencePassage], list[ResearchAttempt], str]:
-                query = build_facet_query(drug, facet, round_index=round_index)
-                operation_settings = resolved_settings
-                if source.source_type == "general_web":
-                    operation_settings = replace(
-                        resolved_settings,
-                        web_results_per_query=web_results_per_operation,
-                    )
-                async with semaphore:
-                    items, source_attempts, status = await _run_source_with_retries(
-                        source,
-                        drug,
-                        facet=facet,
-                        query=query,
-                        client=client,
-                        settings=operation_settings,
-                        sleep=sleep,
-                    )
-                return facet, source.name, items, source_attempts, status
-
-            round_results = await asyncio.gather(
-                *(
-                    run_one(source, facet)
-                    for facet in facets_to_run
-                    for source in resolved_sources
-                )
-            )
-            statuses_by_facet: dict[str, list[tuple[str, str]]] = {
-                facet: [] for facet in facets_to_run
-            }
-            for facet, source_name, items, source_attempts, status in round_results:
-                attempts.extend(source_attempts)
-                statuses_by_facet[facet].append((source_name, status))
-                evidence.extend(items)
-            for facet, statuses in statuses_by_facet.items():
-                if statuses and all(status == "failed" for _, status in statuses):
-                    failures.append(
-                        f"{facet}: all sources failed in adaptive round {round_index + 1}"
-                    )
-
-        deduplicated: list[EvidencePassage] = []
-        seen: set[tuple[str, str]] = set()
-        for item in evidence:
-            key = (item.source, item.content_sha256 or item.evidence_id)
-            if key not in seen:
-                seen.add(key)
-                deduplicated.append(item)
-
+        # The drug axis alone decides whether the drug is researched, so an
+        # indication pass that comes back empty can never block a drug.
         unresolved: list[str] = []
         for facet in FACETS:
-            facet_attempts = [item for item in attempts if item.facet == facet]
             terminal_by_source: dict[str, str] = {}
-            for item in facet_attempts:
-                terminal_by_source[item.source] = item.status
+            for item in attempts:
+                if item.facet == facet and item.query_scope == "drug":
+                    terminal_by_source[item.source] = item.status
             if not terminal_by_source or all(
                 status == "failed" for status in terminal_by_source.values()
             ):
                 unresolved.append(facet)
         status = "blocked" if unresolved else "complete"
         failures.extend(f"Unresolved technical facet: {facet}" for facet in unresolved)
-        return deduplicated, attempts, status, list(dict.fromkeys(failures))
+
+        if indications:
+            indication_evidence, indication_attempts = await research_indications(
+                drug,
+                indications,
+                sources=resolved_sources,
+                settings=resolved_settings,
+                client=client,
+                sleep=sleep,
+            )
+            evidence.extend(indication_evidence)
+            attempts.extend(indication_attempts)
+
+        return (
+            _deduplicate(evidence),
+            attempts,
+            status,
+            list(dict.fromkeys(failures)),
+        )
     finally:
         if owns_client:
             await client.aclose()
@@ -959,8 +1446,22 @@ __all__ = [
     "NCIDrugSource",
     "PubMedDrugSource",
     "ResearchSettings",
+    "ResearchSubject",
+    "build_europe_pmc_term",
     "build_facet_query",
+    "build_nci_query",
+    "build_pubmed_term",
+    "build_source_query",
+    "build_web_query",
+    "clean_indication",
     "clean_text",
     "default_sources",
+    "research_class",
     "research_drug",
+    "research_indications",
+    "research_subject",
+    "source_matches",
+    "subject_for_class",
+    "subject_for_drug",
+    "subject_for_indication",
 ]

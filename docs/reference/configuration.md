@@ -524,7 +524,7 @@ Configuration for experimental-drug selection during patient-free research and
 for the patient-specific four-point-per-drug LLM scorer. Its `local` and
 `remote` blocks follow the same structure as `trial.local` and `trial.remote`.
 The default request enables model thinking, permits up to 100,000 completion
-tokens within a 131,072-token local context, and uses a repetition penalty of
+tokens within a 262,144-token local context, and uses a repetition penalty of
 1.1. Each scoring message describes exactly one patient; the backend may batch
 many independent messages in one run. `score_good_options_with_llm` can
 selectively retry code-validation failures with `max_parse_attempts`; each
@@ -553,6 +553,33 @@ exhausts this budget mid-trace returns an empty answer with
 LLM batches so successfully returned batches can be checkpointed throughout
 long catalog builds. Screening and synthesis LLM overrides inherit from
 `llm_good_option`.
+
+Evidence is also retrieved on two axes beside the drug's own name, and each has
+its own budget so that neither can evict the other.
+
+`class_max_per_drug` (default 3) caps how many pharmacologic classes the
+`classify` stage may assign to one drug; a drug legitimately holds more than one,
+since atezolizumab is both a PD-L1 inhibitor and an immune checkpoint inhibitor.
+`class_assignment_evidence_max_tokens` (40,000) bounds the mechanism passages
+that stage reads, and `class_llm` gives it its own completion budget.
+`class_evidence_max_tokens` (60,000) bounds the corpus that class *synthesis*
+reads. Class synthesis is a separate call from agent synthesis rather than a
+larger pooled one: 165 drugs already use more than half the agent budget and the
+largest uses 91% of it, so pooling would let a flood of same-class passages evict
+the agent's own data. `class_option_summary_max_tokens` (1,600) bounds each
+rendered class block in the scoring prompt, where one block is emitted per
+distinct class across the trial's drugs.
+
+Retrieval settings for both axes live on `ResearchSettings` rather than in this
+block: `class_facets`, `class_sources`, `class_research_rounds`, and the
+`max_class_*` record caps for the class axis, and `indication_terms_per_drug`
+(default 4), `indication_facets`, `indication_sources`, and the
+`max_indication_*` caps for the indication axis. Indication terms come from the
+`conditionsModule.conditions` of the trials a drug appears in, falling back to
+`derivedSection.conditionBrowseModule.meshes`, so the catalog stays patient-free
+and cacheable. Both axes call only the query-driven sources; the registry, label,
+and curation adapters search by exact agent name and return nothing for a class
+name.
 
 ## `good_option_checker`
 

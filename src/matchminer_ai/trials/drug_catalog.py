@@ -37,14 +37,18 @@ from matchminer_ai.patients.ontology import (
 from .drug_evidence import (
     CATALOG_SCHEMA_VERSION,
     DRUG_ROLES,
+    EVIDENCE_SCOPES,
     GOOD_OPTION_INPUT_VERSION,
     GOOD_OPTION_LABEL_SCHEMA_VERSION,
     GOOD_OPTION_PROJECTION_VERSION,
     GOOD_OPTION_PROMPT_VERSION,
     HELP_ME_CHOOSE_PROJECTION_VERSION,
+    QUERY_SCOPES,
     ROLE_POLICY_VERSION,
     SCOREABLE_ROLES,
     SYNTHESIS_SCHEMA_VERSION,
+    ClassSummary,
+    DrugClass,
     DrugIdentity,
     DrugSummary,
     EvidencePassage,
@@ -56,8 +60,10 @@ from .drug_research import (
     DrugEvidenceSource,
     GeneralWebProvider,
     ResearchSettings,
+    clean_indication,
     clean_text,
     default_sources,
+    research_class,
     research_drug,
     utc_now,
 )
@@ -72,7 +78,10 @@ CONTROL_ARM_TYPES = frozenset(
 ACTIVE_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL"})
 ROLE_PROMPT_VERSION = "trial-cancer-treatment-agent-screen-v3"
 SYNTHESIS_PROMPT_VERSION = "drug-evidence-synthesis-v3"
+CLASS_PROMPT_VERSION = "drug-pharmacologic-class-v1"
 CATALOG_CHECKPOINT_SCHEMA_VERSION = "good-option-catalog-checkpoints-v1"
+CLASS_BASES = frozenset({"target", "mechanism", "modality"})
+CONFIDENCE_LEVELS = frozenset({"high", "medium", "low"})
 INTERVENTION_SCREENING_DISPOSITIONS = frozenset({"include", "exclude", "uncertain"})
 INTERVENTION_EXCLUSION_CATEGORIES = frozenset(
     {
@@ -94,6 +103,43 @@ _SYNTHESIS_CATEGORIES = (
     "biomarker_directed_efficacy",
     "safety",
     "limitations",
+)
+EVIDENCE_COLUMNS = (
+    "evidence_id",
+    "drug_id",
+    "class_id",
+    "query_scope",
+    "facet",
+    "source",
+    "source_type",
+    "title",
+    "passage",
+    "url",
+    "source_locator",
+    "published_at",
+    "retrieved_at",
+    "license",
+    "query",
+    "content_sha256",
+    "attributes_json",
+)
+DRUG_CLASS_COLUMNS = (
+    "drug_id",
+    "class_id",
+    "class_name",
+    "basis",
+    "target",
+    "aliases_json",
+    "confidence",
+    "support_ids_json",
+)
+CLASS_SUMMARY_COLUMNS = (
+    "class_id",
+    "class_name",
+    "synthesis_status",
+    "structured_facts_json",
+    "class_option_summary",
+    "evidence_count",
 )
 
 
@@ -130,6 +176,10 @@ SummarySynthesizer = Callable[
     [DrugIdentity, Sequence[EvidencePassage]],
     Mapping[str, Any] | Awaitable[Mapping[str, Any]],
 ]
+ClassResolver = Callable[
+    [DrugIdentity, Sequence[EvidencePassage]],
+    Mapping[str, Any] | Awaitable[Mapping[str, Any]],
+]
 
 
 def _sha256_file(path: Path) -> str:
@@ -147,6 +197,7 @@ def _compatibility_id(*, ncit_version: str) -> str:
         "role_prompt": ROLE_PROMPT_VERSION,
         "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
         "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
+        "class_prompt": CLASS_PROMPT_VERSION,
         "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
         "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
         "patient_prompt": GOOD_OPTION_PROMPT_VERSION,
@@ -192,6 +243,7 @@ def _checkpoint_run_spec(
     sources: Sequence[DrugEvidenceSource],
     role_resolver: RoleResolver | None,
     synthesizer: SummarySynthesizer | None,
+    class_resolver: ClassResolver | None,
     ncit_resource: str,
     ncit_version: str,
 ) -> dict[str, Any]:
@@ -224,6 +276,9 @@ def _checkpoint_run_spec(
         "synthesizer": _callable_identity(
             synthesizer, default="matchminer_ai.default_summary_synthesizer"
         ),
+        "class_resolver": _callable_identity(
+            class_resolver, default="matchminer_ai.default_class_resolver"
+        ),
         "teacher_fingerprint_sha256": teacher_fingerprint,
         "versions": {
             "checkpoint_schema": CATALOG_CHECKPOINT_SCHEMA_VERSION,
@@ -232,6 +287,7 @@ def _checkpoint_run_spec(
             "role_prompt": ROLE_PROMPT_VERSION,
             "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
             "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
+            "class_prompt": CLASS_PROMPT_VERSION,
         },
     }
 
@@ -436,6 +492,8 @@ def _attempt_from_record(record: Mapping[str, Any]) -> ResearchAttempt:
         error_type=str(record.get("error_type") or ""),
         error_message=str(record.get("error_message") or ""),
         retry_after_seconds=(float(retry_after) if retry_after is not None else None),
+        class_id=str(record.get("class_id") or ""),
+        query_scope=str(record.get("query_scope") or "drug"),
     )
 
 
@@ -458,6 +516,8 @@ def _evidence_from_record(record: Mapping[str, Any]) -> EvidencePassage:
         license=str(record.get("license") or ""),
         query=str(record.get("query") or ""),
         content_sha256=str(record.get("content_sha256") or ""),
+        class_id=str(record.get("class_id") or ""),
+        query_scope=str(record.get("query_scope") or "drug"),
         attributes=(attributes if isinstance(attributes, Mapping) else {}),
     )
 
@@ -1024,8 +1084,20 @@ def _synthesis_fact_validation_error(
 
 
 def _validate_structured_facts(
-    value: Mapping[str, Any], *, evidence: Sequence[EvidencePassage]
+    value: Mapping[str, Any],
+    *,
+    evidence: Sequence[EvidencePassage],
+    scope: str = "agent",
 ) -> dict[str, list[dict[str, Any]]]:
+    """Validate one synthesis result and stamp the corpus it was drawn from.
+
+    Scope is assigned here, in code, from the corpus synthesis ran over, rather
+    than asked of the model: it is provenance we already hold, and a model that
+    forgets the field would silently launder class evidence as agent evidence.
+    """
+
+    if scope not in EVIDENCE_SCOPES:
+        raise ValueError(f"Unknown evidence scope: {scope!r}")
     supplied_map = value.get("__passage_id_map__", {})
     passage_id_map = (
         {str(key): str(item) for key, item in supplied_map.items()}
@@ -1064,13 +1136,42 @@ def _validate_structured_facts(
             record = {
                 str(key): value
                 for key, value in raw.items()
-                if key not in {"text", "support_ids"}
+                if key not in {"text", "support_ids", "scope"}
             }
+            record["scope"] = scope
             record["text"] = text
             record["support_ids"] = [passage_id_map[item] for item in support_ids]
             items.append(record)
         validated[category] = items
     return validated
+
+
+def stamp_fact_scope(
+    facts: Mapping[str, Any], *, scope: str = "agent"
+) -> dict[str, list[dict[str, Any]]]:
+    """Add a scope to stored facts without re-validating them.
+
+    Stored ``structured_facts_json`` holds *resolved* evidence IDs in
+    support_ids, so running them back through ``_validate_structured_facts``
+    against a fresh P# map matches nothing and silently drops every
+    non-limitation fact. A catalog rebuilt from an older bundle still has to
+    satisfy the scope contract, so the field is added in place and nothing else
+    about the fact is touched.
+    """
+
+    if scope not in EVIDENCE_SCOPES:
+        raise ValueError(f"Unknown evidence scope: {scope!r}")
+    stamped: dict[str, list[dict[str, Any]]] = {}
+    for category in _SYNTHESIS_CATEGORIES:
+        items = facts.get(category, []) or []
+        if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
+            items = []
+        stamped[category] = [
+            {**item, "scope": str(item.get("scope") or scope)}
+            for item in items
+            if isinstance(item, Mapping)
+        ]
+    return stamped
 
 
 _ATTRIBUTION_FIELDS = {
@@ -1094,15 +1195,20 @@ def _attribution_prefix(
     The synthesis schema carries tumor type, histology, regimen, biomarker and
     prevalence denominator alongside each statement. They are what makes a
     statement answerable for one patient, so they belong in the projection.
+
+    Scope leads, because the rubric credits class evidence but asks the scorer to
+    prefer agent-specific evidence and to say which it used. That instruction has
+    nothing to bind to unless each statement says which corpus produced it.
     """
-    fields = _ATTRIBUTION_FIELDS.get(category)
-    if not fields or max_chars < 8:
+    if max_chars < 8:
         return ""
-    parts = [
+    scope = clean_text(item.get("scope"), max_chars=20)
+    parts = [f"scope: {scope}"] if scope in EVIDENCE_SCOPES else []
+    parts.extend(
         f"{field.replace('_', ' ')}: {value}"
-        for field in fields
+        for field in _ATTRIBUTION_FIELDS.get(category, ())
         if (value := clean_text(item.get(field), max_chars=200))
-    ]
+    )
     if not parts:
         return ""
     prefix = " | ".join(parts)
@@ -1115,6 +1221,7 @@ def _render_summary(
     *,
     include_safety: bool,
     max_chars: int,
+    header: str | None = None,
 ) -> str:
     labels = {
         "mechanism_and_targets": "Mechanism and targets",
@@ -1127,38 +1234,52 @@ def _render_summary(
     categories = list(_SYNTHESIS_CATEGORIES)
     if not include_safety:
         categories.remove("safety")
-    header = f"Drug: {drug.preferred_name}"
+    resolved_header = header or f"Drug: {drug.preferred_name}"
     heading_chars = sum(len(labels[category]) + 2 for category in categories)
     newline_chars = 2 * (len(categories) + 1)
     available = max(
         256 * len(categories),
-        max_chars - len(header) - heading_chars - newline_chars,
+        max_chars - len(resolved_header) - heading_chars - newline_chars,
     )
-    section_budget = max(256, available // len(categories))
-    lines = [header]
+
+    # Synthesis records which tumor, biomarker and regimen each statement belongs
+    # to. Rendering the text alone strips that attribution, so a reader sees
+    # "prolonged PFS (15.1 vs 10.6 months)" with no disease attached and cannot
+    # tell whether it applies to this patient.
+    rendered_lines: dict[str, list[str]] = {}
+    for category in categories:
+        lines_for_category: list[str] = []
+        for item in facts.get(category, ()):
+            text = clean_text(item.get("text"), max_chars=1500)
+            if not text:
+                continue
+            prefix = _attribution_prefix(category, item, max_chars=300)
+            lines_for_category.append(f"- [{prefix}] {text}" if prefix else f"- {text}")
+        rendered_lines[category] = lines_for_category
+
+    budgets = _fair_section_budgets(
+        {
+            category: sum(len(line) + 1 for line in lines)
+            for category, lines in rendered_lines.items()
+            if lines
+        },
+        available,
+    )
+
+    lines = [resolved_header]
     for category in categories:
         lines.append(f"{labels[category]}:")
-        items = list(facts.get(category, ()))
-        if not items:
+        if not rendered_lines[category]:
             lines.append(
                 "- No relevant evidence for this category was identified in the "
                 "retrieved passages."
             )
             continue
         used = 0
-        for item in items:
-            remaining = section_budget - used
-            if remaining <= 3:
+        budget = budgets[category]
+        for line in rendered_lines[category]:
+            if used + len(line) + 1 > budget:
                 break
-            text = clean_text(item.get("text"), max_chars=min(1500, remaining - 2))
-            if not text:
-                continue
-            # Synthesis records which tumor, biomarker and regimen each statement
-            # belongs to. Rendering the text alone strips that attribution, so a
-            # reader sees "prolonged PFS (15.1 vs 10.6 months)" with no disease
-            # attached and cannot tell whether it applies to this patient.
-            prefix = _attribution_prefix(category, item, max_chars=remaining - len(text) - 6)
-            line = f"- [{prefix}] {text}" if prefix else f"- {text}"
             lines.append(line)
             used += len(line) + 1
     rendered = "\n".join(lines)
@@ -1167,42 +1288,89 @@ def _render_summary(
     return rendered
 
 
+def _fair_section_budgets(demands: Mapping[str, int], available: int) -> dict[str, int]:
+    """Split the projection budget across sections by max-min fair share.
+
+    An equal split wastes it. Efficacy by tumor type is where disease-specific
+    results live and is always the fullest section, while limitations often runs
+    to a line or two; giving each a fifth of the budget truncated atezolizumab's
+    projection at 5,368 of 9,600 available characters and dropped the stage III
+    dMMR colon cancer result the patient's own trial reported. Sections that want
+    less than their share release the remainder to the ones that want more.
+    """
+
+    budgets: dict[str, int] = {}
+    pending = dict(demands)
+    remaining = max(0, available)
+    while pending:
+        share = remaining // len(pending)
+        satisfied = {
+            category: demand for category, demand in pending.items() if demand <= share
+        }
+        if not satisfied:
+            budgets.update({category: share for category in pending})
+            break
+        for category, demand in satisfied.items():
+            budgets[category] = demand
+            remaining -= demand
+            del pending[category]
+    return {category: budgets.get(category, 0) for category in demands}
+
+
+def bound_evidence(
+    items: Sequence[EvidencePassage], *, character_limit: int
+) -> list[EvidencePassage]:
+    """Round-robin passages into the synthesis budget, by axis and then source.
+
+    Keying on the query scope as well as the source is what reserves room for the
+    newest axes. Indication and class passages arrive from the same handful of
+    sources as the drug-name passages and, being fewer, would otherwise sit at
+    the back of each source's queue and be dropped first — exactly the passages
+    that carry the patient's disease.
+    """
+
+    by_key: dict[tuple[str, str], list[EvidencePassage]] = {}
+    for item in items:
+        by_key.setdefault((item.query_scope, item.source), []).append(item)
+    selected: list[EvidencePassage] = []
+    used = 0
+    while by_key and used < character_limit:
+        for key in list(by_key):
+            item = by_key[key].pop(0)
+            remaining = character_limit - used
+            if remaining <= 0:
+                break
+            if len(item.passage) > remaining:
+                item = EvidencePassage(
+                    **{
+                        **asdict(item),
+                        "passage": clean_text(item.passage, max_chars=remaining),
+                    }
+                )
+            selected.append(item)
+            used += len(item.passage)
+            if not by_key[key]:
+                del by_key[key]
+    return selected
+
+
 async def _default_synthesize_many(
     drugs_and_evidence: Sequence[tuple[DrugIdentity, Sequence[EvidencePassage]]],
     *,
     config: MMAIConfig,
+    evidence_token_limit: int | None = None,
 ) -> dict[str, Mapping[str, Any]]:
     if not drugs_and_evidence:
         return {}
     token_limit = int(
         config.good_option_catalog.get("synthesis_evidence_max_tokens", 190_000)
+        if evidence_token_limit is None
+        else evidence_token_limit
     )
     character_limit = max(4_000, token_limit * 4)
 
     def bounded(items: Sequence[EvidencePassage]) -> list[EvidencePassage]:
-        by_source: dict[str, list[EvidencePassage]] = {}
-        for item in items:
-            by_source.setdefault(item.source, []).append(item)
-        selected: list[EvidencePassage] = []
-        used = 0
-        while by_source and used < character_limit:
-            for source in list(by_source):
-                item = by_source[source].pop(0)
-                remaining = character_limit - used
-                if remaining <= 0:
-                    break
-                if len(item.passage) > remaining:
-                    item = EvidencePassage(
-                        **{
-                            **asdict(item),
-                            "passage": clean_text(item.passage, max_chars=remaining),
-                        }
-                    )
-                selected.append(item)
-                used += len(item.passage)
-                if not by_source[source]:
-                    del by_source[source]
-        return selected
+        return bound_evidence(items, character_limit=character_limit)
 
     bounded_inputs = [
         (drug, bounded(evidence)) for drug, evidence in drugs_and_evidence
@@ -1296,6 +1464,472 @@ async def _default_synthesize_many(
             validation_errors.get(drug.drug_id, "unknown error"),
         )
     return parsed
+
+
+#: Tokens that name the same class in different words. Retrieval is shared by
+#: class_id, so two drugs whose classes differ only by a plural or an acronym
+#: must hash to the same corpus or the sharing never happens.
+_CLASS_SYNONYM_TOKENS = {
+    "inhibitors": "inhibitor",
+    "blocker": "inhibitor",
+    "blockers": "inhibitor",
+    "blockade": "inhibitor",
+    "antagonists": "antagonist",
+    "agonists": "agonist",
+    "antibodies": "antibody",
+    "mab": "monoclonal antibody",
+    "mabs": "monoclonal antibody",
+    "degraders": "degrader",
+    "conjugates": "conjugate",
+    "modulators": "modulator",
+    "inhibition": "inhibitor",
+    "adc": "antibody drug conjugate",
+    "adcs": "antibody drug conjugate",
+    "tki": "tyrosine kinase inhibitor",
+    "tkis": "tyrosine kinase inhibitor",
+    "ici": "immune checkpoint inhibitor",
+    "icis": "immune checkpoint inhibitor",
+    "car": "chimeric antigen receptor",
+    "bite": "bispecific t cell engager",
+}
+#: Words that carry no class information and only split identical classes.
+#: "drug" is deliberately absent: it is load-bearing in "antibody-drug conjugate".
+_CLASS_STOP_TOKENS = frozenset(
+    {"a", "an", "the", "of", "anti", "agent", "agents", "class",
+     "therapy", "therapies", "based", "targeting", "directed"}
+)
+
+
+def normalize_class_name(name: str) -> str:
+    """Fold a class name to the key two drugs must agree on to share a corpus."""
+
+    # A parenthetical is nearly always the acronym for what precedes it, so
+    # keeping it turns "antibody-drug conjugate (ADC)" into a doubled string
+    # that matches neither spelled-out nor abbreviated forms.
+    text = normalize_ontology_text(re.sub(r"\([^)]*\)", " ", str(name or "")))
+    expanded = " ".join(_CLASS_SYNONYM_TOKENS.get(token, token) for token in text.split())
+    tokens = [
+        token for token in expanded.split() if token not in _CLASS_STOP_TOKENS
+    ]
+    half = len(tokens) // 2
+    if half and tokens[:half] == tokens[half:]:
+        tokens = tokens[:half]
+    return " ".join(tokens)
+
+
+def class_id_for(name: str) -> str:
+    """Return the stable identity of a class name, independent of its wording."""
+
+    normalized = normalize_class_name(name)
+    if not normalized:
+        return ""
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
+
+
+def build_drug_class_messages(
+    drug: DrugIdentity,
+    evidence: Sequence[EvidencePassage],
+    *,
+    max_classes: int,
+) -> list[dict[str, str]]:
+    """Build the class-assignment prompt from a drug's own mechanism evidence.
+
+    NCIt is not the source here. It has no entry, or a placeholder one, for the
+    first-in-human agents a phase I portfolio is made of, which are exactly the
+    drugs with too little evidence of their own to score on. The drug's retrieved
+    mechanism passages do describe them, so the class is read from those and the
+    ontology definition is offered only as a hint.
+    """
+
+    records = [
+        {
+            "passage_id": f"P{index}",
+            "facet": item.facet,
+            "source_kind": item.source_type,
+            "publication_year": str(item.published_at or "")[:4],
+            "text": item.passage,
+        }
+        for index, item in enumerate(evidence, start=1)
+    ]
+    system = load_prompt_text("trial_drug_class.system.txt")
+    user = load_prompt_text("trial_drug_class.user.txt").format(
+        max_classes=max_classes,
+        payload=json.dumps(
+            {
+                "drug": drug.preferred_name,
+                "aliases": list(drug.aliases[:8]),
+                "ncit_definition_hint": clean_text(drug.definition, max_chars=2000),
+                "passages": records,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def _class_output_validation_error(
+    value: Mapping[str, Any], *, evidence: Sequence[EvidencePassage]
+) -> str | None:
+    raw_classes = value.get("classes")
+    if not isinstance(raw_classes, list):
+        return "the response did not contain a JSON array named classes"
+    passage_id_map = {
+        str(key): str(item)
+        for key, item in (value.get("__passage_id_map__") or {}).items()
+    }
+    invalid: list[str] = []
+    for index, raw in enumerate(raw_classes):
+        if not isinstance(raw, Mapping):
+            invalid.append(f"item {index} is not an object")
+            continue
+        name = clean_text(raw.get("name"), max_chars=200)
+        if not name or not normalize_class_name(name):
+            invalid.append(f"item {index} has no usable name")
+            continue
+        if clean_text(raw.get("basis"), max_chars=40).casefold() not in CLASS_BASES:
+            invalid.append(f"{name}: basis must be target, mechanism, or modality")
+        if (
+            clean_text(raw.get("confidence"), max_chars=20).casefold()
+            not in CONFIDENCE_LEVELS
+        ):
+            invalid.append(f"{name}: confidence must be high, medium, or low")
+        if evidence and not _supported_passage_ids(
+            raw.get("support_ids", []), passage_id_map=passage_id_map
+        ):
+            invalid.append(f"{name}: no supplied P# identifier supports it")
+    if invalid:
+        return "; ".join(invalid[:5])
+    return None
+
+
+def _validate_drug_classes(
+    drug_id: str,
+    value: Mapping[str, Any],
+    *,
+    max_classes: int,
+) -> list[DrugClass]:
+    """Turn one validated class response into deduplicated catalog rows."""
+
+    passage_id_map = {
+        str(key): str(item)
+        for key, item in (value.get("__passage_id_map__") or {}).items()
+    }
+    records: dict[str, DrugClass] = {}
+    for raw in value.get("classes", []) or []:
+        if not isinstance(raw, Mapping):
+            continue
+        name = clean_text(raw.get("name"), max_chars=200)
+        class_id = class_id_for(name)
+        if not class_id or class_id in records:
+            continue
+        support = [
+            passage_id_map[item]
+            for item in _supported_passage_ids(
+                raw.get("support_ids", []), passage_id_map=passage_id_map
+            )
+        ]
+        aliases = raw.get("aliases", [])
+        if not isinstance(aliases, Sequence) or isinstance(aliases, (str, bytes)):
+            aliases = []
+        records[class_id] = DrugClass(
+            drug_id=drug_id,
+            class_id=class_id,
+            class_name=name,
+            basis=clean_text(raw.get("basis"), max_chars=40).casefold(),
+            target=clean_text(raw.get("target"), max_chars=200),
+            aliases=tuple(
+                dict.fromkeys(
+                    cleaned
+                    for item in aliases
+                    if (cleaned := clean_text(item, max_chars=200))
+                )
+            )[:6],
+            confidence=clean_text(raw.get("confidence"), max_chars=20).casefold(),
+            support_ids=tuple(support),
+        )
+        if len(records) >= max_classes:
+            break
+    return list(records.values())
+
+
+async def _default_classify_many(
+    drugs_and_evidence: Sequence[tuple[DrugIdentity, Sequence[EvidencePassage]]],
+    *,
+    config: MMAIConfig,
+) -> dict[str, Mapping[str, Any]]:
+    """Assign pharmacologic classes for a batch of drugs, with bounded retries."""
+
+    if not drugs_and_evidence:
+        return {}
+    catalog_config = config.good_option_catalog
+    max_classes = max(1, int(catalog_config.get("class_max_per_drug", 3)))
+    character_limit = max(
+        4_000,
+        int(catalog_config.get("class_assignment_evidence_max_tokens", 40_000)) * 4,
+    )
+    bounded_inputs = [
+        (drug, bound_evidence(evidence, character_limit=character_limit))
+        for drug, evidence in drugs_and_evidence
+    ]
+    parsed: dict[str, Mapping[str, Any]] = {}
+    validation_errors: dict[str, str] = {}
+    pending = list(bounded_inputs)
+    max_attempts = max(
+        1, int(catalog_config.get("class_assignment_max_attempts", 3))
+    )
+    for _attempt in range(1, max_attempts + 1):
+        if not pending:
+            break
+        messages_list: list[list[dict[str, str]]] = []
+        for drug, evidence in pending:
+            messages = build_drug_class_messages(
+                drug, evidence, max_classes=max_classes
+            )
+            previous_error = validation_errors.get(drug.drug_id)
+            if previous_error:
+                messages[-1] = {
+                    **messages[-1],
+                    "content": load_prompt_text("trial_drug_class.retry.txt").format(
+                        previous_content=messages[-1]["content"],
+                        attempt=_attempt,
+                        max_attempts=max_attempts,
+                        previous_error=previous_error,
+                    ),
+                }
+            messages_list.append(messages)
+        outputs = await asyncio.to_thread(
+            _run_llm_messages, messages_list, config=config, stage="class"
+        )
+        retry: list[tuple[DrugIdentity, Sequence[EvidencePassage]]] = []
+        for (drug, bounded_evidence), raw_output in zip(pending, outputs, strict=True):
+            output = _coerce_catalog_llm_output(raw_output)
+            if _token_limited_finish_reason(output.finish_reason):
+                validation_errors[drug.drug_id] = (
+                    "the response reached its output token limit "
+                    f"(finish_reason={output.finish_reason})"
+                )
+                retry.append((drug, bounded_evidence))
+                continue
+            raw_value = _find_json_mapping(output.text, "classes", allow_bare_array=True)
+            if not isinstance(raw_value, Mapping):
+                validation_errors[drug.drug_id] = (
+                    "the final response did not contain a JSON object with a classes "
+                    "array"
+                )
+                retry.append((drug, bounded_evidence))
+                continue
+            raw = dict(raw_value)
+            raw["__passage_id_map__"] = {
+                f"P{index}": item.evidence_id
+                for index, item in enumerate(bounded_evidence, start=1)
+            }
+            error = _class_output_validation_error(raw, evidence=bounded_evidence)
+            if error:
+                validation_errors[drug.drug_id] = error
+                retry.append((drug, bounded_evidence))
+                continue
+            parsed[drug.drug_id] = raw
+        pending = retry
+    for drug, _evidence in pending:
+        logging.warning(
+            "Class assignment for %s failed validation on every attempt: %s",
+            drug.preferred_name,
+            validation_errors.get(drug.drug_id, "unknown error"),
+        )
+    return parsed
+
+
+async def _synthesize_classes(
+    class_subjects: Mapping[str, tuple[str, tuple[str, ...]]],
+    class_evidence_by_id: Mapping[str, Sequence[EvidencePassage]],
+    *,
+    config: MMAIConfig,
+    checkpoint: "_CatalogCheckpointStore",
+    synthesizer: SummarySynthesizer | None = None,
+    progress_callback: Callable[[str, int, int, str], None] | None = None,
+) -> list[ClassSummary]:
+    """Synthesize each class corpus on its own budget.
+
+    Class synthesis is a separate call from agent synthesis, not a larger pooled
+    one. 165 drugs already use more than half the agent budget and the largest
+    uses 91% of it; pooling would let a flood of pembrolizumab and nivolumab
+    passages evict the agent's own data, which is the evidence the rubric asks
+    the scorer to prefer.
+    """
+
+    catalog_config = config.good_option_catalog
+    evidence_token_limit = int(catalog_config.get("class_evidence_max_tokens", 60_000))
+    summary_max_chars = max(
+        1000, int(catalog_config.get("class_option_summary_max_tokens", 1600)) * 4
+    )
+    batch_size = max(1, int(catalog_config.get("class_checkpoint_batch_size", 64)))
+
+    facts_by_class: dict[str, Mapping[str, Any]] = {}
+    pending: list[tuple[DrugIdentity, Sequence[EvidencePassage]]] = []
+    completed = 0
+    for class_id, (class_name, _aliases) in class_subjects.items():
+        evidence = list(class_evidence_by_id.get(class_id, ()))
+        identity = DrugIdentity(
+            drug_id=class_id, preferred_name=f"{class_name} (drug class)"
+        )
+        checkpoint_input = {
+            "class_id": class_id,
+            "class_name": class_name,
+            "evidence": [item.to_record() for item in evidence],
+        }
+        saved = checkpoint.load(
+            "class_synthesis", class_id, input_value=checkpoint_input
+        )
+        facts = saved.get("facts") if saved is not None else None
+        if isinstance(facts, Mapping) and all(
+            isinstance(facts.get(category), list) for category in _SYNTHESIS_CATEGORIES
+        ):
+            facts_by_class[class_id] = facts
+            completed += 1
+            if progress_callback:
+                progress_callback(
+                    "class_synthesis",
+                    completed,
+                    len(class_subjects),
+                    f"{class_name} (checkpoint)",
+                )
+        elif evidence:
+            pending.append((identity, evidence))
+        else:
+            completed += 1
+
+    for start in range(0, len(pending), batch_size):
+        batch = pending[start : start + batch_size]
+        if synthesizer is None:
+            outputs = await _default_synthesize_many(
+                batch, config=config, evidence_token_limit=evidence_token_limit
+            )
+        else:
+            outputs = {}
+            for identity, evidence in batch:
+                result = await _maybe_await(synthesizer(identity, evidence))
+                if isinstance(result, Mapping):
+                    outputs[identity.drug_id] = result
+        for identity, evidence in batch:
+            value = outputs.get(identity.drug_id)
+            if isinstance(value, Mapping):
+                facts_by_class[identity.drug_id] = value
+                checkpoint.save(
+                    "class_synthesis",
+                    identity.drug_id,
+                    input_value={
+                        "class_id": identity.drug_id,
+                        "class_name": class_subjects[identity.drug_id][0],
+                        "evidence": [item.to_record() for item in evidence],
+                    },
+                    data={"facts": dict(value)},
+                )
+            completed += 1
+            if progress_callback:
+                progress_callback(
+                    "class_synthesis",
+                    completed,
+                    len(class_subjects),
+                    identity.preferred_name,
+                )
+
+    summaries: list[ClassSummary] = []
+    for class_id, (class_name, _aliases) in class_subjects.items():
+        evidence = list(class_evidence_by_id.get(class_id, ()))
+        raw_facts = facts_by_class.get(class_id)
+        status = "ok" if isinstance(raw_facts, Mapping) else "blocked"
+        facts = (
+            _validate_structured_facts(
+                raw_facts,
+                evidence=bound_evidence(
+                    evidence,
+                    character_limit=max(4_000, evidence_token_limit * 4),
+                ),
+                scope="class",
+            )
+            if isinstance(raw_facts, Mapping)
+            else {category: [] for category in _SYNTHESIS_CATEGORIES}
+        )
+        summaries.append(
+            ClassSummary(
+                class_id=class_id,
+                class_name=class_name,
+                synthesis_status=status,
+                structured_facts=facts,
+                class_option_summary=(
+                    _render_summary(
+                        DrugIdentity(drug_id=class_id, preferred_name=class_name),
+                        facts,
+                        include_safety=False,
+                        max_chars=summary_max_chars,
+                        header=f"Drug class: {class_name}",
+                    )
+                    if status == "ok"
+                    else ""
+                ),
+                evidence_count=len(evidence),
+            )
+        )
+    return summaries
+
+
+def _indications_for_drugs(
+    assignments: Sequence[TrialDrugAssignment],
+    studies: Mapping[str, Mapping[str, Any]],
+    *,
+    limit: int,
+) -> dict[str, tuple[str, ...]]:
+    """Map each drug to the diseases its own trials name.
+
+    The catalog is built patient-free, but it was never trial-free: the registry
+    record it already stores says what each trial treats. Nothing in retrieval
+    read it, so no query ever named a disease, and 62% of patient-drug pairs
+    reached the scorer with evidence that never mentions the patient's cancer.
+    """
+
+    counts: dict[str, dict[str, dict[str, int]]] = {}
+    for assignment in assignments:
+        study = studies.get(assignment.trial_id)
+        if not isinstance(study, Mapping):
+            continue
+        protocol = study.get("protocolSection") or {}
+        conditions = [
+            clean_indication(value)
+            for value in (protocol.get("conditionsModule") or {}).get("conditions", [])
+            or []
+        ]
+        if not any(conditions):
+            derived = (study.get("derivedSection") or {}).get(
+                "conditionBrowseModule"
+            ) or {}
+            conditions = [
+                clean_indication(
+                    item.get("term") if isinstance(item, Mapping) else item
+                )
+                for item in derived.get("meshes", []) or []
+            ]
+        drug_counts = counts.setdefault(assignment.drug_id, {})
+        for term in dict.fromkeys(term for term in conditions if term):
+            spellings = drug_counts.setdefault(term.casefold(), {})
+            spellings[term] = spellings.get(term, 0) + 1
+
+    # Rank by how many of the drug's own trials name a disease, not by which
+    # trial happened to come first. Atezolizumab sits in 84 catalog trials naming
+    # 177 conditions; taking the first four gave four spellings of head and neck
+    # cancer, while the four most common are lung, liver, colorectal, and
+    # melanoma -- which is what its literature is actually about.
+    resolved: dict[str, tuple[str, ...]] = {}
+    for drug_id, drug_counts in counts.items():
+        ranked = sorted(
+            drug_counts.items(),
+            key=lambda item: (-sum(item[1].values()), item[0]),
+        )
+        resolved[drug_id] = tuple(
+            max(spellings.items(), key=lambda item: (item[1], -len(item[0])))[0]
+            for _key, spellings in ranked[:limit]
+        )
+    return resolved
 
 
 async def _fetch_registry_with_retries(
@@ -1530,6 +2164,7 @@ async def build_good_option_catalog(
     web_provider: GeneralWebProvider | None = None,
     role_resolver: RoleResolver | None = None,
     synthesizer: SummarySynthesizer | None = None,
+    class_resolver: ClassResolver | None = None,
     checkpoint_path: str | Path | None = None,
     reset_checkpoint: bool = False,
     overwrite: bool = False,
@@ -1583,6 +2218,7 @@ async def build_good_option_catalog(
             sources=resolved_sources,
             role_resolver=role_resolver,
             synthesizer=synthesizer,
+            class_resolver=class_resolver,
             ncit_resource=ncit_resource,
             ncit_version=ncit_version,
         ),
@@ -1911,11 +2547,19 @@ async def build_good_option_catalog(
             assignments_by_key[key] = assignment
     assignments = tuple(assignments_by_key.values())
 
+    indications_by_drug = _indications_for_drugs(
+        assignments, studies, limit=resolved_settings.indication_terms_per_drug
+    )
+
     evidence_by_drug: dict[str, list[EvidencePassage]] = {}
     status_by_drug: dict[str, tuple[str, list[str]]] = {}
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         for index, drug in enumerate(identities.values(), start=1):
-            checkpoint_input = {"drug": asdict(drug)}
+            indications = indications_by_drug.get(drug.drug_id, ())
+            checkpoint_input = {
+                "drug": asdict(drug),
+                "indications": list(indications),
+            }
             definition_evidence = _ncit_definition_evidence(
                 drug, ncit_version=ncit_version
             )
@@ -1948,22 +2592,32 @@ async def build_good_option_catalog(
                     sources=resolved_sources,
                     settings=resolved_settings,
                     client=client,
+                    indications=indications,
                 )
                 evidence = _merge_evidence(
                     definition_evidence, prior_evidence, new_evidence
                 )
                 drug_attempts = [*prior_attempts, *new_attempts]
-                web_items = [
-                    item for item in evidence if item.source_type == "general_web"
-                ]
-                non_web_items = [
-                    item for item in evidence if item.source_type != "general_web"
-                ]
+                # This cap belongs to the drug-name axis; the indication axis is
+                # already bounded as a whole by research_indications, and sharing
+                # one allowance would let whichever axis ran first take all of it.
                 web_document_limit = min(
                     resolved_settings.max_web_results_per_drug,
                     resolved_settings.max_web_documents_per_drug,
                 )
-                evidence = [*non_web_items, *web_items[:web_document_limit]]
+                kept_web = 0
+                trimmed: list[EvidencePassage] = []
+                for item in evidence:
+                    if (
+                        item.source_type != "general_web"
+                        or item.query_scope != "drug"
+                    ):
+                        trimmed.append(item)
+                        continue
+                    if kept_web < web_document_limit:
+                        kept_web += 1
+                        trimmed.append(item)
+                evidence = trimmed
                 checkpoint.save(
                     "research",
                     drug.drug_id,
@@ -1987,6 +2641,178 @@ async def build_good_option_catalog(
                     len(identities),
                     f"{drug.preferred_name}{suffix}",
                 )
+
+    # Classification runs after research because it reads the drug's own
+    # mechanism passages, and before class retrieval because it is what says
+    # which class corpora need retrieving at all.
+    max_classes = max(1, int(catalog_config.get("class_max_per_drug", 3)))
+    classify_inputs: list[tuple[DrugIdentity, list[EvidencePassage]]] = []
+    for drug in identities.values():
+        if status_by_drug[drug.drug_id][0] != "complete":
+            continue
+        evidence = evidence_by_drug[drug.drug_id]
+        mechanism = [item for item in evidence if item.facet == "mechanism_targets"]
+        classify_inputs.append((drug, mechanism or list(evidence)))
+    classes_by_drug: dict[str, list[DrugClass]] = {}
+    pending_classify: list[tuple[DrugIdentity, list[EvidencePassage]]] = []
+    classify_completed = 0
+    for drug, mechanism_evidence in classify_inputs:
+        checkpoint_input = {
+            "drug": asdict(drug),
+            "evidence": [item.to_record() for item in mechanism_evidence],
+            "max_classes": max_classes,
+        }
+        saved = checkpoint.load("classify", drug.drug_id, input_value=checkpoint_input)
+        raw_classes = saved.get("classes") if saved is not None else None
+        if isinstance(raw_classes, list):
+            classes_by_drug[drug.drug_id] = [
+                DrugClass.from_record(item)
+                for item in raw_classes
+                if isinstance(item, Mapping)
+            ]
+            classify_completed += 1
+            if progress_callback:
+                progress_callback(
+                    "classify",
+                    classify_completed,
+                    len(classify_inputs),
+                    f"{drug.preferred_name} (checkpoint)",
+                )
+        else:
+            pending_classify.append((drug, mechanism_evidence))
+    class_batch_size = max(1, int(catalog_config.get("class_checkpoint_batch_size", 64)))
+
+    def record_classes(
+        drug: DrugIdentity,
+        mechanism_evidence: Sequence[EvidencePassage],
+        value: Any,
+    ) -> None:
+        nonlocal classify_completed
+        records = (
+            _validate_drug_classes(drug.drug_id, value, max_classes=max_classes)
+            if isinstance(value, Mapping)
+            else []
+        )
+        classes_by_drug[drug.drug_id] = records
+        if isinstance(value, Mapping):
+            checkpoint.save(
+                "classify",
+                drug.drug_id,
+                input_value={
+                    "drug": asdict(drug),
+                    "evidence": [item.to_record() for item in mechanism_evidence],
+                    "max_classes": max_classes,
+                },
+                data={"classes": [item.to_record() for item in records]},
+            )
+        classify_completed += 1
+        if progress_callback:
+            progress_callback(
+                "classify",
+                classify_completed,
+                len(classify_inputs),
+                drug.preferred_name,
+            )
+
+    if class_resolver is None:
+        for start in range(0, len(pending_classify), class_batch_size):
+            batch = pending_classify[start : start + class_batch_size]
+            batch_outputs = await _default_classify_many(batch, config=resolved_config)
+            for drug, mechanism_evidence in batch:
+                record_classes(
+                    drug, mechanism_evidence, batch_outputs.get(drug.drug_id)
+                )
+    else:
+        for drug, mechanism_evidence in pending_classify:
+            value = await _maybe_await(class_resolver(drug, mechanism_evidence))
+            if isinstance(value, Mapping):
+                value = {
+                    **value,
+                    "__passage_id_map__": {
+                        f"P{index}": item.evidence_id
+                        for index, item in enumerate(mechanism_evidence, start=1)
+                    },
+                }
+            record_classes(drug, mechanism_evidence, value)
+
+    # One corpus per class, not per drug: the classes collapse thousands of
+    # agents onto a few hundred subjects, and every member reads the same block.
+    class_subjects: dict[str, tuple[str, tuple[str, ...]]] = {}
+    for records in classes_by_drug.values():
+        for record in records:
+            name, aliases = class_subjects.get(record.class_id, (record.class_name, ()))
+            class_subjects[record.class_id] = (
+                name,
+                tuple(dict.fromkeys((*aliases, *record.aliases)))[:6],
+            )
+    class_evidence_by_id: dict[str, list[EvidencePassage]] = {}
+    class_research_completed = 0
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        for class_id, (class_name, aliases) in class_subjects.items():
+            checkpoint_input = {
+                "class_id": class_id,
+                "class_name": class_name,
+                "aliases": list(aliases),
+            }
+            saved = checkpoint.load(
+                "class_research", class_id, input_value=checkpoint_input
+            )
+            resumed = saved is not None and str(saved.get("status") or "") == "complete"
+            if resumed:
+                class_items = [
+                    _evidence_from_record(value)
+                    for value in saved.get("evidence", [])
+                    if isinstance(value, Mapping)
+                ]
+                class_attempts = [
+                    _attempt_from_record(value)
+                    for value in saved.get("attempts", [])
+                    if isinstance(value, Mapping)
+                ]
+            else:
+                (
+                    class_items,
+                    class_attempts,
+                    class_status,
+                    _class_failures,
+                ) = await research_class(
+                    class_id,
+                    class_name,
+                    aliases=aliases,
+                    sources=resolved_sources,
+                    settings=resolved_settings,
+                    client=client,
+                )
+                checkpoint.save(
+                    "class_research",
+                    class_id,
+                    input_value=checkpoint_input,
+                    data={
+                        "evidence": [item.to_record() for item in class_items],
+                        "attempts": [item.to_record() for item in class_attempts],
+                        "status": class_status,
+                    },
+                )
+            class_evidence_by_id[class_id] = class_items
+            attempts.extend(class_attempts)
+            class_research_completed += 1
+            if progress_callback:
+                suffix = " (checkpoint)" if resumed else ""
+                progress_callback(
+                    "class_research",
+                    class_research_completed,
+                    len(class_subjects),
+                    f"{class_name}{suffix}",
+                )
+
+    class_summary_records = await _synthesize_classes(
+        class_subjects,
+        class_evidence_by_id,
+        config=resolved_config,
+        checkpoint=checkpoint,
+        synthesizer=synthesizer,
+        progress_callback=progress_callback,
+    )
 
     synthesis_inputs = [
         (drug, evidence_by_drug[drug.drug_id])
@@ -2210,23 +3036,26 @@ async def build_good_option_catalog(
     evidence_items = [item for values in evidence_by_drug.values() for item in values]
     drug_evidence = pd.DataFrame(
         [item.to_record() for item in evidence_items],
-        columns=[
-            "evidence_id",
-            "drug_id",
-            "facet",
-            "source",
-            "source_type",
-            "title",
-            "passage",
-            "url",
-            "source_locator",
-            "published_at",
-            "retrieved_at",
-            "license",
-            "query",
-            "content_sha256",
-            "attributes_json",
+        columns=EVIDENCE_COLUMNS,
+    )
+    class_evidence_items = [
+        item for values in class_evidence_by_id.values() for item in values
+    ]
+    class_evidence = pd.DataFrame(
+        [item.to_record() for item in class_evidence_items],
+        columns=EVIDENCE_COLUMNS,
+    )
+    drug_classes = pd.DataFrame(
+        [
+            record.to_record()
+            for records in classes_by_drug.values()
+            for record in records
         ],
+        columns=DRUG_CLASS_COLUMNS,
+    )
+    class_summaries = pd.DataFrame(
+        [item.to_record() for item in class_summary_records],
+        columns=CLASS_SUMMARY_COLUMNS,
     )
     research_attempts = pd.DataFrame([item.to_record() for item in attempts])
     _write_catalog_bundle(
@@ -2236,6 +3065,9 @@ async def build_good_option_catalog(
         trial_drug_index=trial_drug_index,
         drug_summaries=drug_summaries,
         drug_evidence=drug_evidence,
+        drug_classes=drug_classes,
+        class_evidence=class_evidence,
+        class_summaries=class_summaries,
         research_attempts=research_attempts,
         config=resolved_config,
         ncit_resource=ncit_resource,
@@ -2259,6 +3091,9 @@ def _write_catalog_bundle(
     drug_summaries: pd.DataFrame,
     drug_evidence: pd.DataFrame,
     research_attempts: pd.DataFrame,
+    drug_classes: pd.DataFrame | None = None,
+    class_evidence: pd.DataFrame | None = None,
+    class_summaries: pd.DataFrame | None = None,
     config: MMAIConfig,
     ncit_resource: str,
     ncit_version: str,
@@ -2270,10 +3105,36 @@ def _write_catalog_bundle(
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists() and not overwrite:
         raise FileExistsError(f"Catalog output already exists: {output}")
+    resolved_drug_classes = (
+        pd.DataFrame(columns=DRUG_CLASS_COLUMNS)
+        if drug_classes is None
+        else drug_classes
+    )
+    resolved_class_evidence = (
+        pd.DataFrame(columns=EVIDENCE_COLUMNS)
+        if class_evidence is None
+        else class_evidence
+    )
+    resolved_class_summaries = (
+        pd.DataFrame(columns=CLASS_SUMMARY_COLUMNS)
+        if class_summaries is None
+        else class_summaries
+    )
     temporary = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))
     try:
         evidence_dir = temporary / "drug_evidence"
         evidence_dir.mkdir()
+        class_evidence_dir = temporary / "class_evidence"
+        class_evidence_dir.mkdir()
+        resolved_drug_classes.to_parquet(
+            temporary / "drug_classes.parquet", index=False
+        )
+        resolved_class_summaries.to_parquet(
+            temporary / "class_summaries.parquet", index=False
+        )
+        resolved_class_evidence.to_parquet(
+            class_evidence_dir / "part-00000.parquet", index=False
+        )
         trial_registry.to_parquet(temporary / "trial_registry.parquet", index=False)
         trial_intervention_screening.to_parquet(
             temporary / "trial_intervention_screening.parquet", index=False
@@ -2301,6 +3162,7 @@ def _write_catalog_bundle(
                 "role_prompt": ROLE_PROMPT_VERSION,
                 "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
                 "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
+                "class_prompt": CLASS_PROMPT_VERSION,
                 "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
                 "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
                 "good_option_prompt": GOOD_OPTION_PROMPT_VERSION,
@@ -2321,6 +3183,17 @@ def _write_catalog_bundle(
                 "trial_drug_assignments": len(trial_drug_index),
                 "unique_drugs": len(drug_summaries),
                 "evidence_passages": len(drug_evidence),
+                "drug_class_assignments": len(resolved_drug_classes),
+                "unique_classes": len(resolved_class_summaries),
+                "class_evidence_passages": len(resolved_class_evidence),
+                "blocked_class_summaries": int(
+                    resolved_class_summaries.get(
+                        "synthesis_status", pd.Series(dtype=str)
+                    )
+                    .astype(str)
+                    .eq("blocked")
+                    .sum()
+                ),
                 "research_attempts": len(research_attempts),
                 "blocked_drugs": int(
                     drug_summaries.get("research_status", pd.Series(dtype=str))
@@ -2359,8 +3232,8 @@ def _write_catalog_bundle(
         raise
 
 
-def _read_evidence(path: Path) -> pd.DataFrame:
-    files = sorted((path / "drug_evidence").glob("*.parquet"))
+def _read_evidence(path: Path, *, directory: str = "drug_evidence") -> pd.DataFrame:
+    files = sorted((path / directory).glob("*.parquet"))
     if not files:
         return pd.DataFrame()
     return pd.concat((pd.read_parquet(file) for file in files), ignore_index=True)
@@ -2384,6 +3257,7 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
         "role_prompt": ROLE_PROMPT_VERSION,
         "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
         "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
+        "class_prompt": CLASS_PROMPT_VERSION,
         "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
         "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
         "good_option_prompt": GOOD_OPTION_PROMPT_VERSION,
@@ -2417,6 +3291,9 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
     index = pd.read_parquet(root / "trial_drug_index.parquet")
     summaries = pd.read_parquet(root / "drug_summaries.parquet")
     evidence = _read_evidence(root)
+    drug_classes = pd.read_parquet(root / "drug_classes.parquet")
+    class_summaries = pd.read_parquet(root / "class_summaries.parquet")
+    class_evidence = _read_evidence(root, directory="class_evidence")
     declared_trial_ids = manifest.get("trial_ids")
     if declared_trial_ids is not None and list(registry["trial_id"].astype(str)) != [
         str(value) for value in declared_trial_ids
@@ -2555,6 +3432,13 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
     evidence_drugs = set(evidence.get("drug_id", pd.Series(dtype=str)).astype(str))
     if evidence_drugs - known_drugs:
         raise ValueError("drug_evidence references unknown drug IDs.")
+    for name, frame in (("drug_evidence", evidence), ("class_evidence", class_evidence)):
+        unknown_scopes = sorted(
+            set(frame.get("query_scope", pd.Series(dtype=str)).astype(str))
+            - set(QUERY_SCOPES)
+        )
+        if unknown_scopes:
+            raise ValueError(f"{name} contains unknown query scopes: {unknown_scopes}")
     evidence_ids_by_drug = (
         {
             drug_id: set(group["evidence_id"].astype(str))
@@ -2572,6 +3456,11 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
             for fact in facts.get(category, []) or []:
                 if not isinstance(fact, Mapping):
                     raise ValueError("Structured summary facts must be JSON objects.")
+                if str(fact.get("scope") or "") != "agent":
+                    raise ValueError(
+                        "Drug summary facts must carry scope='agent'; a fact without "
+                        "a scope cannot be told apart from class evidence."
+                    )
                 support_ids = fact.get("support_ids", []) or []
                 if not isinstance(support_ids, Sequence) or isinstance(
                     support_ids, (str, bytes)
@@ -2583,7 +3472,100 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
                         "Structured summary references unknown evidence IDs: "
                         + ", ".join(sorted(unsupported))
                     )
+    _validate_class_tables(
+        drug_classes=drug_classes,
+        class_summaries=class_summaries,
+        class_evidence=class_evidence,
+        known_drugs=known_drugs,
+    )
     return manifest
+
+
+def _validate_class_tables(
+    *,
+    drug_classes: pd.DataFrame,
+    class_summaries: pd.DataFrame,
+    class_evidence: pd.DataFrame,
+    known_drugs: set[str],
+) -> None:
+    """Check the class axis: identities, membership, and fact provenance."""
+
+    missing_columns = sorted(set(DRUG_CLASS_COLUMNS) - set(drug_classes.columns))
+    if missing_columns:
+        raise ValueError("drug_classes is missing columns: " + ", ".join(missing_columns))
+    missing_columns = sorted(set(CLASS_SUMMARY_COLUMNS) - set(class_summaries.columns))
+    if missing_columns:
+        raise ValueError(
+            "class_summaries is missing columns: " + ", ".join(missing_columns)
+        )
+    if not drug_classes.empty:
+        if drug_classes[["drug_id", "class_id"]].astype(str).duplicated().any():
+            raise ValueError("drug_classes contains duplicate drug-class pairs.")
+        if set(drug_classes["drug_id"].astype(str)) - known_drugs:
+            raise ValueError("drug_classes references unknown drug IDs.")
+        unknown_bases = sorted(
+            set(drug_classes["basis"].astype(str)) - CLASS_BASES - {""}
+        )
+        if unknown_bases:
+            raise ValueError(f"drug_classes contains unknown bases: {unknown_bases}")
+        for record in drug_classes.to_dict(orient="records"):
+            expected = class_id_for(str(record.get("class_name") or ""))
+            if str(record.get("class_id")) != expected:
+                raise ValueError(
+                    "drug_classes class_id does not match its normalized class name: "
+                    f"{record.get('class_name')!r}"
+                )
+    if not class_summaries.empty:
+        if class_summaries["class_id"].astype(str).duplicated().any():
+            raise ValueError("class_summaries contains duplicate class_id values.")
+        status = class_summaries["synthesis_status"].astype(str)
+        if not status.isin({"ok", "blocked"}).all():
+            raise ValueError(
+                "Every class must have a terminal ok/blocked synthesis status."
+            )
+        rendered = (
+            class_summaries["class_option_summary"].fillna("").astype(str).str.strip()
+        )
+        if (status.eq("ok") & rendered.eq("")).any():
+            raise ValueError("Every completed class synthesis requires a projection.")
+    if set(drug_classes.get("class_id", pd.Series(dtype=str)).astype(str)) - set(
+        class_summaries.get("class_id", pd.Series(dtype=str)).astype(str)
+    ):
+        raise ValueError("drug_classes references classes with no summary row.")
+    known_classes = set(class_summaries.get("class_id", pd.Series(dtype=str)).astype(str))
+    if set(class_evidence.get("class_id", pd.Series(dtype=str)).astype(str)) - (
+        known_classes
+    ):
+        raise ValueError("class_evidence references unknown class IDs.")
+    evidence_ids_by_class = (
+        {
+            class_id: set(group["evidence_id"].astype(str))
+            for class_id, group in class_evidence.groupby("class_id", sort=False)
+        }
+        if not class_evidence.empty
+        else {}
+    )
+    for row in class_summaries.to_dict(orient="records"):
+        if str(row.get("synthesis_status")) != "ok":
+            continue
+        facts = json.loads(str(row.get("structured_facts_json") or "{}"))
+        if not isinstance(facts, Mapping):
+            raise ValueError("class structured_facts_json must contain a JSON object.")
+        known_evidence = evidence_ids_by_class.get(str(row["class_id"]), set())
+        for category in _SYNTHESIS_CATEGORIES:
+            for fact in facts.get(category, []) or []:
+                if not isinstance(fact, Mapping):
+                    raise ValueError("Class summary facts must be JSON objects.")
+                if str(fact.get("scope") or "") != "class":
+                    raise ValueError("Class summary facts must carry scope='class'.")
+                unsupported = set(map(str, fact.get("support_ids", []) or [])) - (
+                    known_evidence
+                )
+                if unsupported:
+                    raise ValueError(
+                        "Class summary references unknown evidence IDs: "
+                        + ", ".join(sorted(unsupported))
+                    )
 
 
 def load_good_option_catalog(
@@ -2608,21 +3590,31 @@ def load_good_option_catalog(
         drug_summaries=pd.read_parquet(root / "drug_summaries.parquet"),
         drug_evidence=_read_evidence(root),
         drug_research_attempts=pd.read_parquet(root / "drug_research_attempts.parquet"),
+        drug_classes=pd.read_parquet(root / "drug_classes.parquet"),
+        class_evidence=_read_evidence(root, directory="class_evidence"),
+        class_summaries=pd.read_parquet(root / "class_summaries.parquet"),
     )
 
 
 __all__ = [
     "CATALOG_CHECKPOINT_SCHEMA_VERSION",
+    "CLASS_PROMPT_VERSION",
     "INTERVENTION_EXCLUSION_CATEGORIES",
     "INTERVENTION_SCREENING_DISPOSITIONS",
     "ROLE_PROMPT_VERSION",
     "SYNTHESIS_PROMPT_VERSION",
+    "ClassResolver",
     "RoleResolver",
     "SummarySynthesizer",
+    "bound_evidence",
+    "build_drug_class_messages",
     "build_good_option_catalog",
     "build_intervention_screening_messages",
     "build_role_resolution_messages",
     "build_synthesis_messages",
+    "class_id_for",
     "load_good_option_catalog",
+    "normalize_class_name",
+    "stamp_fact_scope",
     "validate_good_option_catalog",
 ]

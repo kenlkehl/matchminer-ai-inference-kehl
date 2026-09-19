@@ -77,16 +77,21 @@ def outputs(c, s):
 
 
 def test_prompt_and_artifact_versions_match_pre_refactor_snapshot():
-    # Captured from commit 5f9fac4 with fabricated data, including literal braces
-    # and Unicode. A text change requires deliberate artifact-version review.
+    # Fabricated data, including literal braces and Unicode. A text change
+    # requires deliberate artifact-version review.
+    #
+    # Re-captured for the class- and indication-aware retrieval work: the
+    # synthesis prompt was rewritten (claim -> text), the scoring prompt gained
+    # the class-evidence legend, and the compatibility id gained the class
+    # prompt version. The screen and checker artifacts are unchanged.
     expected = {
         "screen": "efbc763d49e9ff434f993a4a5d088c143eb351b38f161675c07ec26410000826",
-        "synthesis": "1ea8a4230a74c06ce5ffe9ff9cc5707c81c039c7ca799ee9e9096a7fb9a55fa2",
-        "scoring": "309b368a5bb519ae108ba1a0eb996964797549ae60f7174e04af77aa1253dd72",
+        "synthesis": "13f0476492ca2d769502d9ee91d3c96225635834075c5bb225c0de7cf8290e58",
+        "scoring": "21d1254fff62df863ebb413b15afbf97b82e09b2705f47abfc8a2c2539aa36ae",
         "checker": "1123fd83802f67d38aa57b351b74516e8dfc14f8c7f1122ccb33e21f03281fc9",
-        "retry": "c61d618a3398f91e86441212b39cd9519125cd731d2df66aae7943c8a67f3145",
-        "retry_without_finish": "7cfd9027c7372eec517f6dc59fdf31badb6cabcae5eb52cd8154d6d1ca6fa96e",
-        "compatibility_id": "15b59bf69af525e7335ee62515e5c10ca7ffa07a31153113620dffccdc82cb55",
+        "retry": "be4026558080f5c0bf5b5ff7242ae91dea7c69a4b1e50f4ee74d04a7e534b8ab",
+        "retry_without_finish": "327f5fa6a423706f85250730b0311da316cd7f6b9b9c0edf3908dde816b27988",
+        "compatibility_id": "e4bbb75313f28b7ac98125cedbfb4f2dba7e8ad0369f2530f23722a8810d8947",
     }
     actual = {
         key: hashlib.sha256(

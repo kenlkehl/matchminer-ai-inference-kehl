@@ -128,7 +128,7 @@ def test_default_preset_matches_training_runtime_defaults():
     )
     assert config.llm_exclusion_criteria["local"]["generation"]["temperature"] == 0.0
     assert config.llm_exclusion_criteria["local"]["generation"]["max_tokens"] == 20000
-    assert config.llm_good_option["local"]["engine"]["max_model_len"] == 131072
+    assert config.llm_good_option["local"]["engine"]["max_model_len"] == 262144
     assert config.llm_good_option["local"]["generation"]["max_tokens"] == 100000
     assert config.llm_good_option["local"]["generation"][
         "repetition_penalty"
@@ -145,13 +145,13 @@ def test_default_preset_matches_training_runtime_defaults():
     ] == {"enable_thinking": True}
     assert (
         config.good_option_catalog["synthesis_llm"]["local"]["generation"]["max_tokens"]
-        == 32000
+        == 50000
     )
     assert (
         config.good_option_catalog["synthesis_llm"]["remote"]["request_params"][
             "max_tokens"
         ]
-        == 32000
+        == 50000
     )
     assert config.raw["good_option_checker"] == {
         "model_name": "",
