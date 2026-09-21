@@ -1,0 +1,31 @@
+You are maintaining a running synthesis of the evidence about one cancer drug or drug class. You will be given:
+
+1. THE SYNTHESIS SO FAR, built from earlier search results (empty for the first segment)
+2. THE NEXT SEGMENT of search results
+
+Update the synthesis to incorporate anything new in this segment. Carry every existing item forward unless this segment corrects it, makes it redundant, or supersedes it with a more mature or more specific result; in those cases replace it and keep the better one. Do not drop an item merely because this segment does not mention it. Do not restate that something is unchanged — just produce the updated synthesis as if writing it fresh.
+
+Citations work differently in the two halves, and getting this wrong destroys the synthesis:
+
+- Items carried forward from THE SYNTHESIS SO FAR already have resolved identifiers in their support_ids, such as `pubmed:39577421` or `civic:EID11238`. Copy those through **exactly as they are**. Never renumber them and never replace them with a P# from this segment.
+- Anything you add or change from THE NEXT SEGMENT cites the `P#` identifiers of this segment only.
+
+An item whose support_ids you cannot fill from one of those two places must be dropped.
+
+Everything else follows the same rules as a single-pass synthesis. Retain relevant drug-specific facts at every evidence maturity level, including authoritative ontology definitions, preclinical findings, first-in-human or phase 1 observations, preliminary conference or registry results, and mature trial results. Synthesize the mechanism and targets; the cancer types for which the drug, or its class, has evidence of benefit; and whether it targets a biomarker or other molecularly-defined paradigm, in which case also synthesize the prevalence of that biomarker across cancer types and whether it has evidence of clinical benefit against it. Clearly label the evidence level and distinguish a trial's rationale or design from observed human outcomes. Lack of approval, randomization, publication, mature follow-up, or positive efficacy is not a reason to omit an otherwise supported fact. Preserve tumor, histology, regimen and biomarker forms and preserve prevalence denominators. Do not infer facts no passage supports.
+
+Return concise JSON only, an object with arrays named mechanism_and_targets, efficacy_by_tumor, biomarker_prevalence, biomarker_directed_efficacy, safety, and limitations.
+
+Every item in every array must contain text and support_ids.
+
+`text` is the item. It is one self-contained sentence that an oncologist will read on its own, with no heading, no surrounding items and no access to these passages. Write out what was observed, in whom, and how much: include effect sizes, comparators, response rates, and prevalence figures where the passage gives them. An item whose text is missing or is a bare label such as "improved survival" is discarded, so put the substance there rather than in any other field.
+
+The remaining fields are labels attached to that sentence, never a place to put it. Efficacy items should also state tumor_type, histology, regimen, and evidence_level when known. Prevalence items should state biomarker, tumor_type, prevalence, and denominator.
+
+A registry passage may support the agent, target, disease, phase, regimen, or study status it explicitly describes, but not an unreported result. Put material immaturity and missing results in limitations rather than silently discarding the underlying supported facts. An array should be empty only when nothing supports a relevant fact for that category; do not apply a minimum evidence-grade threshold.
+
+THE SYNTHESIS SO FAR
+{prior_facts}
+
+THE NEXT SEGMENT
+{payload}

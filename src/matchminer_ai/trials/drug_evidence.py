@@ -12,7 +12,7 @@ import pandas as pd
 
 
 CATALOG_SCHEMA_VERSION = "good-option-catalog-v4"
-ROLE_POLICY_VERSION = "ctgov-cancer-treatment-agent-screen-v3"
+ROLE_POLICY_VERSION = "ctgov-cancer-treatment-agent-screen-v4"
 SYNTHESIS_SCHEMA_VERSION = "drug-evidence-summary-v4"
 GOOD_OPTION_PROJECTION_VERSION = "good-option-drug-summary-v4"
 HELP_ME_CHOOSE_PROJECTION_VERSION = "help-me-choose-drug-summary-v4"
@@ -28,9 +28,9 @@ GOOD_OPTION_LABEL_SCHEMA_VERSION = "good-option-four-binary-per-drug-v9"
 EVIDENCE_SCOPES = ("agent", "class")
 
 #: Why a retrieval query was issued. ``drug`` is the historical drug-name-only
-#: query, ``class`` is a class-name query, and ``drug_indication`` conditions the
-#: drug name on a disease named by a trial the drug appears in.
-QUERY_SCOPES = ("drug", "class", "drug_indication")
+#: query and ``class`` its class-name equivalent; the ``_indication`` variants
+#: condition either on a disease named by a trial the drug or class appears in.
+QUERY_SCOPES = ("drug", "class", "drug_indication", "class_indication")
 
 RUBRIC_CRITERIA = (
     "disease_type_benefit",

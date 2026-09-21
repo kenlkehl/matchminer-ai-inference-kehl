@@ -76,8 +76,8 @@ CONTROL_ARM_TYPES = frozenset(
     {"ACTIVE_COMPARATOR", "PLACEBO_COMPARATOR", "SHAM_COMPARATOR", "NO_INTERVENTION"}
 )
 ACTIVE_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL"})
-ROLE_PROMPT_VERSION = "trial-cancer-treatment-agent-screen-v3"
-SYNTHESIS_PROMPT_VERSION = "drug-evidence-synthesis-v3"
+ROLE_PROMPT_VERSION = "trial-cancer-treatment-agent-screen-v4"
+SYNTHESIS_PROMPT_VERSION = "drug-evidence-serial-synthesis-v4"
 CLASS_PROMPT_VERSION = "drug-pharmacologic-class-v1"
 CATALOG_CHECKPOINT_SCHEMA_VERSION = "good-option-catalog-checkpoints-v1"
 CLASS_BASES = frozenset({"target", "mechanism", "modality"})
@@ -96,6 +96,9 @@ INTERVENTION_EXCLUSION_CATEGORIES = frozenset(
         "other",
     }
 )
+#: Large enough that bound_evidence orders without dropping. Chunking keeps
+#: everything, so the only job left for the bounding pass is interleaving.
+_UNBOUNDED_CHARACTERS = 1 << 40
 _SYNTHESIS_CATEGORIES = (
     "mechanism_and_targets",
     "efficacy_by_tumor",
@@ -588,6 +591,10 @@ def _extract_registry_interventions(
         )
         description = clean_text(raw.get("description"), max_chars=3000)
         role_text = " ".join((name, description, *arm_descriptions)).casefold()
+        # The arm description is shared by every intervention in the arm, so a
+        # phrase there says nothing about which of them it applies to. Rules
+        # strong enough to outrank the screen read only this agent's own text.
+        agent_text = " ".join((name, description)).casefold()
         if arm_types and set(arm_types).issubset(CONTROL_ARM_TYPES):
             role, confidence, rationale = (
                 "control",
@@ -604,9 +611,28 @@ def _extract_registry_interventions(
                 "Registry text explicitly identifies supportive use.",
             )
         elif re.search(
+            r"\b(?:lymphodeplet\w*|conditioning (?:chemotherapy|regimen|therapy)|"
+            r"bridging therapy)\b",
+            agent_text,
+        ):
+            # Fludarabine and cyclophosphamide before a CAR-T are the platform the
+            # cells are delivered on, not the agent under test. The screen reads
+            # them as "part of the experimental regimen" because that is where the
+            # registry lists them, so this is settled structurally instead.
+            role, confidence, rationale = (
+                "background",
+                "high",
+                "Registry text identifies lymphodepleting or conditioning therapy.",
+            )
+        elif re.search(
             r"\b(?:standard[- ]of[- ]care|standard backbone|background therapy|backbone therapy)\b",
             role_text,
         ):
+            # Deliberately medium: "standard of care" turns up in arm text that
+            # is describing the control arm, the eligibility context, or the
+            # regimen a de-escalation trial is itself studying. Only the
+            # lymphodepletion phrasing above is specific enough to outrank the
+            # screen, which reads the trial's actual question.
             role, confidence, rationale = (
                 "background",
                 "medium",
@@ -788,6 +814,7 @@ async def _resolve_roles_with_default_llm(
         return {}
     outputs_by_trial: dict[str, Mapping[str, Mapping[str, Any]]] = {}
     validation_errors: dict[str, str] = {}
+    soft_warned: set[str] = set()
     pending = list(trial_ids)
     max_attempts = max(
         1, int(config.good_option_catalog.get("screening_max_attempts", 3))
@@ -852,9 +879,15 @@ async def _resolve_roles_with_default_llm(
             outputs_by_trial[trial_id] = records
             validation_error = _role_output_validation_error(
                 by_trial[trial_id], records
+            ) or (
+                # Soft: retried once, but the answer stands if it is repeated.
+                _role_output_soft_warning(by_trial[trial_id], records)
+                if trial_id not in soft_warned
+                else None
             )
             if validation_error is not None:
                 validation_errors[trial_id] = validation_error
+                soft_warned.add(trial_id)
                 retry.append(trial_id)
         pending = retry
     return outputs_by_trial
@@ -893,24 +926,40 @@ def _supported_active_names(
     return tuple(dict.fromkeys(accepted))
 
 
+def _name_variants(name: str) -> tuple[str, ...]:
+    """Surface forms of one registry name that should all resolve alike.
+
+    Registries write the same agent as "Avutometinib" in one trial and
+    "avutometinib (VS-6766)" in another. Without the parenthetical stripped the
+    second fails to match NCIt, splits into its own name-hash identity, and turns
+    up as a drug with no evidence.
+    """
+
+    candidates = (
+        normalize_ontology_text(name),
+        normalize_ontology_text(
+            re.sub(
+                r"\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iv|oral|tablet|capsule)s?\b",
+                " ",
+                name,
+                flags=re.IGNORECASE,
+            )
+        ),
+        normalize_ontology_text(re.sub(r"\([^)]*\)", " ", name)),
+    )
+    return tuple(dict.fromkeys(value for value in candidates if value))
+
+
 def _exact_ncit_match(
     name: str, candidates: Sequence[NCItDrugRecord]
 ) -> NCItDrugRecord | None:
-    normalized = normalize_ontology_text(name)
-    stripped = normalize_ontology_text(
-        re.sub(
-            r"\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iv|oral|tablet|capsule)s?\b",
-            " ",
-            name,
-            flags=re.IGNORECASE,
-        )
-    )
+    variants = set(_name_variants(name))
     for candidate in candidates:
         aliases = {
             normalize_ontology_text(value)
             for value in (candidate.preferred_name, *candidate.synonyms)
         }
-        if normalized in aliases or stripped in aliases:
+        if variants & aliases:
             return candidate
     return None
 
@@ -919,7 +968,15 @@ def _canonicalize_drug(
     name: str, aliases: Sequence[str], *, ncit_index: Any
 ) -> DrugIdentity:
     candidate: NCItDrugRecord | None = None
-    for query in (name, *aliases):
+    queries = tuple(
+        dict.fromkeys(
+            value
+            for raw in (name, *aliases)
+            for value in (raw, re.sub(r"\([^)]*\)", " ", raw).strip())
+            if value
+        )
+    )
+    for query in queries:
         candidate = _exact_ncit_match(query, ncit_index.search(query, limit=8))
         if candidate is not None:
             break
@@ -1354,116 +1411,208 @@ def bound_evidence(
     return selected
 
 
-async def _default_synthesize_many(
+def chunk_evidence(
+    items: Sequence[EvidencePassage], *, character_limit: int
+) -> list[list[EvidencePassage]]:
+    """Split a ledger into ordered chunks that each fit one prompt.
+
+    Interleaved by axis and source first, so an early chunk is a cross-section of
+    what was retrieved rather than everything PubMed happened to return. Nothing
+    is discarded: the bounding pass this replaces silently dropped whatever did
+    not fit, which for the broad drug classes was a third of their evidence.
+    """
+
+    ordered = bound_evidence(items, character_limit=_UNBOUNDED_CHARACTERS)
+    chunks: list[list[EvidencePassage]] = []
+    current: list[EvidencePassage] = []
+    used = 0
+    for item in ordered:
+        passage = item.passage
+        if len(passage) > character_limit:
+            item = EvidencePassage(
+                **{**asdict(item), "passage": clean_text(passage, max_chars=character_limit)}
+            )
+            passage = item.passage
+        if current and used + len(passage) > character_limit:
+            chunks.append(current)
+            current, used = [], 0
+        current.append(item)
+        used += len(passage)
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def build_synthesis_update_messages(
+    drug: DrugIdentity,
+    evidence: Sequence[EvidencePassage],
+    prior_facts: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    """Build one round of a running synthesis over the next chunk of evidence."""
+
+    records = [
+        {
+            "passage_id": f"P{index}",
+            "facet": item.facet,
+            "source_kind": item.source_type,
+            "publication_year": str(item.published_at or "")[:4],
+            "text": item.passage,
+        }
+        for index, item in enumerate(evidence, start=1)
+    ]
+    system = load_prompt_text("trial_drug_synthesis.system.txt")
+    user = load_prompt_text("trial_drug_synthesis.update.txt").format(
+        prior_facts=json.dumps(
+            {category: prior_facts.get(category, []) for category in _SYNTHESIS_CATEGORIES},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        payload=json.dumps(
+            {"drug": drug.preferred_name, "passages": records},
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+async def synthesize_serially(
     drugs_and_evidence: Sequence[tuple[DrugIdentity, Sequence[EvidencePassage]]],
     *,
     config: MMAIConfig,
-    evidence_token_limit: int | None = None,
-) -> dict[str, Mapping[str, Any]]:
+    chunk_token_limit: int | None = None,
+    scope: str = "agent",
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """Synthesize each subject by iterating a running summary over its evidence.
+
+    Rounds are organized the way patient serial summarization organizes them:
+    round N carries every subject's Nth chunk, so one batched LLM call keeps the
+    backend saturated while each subject's chunk still sees the summary built
+    from its own earlier chunks.
+
+    Returns validated facts with resolved evidence IDs. Callers must not run
+    ``_validate_structured_facts`` over the result: support_ids are already
+    resolved, and re-resolving them against a fresh P# map matches nothing and
+    silently drops every fact.
+    """
+
     if not drugs_and_evidence:
         return {}
+    catalog_config = config.good_option_catalog
     token_limit = int(
-        config.good_option_catalog.get("synthesis_evidence_max_tokens", 190_000)
-        if evidence_token_limit is None
-        else evidence_token_limit
+        catalog_config.get("synthesis_chunk_max_tokens", 40_000)
+        if chunk_token_limit is None
+        else chunk_token_limit
     )
     character_limit = max(4_000, token_limit * 4)
+    max_attempts = max(1, int(catalog_config.get("synthesis_max_attempts", 3)))
 
-    def bounded(items: Sequence[EvidencePassage]) -> list[EvidencePassage]:
-        return bound_evidence(items, character_limit=character_limit)
+    chunks_by_subject = {
+        drug.drug_id: chunk_evidence(evidence, character_limit=character_limit)
+        for drug, evidence in drugs_and_evidence
+    }
+    drugs_by_id = {drug.drug_id: drug for drug, _evidence in drugs_and_evidence}
+    facts: dict[str, dict[str, list[dict[str, Any]]]] = {
+        drug_id: {category: [] for category in _SYNTHESIS_CATEGORIES}
+        for drug_id in chunks_by_subject
+    }
+    # Evidence IDs already cited become identity entries in the next round's map,
+    # so carried-forward citations validate without being renumbered.
+    resolved: dict[str, set[str]] = {drug_id: set() for drug_id in chunks_by_subject}
 
-    bounded_inputs = [
-        (drug, bounded(evidence)) for drug, evidence in drugs_and_evidence
-    ]
-    parsed: dict[str, Mapping[str, Any]] = {}
-    validation_errors: dict[str, str] = {}
-    pending = list(bounded_inputs)
-    max_attempts = max(
-        1, int(config.good_option_catalog.get("synthesis_max_attempts", 3))
-    )
-    for _attempt in range(1, max_attempts + 1):
-        if not pending:
-            break
-        messages_list: list[list[dict[str, str]]] = []
-        for drug, evidence in pending:
-            messages = build_synthesis_messages(drug, evidence)
-            previous_error = validation_errors.get(drug.drug_id)
-            if previous_error:
-                messages[-1] = {
-                    **messages[-1],
-                    "content": (
-                        load_prompt_text("trial_drug_synthesis.retry.txt").format(
+    rounds = max((len(value) for value in chunks_by_subject.values()), default=0)
+    for round_index in range(rounds):
+        pending = [
+            drug_id
+            for drug_id, chunks in chunks_by_subject.items()
+            if round_index < len(chunks)
+        ]
+        errors: dict[str, str] = {}
+        for _attempt in range(1, max_attempts + 1):
+            if not pending:
+                break
+            messages_list = []
+            for drug_id in pending:
+                chunk = chunks_by_subject[drug_id][round_index]
+                messages = build_synthesis_update_messages(
+                    drugs_by_id[drug_id], chunk, facts[drug_id]
+                )
+                previous_error = errors.get(drug_id)
+                if previous_error:
+                    messages[-1] = {
+                        **messages[-1],
+                        "content": load_prompt_text(
+                            "trial_drug_synthesis.retry.txt"
+                        ).format(
                             previous_content=messages[-1]["content"],
                             attempt=_attempt,
                             max_attempts=max_attempts,
                             previous_error=previous_error,
-                        )
-                    ),
-                }
-            messages_list.append(messages)
-        outputs = await asyncio.to_thread(
-            _run_llm_messages,
-            messages_list,
-            config=config,
-            stage="synthesis",
-        )
-        retry: list[tuple[DrugIdentity, Sequence[EvidencePassage]]] = []
-        for (drug, bounded_evidence), raw_output in zip(pending, outputs, strict=True):
-            output = _coerce_catalog_llm_output(raw_output)
-            if _token_limited_finish_reason(output.finish_reason):
-                validation_errors[drug.drug_id] = (
-                    "the response reached its output token limit "
-                    f"(finish_reason={output.finish_reason})"
-                )
-                retry.append((drug, bounded_evidence))
-                continue
-            if not output.text.strip():
-                validation_errors[drug.drug_id] = "the final response was blank"
-                retry.append((drug, bounded_evidence))
-                continue
-            raw_value = _find_json_mapping(output.text, "mechanism_and_targets")
-            if not isinstance(raw_value, Mapping) or any(
-                not isinstance(raw_value.get(category), list)
-                for category in _SYNTHESIS_CATEGORIES
-            ):
-                validation_errors[drug.drug_id] = (
-                    "the final response did not contain every required JSON array"
-                )
-                retry.append((drug, bounded_evidence))
-                continue
-            raw = dict(raw_value)
-            raw["__passage_id_map__"] = {
-                f"P{index}": item.evidence_id
-                for index, item in enumerate(bounded_evidence, start=1)
-            }
-            fact_error = _synthesis_fact_validation_error(
-                raw, evidence=bounded_evidence
+                        ),
+                    }
+                messages_list.append(messages)
+            outputs = await asyncio.to_thread(
+                _run_llm_messages, messages_list, config=config, stage="synthesis"
             )
-            if fact_error:
-                validation_errors[drug.drug_id] = fact_error
-                retry.append((drug, bounded_evidence))
-                continue
-            if bounded_evidence and all(
-                not raw.get(category) for category in _SYNTHESIS_CATEGORIES
-            ):
-                validation_errors[drug.drug_id] = (
-                    "all arrays were empty despite supplied passages; include relevant "
-                    "supported facts or a limitations item explaining the evidence gap"
+            retry: list[str] = []
+            for drug_id, raw_output in zip(pending, outputs, strict=True):
+                chunk = chunks_by_subject[drug_id][round_index]
+                output = _coerce_catalog_llm_output(raw_output)
+                if _token_limited_finish_reason(output.finish_reason):
+                    errors[drug_id] = (
+                        "the response reached its output token limit "
+                        f"(finish_reason={output.finish_reason})"
+                    )
+                    retry.append(drug_id)
+                    continue
+                raw_value = _find_json_mapping(output.text, "mechanism_and_targets")
+                if not isinstance(raw_value, Mapping) or any(
+                    not isinstance(raw_value.get(category), list)
+                    for category in _SYNTHESIS_CATEGORIES
+                ):
+                    errors[drug_id] = (
+                        "the final response did not contain every required JSON array"
+                    )
+                    retry.append(drug_id)
+                    continue
+                raw = dict(raw_value)
+                raw["__passage_id_map__"] = {
+                    **{f"P{index}": item.evidence_id for index, item in enumerate(chunk, start=1)},
+                    **{value: value for value in resolved[drug_id]},
+                }
+                updated = _validate_structured_facts(
+                    raw, evidence=chunk, scope=scope
                 )
-                retry.append((drug, bounded_evidence))
-                continue
-            parsed[drug.drug_id] = raw
-        pending = retry
-    # A response that failed fact validation on every attempt is not a result.
-    # Storing it here previously turned a large silent fact loss into a clean
-    # "0 failures" report; leaving it out marks the drug blocked instead.
-    for drug, _evidence in pending:
-        logging.warning(
-            "Synthesis for %s failed validation on every attempt: %s",
-            drug.preferred_name,
-            validation_errors.get(drug.drug_id, "unknown error"),
-        )
-    return parsed
+                if chunk and not any(updated.values()):
+                    errors[drug_id] = (
+                        "the update dropped every previously supported fact; carry "
+                        "existing items forward with their resolved support_ids"
+                        if any(facts[drug_id].values())
+                        else "all arrays were empty despite supplied passages; "
+                        "include relevant supported facts or a limitations item "
+                        "explaining the evidence gap"
+                    )
+                    retry.append(drug_id)
+                    continue
+                facts[drug_id] = updated
+                resolved[drug_id].update(
+                    value
+                    for items in updated.values()
+                    for item in items
+                    for value in item.get("support_ids", [])
+                )
+            pending = retry
+        for drug_id in pending:
+            logging.warning(
+                "Synthesis round %d for %s failed validation on every attempt: %s",
+                round_index + 1,
+                drugs_by_id[drug_id].preferred_name,
+                errors.get(drug_id, "unknown error"),
+            )
+        if progress_callback:
+            progress_callback(round_index + 1, rounds)
+    return facts
 
 
 #: Tokens that name the same class in different words. Retrieval is shared by
@@ -1802,15 +1951,20 @@ async def _synthesize_classes(
     for start in range(0, len(pending), batch_size):
         batch = pending[start : start + batch_size]
         if synthesizer is None:
-            outputs = await _default_synthesize_many(
-                batch, config=config, evidence_token_limit=evidence_token_limit
+            outputs = await synthesize_serially(
+                batch,
+                config=config,
+                chunk_token_limit=evidence_token_limit,
+                scope="class",
             )
         else:
             outputs = {}
             for identity, evidence in batch:
                 result = await _maybe_await(synthesizer(identity, evidence))
                 if isinstance(result, Mapping):
-                    outputs[identity.drug_id] = result
+                    outputs[identity.drug_id] = _validate_structured_facts(
+                        result, evidence=evidence, scope="class"
+                    )
         for identity, evidence in batch:
             value = outputs.get(identity.drug_id)
             if isinstance(value, Mapping):
@@ -1837,20 +1991,15 @@ async def _synthesize_classes(
     summaries: list[ClassSummary] = []
     for class_id, (class_name, _aliases) in class_subjects.items():
         evidence = list(class_evidence_by_id.get(class_id, ()))
-        raw_facts = facts_by_class.get(class_id)
-        status = "ok" if isinstance(raw_facts, Mapping) else "blocked"
+        # Already validated, with support_ids resolved to evidence IDs by the
+        # round that produced them. Re-validating here would match nothing.
+        stored = facts_by_class.get(class_id)
         facts = (
-            _validate_structured_facts(
-                raw_facts,
-                evidence=bound_evidence(
-                    evidence,
-                    character_limit=max(4_000, evidence_token_limit * 4),
-                ),
-                scope="class",
-            )
-            if isinstance(raw_facts, Mapping)
+            dict(stored)
+            if isinstance(stored, Mapping)
             else {category: [] for category in _SYNTHESIS_CATEGORIES}
         )
+        status = "ok" if evidence and any(facts.values()) else "blocked"
         summaries.append(
             ClassSummary(
                 class_id=class_id,
@@ -1888,48 +2037,130 @@ def _indications_for_drugs(
     reached the scorer with evidence that never mentions the patient's cancer.
     """
 
-    counts: dict[str, dict[str, dict[str, int]]] = {}
+    by_trial: dict[str, dict[str, list[str]]] = {}
     for assignment in assignments:
         study = studies.get(assignment.trial_id)
         if not isinstance(study, Mapping):
             continue
-        protocol = study.get("protocolSection") or {}
-        conditions = [
-            clean_indication(value)
-            for value in (protocol.get("conditionsModule") or {}).get("conditions", [])
-            or []
-        ]
-        if not any(conditions):
-            derived = (study.get("derivedSection") or {}).get(
-                "conditionBrowseModule"
-            ) or {}
-            conditions = [
-                clean_indication(
-                    item.get("term") if isinstance(item, Mapping) else item
-                )
-                for item in derived.get("meshes", []) or []
-            ]
-        drug_counts = counts.setdefault(assignment.drug_id, {})
-        for term in dict.fromkeys(term for term in conditions if term):
-            spellings = drug_counts.setdefault(term.casefold(), {})
-            spellings[term] = spellings.get(term, 0) + 1
+        by_trial.setdefault(assignment.drug_id, {})[assignment.trial_id] = (
+            trial_indications(study)
+        )
+    return {
+        drug_id: _round_robin_terms(trials, limit=limit)
+        for drug_id, trials in by_trial.items()
+    }
 
-    # Rank by how many of the drug's own trials name a disease, not by which
-    # trial happened to come first. Atezolizumab sits in 84 catalog trials naming
-    # 177 conditions; taking the first four gave four spellings of head and neck
-    # cancer, while the four most common are lung, liver, colorectal, and
-    # melanoma -- which is what its literature is actually about.
-    resolved: dict[str, tuple[str, ...]] = {}
-    for drug_id, drug_counts in counts.items():
-        ranked = sorted(
-            drug_counts.items(),
-            key=lambda item: (-sum(item[1].values()), item[0]),
-        )
-        resolved[drug_id] = tuple(
-            max(spellings.items(), key=lambda item: (item[1], -len(item[0])))[0]
-            for _key, spellings in ranked[:limit]
-        )
-    return resolved
+
+def trial_indications(study: Mapping[str, Any]) -> list[str]:
+    """Read one trial's diseases, preferring its own conditions to MeSH terms."""
+
+    protocol = study.get("protocolSection") or {}
+    conditions = [
+        clean_indication(value)
+        for value in (protocol.get("conditionsModule") or {}).get("conditions", []) or []
+    ]
+    if not any(conditions):
+        derived = (study.get("derivedSection") or {}).get("conditionBrowseModule") or {}
+        conditions = [
+            clean_indication(item.get("term") if isinstance(item, Mapping) else item)
+            for item in derived.get("meshes", []) or []
+        ]
+    return [term for term in dict.fromkeys(conditions) if term]
+
+
+def _round_robin_terms(
+    terms_by_trial: Mapping[str, Sequence[str]], *, limit: int
+) -> tuple[str, ...]:
+    """Serve every trial one disease before serving any trial a second.
+
+    Ranking by how often a drug's trials name a disease answers "what is this
+    drug generally studied in", which is the wrong question when scoring a
+    patient against one specific trial. Durvalumab's mesothelioma trial lost that
+    ranking to its lung and liver trials, so the mesothelioma patient was scored
+    against evidence that never mentioned mesothelioma. Round-robin instead, so
+    no trial's disease can be crowded out by a different trial's.
+    """
+
+    queues = [list(value) for value in terms_by_trial.values()]
+    selected: list[str] = []
+    kept: list[frozenset[str]] = []
+    seen: set[str] = set()
+    while len(selected) < limit and any(queues):
+        progressed = False
+        for queue in queues:
+            if len(selected) >= limit:
+                break
+            while queue:
+                term = queue.pop(0)
+                if term.casefold() in seen:
+                    continue
+                seen.add(term.casefold())
+                words = _disease_words(term)
+                # "Mesothelioma", "Pleural Mesothelioma" and "Malignant Pleural
+                # Mesothelioma" are one disease spelled three ways, and searching
+                # all three spends three subjects on one corpus. Registries list
+                # the general form first, so keeping the first of a family keeps
+                # the one that returns the most.
+                if words and any(words >= existing for existing in kept):
+                    continue
+                kept.append(words)
+                selected.append(term)
+                progressed = True
+                break
+        if not progressed:
+            break
+    return tuple(selected)
+
+
+_DISEASE_STOP_WORDS = frozenset(
+    {
+        "advanced", "metastatic", "recurrent", "refractory", "relapsed", "malignant",
+        "unresectable", "locally", "newly", "diagnosed", "primary", "stage", "grade",
+        "the", "and", "with", "of", "or",
+    }
+)
+
+
+def _disease_words(term: str) -> frozenset[str]:
+    """Content words of a disease name, for spotting one disease spelled twice."""
+
+    return frozenset(
+        word
+        for word in re.split(r"[^a-z0-9]+", term.casefold())
+        if len(word) > 2 and word not in _DISEASE_STOP_WORDS
+    )
+
+
+def indications_for_classes(
+    classes_by_drug: Mapping[str, Sequence[DrugClass]],
+    assignments: Sequence[TrialDrugAssignment],
+    studies: Mapping[str, Mapping[str, Any]],
+    *,
+    limit: int,
+) -> dict[str, tuple[str, ...]]:
+    """Map each class to the diseases the trials of its member drugs name.
+
+    The class axis had no disease on it at all: a query for "immune checkpoint
+    inhibitor" returns whatever that class is famous for, which is melanoma and
+    lung. Only 60% of cohort drug-trial pairs had their disease reach the class
+    summary the scorer reads, and the misses included mesothelioma, where the
+    class evidence is the strongest evidence there is.
+    """
+
+    by_class: dict[str, dict[str, list[str]]] = {}
+    for assignment in assignments:
+        study = studies.get(assignment.trial_id)
+        if not isinstance(study, Mapping):
+            continue
+        terms = trial_indications(study)
+        if not terms:
+            continue
+        for record in classes_by_drug.get(assignment.drug_id, ()):
+            by_class.setdefault(record.class_id, {})[assignment.trial_id] = terms
+    return {
+        class_id: _round_robin_terms(trials, limit=limit)
+        for class_id, trials in by_class.items()
+    }
 
 
 async def _fetch_registry_with_retries(
@@ -2110,6 +2341,43 @@ def _role_output_validation_error(
     return None
 
 
+def _role_output_soft_warning(
+    interventions: Sequence[_RegistryIntervention],
+    output: Mapping[str, Mapping[str, Any]],
+) -> str | None:
+    """Flag an output worth one more attempt without rejecting it outright.
+
+    A trial that keeps agents but marks none of them investigational has usually
+    had its platform mistaken for its question — that is how a CAR-T product came
+    back as background. It is not impossible, though: a head-to-head of two
+    standard regimens genuinely has no investigational arm. So this prompts a
+    retry and the second answer stands, rather than failing the trial closed and
+    discarding every agent in it.
+    """
+
+    included = [
+        item
+        for index, item in enumerate(interventions)
+        if clean_text(
+            output.get(str(index), {}).get("research_disposition"), max_chars=40
+        ).casefold()
+        == "include"
+    ]
+    if not included:
+        return None
+    roles = {
+        clean_text(output.get(str(index), {}).get("role"), max_chars=40).casefold()
+        for index, item in enumerate(interventions)
+        if item in included
+    }
+    if roles & SCOREABLE_ROLES:
+        return None
+    return (
+        "every included agent was marked background, control, or supportive, so "
+        "the trial has no agent under study; identify what this trial is testing"
+    )
+
+
 def _role_output_is_complete(
     interventions: Sequence[_RegistryIntervention],
     output: Mapping[str, Mapping[str, Any]],
@@ -2152,6 +2420,158 @@ def _fail_closed_role_output(
         if _role_output_validation_error(interventions, candidate) is None:
             fallback[index] = dict(item)
     return fallback
+
+
+def derive_trial_assignments(
+    interventions_by_trial: Mapping[str, Sequence[_RegistryIntervention]],
+    role_outputs: Mapping[str, Mapping[str, Mapping[str, Any]]],
+    *,
+    ncit_index: Any,
+) -> tuple[dict[str, DrugIdentity], tuple[TrialDrugAssignment, ...], list[dict[str, Any]]]:
+    """Turn screening decisions into canonical drugs, roles, and audit rows.
+
+    Shared by the full build and by re-screening an existing catalog in place,
+    so a change to the screening policy can be applied without redoing retrieval.
+    """
+
+    identities: dict[str, DrugIdentity] = {}
+    assignment_candidates: list[TrialDrugAssignment] = []
+    screening_rows: list[dict[str, Any]] = []
+    for trial_id, interventions in interventions_by_trial.items():
+        outputs = role_outputs.get(trial_id, {})
+        for intervention_index, intervention in enumerate(interventions):
+            role_output = outputs.get(str(intervention_index), {})
+            disposition = clean_text(
+                role_output.get("research_disposition"), max_chars=40
+            ).casefold()
+            if disposition not in INTERVENTION_SCREENING_DISPOSITIONS:
+                disposition = "uncertain"
+            exclusion_category = clean_text(
+                role_output.get("exclusion_category"), max_chars=80
+            ).casefold()
+            if exclusion_category not in INTERVENTION_EXCLUSION_CATEGORIES:
+                exclusion_category = "insufficient_context"
+            if disposition == "include":
+                exclusion_category = "none"
+            elif exclusion_category == "none":
+                exclusion_category = "insufficient_context"
+
+            role = intervention.initial_role
+            confidence = intervention.role_confidence
+            rationale = intervention.role_rationale
+            proposed_role = clean_text(role_output.get("role"), max_chars=40).casefold()
+            screening_confidence = clean_text(
+                role_output.get("confidence"), max_chars=20
+            ).casefold()
+            screening_rationale = clean_text(
+                role_output.get("rationale"), max_chars=1000
+            )
+            # A high-confidence structural read beats the model. The registry
+            # saying "lymphodepleting chemotherapy" settles the role; the screen
+            # reliably overrides it to investigational because the agent sits in
+            # an experimental arm.
+            if proposed_role in DRUG_ROLES and not (
+                intervention.initial_role in {"control", "supportive", "background"}
+                and intervention.role_confidence == "high"
+            ):
+                role = proposed_role
+                confidence = screening_confidence or "low"
+            if screening_rationale:
+                rationale = screening_rationale
+            elif not role_output:
+                rationale = (
+                    "Intervention screening did not return a complete valid result; "
+                    "the entry was excluded fail-closed."
+                )
+            active_names = (
+                _supported_active_names(
+                    intervention, role_output.get("active_entity_names", [])
+                )
+                if disposition == "include"
+                else ()
+            )
+            if disposition == "include" and not active_names:
+                disposition = "uncertain"
+                exclusion_category = "not_a_concrete_agent"
+                rationale = (
+                    f"{rationale} No supported concrete active-entity name was "
+                    "returned; the entry was excluded fail-closed."
+                ).strip()
+            screening_rows.append(
+                {
+                    "trial_id": trial_id,
+                    "intervention_index": intervention_index,
+                    "registry_name": intervention.registry_name,
+                    "intervention_type": intervention.intervention_type,
+                    "research_disposition": disposition,
+                    "included": disposition == "include",
+                    "exclusion_category": exclusion_category,
+                    "confidence": screening_confidence or "low",
+                    "role": role,
+                    "rationale": rationale,
+                    "active_entity_names_json": json.dumps(
+                        active_names, ensure_ascii=False
+                    ),
+                    "arm_labels_json": json.dumps(
+                        intervention.arm_labels, ensure_ascii=False
+                    ),
+                    "arm_types_json": json.dumps(
+                        intervention.arm_types, ensure_ascii=False
+                    ),
+                }
+            )
+            if disposition != "include":
+                continue
+            for active_name in active_names:
+                identity = _canonicalize_drug(
+                    active_name, intervention.aliases, ncit_index=ncit_index
+                )
+                existing = identities.get(identity.drug_id)
+                if existing is not None:
+                    identity = DrugIdentity(
+                        drug_id=existing.drug_id,
+                        preferred_name=existing.preferred_name,
+                        ncit_code=existing.ncit_code,
+                        aliases=tuple(
+                            dict.fromkeys((*existing.aliases, *identity.aliases))
+                        ),
+                        definition=existing.definition or identity.definition,
+                    )
+                identities[identity.drug_id] = identity
+                assignment_candidates.append(
+                    TrialDrugAssignment(
+                        trial_id=trial_id,
+                        drug_id=identity.drug_id,
+                        preferred_name=identity.preferred_name,
+                        registry_name=intervention.registry_name,
+                        intervention_type=intervention.intervention_type,
+                        role=role,
+                        role_confidence=confidence,
+                        scoreable=role in SCOREABLE_ROLES,
+                        arm_labels=intervention.arm_labels,
+                        arm_types=intervention.arm_types,
+                        role_rationale=rationale,
+                    )
+                )
+
+    role_priority = {
+        "investigational": 5,
+        "uncertain": 4,
+        "control": 3,
+        "background": 2,
+        "supportive": 1,
+    }
+    assignments_by_key: dict[tuple[str, str], TrialDrugAssignment] = {}
+    for assignment in assignment_candidates:
+        key = (assignment.trial_id, assignment.drug_id)
+        existing = assignments_by_key.get(key)
+        if (
+            existing is None
+            or role_priority[assignment.role] > role_priority[existing.role]
+        ):
+            assignments_by_key[key] = assignment
+    assignments = tuple(assignments_by_key.values())
+    return identities, assignments, screening_rows
 
 
 async def build_good_option_catalog(
@@ -2413,139 +2833,9 @@ async def build_good_option_catalog(
                     trial_id,
                 )
 
-    identities: dict[str, DrugIdentity] = {}
-    assignment_candidates: list[TrialDrugAssignment] = []
-    screening_rows: list[dict[str, Any]] = []
-    for trial_id, interventions in interventions_by_trial.items():
-        outputs = role_outputs.get(trial_id, {})
-        for intervention_index, intervention in enumerate(interventions):
-            role_output = outputs.get(str(intervention_index), {})
-            disposition = clean_text(
-                role_output.get("research_disposition"), max_chars=40
-            ).casefold()
-            if disposition not in INTERVENTION_SCREENING_DISPOSITIONS:
-                disposition = "uncertain"
-            exclusion_category = clean_text(
-                role_output.get("exclusion_category"), max_chars=80
-            ).casefold()
-            if exclusion_category not in INTERVENTION_EXCLUSION_CATEGORIES:
-                exclusion_category = "insufficient_context"
-            if disposition == "include":
-                exclusion_category = "none"
-            elif exclusion_category == "none":
-                exclusion_category = "insufficient_context"
-
-            role = intervention.initial_role
-            confidence = intervention.role_confidence
-            rationale = intervention.role_rationale
-            proposed_role = clean_text(role_output.get("role"), max_chars=40).casefold()
-            screening_confidence = clean_text(
-                role_output.get("confidence"), max_chars=20
-            ).casefold()
-            screening_rationale = clean_text(
-                role_output.get("rationale"), max_chars=1000
-            )
-            if proposed_role in DRUG_ROLES and not (
-                intervention.initial_role in {"control", "supportive"}
-                and intervention.role_confidence == "high"
-            ):
-                role = proposed_role
-                confidence = screening_confidence or "low"
-            if screening_rationale:
-                rationale = screening_rationale
-            elif not role_output:
-                rationale = (
-                    "Intervention screening did not return a complete valid result; "
-                    "the entry was excluded fail-closed."
-                )
-            active_names = (
-                _supported_active_names(
-                    intervention, role_output.get("active_entity_names", [])
-                )
-                if disposition == "include"
-                else ()
-            )
-            if disposition == "include" and not active_names:
-                disposition = "uncertain"
-                exclusion_category = "not_a_concrete_agent"
-                rationale = (
-                    f"{rationale} No supported concrete active-entity name was "
-                    "returned; the entry was excluded fail-closed."
-                ).strip()
-            screening_rows.append(
-                {
-                    "trial_id": trial_id,
-                    "intervention_index": intervention_index,
-                    "registry_name": intervention.registry_name,
-                    "intervention_type": intervention.intervention_type,
-                    "research_disposition": disposition,
-                    "included": disposition == "include",
-                    "exclusion_category": exclusion_category,
-                    "confidence": screening_confidence or "low",
-                    "role": role,
-                    "rationale": rationale,
-                    "active_entity_names_json": json.dumps(
-                        active_names, ensure_ascii=False
-                    ),
-                    "arm_labels_json": json.dumps(
-                        intervention.arm_labels, ensure_ascii=False
-                    ),
-                    "arm_types_json": json.dumps(
-                        intervention.arm_types, ensure_ascii=False
-                    ),
-                }
-            )
-            if disposition != "include":
-                continue
-            for active_name in active_names:
-                identity = _canonicalize_drug(
-                    active_name, intervention.aliases, ncit_index=ncit_index
-                )
-                existing = identities.get(identity.drug_id)
-                if existing is not None:
-                    identity = DrugIdentity(
-                        drug_id=existing.drug_id,
-                        preferred_name=existing.preferred_name,
-                        ncit_code=existing.ncit_code,
-                        aliases=tuple(
-                            dict.fromkeys((*existing.aliases, *identity.aliases))
-                        ),
-                        definition=existing.definition or identity.definition,
-                    )
-                identities[identity.drug_id] = identity
-                assignment_candidates.append(
-                    TrialDrugAssignment(
-                        trial_id=trial_id,
-                        drug_id=identity.drug_id,
-                        preferred_name=identity.preferred_name,
-                        registry_name=intervention.registry_name,
-                        intervention_type=intervention.intervention_type,
-                        role=role,
-                        role_confidence=confidence,
-                        scoreable=role in SCOREABLE_ROLES,
-                        arm_labels=intervention.arm_labels,
-                        arm_types=intervention.arm_types,
-                        role_rationale=rationale,
-                    )
-                )
-
-    role_priority = {
-        "investigational": 5,
-        "uncertain": 4,
-        "control": 3,
-        "background": 2,
-        "supportive": 1,
-    }
-    assignments_by_key: dict[tuple[str, str], TrialDrugAssignment] = {}
-    for assignment in assignment_candidates:
-        key = (assignment.trial_id, assignment.drug_id)
-        existing = assignments_by_key.get(key)
-        if (
-            existing is None
-            or role_priority[assignment.role] > role_priority[existing.role]
-        ):
-            assignments_by_key[key] = assignment
-    assignments = tuple(assignments_by_key.values())
+    identities, assignments, screening_rows = derive_trial_assignments(
+        interventions_by_trial, role_outputs, ncit_index=ncit_index
+    )
 
     indications_by_drug = _indications_for_drugs(
         assignments, studies, limit=resolved_settings.indication_terms_per_drug
@@ -2745,14 +3035,22 @@ async def build_good_option_catalog(
                 name,
                 tuple(dict.fromkeys((*aliases, *record.aliases)))[:6],
             )
+    class_indications = indications_for_classes(
+        classes_by_drug,
+        assignments,
+        studies,
+        limit=resolved_settings.class_indication_terms,
+    )
     class_evidence_by_id: dict[str, list[EvidencePassage]] = {}
     class_research_completed = 0
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         for class_id, (class_name, aliases) in class_subjects.items():
+            class_terms = class_indications.get(class_id, ())
             checkpoint_input = {
                 "class_id": class_id,
                 "class_name": class_name,
                 "aliases": list(aliases),
+                "indications": list(class_terms),
             }
             saved = checkpoint.load(
                 "class_research", class_id, input_value=checkpoint_input
@@ -2779,6 +3077,7 @@ async def build_good_option_catalog(
                     class_id,
                     class_name,
                     aliases=aliases,
+                    indications=class_terms,
                     sources=resolved_sources,
                     settings=resolved_settings,
                     client=client,
@@ -2874,8 +3173,8 @@ async def build_good_option_catalog(
         )
         for start in range(0, len(nonempty), synthesis_batch_size):
             batch = nonempty[start : start + synthesis_batch_size]
-            batch_outputs = await _default_synthesize_many(
-                batch, config=resolved_config
+            batch_outputs = await synthesize_serially(
+                batch, config=resolved_config, scope="agent"
             )
             for drug, evidence in batch:
                 value = batch_outputs.get(drug.drug_id)
@@ -2900,7 +3199,12 @@ async def build_good_option_catalog(
                     )
     else:
         for drug, evidence in pending_synthesis:
-            value = await _maybe_await(synthesizer(drug, evidence))
+            raw_value = await _maybe_await(synthesizer(drug, evidence))
+            value = (
+                _validate_structured_facts(raw_value, evidence=evidence, scope="agent")
+                if isinstance(raw_value, Mapping)
+                else raw_value
+            )
             if isinstance(value, Mapping) and all(
                 isinstance(value.get(category), list)
                 for category in _SYNTHESIS_CATEGORIES
@@ -2935,14 +3239,19 @@ async def build_good_option_catalog(
     )
     for drug in identities.values():
         research_status, failures = status_by_drug[drug.drug_id]
-        raw_facts = synthesized.get(drug.drug_id, {})
-        facts = _validate_structured_facts(
-            raw_facts if isinstance(raw_facts, Mapping) else {},
-            evidence=evidence_by_drug[drug.drug_id],
+        # Already validated by the synthesis round that produced it, with
+        # support_ids resolved to evidence IDs. Re-validating against a fresh P#
+        # map would match nothing and silently drop every fact.
+        stored = synthesized.get(drug.drug_id)
+        facts = (
+            dict(stored)
+            if isinstance(stored, Mapping)
+            else {category: [] for category in _SYNTHESIS_CATEGORIES}
         )
         synthesis_status = (
             "ok"
-            if research_status == "complete" and drug.drug_id in synthesized
+            if research_status == "complete"
+            and (any(facts.values()) or not evidence_by_drug[drug.drug_id])
             else "blocked"
         )
         if research_status == "complete" and synthesis_status == "blocked":
@@ -3607,7 +3916,9 @@ __all__ = [
     "RoleResolver",
     "SummarySynthesizer",
     "bound_evidence",
+    "chunk_evidence",
     "build_drug_class_messages",
+    "build_synthesis_update_messages",
     "build_good_option_catalog",
     "build_intervention_screening_messages",
     "build_role_resolution_messages",
@@ -3616,5 +3927,6 @@ __all__ = [
     "load_good_option_catalog",
     "normalize_class_name",
     "stamp_fact_scope",
+    "synthesize_serially",
     "validate_good_option_catalog",
 ]

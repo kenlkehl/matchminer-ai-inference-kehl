@@ -154,7 +154,7 @@ def subject_for_indication(drug: DrugIdentity, indication: str) -> ResearchSubje
 
 
 def subject_for_class(
-    class_id: str, class_name: str, aliases: Sequence[str] = ()
+    class_id: str, class_name: str, aliases: Sequence[str] = (), indication: str = ""
 ) -> ResearchSubject:
     names = tuple(
         dict.fromkeys(
@@ -163,11 +163,13 @@ def subject_for_class(
             if clean_text(value, max_chars=200)
         )
     )
+    disease = clean_indication(indication)
     return ResearchSubject(
-        subject_id=class_id,
-        query_scope="class",
+        subject_id=f"{class_id}|{disease}" if disease else class_id,
+        query_scope="class_indication" if disease else "class",
         names=names,
         class_id=class_id,
+        indication=disease,
     )
 
 
@@ -220,6 +222,10 @@ class ResearchSettings:
     )
     class_sources: tuple[str, ...] = ("pubmed", "europe_pmc", "nci", "web")
     class_research_rounds: int = 1
+    #: Diseases to condition each class query on, taken from the trials of the
+    #: drugs in that class. A broad class touches many: "immune checkpoint
+    #: inhibitor" spans 33 diseases across a 54-trial cohort.
+    class_indication_terms: int = 25
     max_class_pubmed_records: int = 30
     max_class_europe_pmc_records: int = 10
     max_class_web_results_per_subject: int = 24
@@ -227,7 +233,10 @@ class ResearchSettings:
 
     # Indication axis. Conditioned on the diseases the drug's own trials name,
     # so it stays patient-free and cacheable.
-    indication_terms_per_drug: int = 4
+    #: Every disease the drug's own trials name, not the handful it is most
+    #: studied in. A drug in one trial uses one slot; the cap only binds for
+    #: agents like pembrolizumab that span hundreds of trials.
+    indication_terms_per_drug: int = 25
     indication_facets: tuple[str, ...] = (
         "efficacy_by_tumor",
         "biomarker_directed_efficacy",
@@ -238,12 +247,10 @@ class ResearchSettings:
     max_indication_regulatory_records: int = 3
     max_indication_web_results_per_subject: int = 12
     max_indication_web_documents_per_subject: int = 6
-    # Four diseases across four sources out-retrieve the drug's own name: for
-    # sacituzumab govitecan the uncapped indication axis returned 715k characters
-    # against the agent ledger's 463k. Synthesis round-robins by axis, so leaving
-    # it uncapped would hand the indication axis half the budget and halve the
-    # agent evidence the rubric asks the scorer to prefer.
-    max_indication_passages_per_drug: int = 40
+    # Was 40, to stop the indication axis taking half a fixed synthesis budget.
+    # Synthesis now chunks instead of truncating, so volume no longer displaces
+    # the agent's own evidence and this only guards against a runaway.
+    max_indication_passages_per_drug: int = 400
 
 
 class GeneralWebProvider(Protocol):
@@ -1218,6 +1225,7 @@ async def research_class(
     class_name: str,
     *,
     aliases: Sequence[str] = (),
+    indications: Sequence[str] = (),
     sources: Sequence[DrugEvidenceSource] | None = None,
     settings: ResearchSettings | None = None,
     client: httpx.AsyncClient | None = None,
@@ -1263,6 +1271,53 @@ async def research_class(
                 resolved_settings.max_class_web_documents_per_subject
             ),
         )
+        # The class name alone returns what the class is famous for. Conditioning
+        # on the diseases its member drugs are actually trialled in is what puts
+        # checkpoint-inhibitor evidence in mesothelioma into the mesothelioma
+        # patient's prompt.
+        terms = list(
+            dict.fromkeys(
+                clean_indication(value) for value in indications if clean_indication(value)
+            )
+        )[: max(0, resolved_settings.class_indication_terms)]
+        if terms:
+            per_subject = replace(
+                resolved_settings,
+                max_pubmed_records=resolved_settings.max_indication_pubmed_records,
+                max_europe_pmc_records=(
+                    resolved_settings.max_indication_europe_pmc_records
+                ),
+                max_regulatory_records=(
+                    resolved_settings.max_indication_regulatory_records
+                ),
+                max_concurrency=max(
+                    1, resolved_settings.max_concurrency // max(1, min(len(terms), 4))
+                ),
+            )
+            results = await asyncio.gather(
+                *(
+                    research_subject(
+                        subject_for_class(class_id, class_name, aliases, indication=term),
+                        sources=resolved_sources,
+                        settings=per_subject,
+                        facets=resolved_settings.indication_facets,
+                        rounds=1,
+                        client=client,
+                        sleep=sleep,
+                        web_results_budget=(
+                            resolved_settings.max_indication_web_results_per_subject
+                        ),
+                        web_documents_budget=(
+                            resolved_settings.max_indication_web_documents_per_subject
+                        ),
+                    )
+                    for term in terms
+                )
+            )
+            for items, subject_attempts, _failures in results:
+                evidence.extend(items)
+                attempts.extend(subject_attempts)
+
         status = "complete" if evidence else _axis_status(attempts)
         return (
             _deduplicate(evidence),
@@ -1311,7 +1366,7 @@ async def research_indications(
     # total in flight stays near the configured ceiling.
     per_subject_settings = replace(
         axis_settings,
-        max_concurrency=max(1, settings.max_concurrency // max(1, len(terms) or 1)),
+        max_concurrency=max(1, settings.max_concurrency // max(1, min(len(terms), 4))),
     )
     results = await asyncio.gather(
         *(

@@ -647,14 +647,16 @@ def test_synthesis_retries_invalid_json_and_preserves_ledger_support_ids(
     )
 
     result = asyncio.run(
-        catalog_module._default_synthesize_many(
+        catalog_module.synthesize_serially(
             [(DrugIdentity(drug_id="D1", preferred_name="Novel Agent"), [evidence])],
             config=config,
         )
     )
 
     assert calls == 2
-    assert result["D1"]["__passage_id_map__"] == {"P1": "ledger:E1"}
+    # Serial synthesis returns validated facts, so support_ids are already
+    # resolved to ledger IDs rather than left as prompt positions.
+    assert result["D1"]["mechanism_and_targets"][0]["support_ids"] == ["ledger:E1"]
 
 
 def test_synthesis_retries_token_limited_or_all_empty_outputs(
@@ -715,14 +717,14 @@ def test_synthesis_retries_token_limited_or_all_empty_outputs(
     )
 
     result = asyncio.run(
-        catalog_module._default_synthesize_many(
+        catalog_module.synthesize_serially(
             [(DrugIdentity(drug_id="D1", preferred_name="Novel Agent"), [evidence])],
             config=load_default_preset(),
         )
     )
 
     assert calls == 3
-    assert result["D1"]["mechanism_and_targets"][0]["support_ids"] == ["P1"]
+    assert result["D1"]["mechanism_and_targets"][0]["support_ids"] == ["ledger:E1"]
 
 
 def test_ncit_definition_is_citable_ledger_evidence() -> None:
@@ -904,6 +906,137 @@ def test_projection_gives_a_full_section_the_budget_thin_ones_do_not_use() -> No
     assert "Targets Marker A." in rendered
     assert "Single arm." in rendered
     assert len(rendered) <= 4000
+
+
+def test_structural_background_read_survives_the_screen_calling_it_investigational() -> None:
+    """Lymphodepletion sits in the experimental arm and is not the tested agent.
+
+    The screen reliably reads "administered as part of the experimental regimen"
+    as investigational, which put CAR-T conditioning chemotherapy into the scored
+    drug set and diluted the cell therapy's own score threefold.
+    """
+
+    interventions = catalog_module._extract_registry_interventions(
+        "NCT12345678",
+        {
+            "protocolSection": {
+                "armsInterventionsModule": {
+                    "armGroups": [{"label": "Experimental", "type": "EXPERIMENTAL"}],
+                    "interventions": [
+                        {
+                            "type": "DRUG",
+                            "name": "Fludarabine",
+                            "description": "Lymphodepleting chemotherapy before cells.",
+                            "armGroupLabels": ["Experimental"],
+                        },
+                        {
+                            "type": "BIOLOGICAL",
+                            "name": "Novel Agent",
+                            "description": "Autologous CAR T cells.",
+                            "armGroupLabels": ["Experimental"],
+                        },
+                    ],
+                }
+            }
+        },
+    )
+    assert [item.initial_role for item in interventions] == ["background", "uncertain"]
+    assert interventions[0].role_confidence == "high"
+
+    screen = {
+        str(index): {
+            "research_disposition": "include",
+            "exclusion_category": "none",
+            "role": "investigational",
+            "confidence": "high",
+            "rationale": "Administered as part of the experimental regimen.",
+            "active_entity_names": [item.registry_name],
+        }
+        for index, item in enumerate(interventions)
+    }
+    _identities, assignments, _rows = catalog_module.derive_trial_assignments(
+        {"NCT12345678": interventions}, {"NCT12345678": screen}, ncit_index=_NoNCIt()
+    )
+    roles = {item.preferred_name: (item.role, item.scoreable) for item in assignments}
+
+    assert roles["Fludarabine"] == ("background", False)
+    assert roles["Novel Agent"] == ("investigational", True)
+
+
+def test_serial_synthesis_carries_facts_across_chunks_with_resolved_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The running summary must survive renumbering between chunks.
+
+    Each chunk numbers its own passages from P1, so a fact carried forward cites
+    an evidence ID while a new fact cites a position. Resolving the carried one
+    against the new chunk's map would match nothing and delete it.
+    """
+
+    def passage(index: int) -> EvidencePassage:
+        return EvidencePassage(
+            evidence_id=f"ledger:E{index}",
+            drug_id="D1",
+            facet="efficacy_by_tumor",
+            source="pubmed",
+            source_type="literature_abstract",
+            title="Abstract",
+            passage="x" * 3000,
+            url="",
+            source_locator=str(index),
+            content_sha256=f"E{index}",
+        )
+
+    seen: list[str] = []
+
+    def fake_run(messages_list, *, config, stage):
+        del config, stage
+        body = messages_list[0][-1]["content"]
+        seen.append(body)
+        if len(seen) == 1:
+            facts = {"efficacy_by_tumor": [{"text": "First.", "support_ids": ["P1"]}]}
+        else:
+            # Carry the earlier fact by its resolved ID; add one from this chunk.
+            facts = {
+                "efficacy_by_tumor": [
+                    {"text": "First.", "support_ids": ["ledger:E1"]},
+                    {"text": "Second.", "support_ids": ["P1"]},
+                ]
+            }
+        return [
+            json.dumps(
+                {
+                    **{category: [] for category in catalog_module._SYNTHESIS_CATEGORIES},
+                    **facts,
+                }
+            )
+        ]
+
+    async def run_inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    monkeypatch.setattr(catalog_module.asyncio, "to_thread", run_inline)
+
+    result = asyncio.run(
+        catalog_module.synthesize_serially(
+            [
+                (
+                    DrugIdentity(drug_id="D1", preferred_name="Novel Agent"),
+                    [passage(1), passage(2)],
+                )
+            ],
+            config=load_default_preset(),
+            chunk_token_limit=1000,  # 4,000 characters: one passage per chunk.
+        )
+    )
+
+    assert len(seen) == 2
+    assert "THE SYNTHESIS SO FAR" in seen[1] and "ledger:E1" in seen[1]
+    items = result["D1"]["efficacy_by_tumor"]
+    assert [item["text"] for item in items] == ["First.", "Second."]
+    assert [item["support_ids"] for item in items] == [["ledger:E1"], ["ledger:E2"]]
+    assert all(item["scope"] == "agent" for item in items)
 
 
 def test_class_ids_are_stable_across_wording_of_the_same_class() -> None:
@@ -1189,10 +1322,15 @@ def test_catalog_retrieves_and_merges_class_and_indication_evidence(
     assert list(catalog.drug_classes["class_id"]) == [class_id]
     assert list(catalog.class_summaries["class_id"]) == [class_id]
 
-    # The class corpus is retrieved for the class, not for any one drug.
+    # The class corpus is retrieved for the class, not for any one drug, and is
+    # conditioned on the diseases the class's member trials name.
     assert set(catalog.class_evidence["class_id"]) == {class_id}
-    assert set(catalog.class_evidence["query_scope"]) == {"class"}
+    assert set(catalog.class_evidence["query_scope"]) == {"class", "class_indication"}
     assert (catalog.class_evidence["drug_id"] == "").all()
+    class_disease_queries = catalog.class_evidence.loc[
+        catalog.class_evidence["query_scope"].eq("class_indication"), "query"
+    ]
+    assert any("Colon Adenocarcinoma" in value for value in class_disease_queries)
 
     # Both diseases named by the trial reached retrieval, and the passages they
     # produced are marked with the axis that found them.

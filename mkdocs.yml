@@ -20,6 +20,7 @@ nav:
       - Example Notebook: getting-started/example-notebook.md
   - User Guide:
       - Patient-centric matching workflow: user-guide/patient-centric-matching.md
+      - How the Good Options pipeline works: user-guide/good-options-pipeline.md
       - Choosing an Inference Setup: user-guide/local-vs-remote.md
   - Reference:
       - Configuration: reference/configuration.md

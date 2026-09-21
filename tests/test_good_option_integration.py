@@ -83,15 +83,17 @@ def test_prompt_and_artifact_versions_match_pre_refactor_snapshot():
     # Re-captured for the class- and indication-aware retrieval work: the
     # synthesis prompt was rewritten (claim -> text), the scoring prompt gained
     # the class-evidence legend, and the compatibility id gained the class
-    # prompt version. The screen and checker artifacts are unchanged.
+    # prompt version. Re-captured again for the screening-role fix, which
+    # rewrote the screen prompt and bumped the role policy and prompt versions,
+    # and for serial synthesis, which bumped the synthesis prompt version.
     expected = {
-        "screen": "efbc763d49e9ff434f993a4a5d088c143eb351b38f161675c07ec26410000826",
+        "screen": "c44cb04dbc13dbf47bab65710a86380c19a09f41158d5e448f69a4701801e807",
         "synthesis": "13f0476492ca2d769502d9ee91d3c96225635834075c5bb225c0de7cf8290e58",
         "scoring": "21d1254fff62df863ebb413b15afbf97b82e09b2705f47abfc8a2c2539aa36ae",
         "checker": "1123fd83802f67d38aa57b351b74516e8dfc14f8c7f1122ccb33e21f03281fc9",
         "retry": "be4026558080f5c0bf5b5ff7242ae91dea7c69a4b1e50f4ee74d04a7e534b8ab",
         "retry_without_finish": "327f5fa6a423706f85250730b0311da316cd7f6b9b9c0edf3908dde816b27988",
-        "compatibility_id": "e4bbb75313f28b7ac98125cedbfb4f2dba7e8ad0369f2530f23722a8810d8947",
+        "compatibility_id": "c2ea8b6d776c3886c2df71e08f99de463997153f3c2dc9f8afd4c38e0c80fa5b",
     }
     actual = {
         key: hashlib.sha256(

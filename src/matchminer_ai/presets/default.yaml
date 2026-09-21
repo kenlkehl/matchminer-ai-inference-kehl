@@ -416,11 +416,14 @@ llm_good_option:
 good_option_catalog:
   ncit_resource: Thesaurus_26.07d.FLAT.zip
   ncit_version: 26.07d
-  good_option_summary_max_tokens: 2400
-  help_me_choose_summary_max_tokens: 4200
-  class_option_summary_max_tokens: 1600
-  # Bounds passage text only. JSON scaffolding adds ~6.5%, so the real prompt is
-  # about 1.08x this value; 190000 leaves ~50k of a 262144 window for reasoning.
+  good_option_summary_max_tokens: 6000
+  help_me_choose_summary_max_tokens: 9000
+  class_option_summary_max_tokens: 4000
+  # Evidence is no longer truncated to fit one call. It is chunked, and a running
+  # synthesis is carried across the chunks, so nothing is discarded unread. This
+  # bounds one chunk; the whole ledger is covered however many chunks that takes.
+  synthesis_chunk_max_tokens: 100000
+  # Retained for tooling that still reports a whole-ledger budget.
   synthesis_evidence_max_tokens: 190000
   # Class synthesis is a separate call on its own budget, so a large shared
   # class corpus can never evict an agent's own passages.
