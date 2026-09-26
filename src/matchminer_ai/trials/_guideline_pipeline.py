@@ -30,15 +30,14 @@ from ._guideline_generation import Client
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
 from ._guideline_ownership import branch_ledger, page_owners
 from ._guideline_repairs import repair_response
+from ._guideline_quotes import QUOTED_DETAIL, materialize_quoted_state
+from ._guideline_quotes import VERSION as QUOTE_VERSION
 from ._guideline_specificity import validate_decision_field_batch
 from ._guideline_schema import (
-    DETAIL,
     EXTRACTION,
     format_space,
-    materialize_evidence,
     validate_extraction,
     validate_shape,
-    validate_state,
 )
 from ._guideline_sources import Guideline, packets
 from ._guideline_specificity import VERSION as SPECIFICITY_VERSION
@@ -201,6 +200,7 @@ def _run(
                 "decision_fields": SPECIFICITY_VERSION,
                 "ownership": OWNERSHIP_VERSION,
                 "json_normalization": JSON_NORMALIZATION_VERSION,
+                "detail_citations": QUOTE_VERSION,
             },
         },
     )
@@ -406,30 +406,19 @@ def _run(
             supplied = {p.id: p for p in context}
 
             def validate(v):
-                validate_shape(v, DETAIL)
+                validate_shape(v, QUOTED_DETAIL)
                 validate_decision_fields(v, metadata["title"])
                 if v["space"] != group["space"]:
                     raise ValueError(
                         "Final detail space must exactly equal the requested canonical space"
                     )
-                validate_state(v, supplied)
+                materialize_quoted_state(v, supplied)
 
             value = client.complete(
                 key,
                 messages,
-                DETAIL,
+                QUOTED_DETAIL,
                 validate,
-                repair_handler=lambda v, error: repair_response(
-                    client,
-                    guideline,
-                    supplied,
-                    [],
-                    key,
-                    v,
-                    error,
-                    validate,
-                    context_chars,
-                ),
             )
             # Stable within a source edition and canonical definition, independent of completion order.
             pid = f"nccn-{guideline.disease}-{digest({'pdf': metadata['source_sha256'], 'space': group['space']})[:16]}"
@@ -438,7 +427,7 @@ def _run(
                 "space_trial_id": pid,
                 "trial_id": f"guideline:{guideline.disease}:{metadata['version']}",
                 "clinical_space_summary": format_space(group["space"]),
-                **materialize_evidence(value, supplied),
+                **materialize_quoted_state(value, supplied),
                 "source_batch_numbers": group["source_batch_numbers"],
                 "source": source_info,
                 "context_page_ids": list(supplied),
@@ -537,6 +526,9 @@ def export(output, rows):
                 "",
             ]
         )
+        if row.get("citation_review", {}).get("issues"):
+            lines.extend(["**Population source support unresolved:**", "",
+                          *[f"- {s}" for s in row["citation_review"]["issues"]], ""])
         for key, title in (
             ("diagnostic_workup", "Diagnostic / workup considerations"),
             ("treatment_options", "Treatment / management options"),
@@ -547,6 +539,8 @@ def export(output, rows):
                 lines.append(
                     f"- **{item['name']}** — {item['conditions']} Category: {item['category']}. Sources: {cites}."
                 )
+                for issue in item.get("citation_review", {}).get("issues", []):
+                    lines.append(f"  - **Source support unresolved:** {issue}")
             if not row[key]:
                 lines.append("No supported items extracted; see uncertainties.")
             lines.append("")

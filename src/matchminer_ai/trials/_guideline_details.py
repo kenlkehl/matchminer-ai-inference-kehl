@@ -5,7 +5,8 @@ import json
 from . import _guideline_prompts as prompts
 from ._guideline_canonical import LEAN_STATE, VERSION, clinical_candidate
 from ._guideline_context import pack_messages
-from ._guideline_schema import DETAIL, format_space
+from ._guideline_schema import format_space
+from ._guideline_quotes import QUOTED_DETAIL
 
 
 def candidate_menus(group, candidates):
@@ -49,7 +50,7 @@ def build_detail_call(client, guideline, group, candidates, context_chars=None):
         format_space(group["space"]),
         prompts.DETAIL_TASK,
         payload,
-        DETAIL,
+        QUOTED_DETAIL,
         context_chars,
         tail=tail,
     )

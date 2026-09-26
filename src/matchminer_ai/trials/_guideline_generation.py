@@ -18,6 +18,7 @@ from ._guideline_schema import (
     normalize_evidence_lists,
 )
 from .prompt_builder import load_prompt_text
+from ._guideline_quotes import QUOTED_DETAIL
 
 
 def clinical_content(value):
@@ -162,7 +163,7 @@ class Client(StructuredClient):
                     "Repeated 24 complete clinical definitions without any new definition",
                 )
             )
-        if schema == DETAIL:
+        if schema in (DETAIL, QUOTED_DETAIL):
             guards.append(
                 (
                     OptionRepetitionGuard(),

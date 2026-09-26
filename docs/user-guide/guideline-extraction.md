@@ -161,6 +161,25 @@ fields are split without changing OR to AND. Generic breast HR-negative expands
 to ER-negative AND PR-negative; HR-positive expands to ER-positive OR PR-positive.
 Detail generation freezes the canonical definition and supplies its current menu.
 
+Final-detail generation uses **source excerpts**, not model-selected line numbers.
+Each citation contains a supplied page ID and exact `source_text`. Code locates a
+unique match on that page (allowing whitespace differences only), derives its
+line numbers, and copies the original text for display. Missing or ambiguous
+excerpts fail validation and trigger a bounded retry. This prevents a model from
+requesting one sentence while accidentally citing a neighboring numbered line.
+The model must select text supporting the particular option, its conditions, and
+any stated category, without expanding narrower source claims using background
+knowledge.
+
+For a two-column page, the displayed quote can be a verified substring of one
+column; the full original lines remain in `source_lines`. Multiple excerpts can
+connect wrapped clauses and population prerequisites without interleaving the
+other column. The offline audit checks the excerpt's exact source location and
+the recorded raw provider response. Extraction and consolidation still use line
+references internally. Existing line-reference catalogs remain readable and
+auditable, but this change does not retrospectively correct their citations.
+Exact text occurrence is not an independent guarantee of clinical support.
+
 Prompts, including field descriptions, consolidation, selection, and citation
 repair instructions, live in `src/matchminer_ai/prompts/guideline.*.txt` and
 `structured.retry.txt`. These generation prompts are fingerprinted for resume checks.
@@ -396,3 +415,55 @@ across separate runners. Extraction retries retain up to four recent validation
 diagnostics, including when resuming saved responses, so fixing one field does
 not discard guidance about earlier errors. Validation still must pass before
 any response is accepted.
+
+## Reviewing existing catalog citations
+
+`trials.review_guideline_citations` reviews every population, diagnostic item,
+and treatment item using the configured guideline LLM. It replaces citations
+with exact source excerpts, derives their page/line addresses in code, and keeps
+all clinical fields and IDs unchanged. It uses the full available context with
+the usual output reserve, reasoning and vendor sampling settings. Required
+citation pages are retained; other source pages fill the remaining budget.
+
+```python
+from matchminer_ai.trials import review_guideline_citations
+
+reviewed, metadata = review_guideline_citations(
+    "/local/data/original_catalog",
+    output_dir="/local/data/reviewed_catalog",
+    config=config,
+    return_metadata=True,
+)
+```
+
+Each population and menu item gains `citation_review`, containing `version`,
+`status` (`supported_by_model_review` or `unresolved`), and `issues`. An unresolved
+item can have partial evidence or an empty evidence list. **Consumers must show
+these issues beside the affected assertion**, rather than presenting partial
+source support as validation of the complete recommendation. The dashboard and
+Markdown reports do this. A completed review can contain unresolved items; the
+status and audit report count them separately. Neither model review nor the
+mechanical audit establishes clinical correctness.
+
+The external output retains `original_paradigms.jsonl`, per-space reviews, raw
+provider responses, the standard catalog exports, and a reconstructable audit.
+Original catalogs are never overwritten. `audit_guideline_catalog` recognizes
+both extraction and citation-review catalogs. Resume the same invocation after
+an interruption; accepted checkpoints are reused. Changed source bytes, original
+catalog bytes, prompts or generation settings require a new output directory.
+
+For a collection, create an external JSON object mapping disease names to their
+completed catalog directories, then run:
+
+```bash
+python examples/review_guideline_collection.py \
+  --catalog-manifest /local/data/catalogs.json \
+  --output-dir /local/data/citation_reviews \
+  --endpoint http://localhost:8000/v1 --concurrency 32
+```
+
+The endpoint model is discovered unless `--model` is supplied. Four disease
+workers share the process-wide cap of 32 HTTP requests. `collection.json` and
+each disease's `status.json` record live progress, failures, and unresolved
+source-support findings. Repeating the command resumes successful checkpoints
+and retries failed jobs; it does not silently skip a previously failed catalog.

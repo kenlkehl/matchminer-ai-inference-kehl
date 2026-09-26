@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import yaml
-from test_guideline_extraction import catalog, extraction, make_library, state
+from test_guideline_extraction import catalog, extraction, make_library, state, quoted_state
 
 from matchminer_ai import load_config, load_default_preset
 from matchminer_ai._storage import directory_lock, read_json
@@ -99,7 +99,7 @@ def fake_endpoint(monkeypatch):
             if prompt.startswith(prompts.EXTRACT_TASK)
             else catalog()
             if prompt.startswith(CATALOG_TASK)
-            else state()
+            else quoted_state()
         )
         content = json.dumps(value)
         events = [

@@ -5,7 +5,7 @@ import json
 from ._guideline_schema import FIELDS
 from .prompt_builder import load_prompt_text
 
-PROMPT_VERSION = "nccn-trialspace-v12-owned-branches"
+PROMPT_VERSION = "nccn-trialspace-v13-source-excerpts"
 
 FIELD_PLACEMENT_RULES = load_prompt_text("guideline.field_placement_rules.txt").rstrip(
     "\n"

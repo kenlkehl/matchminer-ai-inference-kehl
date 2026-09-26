@@ -767,3 +767,18 @@ def test_unversioned_local_encoder_bypasses_persistent_cache(
     assert metadata["guideline_embedding_cache"]["status"] == "unverified_encoder"
     assert metadata["guideline_embedding_cache"]["path"] is None
     assert not (tmp_path / "cache").exists()
+
+
+def test_review_issues_survive_ranking_and_report(catalog_frame, patients, model_stages, tmp_path):
+    issue = {"version": "citation-review-v1", "status": "unresolved",
+             "issues": ["Synthetic source supports only a narrower test."]}
+    records = copy.deepcopy(catalog_frame.to_dict("records"))
+    for row in records:
+        row["citation_review"] = copy.deepcopy(issue)
+        row["diagnostic_workup"][0].update(evidence=[], citation_review=copy.deepcopy(issue))
+    matches = retrieve_guideline_considerations(patients, pd.DataFrame(records), candidate_k=2, top_n=1)
+    assert matches.iloc[0].diagnostic_workup[0]["citation_review"] == issue
+    report = write_guideline_considerations_report(matches, patients, tmp_path / "review.md").read_text()
+    assert "Population source support unresolved" in report
+    assert "Source support unresolved" in report
+    assert "Synthetic source supports only a narrower test" in report

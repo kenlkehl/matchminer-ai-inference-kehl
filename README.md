@@ -199,3 +199,9 @@ Contributions are welcome! Please follow our
 to this project.
 
 [contributing]: https://dfci.github.io/matchminer-ai-inference/development/contributing/
+
+Existing local guideline catalogs can be reviewed with
+`trials.review_guideline_citations`. The configured guideline LLM checks source
+support; code locates exact excerpts and preserves clinical fields. Unsupported
+or partially supported items retain explicit per-item issues for display and
+human review. See [citation review and collection repair](docs/user-guide/guideline-extraction.md#reviewing-existing-catalog-citations).

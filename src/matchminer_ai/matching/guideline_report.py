@@ -195,6 +195,8 @@ def write_guideline_considerations_report(
                 return "; ".join(labels)
 
             lines += ["Population evidence: " + citations(row["evidence"]), ""]
+            for issue in row.get("citation_review", {}).get("issues", []):
+                lines += [f"**Population source support unresolved:** {_text(issue)}", ""]
             for key, title in (
                 ("diagnostic_workup", "Diagnostic / workup considerations"),
                 ("treatment_options", "Treatment / management considerations"),
@@ -210,6 +212,8 @@ def write_guideline_considerations_report(
                         f"- **{_text(item['name'])}** — **Conditions:** {_text(item['conditions'])}. "
                         f"**Category:** {_text(item['category'])}. **Sources:** {citations(item['evidence'])}."
                     ]
+                    for issue in item.get("citation_review", {}).get("issues", []):
+                        lines.append(f"  - **Source support unresolved:** {_text(issue)}")
                 lines.append("")
             lines += ["**Catalog uncertainties and context limits**", ""]
             lines += [f"- {_text(value)}" for value in row["uncertainties"]] or [

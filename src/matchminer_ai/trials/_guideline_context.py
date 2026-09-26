@@ -24,6 +24,7 @@ def pack_messages(
     tail="",
     population_guidance=True,
     source_ids=None,
+    system_message=None,
 ):
     required_ids = set(required_ids)
     if source_ids is not None and not required_ids <= set(source_ids):
@@ -54,6 +55,8 @@ def pack_messages(
             + rules,
             schema,
         )
+        if system_message is not None:
+            messages[0]["content"] = system_message
         return selected, omitted, messages
 
     # Usually the entire small/medium guideline fits. Do not impose arbitrary character caps.

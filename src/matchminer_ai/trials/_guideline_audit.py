@@ -17,6 +17,8 @@ from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, parse_model
 from ._guideline_generation import clinical_content
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
 from ._guideline_ownership import branch_ledger
+from ._guideline_quotes import VERSION as QUOTE_VERSION
+from ._guideline_quotes import materialize_quoted_state, resolve_excerpt
 from ._guideline_schema import (
     STATE,
     format_space,
@@ -79,6 +81,7 @@ def audit_catalog(guideline, output):
         "Source fingerprint changed",
     )
     settings = config["llm"]
+    quoted_details = config.get("stage_versions", {}).get("detail_citations") == QUOTE_VERSION
     current_json = (
         config.get("stage_versions", {}).get("json_normalization")
         == JSON_NORMALIZATION_VERSION
@@ -93,9 +96,8 @@ def audit_catalog(guideline, output):
                 if accepted["job"].startswith(kind + "-"):
                     result = accepted["result"]
                     if kind == "detail" and "space" in result:
-                        normalized_results[kind].add(
-                            digest(materialize_evidence(result, guideline.pages))
-                        )
+                        materialize = materialize_quoted_state if quoted_details else materialize_evidence
+                        normalized_results[kind].add(digest(materialize(result, guideline.pages)))
                     elif kind == "extract" and "candidates" in result:
                         normalized_results[kind].add(digest(result))
     rows = [
@@ -212,10 +214,15 @@ def audit_catalog(guideline, output):
                     item["source_lines"] == expected,
                     "Source lines differ from original",
                 )
-                require(
-                    item["quote"] == "\n".join(line["text"] for line in expected),
-                    "Evidence quotation differs from original",
-                )
+                if quoted_details:
+                    derived_ids, exact_quote = resolve_excerpt(page, item["quote"])
+                    require(derived_ids == item["line_ids"], "Excerpt line addresses differ")
+                    require(exact_quote == item["quote"], "Excerpt differs from exact source text")
+                else:
+                    require(
+                        item["quote"] == "\n".join(line["text"] for line in expected),
+                        "Evidence quotation differs from original",
+                    )
                 require(item["pdf_page"] == page.number, "Evidence PDF page differs")
                 for key in set(item) - {"page_id", "line_ids"}:
                     del item[key]
@@ -379,6 +386,7 @@ def audit_catalog(guideline, output):
         ),
         "treatment_options": treatment_count,
         "verified_evidence_items": evidence_count,
+        "detail_citation_format": QUOTE_VERSION if quoted_details else "legacy-line-ids",
         "covered_content_pages": len(covered),
         "source_pdf_pages": len(guideline.pages),
         "coverage_dispositions": dict(

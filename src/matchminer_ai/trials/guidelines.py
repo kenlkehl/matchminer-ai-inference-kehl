@@ -220,8 +220,81 @@ def audit_guideline_catalog(
     from ._guideline_sources import load_guideline
 
     output = _output_directory(source_directory, output_dir)
-    result: dict = audit_catalog(
-        load_guideline(Path(source_directory), disease), output
-    )
+    from ._guideline_citation_review import audit_review
+
+    audit = (audit_review if read_json(output / "run_config.json").get("citation_review_version")
+             else audit_catalog)
+    result: dict = audit(load_guideline(Path(source_directory), disease), output)
     atomic_json(output / "validation.json", result)
     return result
+
+
+def review_guideline_citations(
+    catalog: str | Path,
+    *,
+    output_dir: str | Path,
+    source_directory: str | Path | None = None,
+    config: MMAIConfig | None = None,
+    return_metadata: bool = False,
+    progress_callback: Callable[[str], None] | None = None,
+) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
+    """Review every stored assertion with the LLM and derive citations from exact excerpts.
+
+    Accepts a completed disease catalog directory (or its paradigms.jsonl).
+    Sources default to its recorded local converter library; an explicit source
+    directory supports moved libraries, with the identical fingerprint required.
+    Uses the normal guideline remote configuration, context/output reserve,
+    reasoning, sampling, retry and concurrency settings. Output must be a new
+    external directory; repeat an identical invocation to resume checkpoints.
+
+    Clinical fields, IDs, item order and uncertainties remain unchanged. Every
+    population and option gains citation_review with a model-assessed support
+    status and explicit issues. Unsupported citations are removed; evidence can
+    be empty only when an unresolved issue is recorded. This is a completed
+    source review, not certification that all recommendations are supported.
+    Consumers must display unresolved issues alongside the affected assertion.
+    Original records, raw responses and a reconstructable audit are retained.
+    """
+    import pandas as pd
+    from matchminer_ai.llm.backends import build_llm_runtime_config
+    from matchminer_ai.llm.structured import resolve_structured_config
+    from ._guideline_citation_review import run_review
+    from ._guideline_generation import Client
+    from ._guideline_sources import load_guideline
+    from .guideline_catalog import load_guideline_catalog
+
+    resolved = load_default_preset() if config is None else config
+    if not isinstance(resolved, MMAIConfig):
+        raise TypeError("config must be an MMAIConfig instance or None")
+    if not resolved.remote.get("enabled", False):
+        raise ValueError("review_guideline_citations requires remote inference enabled")
+    workers = resolved.remote.get("max_concurrent_requests", 32)
+    if type(workers) is not int or workers < 1:
+        raise ValueError("max_concurrent_requests must be a positive integer")
+    if progress_callback is not None and not callable(progress_callback):
+        raise TypeError("progress_callback must be callable or None")
+    path = Path(catalog).resolve()
+    if path.is_dir():
+        path /= "paradigms.jsonl"
+    frame, input_metadata = load_guideline_catalog(path, return_metadata=True)
+    source = frame.iloc[0]["source"]
+    if any(row["source_fingerprint"] != source["source_fingerprint"] for row in frame.source):
+        raise ValueError("Citation review accepts one disease and source edition at a time")
+    source_directory = source_directory or Path(source["input_directory"]).parent
+    output = _output_directory(source_directory, output_dir)
+    if output.is_relative_to(path.parent) or path.parent.is_relative_to(output):
+        raise ValueError("Citation review output must be separate from the original catalog")
+    guideline = load_guideline(Path(source_directory), source["disease"])
+    if guideline.fingerprint != source["source_fingerprint"]:
+        raise ValueError("Source fingerprint differs from the original catalog")
+    previous = read_json(output / "run_config.json") if (output / "run_config.json").exists() else None
+    runtime = build_llm_runtime_config("guideline", dict(resolved.guideline), config=resolved)
+    llm, model_metadata = resolve_structured_config(
+        runtime, cache_dir=output / "checkpoints", previous=previous, client_type=Client)
+    rows, audit = run_review(guideline, path, output, Client(llm, output / "checkpoints"),
+                             workers=workers, notify=progress_callback)
+    result = pd.DataFrame(rows)
+    metadata = {"input_catalog": input_metadata, "validation": audit,
+                "model_metadata": model_metadata, "output_directory": str(output),
+                "run_config": read_json(output / "run_config.json")}
+    return (result, metadata) if return_metadata else result

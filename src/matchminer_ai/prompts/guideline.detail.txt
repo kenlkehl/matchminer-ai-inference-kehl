@@ -26,6 +26,17 @@ ambiguous branches, missing cross-guideline sources and omitted-context limitati
 Biomarker testing, pathology review and imaging are workup, not treatment options; move any such
 misclassified candidate items to diagnostic_workup. Drug administration and therapeutic procedures
 belong in treatment_options. A diagnostic prerequisite must never be presented as a treatment.
-Before answering, verify that each cited line exists AND supports its particular state's option.
+For final citations, return page_id and source_text as required by the schema, not line_ids.
+Copy exact source words that directly support each particular option and its full stated conditions.
+Use a uniquely located, informative excerpt, not an isolated generic term. Software derives line
+addresses from your excerpt; do not copy tentative candidate line numbers. Check the cited text
+itself, not merely the page's topic. A laboratory-test option needs text specifying that test; a
+passage about imaging or receptor discordance does not support a blood test. Cite additional source
+text for any wider panel, timing, prerequisite, or category claimed in the option. Do not expand a
+narrower source recommendation into a broader test panel or regimen using medical background knowledge.
+To avoid interleaved PDF columns, copy a relevant substring within one displayed source line and
+use separate evidence items for subsequent wrapped lines, connecting their meaning in source order.
+Do not include L-number prefixes, join words across intervening column text, or reconstruct prose.
+Before answering, verify that each excerpt exists AND supports its particular state's option.
 Completeness is within the fixed current disease state, not across future treatment lines. Do not
 include a future-line option merely because the patient could progress into that different state.

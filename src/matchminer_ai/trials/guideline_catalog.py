@@ -201,7 +201,18 @@ def _validate_catalog(frame):
                     )
                 owners.append(item)
         for owner in owners:
-            if not isinstance(owner.get("evidence"), list) or not owner["evidence"]:
+            review = owner.get("citation_review")
+            if review is not None:
+                if (not isinstance(review, dict)
+                    or review.get("version") != "citation-review-v1"
+                    or review.get("status") not in {"unresolved", "supported_by_model_review"}
+                    or not isinstance(review.get("issues"), list)
+                    or any(not isinstance(s, str) or not s.strip() for s in review["issues"])
+                    or bool(review["issues"]) != (review["status"] == "unresolved")):
+                    raise ValueError("Invalid guideline citation review metadata")
+            if not isinstance(owner.get("evidence"), list) or (
+                not owner["evidence"] and not (review and review["status"] == "unresolved")
+            ):
                 raise ValueError("Each catalog state and option must retain evidence.")
             for evidence in owner["evidence"]:
                 if (

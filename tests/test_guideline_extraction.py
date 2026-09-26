@@ -92,6 +92,14 @@ def state():
     }
 
 
+def quoted_state():
+    value = state()
+    owners = [value, *value["diagnostic_workup"], *value["treatment_options"]]
+    for owner in owners:
+        owner["evidence"] = [{"page_id": "p0002", "source_text": TEXT}]
+    return value
+
+
 def extraction():
     return {
         "candidates": [
@@ -1595,7 +1603,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                 else:
                     self.assertIn("mixes AND and OR", body["messages"][-1]["content"])
             else:
-                value = catalog() if prompt.startswith(CATALOG_TASK) else state()
+                value = catalog() if prompt.startswith(CATALOG_TASK) else quoted_state()
             return {
                 "choices": [
                     {"finish_reason": "stop", "message": {"content": json.dumps(value)}}
@@ -1633,10 +1641,10 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                     elif prompt.startswith(CATALOG_TASK):
                         value = catalog()
                     else:
-                        value = state()
+                        value = quoted_state()
                         calls.append("detail")
                         if len(calls) == 1:
-                            value["evidence"][0]["line_ids"] = [999]
+                            value["evidence"][0]["source_text"] = "Absent synthetic quotation"
                             value["space"]["cancer_burden_allowed"] = criterion
                         else:
                             self.assertIn(expected, body["messages"][-1]["content"])
@@ -1704,7 +1712,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
             if schema == EXTRACTION
             else catalog()
             if schema == CATALOG
-            else state()
+            else quoted_state()
         )
         validator(response)
         return response
@@ -1978,7 +1986,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                 if prompt.startswith(prompts.EXTRACT_TASK)
                 else catalog()
                 if prompt.startswith(CATALOG_TASK)
-                else state()
+                else quoted_state()
             )
             return {
                 "choices": [
@@ -2014,10 +2022,10 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
         row = json.loads((output / "paradigms.jsonl").read_text())
         row["evidence"][0]["quote"] = "Altered fictional evidence"
         (output / "paradigms.jsonl").write_text(json.dumps(row) + "\n")
-        with self.assertRaisesRegex(ValueError, "quotation differs"):
+        with self.assertRaisesRegex(ValueError, "source_text does not occur"):
             audit_catalog(g, output)
 
-    def test_audit_accepts_citation_lines_sorted_into_reading_order_during_export(self):
+    def test_audit_derives_citation_lines_in_source_reading_order(self):
         root = make_library(
             self.base / "multiline", TEXT + "\nAdditional synthetic evidence."
         )
@@ -2031,8 +2039,10 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
             elif prompt.startswith(CATALOG_TASK):
                 value = catalog()
             else:
-                value = state()
-                value["diagnostic_workup"][0]["evidence"][0]["line_ids"] = [2, 1]
+                value = quoted_state()
+                value["diagnostic_workup"][0]["evidence"][0]["source_text"] = (
+                    TEXT + "\nAdditional synthetic evidence."
+                )
             return {
                 "choices": [
                     {"finish_reason": "stop", "message": {"content": json.dumps(value)}}
@@ -2076,7 +2086,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                 value = extraction()
                 value["candidates"][0]["evidence"][0]["line_ids"] = [999]
             else:
-                value = catalog() if prompt.startswith(CATALOG_TASK) else state()
+                value = catalog() if prompt.startswith(CATALOG_TASK) else quoted_state()
             return {
                 "choices": [
                     {"finish_reason": "stop", "message": {"content": json.dumps(value)}}

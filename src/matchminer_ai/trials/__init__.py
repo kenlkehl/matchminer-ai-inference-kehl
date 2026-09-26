@@ -14,7 +14,7 @@ from .eligibility import (
     extract_trial_space_eligibility_criteria,
 )
 from .structure import structure_trial_space
-from .guidelines import audit_guideline_catalog, list_guidelines, summarize_guidelines
+from .guidelines import audit_guideline_catalog, list_guidelines, summarize_guidelines, review_guideline_citations
 from .guideline_catalog import load_guideline_catalog, get_guideline_considerations
 
 if TYPE_CHECKING:
@@ -171,6 +171,7 @@ __all__ = [
     "structure_trial_space",
     "summarize_trials",
     "summarize_guidelines",
+    "review_guideline_citations",
     "list_guidelines",
     "audit_guideline_catalog",
     "load_guideline_catalog",

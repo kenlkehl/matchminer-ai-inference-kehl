@@ -25,11 +25,17 @@ to every state. Historical discussion of a study is NOT itself a guideline recom
 source refers to another guideline, retain the referral and gap; do not supply its unseen contents.
 Use empty arrays when no supported options are available; explain unresolved gaps in uncertainties.
 
-Each state and EACH option must cite supplied page IDs and source line numbers. Every nonblank line
+Each state and EACH option must cite supplied pages using the citation format in the requested schema.
+When the schema requests source_text, copy a short exact excerpt that directly supports the particular
+claim and its conditions; software finds and verifies its line address. Do not substitute a nearby
+topic or infer that existence on the same page establishes support. Use multiple excerpts for the
+population, recommendation, and prerequisites when needed. Never select text from another PDF column
+merely because it shares a horizontal line. Do not paraphrase quotations or insert ellipses.
+When the schema requests line_ids, cite source line numbers. Every nonblank line
 is prefixed with L0001, L0002, etc.; return their integer numbers in line_ids (1-12 lines per evidence
 item). Cite all lines needed to connect the population, option and its conditions, using multiple
 evidence items when needed. Cite clinical text, never copyright footers or page headings alone.
-The software copies those lines verbatim as evidence; do not generate or reconstruct quotations.
+The software copies cited source text verbatim as evidence; never invent quotations.
 Line existence does not prove applicability: ensure the cited branch/footnote supports this population.
 
 These are pdftotext -layout pages: horizontal position alone does not prove a flowchart edge; arrows,
