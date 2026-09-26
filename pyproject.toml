@@ -53,6 +53,7 @@ dependencies = [
 
 [project.scripts]
 matchminer-ai-llm-trial-check = "matchminer_ai.cli.llm_trial_check:main"
+matchminer-ai-build-good-option-catalog = "matchminer_ai.cli.build_good_option_catalog:main"
 
 [project.optional-dependencies]
 dev = [

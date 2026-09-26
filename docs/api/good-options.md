@@ -135,6 +135,24 @@ compatibility, intervention-screen decisions, trial-drug references, terminal
 research states, and structured-fact evidence support.
 `load_good_option_catalog` validates by default.
 
+### Command line
+
+`matchminer-ai-build-good-option-catalog` builds and validates a complete
+catalog, drug classes included, against an OpenAI-compatible endpoint:
+
+```bash
+matchminer-ai-build-good-option-catalog \
+  --nct-ids-file trial_ids.txt \
+  --output data/no_phi/good_option_catalog \
+  --server-url http://gpu-host:8001/v1
+```
+
+The served model is read from the endpoint's `/v1/models`, and its registered
+sampling profile (see [LLM Server Helper](llm.md#model-sampling-profiles)) is
+applied to `llm_good_option` and every `good_option_catalog.*_llm` stage
+override. Checkpoints default to `<output>_checkpoints`; rerun the same command
+to resume.
+
 ## Score a patient-trial candidate
 
 `evaluate_good_options` and the two scorer-specific APIs require a loaded
