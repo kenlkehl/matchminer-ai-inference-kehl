@@ -161,3 +161,15 @@ def validate_decision_fields(state, guideline_title):
                     "negative = ER-negative AND PR-negative; positive = ER-positive OR "
                     "PR-positive (either or both). Preserve specific source-stated results."
                 )
+
+
+def validate_decision_field_batch(states, guideline_title):
+    """Report every failing candidate in a draft without editing clinical content."""
+    errors = []
+    for state in states:
+        try:
+            validate_decision_fields(state, guideline_title)
+        except ValueError as exc:
+            errors.append(str(exc))
+    if errors:
+        raise ValueError("\n\n".join(errors))

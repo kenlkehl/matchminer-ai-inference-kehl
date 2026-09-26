@@ -30,6 +30,7 @@ from ._guideline_generation import Client
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
 from ._guideline_ownership import branch_ledger, page_owners
 from ._guideline_repairs import repair_response
+from ._guideline_specificity import validate_decision_field_batch
 from ._guideline_schema import (
     DETAIL,
     EXTRACTION,
@@ -311,8 +312,7 @@ def _run(
 
             def validate(v):
                 validate_shape(v, EXTRACTION)
-                for candidate in v["candidates"]:
-                    validate_decision_fields(candidate, metadata["title"])
+                validate_decision_field_batch(v["candidates"], metadata["title"])
                 validate_extraction(v, supplied, ids)
 
             value = client.complete(

@@ -31,7 +31,9 @@ class _CachedCatalog:
 _CATALOG_CACHE: OrderedDict[Path, _CachedCatalog] = OrderedDict()
 _CATALOG_CACHE_LOCK = RLock()
 _CATALOG_CACHE_MAX_FILES = 128
-_CATALOG_CACHE_MAX_BYTES = 64 * 1024 * 1024
+# A full guideline collection exceeds 64 MiB. A smaller-than-collection LRU
+# evicts early files during each sequential scan and gets no hits next time.
+_CATALOG_CACHE_MAX_BYTES = 512 * 1024 * 1024
 
 
 def _file_signature(path, *, required=False):
@@ -263,7 +265,7 @@ def load_guideline_catalog(
     change time for the JSONL and its status/audit files on every call. It follows
     the filesystem's metadata visibility (including network filesystem delays);
     use ``refresh=True`` to force a full read. Cache entries are bounded to 128
-    files and 64 MiB of source JSONL, and disappear on process restart. Returned
+    files and 512 MiB of source JSONL, and disappear on process restart. Returned
     records are independent copies, including nested menus and evidence.
     """
     import pandas as pd

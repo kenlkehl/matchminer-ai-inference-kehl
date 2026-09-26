@@ -54,6 +54,18 @@ class RepairError(EndpointError):
 JSON_NORMALIZATION_VERSION = "lossless-lists-v1"
 
 
+def retry_draft(response):
+    """Return only a complete JSON draft, never reasoning or a truncated stream."""
+    try:
+        choice = response["choices"][0]
+        if choice.get("finish_reason") != "stop":
+            return None
+        value, _ = parse_model_json(choice["message"]["content"])
+        return json.dumps(value, ensure_ascii=False)
+    except (ValueError, KeyError, TypeError, IndexError):
+        return None
+
+
 def parse_model_json(content):
     """Recover repeated list keys without losing model content or choosing scalar values."""
     if not isinstance(content, str):
@@ -365,6 +377,23 @@ class StructuredClient:
         )
         return self.count_tokens(messages) <= budget
 
+    def retry_messages(self, messages, schema, errors, draft):
+        """Let the model revise its draft while keeping all original source context."""
+        feedback = self.retry_feedback_history(schema, errors)
+        fallback = messages + [{"role": "user", "content": feedback}]
+        if draft is not None:
+            instruction = resources.files("matchminer_ai.prompts").joinpath(
+                "structured.revise_retry.txt"
+            ).read_text(encoding="utf-8").strip()
+            revision = messages + [
+                {"role": "assistant", "content": draft},
+                {"role": "user", "content": instruction + "\n\n" + feedback},
+            ]
+            # Never trim source context or the output reserve to squeeze in a draft.
+            if self.fits(revision, use_safety_margin=True):
+                return revision
+        return fallback
+
     def complete(self, job, messages, schema, validator, repair_handler=None):
         body = {
             "model": self.config.model,
@@ -526,13 +555,17 @@ class StructuredClient:
         ]
         offset = max(previous_numbers, default=0)
         last_error = None
+        last_draft = None
         retry_errors = []
         for path in reversed(previous):
+            response = read_json(path)
             try:
-                return accept_response(read_json(path), allow_repair=False)
+                return accept_response(response, allow_repair=False)
             except (ValueError, KeyError, TypeError, IndexError) as exc:
                 if last_error is None:
                     last_error = str(exc)
+                if last_draft is None:
+                    last_draft = retry_draft(response)
                 retry_errors.insert(0, str(exc))
                 continue
         # Try all saved responses without generation first. If none validates,
@@ -548,13 +581,12 @@ class StructuredClient:
             attempt_body = dict(body)
             if self.config.stream:
                 attempt_body.update(stream=True, stream_options={"include_usage": True})
-            if last_error is not None:
-                feedback = self.retry_feedback_history(schema, retry_errors)
-                attempt_body["messages"] = messages + [
-                    {"role": "user", "content": feedback}
-                ]
             response = None
             try:
+                if last_error is not None:
+                    attempt_body["messages"] = self.retry_messages(
+                        messages, schema, retry_errors, last_draft
+                    )
                 # The initial pack leaves safety space for validation feedback. A retry
                 # may use that space but must always preserve the entire output reserve.
                 if not self.fits(attempt_body["messages"], use_safety_margin=True):
@@ -583,6 +615,9 @@ class StructuredClient:
                 raise
             except (ValueError, KeyError, TypeError, IndexError, EndpointError) as exc:
                 last_error = str(exc)
+                draft = retry_draft(response)
+                if draft is not None:
+                    last_draft = draft
                 retry_errors.append(last_error)
                 atomic_json(
                     folder / f"failure-{offset + attempt}.json",

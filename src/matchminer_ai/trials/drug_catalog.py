@@ -58,10 +58,13 @@ from .drug_evidence import (
 )
 from .drug_research import (
     DrugEvidenceSource,
+    GeneralWebEvidenceSource,
     GeneralWebProvider,
+    HostRateLimiter,
     ResearchSettings,
     clean_indication,
     clean_text,
+    default_host_rates,
     default_sources,
     research_class,
     research_drug,
@@ -2574,6 +2577,33 @@ def derive_trial_assignments(
     return identities, assignments, screening_rows
 
 
+async def _gather_bounded(
+    items: Sequence[Any],
+    run: Callable[[Any], Awaitable[Any]],
+    *,
+    limit: int,
+) -> list[Any]:
+    """Run ``run`` over ``items`` with at most ``limit`` in flight, in input order.
+
+    A failure cancels the siblings instead of leaving them running unobserved;
+    whatever they already checkpointed is kept for the resumed run.
+    """
+
+    semaphore = asyncio.Semaphore(max(1, limit))
+
+    async def bounded(item: Any) -> Any:
+        async with semaphore:
+            return await run(item)
+
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(bounded(item)) for item in items]
+    except BaseExceptionGroup as errors:
+        # Surface the subject's own error, as the serial loop did.
+        raise errors.exceptions[0]
+    return [task.result() for task in tasks]
+
+
 async def build_good_option_catalog(
     nct_ids: Sequence[str],
     output_path: str | Path,
@@ -2589,8 +2619,15 @@ async def build_good_option_catalog(
     reset_checkpoint: bool = False,
     overwrite: bool = False,
     progress_callback: Callable[[str, int, int, str], None] | None = None,
+    subject_concurrency: int = 1,
+    web_search_concurrency: int = 12,
 ) -> GoodOptionCatalog:
-    """Screen and research cancer-treatment agents with public-only checkpoints."""
+    """Screen and research cancer-treatment agents with public-only checkpoints.
+
+    ``subject_concurrency`` drugs (and later classes) are researched at once.
+    It and ``web_search_concurrency`` only schedule work, so they are left out
+    of the checkpoint fingerprint and may change between resumed runs.
+    """
 
     normalized_ids = tuple(dict.fromkeys(normalize_nct_id(value) for value in nct_ids))
     if not normalized_ids:
@@ -2841,10 +2878,27 @@ async def build_good_option_catalog(
         assignments, studies, limit=resolved_settings.indication_terms_per_drug
     )
 
+    # Web search and E-utilities limits are per IP, so every concurrent subject
+    # draws on one shared budget rather than pacing itself.
+    host_limiter = HostRateLimiter(default_host_rates())
+    if sources is None:
+        for source in resolved_sources:
+            if isinstance(source, GeneralWebEvidenceSource):
+                source.search_slots = asyncio.Semaphore(max(1, web_search_concurrency))
+
     evidence_by_drug: dict[str, list[EvidencePassage]] = {}
     status_by_drug: dict[str, tuple[str, list[str]]] = {}
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        for index, drug in enumerate(identities.values(), start=1):
+    research_completed = 0
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        event_hooks={"request": [host_limiter]},
+    ) as client:
+
+        async def research_one(
+            drug: DrugIdentity,
+        ) -> tuple[list[EvidencePassage], list[ResearchAttempt], str, list[str]]:
+            nonlocal research_completed
             indications = indications_by_drug.get(drug.drug_id, ())
             checkpoint_input = {
                 "drug": asdict(drug),
@@ -2920,17 +2974,27 @@ async def build_good_option_catalog(
                         "failures": list(failures),
                     },
                 )
-            evidence_by_drug[drug.drug_id] = evidence
-            attempts.extend(drug_attempts)
-            status_by_drug[drug.drug_id] = (status, failures)
+            research_completed += 1
             if progress_callback:
                 suffix = " (checkpoint)" if resumed else ""
                 progress_callback(
                     "research",
-                    index,
+                    research_completed,
                     len(identities),
                     f"{drug.preferred_name}{suffix}",
                 )
+            return evidence, drug_attempts, status, failures
+
+        drugs = list(identities.values())
+        drug_results = await _gather_bounded(
+            drugs, research_one, limit=subject_concurrency
+        )
+    for drug, (evidence, drug_attempts, status, failures) in zip(
+        drugs, drug_results, strict=True
+    ):
+        evidence_by_drug[drug.drug_id] = evidence
+        attempts.extend(drug_attempts)
+        status_by_drug[drug.drug_id] = (status, failures)
 
     # Classification runs after research because it reads the drug's own
     # mechanism passages, and before class retrieval because it is what says
@@ -3043,8 +3107,17 @@ async def build_good_option_catalog(
     )
     class_evidence_by_id: dict[str, list[EvidencePassage]] = {}
     class_research_completed = 0
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        for class_id, (class_name, aliases) in class_subjects.items():
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        event_hooks={"request": [host_limiter]},
+    ) as client:
+
+        async def research_one_class(
+            class_id: str,
+        ) -> tuple[list[EvidencePassage], list[ResearchAttempt]]:
+            nonlocal class_research_completed
+            class_name, aliases = class_subjects[class_id]
             class_terms = class_indications.get(class_id, ())
             checkpoint_input = {
                 "class_id": class_id,
@@ -3092,8 +3165,6 @@ async def build_good_option_catalog(
                         "status": class_status,
                     },
                 )
-            class_evidence_by_id[class_id] = class_items
-            attempts.extend(class_attempts)
             class_research_completed += 1
             if progress_callback:
                 suffix = " (checkpoint)" if resumed else ""
@@ -3103,6 +3174,17 @@ async def build_good_option_catalog(
                     len(class_subjects),
                     f"{class_name}{suffix}",
                 )
+            return class_items, class_attempts
+
+        class_ids = list(class_subjects)
+        class_results = await _gather_bounded(
+            class_ids, research_one_class, limit=subject_concurrency
+        )
+    for class_id, (class_items, class_attempts) in zip(
+        class_ids, class_results, strict=True
+    ):
+        class_evidence_by_id[class_id] = class_items
+        attempts.extend(class_attempts)
 
     class_summary_records = await _synthesize_classes(
         class_subjects,

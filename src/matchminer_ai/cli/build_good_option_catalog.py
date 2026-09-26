@@ -100,6 +100,21 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--research-concurrency", type=int, default=None)
+    parser.add_argument(
+        "--subject-concurrency",
+        type=int,
+        default=8,
+        help=(
+            "Drugs, then classes, researched at once. Scheduling only: not part "
+            "of the checkpoint fingerprint, so it can change on resume."
+        ),
+    )
+    parser.add_argument(
+        "--web-search-concurrency",
+        type=int,
+        default=12,
+        help="General-web searches in flight across all subjects.",
+    )
     parser.add_argument("--research-request-timeout", type=float, default=None)
     parser.add_argument("--reset-checkpoints", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
@@ -171,6 +186,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             reset_checkpoint=args.reset_checkpoints,
             overwrite=args.overwrite,
             progress_callback=progress,
+            subject_concurrency=args.subject_concurrency,
+            web_search_concurrency=args.web_search_concurrency,
         )
     )
     manifest = validate_good_option_catalog(catalog.path)

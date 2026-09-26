@@ -163,9 +163,20 @@ Detail generation freezes the canonical definition and supplies its current menu
 
 Prompts, including field descriptions, consolidation, selection, and citation
 repair instructions, live in `src/matchminer_ai/prompts/guideline.*.txt` and
-`structured.retry.txt`. All prompt resources are fingerprinted for resume checks.
+`structured.retry.txt`. These generation prompts are fingerprinted for resume checks.
 Citation-only repair can change references and page accounting, never clinical
 fields, option content, or defining branch ownership.
+
+For failed structured generations, retries include the most recent complete JSON
+draft and validation feedback, using `structured.revise_retry.txt`. Extraction
+feedback reports every candidate that fails the field checks, rather than stopping
+at the first candidate. The LLM revises its own draft against the original source;
+code never guesses Boolean grouping or edits clinical criteria. Incomplete JSON
+and reasoning traces are not reused. If the draft will not fit, retry with feedback
+alone, keeping all original source context and the full output-token reserve.
+Every actual retry message is saved in `request-attempt-*.json`. The revision-only
+instruction does not invalidate already accepted generation checkpoints; accepted
+responses still undergo the same grounding and field validation.
 
 ## Persistence and review
 
@@ -239,7 +250,7 @@ combined catalogs still undergo identifier/space-number uniqueness checks.
 `metadata["catalog"]` for patient retrieval). Progress distinguishes checking
 files, loading/validating changed catalogs, and reusing validated records.
 
-The cache is bounded to 128 files and 64 MiB of source JSONL; Python records have
+The cache is bounded to 128 files and 512 MiB of source JSONL; Python records have
 additional memory overhead. It disappears on process restart and contains no
 patient summaries or results. File-change detection follows the filesystem's
 metadata visibility, including any network filesystem delay. Call

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import html
 import io
 import json
 import math
+import os
 import random
 import re
 import xml.etree.ElementTree as ET
@@ -272,6 +274,44 @@ class DDGSWebProvider:
             return list(client.text(query, max_results=max_results) or [])
 
 
+class HostRateLimiter:
+    """Space request starts per host, shared by every subject researched at once.
+
+    Installed as an httpx request hook, so it also paces retries and redirects.
+    Without it, subjects running in parallel each back off on their own and
+    most E-utilities calls come back 429.
+    """
+
+    def __init__(self, requests_per_second: Mapping[str, float]) -> None:
+        self._intervals = {
+            host.casefold(): 1.0 / rate
+            for host, rate in requests_per_second.items()
+            if rate > 0
+        }
+        self._next_start: dict[str, float] = {}
+
+    async def __call__(self, request: httpx.Request) -> None:
+        host = request.url.host.casefold()
+        interval = self._intervals.get(host)
+        if interval is None:
+            return
+        now = asyncio.get_running_loop().time()
+        start = max(now, self._next_start.get(host, now))
+        self._next_start[host] = start + interval
+        if start > now:
+            await asyncio.sleep(start - now)
+
+
+def ncbi_api_key() -> str:
+    return os.environ.get("NCBI_API_KEY", "").strip()
+
+
+def default_host_rates() -> dict[str, float]:
+    """Published per-IP ceilings, kept just under the limit."""
+
+    return {"eutils.ncbi.nlm.nih.gov": 8.0 if ncbi_api_key() else 2.5}
+
+
 class RetryableResearchError(RuntimeError):
     """A technical source failure that should be retried with backoff."""
 
@@ -373,6 +413,9 @@ class GeneralWebEvidenceSource:
     def __init__(self, provider: GeneralWebProvider | None = None) -> None:
         self.provider = provider or DDGSWebProvider()
         self.name = f"web:{self.provider.name}"
+        #: Optional cap on searches in flight across every subject; the anonymous
+        #: provider times out rather than refusing when it is pushed too hard.
+        self.search_slots: asyncio.Semaphore | None = None
 
     async def fetch(
         self,
@@ -384,11 +427,12 @@ class GeneralWebEvidenceSource:
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
         try:
-            hits = await asyncio.to_thread(
-                self.provider.search,
-                query,
-                max_results=settings.web_results_per_query,
-            )
+            async with self.search_slots or contextlib.nullcontext():
+                hits = await asyncio.to_thread(
+                    self.provider.search,
+                    query,
+                    max_results=settings.web_results_per_query,
+                )
         except Exception as error:  # noqa: BLE001 - normalized retry boundary.
             raise RetryableResearchError(
                 f"General-web search failed via {self.provider.name}: "
@@ -466,6 +510,9 @@ class PubMedDrugSource:
             "sort": "relevance",
             "tool": "matchminer-ai",
         }
+        api_key = ncbi_api_key()
+        if api_key:
+            params["api_key"] = api_key
         search = await client.get(
             "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
             params=params,
@@ -481,6 +528,7 @@ class PubMedDrugSource:
                 "id": ",".join(str(value) for value in ids),
                 "retmode": "xml",
                 "tool": "matchminer-ai",
+                **({"api_key": api_key} if api_key else {}),
             },
         )
         fetched.raise_for_status()
@@ -1498,6 +1546,7 @@ __all__ = [
     "FACETS",
     "GeneralWebEvidenceSource",
     "GeneralWebProvider",
+    "HostRateLimiter",
     "NCIDrugSource",
     "PubMedDrugSource",
     "ResearchSettings",
@@ -1510,6 +1559,7 @@ __all__ = [
     "build_web_query",
     "clean_indication",
     "clean_text",
+    "default_host_rates",
     "default_sources",
     "research_class",
     "research_drug",

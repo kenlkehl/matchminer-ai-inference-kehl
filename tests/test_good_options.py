@@ -34,6 +34,7 @@ from matchminer_ai.trials import (
 )
 from matchminer_ai.trials.drug_research import (
     GeneralWebEvidenceSource,
+    HostRateLimiter,
     build_facet_query,
 )
 
@@ -1864,6 +1865,100 @@ def test_catalog_resumes_registry_roles_and_completed_drug_research(
         (checkpoints / "manifest.json").read_text(encoding="utf-8")
     )
     assert checkpoint_manifest["completed_catalog"] == str(output)
+
+
+def test_catalog_researches_drugs_concurrently_and_resumes_at_any_concurrency(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    research_calls: list[str] = []
+    in_flight = 0
+    peak = 0
+
+    async def fake_fetch(_nct_id: str, *, client):
+        del client
+        return json.loads(json.dumps(STUDY))
+
+    async def slow_research(drug, **_kwargs):
+        nonlocal in_flight, peak
+        research_calls.append(drug.preferred_name)
+        in_flight += 1
+        peak = max(peak, in_flight)
+        # The first drug finishes last, so completion order differs from input.
+        await asyncio.sleep(0.05 if drug.preferred_name == "Novel Agent" else 0.01)
+        in_flight -= 1
+        return [], [], "complete", []
+
+    def synthesize(_drug, _evidence):
+        return {category: [] for category in catalog_module._SYNTHESIS_CATEGORIES}
+
+    monkeypatch.setattr(catalog_module, "fetch_trial_study", fake_fetch)
+    monkeypatch.setattr(catalog_module, "load_ncit_drug_index", lambda _path: _NoNCIt())
+    monkeypatch.setattr(catalog_module, "research_drug", slow_research)
+
+    def build(output: Path, checkpoints: Path, concurrency: int, progress: list):
+        return asyncio.run(
+            build_good_option_catalog(
+                ["NCT12345678"],
+                output,
+                checkpoint_path=checkpoints,
+                config=load_default_preset(),
+                sources=[_EvidenceSource()],
+                settings=ResearchSettings(max_attempts=1),
+                role_resolver=lambda _trial_id, _items: _screening_result(),
+                synthesizer=synthesize,
+                class_resolver=no_classes,
+                overwrite=True,
+                subject_concurrency=concurrency,
+                progress_callback=lambda stage, done, _total, label: progress.append(
+                    (done, label)
+                )
+                if stage == "research"
+                else None,
+            )
+        )
+
+    parallel_progress: list[tuple[int, str]] = []
+    parallel = build(tmp_path / "a", tmp_path / "a-checkpoints", 2, parallel_progress)
+    assert peak == 2
+    assert parallel_progress == [(1, "Control Agent"), (2, "Novel Agent")]
+
+    serial = build(tmp_path / "b", tmp_path / "b-checkpoints", 1, [])
+    assert list(parallel.drug_summaries["drug_id"]) == list(
+        serial.drug_summaries["drug_id"]
+    )
+
+    # Concurrency only schedules work, so a resume at another level reuses
+    # every research checkpoint instead of rejecting the directory.
+    research_calls.clear()
+    resumed_progress: list[tuple[int, str]] = []
+    build(tmp_path / "a", tmp_path / "a-checkpoints", 1, resumed_progress)
+    assert research_calls == []
+    assert all(label.endswith("(checkpoint)") for _done, label in resumed_progress)
+
+
+def test_host_rate_limiter_paces_only_the_configured_host() -> None:
+    started: dict[str, list[float]] = {"eutils.ncbi.nlm.nih.gov": [], "example.test": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        started[request.url.host].append(asyncio.get_event_loop().time())
+        return httpx.Response(200)
+
+    async def run() -> None:
+        limiter = HostRateLimiter({"eutils.ncbi.nlm.nih.gov": 20.0})
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            event_hooks={"request": [limiter]},
+        ) as client:
+            await asyncio.gather(
+                *(client.get("https://eutils.ncbi.nlm.nih.gov/esearch") for _ in range(5)),
+                *(client.get("https://example.test/page") for _ in range(5)),
+            )
+
+    asyncio.run(run())
+    paced = sorted(started["eutils.ncbi.nlm.nih.gov"])
+    assert all(later - earlier >= 0.045 for earlier, later in zip(paced, paced[1:]))
+    unpaced = started["example.test"]
+    assert max(unpaced) - min(unpaced) < 0.045
 
 
 def test_catalog_resumes_completed_drug_synthesis(
