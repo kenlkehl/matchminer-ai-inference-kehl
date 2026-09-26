@@ -1,0 +1,1 @@
+Prior treatment/exposure that disqualifies this population, scoped to the source-defined setting/sequence. Name the excluded treatment itself. No current disease-severity criteria or future recommended treatments.

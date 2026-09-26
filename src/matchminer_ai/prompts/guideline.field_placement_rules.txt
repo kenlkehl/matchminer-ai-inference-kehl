@@ -1,0 +1,51 @@
+TRIALSPACE FIELD MEANINGS AND BOOLEAN LOGIC
+Use the nine fields as typed clinical concepts, following the MatchMiner-AI trial primer:
+- age_range_allowed: age criteria only; do not infer an adult cutoff from silence.
+- sex_allowed: sex criteria only; breast cancer does not imply a female-only population.
+- cancer_type_allowed: spelled-out primary cancer type/site.
+- histology_allowed: histologic/morphologic subtype. Receptor status belongs in biomarkers.
+- cancer_burden_allowed: extent, stage, disease sites, resectability, residual disease,
+  disease-specific prognostic risk and disease-severity states such as visceral crisis.
+  Visceral crisis is a current disease state, NOT a prior treatment or treatment response.
+  Do not infer visceral crisis merely from visceral metastases. Exclude performance status,
+  measurable-disease requirements, life expectancy and general organ-function/fitness criteria;
+  option-specific suitability stays with the option.
+- prior_treatment_required: treatment/exposure that must have occurred and the source-defined
+  response/resistance to that treatment/class. Endocrine refractoriness belongs here as a
+  treatment-response condition, not in burden or biomarkers. Preserve the source wording without
+  inventing named failed drugs, prior-line counts, or timing. De novo/intrinsic resistance must
+  not be expanded into an invented history of treatment. Do not treat every reason to choose a
+  therapy as prior treatment: visceral crisis, symptomatic disease and unresectability are not
+  treatment histories. Planned/recommended treatment belongs in the menu, not either prior field.
+- prior_treatment_excluded: the treatment/exposure that must NOT have occurred, with its
+  source-defined setting/sequence. Excluding prior cytotoxic therapy does not exclude endocrine
+  therapy. Response-based exclusions must identify the source-supported treatment/class.
+- biomarkers_required / biomarkers_excluded: required/disqualifying molecular, germline or
+  protein/receptor findings, including source-supported assay, score and threshold. A drug's
+  target is not automatically a required biomarker. Treatment resistance is not receptor status.
+  If a name carries a defining biomarker qualifier, encode it in these fields as well; the name
+  is not part of the TrialSpace embedding text. Preserve source-supported negative findings.
+
+Requirements in DIFFERENT fields apply together (AND). Do not move the two sides of an OR into
+separate fields of one space: that changes the represented population. Within a field, explicitly
+parenthesize OR alternatives when they share an AND condition: write '(A OR B) AND C', not
+'A OR B AND C', when C is required for both A and B. During extraction or
+consolidation, split source-supported alternatives spanning different fields into separate,
+self-contained spaces, even if they share a treatment menu. For example, a branch defined by
+'visceral crisis OR endocrine refractory' needs a visceral-crisis space with that criterion in
+cancer_burden_allowed and a separate endocrine-refractory space with that criterion in
+prior_treatment_required. Copy all shared source-supported restrictions into both. The
+visceral-crisis alternative must not acquire a requirement for endocrine refractoriness, and the
+endocrine-refractory alternative must not acquire a requirement for visceral crisis. These spaces
+may overlap; do not invent absence of the other condition to make them mutually exclusive.
+Splitting a mixed-field alternative does not authorize expanding the task's clinical scope.
+During consolidation, preserve the input population's shared prior-treatment and biomarker
+restrictions in EVERY resulting alternative. For a first-line input excluding a biomarker, do not
+add later-line states or states requiring that biomarker from a neighboring table row. If a source
+contradicts an input restriction, report that conflict rather than silently changing the scope.
+Do not discard either alternative or weaken both into an unrestricted state. If the source cannot
+resolve a boundary, state the uncertainty. Selection copies existing definitions; detail generation
+and citation-only repair keep fixed fields unchanged and must report gaps instead of repairing them.
+
+Before returning a definition, check each clause's concept against its field and verify that its
+AND/OR population logic is preserved. A valid JSON shape or a plausible state name is insufficient.

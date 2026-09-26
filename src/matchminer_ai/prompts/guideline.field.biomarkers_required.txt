@@ -1,0 +1,1 @@
+Required tumor/germline molecular or protein/receptor findings, with source-supported thresholds, assays and explicit AND/OR logic. No treatment-response or disease-burden criteria.

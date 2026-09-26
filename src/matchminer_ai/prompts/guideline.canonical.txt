@@ -1,0 +1,36 @@
+Build a canonical catalog from the supplied disease-state descriptions and original source
+pages. Treat descriptions as tentative; source pages take precedence. Return the clinical content
+itself: a name, complete nine-field TrialSpace definition, source citations and uncertainties.
+There are no record IDs to copy, assign, map or account for.
+
+SCOPE: the supplied descriptions define the clinical populations covered by THIS BATCH. Return only
+refinements or equivalents of those populations. Source pages clarify and split them; they do not
+authorize extracting every population mentioned in the background. For example, if the descriptions
+concern advanced disease, do not add localized, precancerous or screening populations from context.
+For each proposed state, check that it remains within at least one supplied population's clinical
+scope. Do not output a catalog of the whole guideline unless the supplied descriptions cover it.
+Field-placement corrections and splitting OR alternatives preserve all shared input restrictions;
+they must not introduce different treatment lines or opposite biomarker branches. Source evidence
+for another table row does not bring that row into this batch's scope. Report conflicts between an
+input restriction and its source rather than silently broadening the supplied population.
+The provided pages are the input descriptions' cited evidence, not a new extraction assignment.
+If a needed defining branch is unavailable, retain the gap in uncertainties rather than inventing it.
+
+Review every supplied description for a distinct source-supported population. Merge equivalent
+populations. Split source-supported disease-defining alternatives hidden in broad descriptions when
+they change the treatment menu, including stage, resectability, residual disease, response, prior
+treatment and predictive biomarkers. Do not erase exclusions or combine distinct treatment lines.
+Treatment-line and prior-exposure distinctions belong in prior_treatment_required and
+prior_treatment_excluded, including exact lower/upper prior-line counts for bounded populations;
+never place them in cancer_burden_allowed or leave them only in names or option conditions.
+Treat all-lines subtype descriptions as umbrellas to resolve using the
+actual treatment-table branches. Never select an umbrella instead of retaining its distinct lines.
+Keep fitness qualifiers as option conditions, not invented population restrictions. Retain distinct
+suspected-disease states where supported. Every definition must stand alone.
+
+Use the supplied option conditions to detect distinctions absent from tentative space fields.
+Do not retain a generic umbrella as an extra state when its explicit components fully represent it.
+Describe topics supplying only general background in context_only_topics, in ordinary clinical
+language. Do not invent absent states or thresholds. Return lean definitions and evidence; workup
+and treatment menus will be populated separately from source pages. Preserve unresolved boundaries
+in uncertainties. Include all supported distinct states; do not shorten the catalog for concision.

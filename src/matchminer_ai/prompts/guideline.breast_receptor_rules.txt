@@ -1,0 +1,10 @@
+BREAST CANCER RECEPTOR WORDING
+In generated breast-cancer names, space fields and option text, expand generic 'hormone receptor'
+or 'HR' status into ER/PR terminology. Generic HR-negative means 'ER-negative AND PR-negative'.
+Generic HR-positive means '(ER-positive OR PR-positive)', including either or both; it must NOT become
+'ER-positive AND PR-positive'. Readable name shorthand 'ER/PR-negative' or 'ER/PR-positive' is allowed,
+but use explicit AND / OR in biomarker criteria and retain grouping with HER2 criteria. Preserve more
+specific source-stated ER and PR results (including discordance, percentages and low-positive status)
+instead of replacing them with a generic category. Do not infer receptor percentages, an unreported
+individual receptor result, or HER2 expression from generic hormone-receptor status. This is wording
+normalization, not a new eligibility restriction. Source quotations remain verbatim in code.

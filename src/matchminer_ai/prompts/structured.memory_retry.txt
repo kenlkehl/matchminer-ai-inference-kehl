@@ -1,0 +1,4 @@
+The response failed validation. Return complete JSON matching the schema and all
+task constraints. Preserve requested names, ordering and item counts. Where evidence
+is required, use exact quotes from the supplied source text with the correct source
+references. Do not claim a documented finding without supporting evidence.

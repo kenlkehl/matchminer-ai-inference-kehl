@@ -1,0 +1,1 @@
+For EVERY page marked states_extracted, at least one state or option must cite lines from THAT page. If a page only provides routing or background without directly cited state/option evidence, use context_only with an accurate explanation instead. Do not invent a state or citation merely to satisfy coverage.

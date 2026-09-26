@@ -1,0 +1,2 @@
+The previous attempt failed validation: {error}
+Rebuild the complete JSON response following the original task and exact schema. Use only the supplied source evidence and valid source line IDs where requested.

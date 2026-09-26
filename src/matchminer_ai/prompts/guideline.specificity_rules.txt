@@ -1,0 +1,59 @@
+POPULATION SPECIFICITY: ONE CURRENT TREATMENT DECISION
+A space describes the population at ONE current treatment decision, not every treatment the patient
+might receive over the rest of the illness. A metastatic/recurrent subtype alone is insufficient
+when the supplied guideline divides its menu by treatment line, prior exposure, resistance or response.
+
+Read treatment tables, their row/column headings, branch labels and footnotes before defining the
+space. First-line, second-line and third-line-and-beyond branches with different menus are DIFFERENT
+spaces, even when cancer type, stage and receptor status are identical. Put the current treatment
+setting/line in the name and encode its source-supported treatment-history boundaries in
+prior_treatment_required / prior_treatment_excluded. cancer_burden_allowed describes disease extent,
+stage, resectability, residual disease and disease-specific prognostic risk; it must NOT contain
+treatment-line labels, counts of prior lines or prior-treatment criteria. This follows the
+MatchMiner-AI inference TrialSpace field meanings. Do not hide a population's
+defining treatment line only in option conditions or its name while leaving its nine-field definition
+broad. A first-line branch excludes prior treatment in the SOURCE-DEFINED TREATMENT SEQUENCE
+FOR THAT ADVANCED SETTING, not all prior cancer therapy. Identify whether the source counts all
+systemic therapy, endocrine-based therapy, chemotherapy or another specific sequence. First-line
+chemotherapy after endocrine therapy must NOT exclude that prior endocrine therapy. Prior
+neoadjuvant/adjuvant treatment must not be excluded merely because advanced treatment is first-line.
+A later-line label alone
+does not establish a specific failed drug, intolerance, refractory disease or progression mechanism.
+Keep prior drug/class exposure, response, resistance and timing constraints when the source specifies
+them; do not invent them. Do not count treatment in a different setting toward a line requirement.
+
+OUTPUT CONTRACT: express treatment-line boundaries as prior-treatment criteria, including BOTH
+lower and upper bounds when the source defines a bounded line or shared bin. For the SOURCE-DEFINED
+sequence and setting: second-line means exactly one prior line; second-line OR third-line means
+one OR two prior lines (not merely 'at least one'); third-line and beyond means at least two prior
+lines. First-line requires no prior line in that sequence/setting: put the treatment that must NOT
+have been received in prior_treatment_excluded, leaving prior_treatment_required as NA unless other
+prior therapy is actually required. The excluded field lists the disallowed treatment itself, NOT
+'No prior treatment', which would reverse the exclusion's meaning. Keep ordinal labels out of
+cancer_burden_allowed. Do not infer which drugs comprised prior lines from the ordinal label alone.
+
+Follow the source's actual decision branches. Split source-defined predictive biomarker branches
+(including test thresholds or prior targeted-drug exposure) when they change the available menu.
+Do not create every possible biomarker cross-product or one state per drug. Preserve a source-defined
+shared bin such as 'third line and beyond' when it has one menu; do not fabricate separate third,
+fourth and fifth lines. Option-only suitability, organ-function, availability and supportive-care
+conditions remain with the option unless the source defines a distinct disease-state branch.
+
+During consolidation, retain each explicit treatment-line/prior-exposure population. Broad routing
+pages and subtype summaries are umbrellas, not alternatives to their specific treatment branches.
+Use source pages to split a broad candidate whose option conditions reveal different treatment
+decision populations. Do not merge first-line and later-line branches back together, even if they
+share some drugs. Semantic duplicates phrased as 'Breast Cancer; Invasive' versus 'Invasive Breast
+Cancer' do not justify parallel umbrella states. Before finishing, compare source treatment-line
+branches with the actual nine-field definitions: a meaningful distinction only in the name is lost.
+
+In a detail record, include the COMPLETE menu for the CURRENT defined population only. Treatments
+after a future progression, after another treatment line, or in a different resectability/recurrence
+state belong to a DIFFERENT space, not this menu with a hypothetical condition. Preserve alternatives
+within the present state. An option condition cannot override or contradict the canonical definition.
+If the fixed definition is still too broad to locate one source-defined treatment decision, explicitly
+report that granularity gap in uncertainties; do not pretend the all-lines menu is a specific state.
+
+These specificity rules REFINE THE ACTIVE TASK'S SCOPE; they never widen it. Extraction is anchored
+to PRIMARY pages. Consolidation refines only the supplied clinical populations, not every population
+mentioned in background pages. Detail generation remains within its one fixed canonical definition.

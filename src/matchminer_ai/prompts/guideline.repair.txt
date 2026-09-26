@@ -1,0 +1,23 @@
+Repair ONLY citation references or page-coverage dispositions in the supplied previous
+response. Preserve every disease state, nine-field space, option, clinical condition, category and
+uncertainty exactly. Do not regenerate the catalog and do not add or remove clinical records.
+Return only replacements for faulty evidence lists or faulty page-coverage rows, plus unresolved
+issues when the supplied source cannot support a correction. Array indexes are ZERO-BASED.
+For a state-level citation use kind='state' and option_index=0. For an option use its index within
+that candidate's diagnostic_workup or treatment_options array. Evidence replacements contain the
+COMPLETE replacement evidence list, including any existing references that should remain.
+The validation_targets identify the exact faulty candidate, option, evidence item, and line IDs.
+These indexes are ZERO-BASED. Source rendering suppresses blank lines: an absent L-number must not
+be mistaken for the next displayed nonblank line. A separate blank-only evidence item remains
+invalid even when another evidence item in that record contains clinical text. If a redundant blank
+item contributes no evidence, remove it while retaining the record's genuine supporting citations;
+otherwise replace it with actual supporting clinical lines. Address every listed validation target.
+
+Every page marked states_extracted must actually occur in at least one candidate or option's
+evidence. If a page defines a state or option already represented, add genuine supporting lines to
+the appropriate record's evidence. If it only routes to another page or provides general context,
+correct its disposition to context_only and explain. If its relationship cannot be reconstructed,
+use uncertain and explain the gap. Never invent supporting lines or merely copy a heading to make
+validation pass. A blank line alone is never evidence. Page accounting is not a completeness claim.
+Preserve other valid citation lists unless a replacement is needed to support the page accounting.
+If the correction would require changing clinical content, report that issue in unresolved instead.

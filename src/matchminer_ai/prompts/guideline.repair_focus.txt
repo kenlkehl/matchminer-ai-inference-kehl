@@ -1,0 +1,6 @@
+FOCUSED SOURCE PAGES FOR THE REJECTED CITATIONS (verbatim repeats):
+{pages}
+
+FINAL REPAIR ASSIGNMENT — THESE REFERENCES ARE REJECTED, NOT SUGGESTED ANSWERS:
+{targets}
+Replace the faulty references using actual displayed L-numbered clinical text that supports the specified population and option. Do NOT echo rejected line IDs unchanged as a correction. Lines marked blank or nonexistent cannot support the option. The candidate and option indexes above are exact: copy those indexes, not the rejected evidence. Other supplied pages may support a valid replacement. Preserve clinical content. Return only the evidence_replacements, coverage_replacements, and unresolved fields required by the repair schema.

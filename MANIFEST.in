@@ -1,0 +1,2 @@
+include scripts/convert_guidelines.py
+include scripts/README.md

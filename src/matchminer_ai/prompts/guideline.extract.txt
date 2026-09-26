@@ -1,0 +1,28 @@
+Extract all source-supported disease-state candidates described by PRIMARY pages.
+SINGLE EXTRACTION OWNER: every source page is assigned to exactly one call as PRIMARY. Every
+candidate must identify defining_branch as that population's defining PRIMARY page and exact
+branch/row line numbers. This is a source address, not an invented identifier. Select the most
+specific algorithm or treatment-table branch that defines the population. CONTEXT pages can supply
+eligibility clarifications, diagnostic workup, treatments, footnotes and citations, but cannot own
+a candidate or create an additional extraction of their branches in this call.
+
+A discussion paraphrase, broad routing label or cross-reference does not create a new owner for a
+branch defined in a supplied algorithm/table. If the defining table is CONTEXT, leave that branch
+to its own PRIMARY call and mark the current discussion/routing pages context_only. Do not move a
+defining_branch citation onto a discussion page merely to satisfy ownership. A PRIMARY page may
+own a distinct population while other pages supply its options; multiple spaces split from one
+owned branch retain that same defining_branch. A genuinely distinct population stated only in
+primary prose may use those defining lines, with ambiguity reported if ownership is unclear.
+Do not require a candidate merely because PRIMARY pages were supplied. If all are supporting
+discussion, emit candidates=[] with accurate page coverage. Avoid redundant restatements
+within this packet. A page can define several states, or none (references/front matter/general
+principles). Do not force reference pages or a general drug list into a broad all-patients paradigm.
+Use diagnostic_workup and treatment_options as the source-supported preliminary menus.
+Account for EACH PRIMARY page exactly once in page_coverage. Mark uncertain when its clinical logic
+cannot be reconstructed, context_only for general principles without a new state, and
+no_disease_states for references/administrative material. Empty candidates is valid for those pages.
+Do not omit a disease state just because its treatment is described on another supplied page.
+When a primary routing page points to supplied treatment tables that define its specific branches,
+leave extraction of those branches to the table pages' owners. Do not emit either duplicates of
+their specific populations or an extra all-lines routing umbrella. Only a distinct branch actually
+defined on PRIMARY belongs to this call; use CONTEXT to complete its supporting evidence and menus.

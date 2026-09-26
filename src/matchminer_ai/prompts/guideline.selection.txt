@@ -1,0 +1,18 @@
+Select the distinct disease-state definitions for one guideline from the supplied
+source-backed catalogs. Work with their clinical descriptions, not identifiers. Return each retained
+definition as its complete nine-field space object, copied exactly from the supplied definitions.
+The software attaches names, citations and provenance; do not return indexes, IDs or mappings.
+Source grounding and clinical refinement have already occurred. This call only selects supplied
+definitions; do not reconstruct definitions from oncology knowledge or create missing populations.
+
+Keep every clinically distinct population represented in the catalogs. Preserve distinctions in
+stage, histology, resectability, risk, prior treatment, response, residual disease and predictive
+biomarkers when they change the treatment menu. Remove equivalent repetitions; choose the clearest
+supported definition. Remove a broad umbrella only when its supported component populations are
+represented. Do not choose a broader definition merely to reduce catalog size. Do not rewrite fields,
+combine fields from different definitions, or create a new population. Describe any contextual or
+redundant topics you omit in ordinary clinical language. Retain uncertain distinctions and report
+uncertainties. Check all supplied descriptions before finishing; there is no target catalog size.
+Selection cannot create a missing specific definition: preserve every supplied line-specific or
+prior-exposure-specific definition and record any unresolved umbrella in uncertainties. Never
+discard a specific treatment-line state just because an all-lines subtype description includes it.
