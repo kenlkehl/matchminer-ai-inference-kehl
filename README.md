@@ -89,6 +89,30 @@ signals, not a new eligibility or treatment score.
 For detailed instructions, please see the
 [documentation website](https://dfci.github.io/matchminer-ai-inference/).
 
+The opt-in `matchminer_ai.trials.summarize_guidelines` API extracts canonical
+TrialSpace populations, diagnostic workup, and treatment menus from a locally
+supplied guideline library using a configured remote LLM. See the
+[guideline extraction guide](docs/user-guide/guideline-extraction.md).
+The package contains conversion/extraction code and synthetic tests only; it
+does not include NCCN PDFs, guideline text, or generated catalogs. Source-derived
+outputs and checkpoints must be written outside the code repository.
+Existing catalogs can also be queried by exact space using
+`trials.get_guideline_considerations`, or ranked for patient summaries using
+`matching.retrieve_guideline_considerations` (TrialSpace retrieval followed by
+TrialChecker ranking). These APIs return the stored diagnostic and treatment
+menus with their conditions, citations, and uncertainties.
+Pass `embedding_cache_dir` to the retrieval API to persist and reuse compatible
+guideline embeddings across requests and restarts; patient vectors are not cached.
+Validated guideline files also reuse an in-memory cache until their catalog,
+completion status, or audit files change, avoiding repeated reads and validation.
+
+`patients.review_patient_workup` reviews a retrieved diagnostic/workup list against
+one patient's raw notes in chronological token chunks. It returns JSON-compatible
+per-item statuses, applicability, bottom lines and validated verbatim note evidence.
+This opt-in documentation review uses the patient remote LLM configuration, not
+the patient summary, and writes no patient checkpoints. See the
+[patient API guide](docs/api/patients.md#workup-documentation-review).
+
 ## Ontology attribution
 
 The optional structured patient-summary and trial-space workflows bundle and

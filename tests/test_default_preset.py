@@ -1,40 +1,24 @@
 from matchminer_ai.config import load_default_preset
 
 
-def test_default_preset_matches_training_runtime_defaults():
-    """Keep public inference defaults aligned with the training scripts."""
+def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
+    """Resolve vendor sampling without changing the dated matching model family."""
     config = load_default_preset()
 
     assert config.local == {}
     assert config.trial["local"]["model_name"] == "google/gemma-4-31B-it"
     assert config.trial["local"]["engine"]["max_model_len"] == 30000
-    assert config.trial["local"]["generation"] == {
-        "temperature": 1.0,
-        "top_p": 0.95,
-        "top_k": 20,
-        "min_p": 0.0,
-        "presence_penalty": 1.5,
-        "max_tokens": 20000,
-        "repetition_penalty": 1.0,
-        "skip_special_tokens": False,
-    }
+    from matchminer_ai.llm.backends import build_llm_runtime_config
 
-    assert config.trial["remote"] == {
-        "model_name": "google/gemma-4-31B-it",
-        "request_params": {
-            "max_tokens": 20000,
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "presence_penalty": 1.5,
-        },
-        "extra_body": {
-            "top_k": 20,
-            "min_p": 0.0,
-            "repetition_penalty": 1.0,
-            "skip_special_tokens": False,
-            "chat_template_kwargs": {"enable_thinking": True},
-        },
-    }
+    for name in ("trial", "patient", "llm_match_quality", "llm_exclusion_criteria"):
+        stage = getattr(config, name)
+        local = build_llm_runtime_config(name, stage, config=config)
+        assert local["sampling_params"]["temperature"] == 1.0
+        assert local["sampling_params"]["top_p"] == 0.95
+        assert local["sampling_params"]["top_k"] == 64
+        assert local["chat_template_kwargs"] == {"enable_thinking": True}
+        assert stage["reasoning_effort"] == "xhigh"
+    assert config.remote["max_concurrent_requests"] == 32
 
     assert config.patient["local"]["model_name"] == "google/gemma-4-31B-it"
     assert config.patient["remote"]["model_name"] == "google/gemma-4-31B-it"
@@ -42,8 +26,6 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.patient["local"]["engine"]["max_model_len"] == 100000
     assert config.patient["chunk_size"] == 50000
     assert config.patient["chunk_overlap"] == 500
-    assert config.patient["local"]["generation"]["temperature"] == 0.0
-    assert config.patient["local"]["generation"]["top_k"] == 1
     assert config.patient["local"]["generation"]["max_tokens"] == 20000
     assert config.raw_patient_note_qa["embedding_model_name"] == (
         "Qwen/Qwen3-Embedding-0.6B"
@@ -117,7 +99,6 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.llm_match_quality["local"]["engine"]["max_model_len"] == 50000
     assert config.llm_match_quality["local"]["model_name"] == "google/gemma-4-31B-it"
     assert config.llm_match_quality["remote"]["model_name"] == "google/gemma-4-31B-it"
-    assert config.llm_match_quality["local"]["generation"]["temperature"] == 0.0
     assert config.llm_match_quality["local"]["generation"]["max_tokens"] == (15000)
     assert config.llm_exclusion_criteria["local"]["engine"]["max_model_len"] == 50000
     assert config.llm_exclusion_criteria["local"]["model_name"] == (
@@ -126,7 +107,6 @@ def test_default_preset_matches_training_runtime_defaults():
     assert config.llm_exclusion_criteria["remote"]["model_name"] == (
         "google/gemma-4-31B-it"
     )
-    assert config.llm_exclusion_criteria["local"]["generation"]["temperature"] == 0.0
     assert config.llm_exclusion_criteria["local"]["generation"]["max_tokens"] == 20000
     assert config.llm_good_option["local"]["engine"]["max_model_len"] == 262144
     assert config.llm_good_option["local"]["generation"]["max_tokens"] == 100000
@@ -158,13 +138,16 @@ def test_default_preset_matches_training_runtime_defaults():
         "device": "cuda",
         "max_length": 8192,
     }
-    assert config.llm_match_quality["remote"]["request_params"] == {
+    config.remote["enabled"] = True
+    remote = build_llm_runtime_config(
+        "llm_match_quality", config.llm_match_quality, config=config
+    )
+    assert remote["remote"]["request_params"] == {
         "max_tokens": 15000,
-        "temperature": 0.0,
-        "top_p": 1.0,
-        "presence_penalty": 0.0,
+        "temperature": 1.0,
+        "top_p": 0.95,
     }
-    assert config.llm_match_quality["remote"]["extra_body"]["top_k"] == 1
+    assert remote["remote"]["extra_body"]["top_k"] == 64
     assert config.help_me_choose["local"]["generation"]["max_tokens"] == 6000
     assert config.help_me_choose["remote"]["request_params"]["max_tokens"] == 6000
     assert config.help_me_choose["local"]["generation"]["repetition_penalty"] == 1.1

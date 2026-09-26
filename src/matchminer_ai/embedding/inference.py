@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from importlib import resources
+from importlib.metadata import version
+import json
+from pathlib import Path
 from typing import Any, Dict, cast
 
 from matchminer_ai.llm.backends import get_model_metadata
@@ -148,6 +151,50 @@ def count_embedding_tokens(
     encoded = tokenizer(prepared, add_special_tokens=True, truncation=False)
     input_ids = encoded["input_ids"] if isinstance(encoded, dict) else encoded.input_ids
     return [len(ids) for ids in input_ids]
+
+
+def _embedding_cache_identity(embedding_config, model_metadata):
+    """Identify the already-loaded encoder, not just a mutable Hub model name."""
+    from matchminer_ai._storage import digest
+
+    model_path, device, prompt, length = _resolve_embedding_runtime(embedding_config)
+    # A local directory can be changed in place without an immutable revision.
+    if Path(model_path).exists():
+        return None
+    model = _get_embedding_model(model_path, device, prompt, length)
+    first = model._first_module()
+    revision = getattr(
+        getattr(getattr(first, "auto_model", None), "config", None),
+        "_commit_hash",
+        None,
+    )
+    tokenizer = getattr(first, "tokenizer", None)
+    if not revision or not hasattr(tokenizer, "backend_tokenizer"):
+        return None
+    tokenization = json.loads(tokenizer.backend_tokenizer.to_str())
+    # These fields are modified by each encode batch; the cutoff is captured below.
+    tokenization.pop("padding", None)
+    tokenization.pop("truncation", None)
+    return {
+        "schema": 1,
+        "model_path": model_path,
+        "loaded_revision": revision,
+        "reported_model_metadata": model_metadata,
+        "tokenizer_sha256": digest(tokenization),
+        "special_tokens": tokenizer.special_tokens_map,
+        "prompt": prompt,
+        "max_seq_length": length,
+        "modules": [
+            {"class": type(module).__name__, "config": module.get_config_dict()}
+            for module in model._modules.values()
+            if hasattr(module, "get_config_dict")
+        ],
+        "implementation_sha256": digest(Path(__file__).read_bytes()),
+        "libraries": {
+            name: version(name)
+            for name in ("sentence-transformers", "transformers", "torch")
+        },
+    }
 
 
 __all__ = [

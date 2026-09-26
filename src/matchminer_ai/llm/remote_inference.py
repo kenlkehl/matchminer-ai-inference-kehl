@@ -76,11 +76,12 @@ def build_remote_request_config(
     Task-level ``remote`` config specifies exactly which API-facing fields to
     send. ``request_params`` and ``extra_body`` are pass-through mappings.
     """
-    task_remote_config = dict(llm_config.get("remote", {}))
-    extra_body = dict(task_remote_config.get("extra_body", {}))
+    from .sampling import remote_sampling
+
+    request_params, extra_body = remote_sampling(llm_config)
     if remote_provider_name(llm_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
         extra_body = {}
-    return (dict(task_remote_config.get("request_params", {})), extra_body)
+    return request_params, extra_body
 
 
 def request_params_for_prompt(

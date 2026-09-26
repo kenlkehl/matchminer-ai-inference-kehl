@@ -20,7 +20,9 @@ from matchminer_ai.matching import (
     generate_candidate_matches,
     interpret_exclusion_criteria,
     interpret_match_quality,
+    retrieve_guideline_considerations,
     score_match_quality,
+    write_guideline_considerations_report,
 )
 from matchminer_ai.paradigms import (
     PatientParadigmRankingResult,
@@ -30,13 +32,19 @@ from matchminer_ai.patients import (
     answer_question_with_raw_patient_notes,
     concatenate_patient_note_pdfs,
     full_patient_screen,
+    review_patient_workup,
     structure_patient_summaries,
     structure_patient_summary,
     summarize_patients,
 )
 from matchminer_ai.trials import (
+    audit_guideline_catalog,
     extract_trial_space_eligibility_criteria,
+    get_guideline_considerations,
+    list_guidelines,
+    load_guideline_catalog,
     structure_trial_space,
+    summarize_guidelines,
     summarize_trials,
 )
 
@@ -74,3 +82,11 @@ def test_imports():
     assert interpret_exclusion_criteria is not None
     assert contextualize_trial_spaces is not None
     assert personalize_trial_space_context is not None
+    assert summarize_guidelines is not None
+    assert list_guidelines is not None
+    assert audit_guideline_catalog is not None
+    assert load_guideline_catalog is not None
+    assert get_guideline_considerations is not None
+    assert retrieve_guideline_considerations is not None
+    assert write_guideline_considerations_report is not None
+    assert review_patient_workup is not None

@@ -191,6 +191,8 @@ class LocalBackend:
                 "prompt_build_workers",
                 "model_metadata_cache_dir",
                 "vllm_server_args",
+                "sampling_profile",
+                "reasoning_effort",
             }
         }
         sampling_params = dict(llm_config["sampling_params"])
@@ -380,6 +382,30 @@ def build_llm_runtime_config(
         runtime_config["sampling_params"] = generation_config
         if local_chat_template_kwargs is not None:
             runtime_config["chat_template_kwargs"] = dict(local_chat_template_kwargs)
+    if runtime_config["backend_mode"] == "local":
+        from .sampling import vendor_defaults
+
+        defaults, template = vendor_defaults(
+            runtime_config["model_name"],
+            profile=runtime_config.get("sampling_profile", "none"),
+            template=runtime_config.get("chat_template_kwargs"),
+            reasoning_effort=runtime_config.get("reasoning_effort", "xhigh"),
+        )
+        runtime_config["sampling_params"] = {**defaults, **generation_config}
+        if template:
+            runtime_config["chat_template_kwargs"] = template
+    else:
+        from .remote_inference import build_remote_request_config
+
+        params, extra = build_remote_request_config(runtime_config)
+        runtime_config["remote"] = {
+            **task_remote_config,
+            "request_params": params,
+            "extra_body": extra,
+        }
+        runtime_config["sampling_params"] = params
+        if extra.get("chat_template_kwargs"):
+            runtime_config["chat_template_kwargs"] = extra["chat_template_kwargs"]
     return runtime_config
 
 

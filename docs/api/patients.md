@@ -7,6 +7,7 @@
         - concatenate_patient_note_pdfs
         - full_patient_screen
         - summarize_patients
+        - review_patient_workup
         - structure_patient_summaries
         - structure_patient_summary
 
@@ -193,3 +194,55 @@ may then apply its own continuous batching. Local mode passes each ready prompt
 wave directly to the in-process vLLM engine as one prompt list. Later ontology
 steps remain dependent on earlier model outputs, so the workflow uses several
 batched waves rather than one flat request.
+
+## Workup documentation review
+
+```python
+from matchminer_ai.patients import review_patient_workup
+
+review = review_patient_workup(
+    raw_notes,                       # single-patient note DataFrame or raw string
+    matched_space["diagnostic_workup"],
+    config=config,                  # patient LLM config; remote.enabled=True
+    population_context=matched_space["clinical_space_summary"],  # guideline target, not patient facts
+    progress_callback=print,
+)
+```
+
+This opt-in workflow reviews **all** raw notes serially, carrying forward a running
+JSON assessment for every recommendation. It is independent of patient summarization;
+no patient summary or vector retrieval is used as evidence. DataFrames accept
+`note_text`, optional `note_date`, and optional single-valued `patient_id`. Dates
+are validated and stably sorted; undated notes follow dated notes without assuming
+that their events happened later. String input has no structured date provenance.
+Repeated sentences are retained so dated evidence and contradictions are not lost.
+
+The result contains `assessments`, `notice`, and `metadata`. Each assessment retains
+the original recommendation and its zero-based input index, plus `status`
+(`completed`, `partially_completed`, `planned`, `not_done`, `not_documented`, `unclear`),
+`applicability` (`applies`, `not_applicable`, `uncertain`), `bottom_line`, and
+`evidence` (`note_number`, code-assigned `note_date`, verbatim `quote`). Note numbers
+are one-based chronological positions. Evidence is validated against the current
+fragments or previously accepted quotes; prior evidence survives later updates.
+Quotation validation verifies provenance, not clinical interpretation.
+
+Uses patient model, vendor sampling and reasoning settings (xhigh by default).
+Requires one OpenAI-compatible remote endpoint with `/tokenize` and advertised
+`max_model_len`, or explicit `patient.context_window`; `patient.tokenizer_mode=bytes`
+is an explicit conservative fallback for providers without `/tokenize`.
+The full advertised context is available, reserving the configured patient
+`remote.request_params.max_tokens` (20,000 by default). Chunk size/overlap default
+to patient settings (50,000/500); optional function overrides and
+`recommendation_batch_size=6` bound each serial request. Oversized prompts split
+note packets further, never silently truncate notes or reduce output capacity.
+The model returns ordered natural-language names, not catalog IDs.
+
+Requests and responses stay in memory; no patient checkpoints or reasoning traces
+are returned or written. Three bounded attempts reject incomplete, malformed or
+ungrounded output. Provider and validation errors are not echoed with patient text.
+The configured endpoint receives raw notes and must be authorized for the input.
+
+This is a documentation review for human review, **not an overall guideline
+concordance determination**. Not documented does not mean not done. Conditional
+indications, compound items, alternatives, historical tests, timing and conflicting
+evidence need clinical review. Treatment-concordance assessment is not included.

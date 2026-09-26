@@ -27,6 +27,7 @@ from .pdf import (
 )
 from .structure import structure_patient_summaries, structure_patient_summary
 from .summarize import summarize_patient_notes
+from .workup import review_patient_workup
 
 
 def summarize_patients(
@@ -205,6 +206,7 @@ __all__ = [
     "full_patient_screen",
     "structure_patient_summaries",
     "structure_patient_summary",
+    "review_patient_workup",
     "summarize_patient_notes",
     "summarize_patients",
 ]

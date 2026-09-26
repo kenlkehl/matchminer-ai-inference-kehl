@@ -18,6 +18,8 @@ from .llm_checks import exclusion_criteria_check_with_llm
 from .llm_checks import score_match_quality_with_llm
 from .match import generate_candidate_matches
 from .rerank import interpret_match_quality, score_match_quality
+from .guidelines import retrieve_guideline_considerations
+from .guideline_report import write_guideline_considerations_report
 
 __all__ = [
     "DEFAULT_CUTOFF_PATIENTS_PER_SIDE",
@@ -36,6 +38,8 @@ __all__ = [
     "interpret_match_quality",
     "score_match_quality",
     "score_match_quality_with_llm",
+    "retrieve_guideline_considerations",
+    "write_guideline_considerations_report",
 ]
 
 

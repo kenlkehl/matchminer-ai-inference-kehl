@@ -6,12 +6,14 @@ remote:
   provider: openai
   server_urls:
     - http://localhost:8000/v1
-  max_concurrent_requests: 16
+  max_concurrent_requests: 32
   request_timeout: 600
   max_retries: 6
   batch_size: 1000
   retry_backoff_base: 1.0
 trial:
+  sampling_profile: auto
+  reasoning_effort: xhigh
   reasoning_parser: auto
   local:
     model_name: google/gemma-4-31B-it
@@ -23,25 +25,13 @@ trial:
     chat_template_kwargs:
       enable_thinking: true
     generation:
-      temperature: 1.0
-      top_p: 0.95
-      top_k: 20
-      min_p: 0.0
-      presence_penalty: 1.5
       max_tokens: 20000
-      repetition_penalty: 1.0
       skip_special_tokens: false
   remote:
     model_name: google/gemma-4-31B-it
     request_params:
       max_tokens: 20000
-      temperature: 1.0
-      top_p: 0.95
-      presence_penalty: 1.5
     extra_body:
-      top_k: 20
-      min_p: 0.0
-      repetition_penalty: 1.0
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
@@ -50,6 +40,8 @@ trial:
     question: trial.user.question.txt
   boilerplate_marker: Boilerplate exclusions
 patient:
+  sampling_profile: auto
+  reasoning_effort: xhigh
   reasoning_parser: auto
   chunk_size: 50000
   chunk_overlap: 500
@@ -64,26 +56,14 @@ patient:
     chat_template_kwargs:
       enable_thinking: true
     generation:
-      temperature: 0.0
-      top_k: 1
-      top_p: 1.0
-      presence_penalty: 0.0
-      min_p: 0.0
       max_tokens: 20000
-      repetition_penalty: 1.1
       skip_special_tokens: false
   remote:
     model_name: google/gemma-4-31B-it
     tokenizer_name: google/gemma-4-31B-it
     request_params:
       max_tokens: 20000
-      temperature: 0.0
-      top_p: 1.0
-      presence_penalty: 0.0
     extra_body:
-      top_k: 1
-      min_p: 0.0
-      repetition_penalty: 1.1
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
@@ -312,6 +292,8 @@ exclusion_criteria:
   prompt_file: exclusion_criteria_checker_template.txt
   max_length: 3192
 llm_match_quality:
+  sampling_profile: auto
+  reasoning_effort: xhigh
   reasoning_parser: auto
   local:
     model_name: google/gemma-4-31B-it
@@ -323,30 +305,20 @@ llm_match_quality:
     chat_template_kwargs:
       enable_thinking: true
     generation:
-      temperature: 0.0
-      top_k: 1
-      top_p: 1.0
-      presence_penalty: 0.0
-      min_p: 0.0
       max_tokens: 15000
-      repetition_penalty: 1.1
       skip_special_tokens: false
   remote:
     model_name: google/gemma-4-31B-it
     request_params:
       max_tokens: 15000
-      temperature: 0.0
-      top_p: 1.0
-      presence_penalty: 0.0
     extra_body:
-      top_k: 1
-      min_p: 0.0
-      repetition_penalty: 1.1
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
   prompt_file: llm_match_quality.user.txt
 llm_exclusion_criteria:
+  sampling_profile: auto
+  reasoning_effort: xhigh
   reasoning_parser: auto
   local:
     model_name: google/gemma-4-31B-it
@@ -358,25 +330,13 @@ llm_exclusion_criteria:
     chat_template_kwargs:
       enable_thinking: true
     generation:
-      temperature: 0.0
-      top_k: 1
-      top_p: 1.0
-      presence_penalty: 0.0
-      min_p: 0.0
       max_tokens: 20000
-      repetition_penalty: 1.1
       skip_special_tokens: false
   remote:
     model_name: google/gemma-4-31B-it
     request_params:
       max_tokens: 20000
-      temperature: 0.0
-      top_p: 1.0
-      presence_penalty: 0.0
     extra_body:
-      top_k: 1
-      min_p: 0.0
-      repetition_penalty: 1.1
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
@@ -573,5 +533,25 @@ patient_contextualization:
       min_p: 0.0
       repetition_penalty: 1.05
       skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
+
+# Source-grounded disease-state catalogs from locally supplied guideline libraries.
+# Remote only; no guidelines or generated catalogs are distributed with the package.
+guideline:
+  sampling_profile: auto
+  reasoning_effort: xhigh
+  packet_pages: 8
+  context_window: null  # Discover the full max_model_len; otherwise set explicitly.
+  safety_tokens: 2048
+  tokenizer_mode: endpoint  # vLLM /tokenize; explicit bytes fallback for other servers.
+  response_format: json_schema
+  stream: true
+  api_key_env: OPENAI_API_KEY
+  remote:
+    model_name: null  # Discover the served model from /v1/models.
+    request_params:
+      max_tokens: 100000
+    extra_body:
       chat_template_kwargs:
         enable_thinking: true

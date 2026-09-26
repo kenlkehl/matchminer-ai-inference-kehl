@@ -22,6 +22,7 @@ nav:
       - Patient-centric matching workflow: user-guide/patient-centric-matching.md
       - How the Good Options pipeline works: user-guide/good-options-pipeline.md
       - Choosing an Inference Setup: user-guide/local-vs-remote.md
+      - Guideline extraction: user-guide/guideline-extraction.md
   - Reference:
       - Configuration: reference/configuration.md
       - QC Metrics: reference/qc-metrics.md
@@ -36,6 +37,7 @@ nav:
       - Candidate Matching: api/candidate-matching.md
       - Match Quality: api/match-quality.md
       - Space-paradigm Roll-up: api/space-paradigms.md
+      - Guideline Consideration Retrieval: api/guideline-retrieval.md
       - Exclusion Criteria: api/exclusion-criteria.md
       - Trial-space Contextualization: api/contextualization.md
       - Good Option Research and Scoring: api/good-options.md

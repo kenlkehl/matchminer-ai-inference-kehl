@@ -5,6 +5,11 @@
       members:
         - extract_trial_space_eligibility_criteria
         - summarize_trials
+        - list_guidelines
+        - summarize_guidelines
+        - audit_guideline_catalog
+        - load_guideline_catalog
+        - get_guideline_considerations
         - structure_trial_space
 
 `summarize_trials` preserves source-field formatting and starts newly generated

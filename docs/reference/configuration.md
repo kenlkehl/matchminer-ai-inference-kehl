@@ -23,6 +23,14 @@ config.remote["server_urls"] = ["http://localhost:8000/v1"]
 
 ## Custom Config Files
 
+The optional guideline extractor uses `config.guideline` with the same task-level
+`remote.model_name`, `remote.request_params`, and `remote.extra_body` structure.
+It requires shared remote mode and writes to an explicit external output directory.
+See [guideline extraction](../user-guide/guideline-extraction.md) for context,
+output reserve, reasoning, concurrency, and source-provenance settings. Existing
+custom YAML files without a `guideline` section continue to load; copy that section
+from the default preset before using this optional API.
+
 For package installs, treat the built-in preset files as read-only package data.
 For larger or reusable changes, copy the default preset values into a YAML file
 in your project, edit them, and load that file by path:
@@ -132,7 +140,10 @@ include reasoning text in `message.content` are not currently supported.
 
 ### `remote.max_concurrent_requests`
 
-Maximum number of concurrent requests per remote server.
+Maximum number of concurrent requests per remote server; default 32. Guideline
+clients in one Python process share this cap across diseases for the same endpoint.
+Independent processes have separate caps, so use the collection runner rather
+than launching multiple independent 32-request processes.
 
 ### `remote.request_timeout`
 
@@ -151,6 +162,58 @@ Number of prompts processed per remote-server batch.
 ### `remote.retry_backoff_base`
 
 Base value, in seconds, for exponential retry backoff.
+
+## Model-aware sampling and reasoning
+
+The default preset sets `sampling_profile: auto` and `reasoning_effort: xhigh`
+on every LLM stage: `trial`, `patient`, `llm_match_quality`,
+`llm_exclusion_criteria`, and `guideline`. The selected model determines defaults
+for both in-process vLLM and OpenAI-compatible vLLM requests. Quantized model IDs
+containing the same family name are recognized. Guideline discovery applies the
+profile after `/v1/models` identifies the actual served model.
+
+| Model / mode | Temperature | Top-p | Top-k | Other sampling defaults |
+| --- | ---: | ---: | ---: | --- |
+| Gemma 4 | 1.0 | 0.95 | 64 | Engine defaults for penalties |
+| Qwen 3.8, thinking | 1.0 | 0.95 | 20 | min-p 0, presence penalty 0, repetition penalty 1 |
+| Qwen 3.8, non-thinking | 0.7 | 0.8 | 20 | min-p 0, presence penalty 1.5, repetition penalty 1 |
+
+These follow the vendor recommendations checked on 2026-09-24:
+[Google Gemma 4](https://ai.google.dev/gemma/docs/core/model_card_4),
+[Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next), and
+[Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B).
+
+Qwen defaults to thinking enabled, preserved thinking, and `xhigh` effort.
+Supported effort values are `xhigh`, `medium`, and `low`. Remote requests send
+`reasoning_effort` at the API level and in `chat_template_kwargs`; local prompt
+rendering and endpoint token counting use the same template setting. Gemma 4
+supports thinking enabled/disabled, not graded reasoning effort: its profile
+sets `enable_thinking: true` and does not invent an `xhigh` control.
+
+Explicit `local.generation`, `local.chat_template_kwargs`,
+`remote.request_params`, and `remote.extra_body` values override profile defaults.
+To turn thinking off, set the applicable `chat_template_kwargs.enable_thinking`
+to false. The Qwen profile then selects the non-thinking sampling defaults.
+Set a stage's `sampling_profile` to `none` to use entirely explicit settings;
+`gemma4` and `qwen3.8` also allow explicit family selection for endpoint aliases.
+Unknown model families receive no automatic vendor settings. Existing custom
+configs without `sampling_profile` keep their explicit behavior.
+
+This intentionally replaces the earlier preset's greedy patient/checker LLM
+sampling and mismatched Gemma top-k. Matching model versions, output budgets,
+and clinical prompts are unchanged. Existing generated artifacts retain their
+original settings; changed extraction settings require a fresh run directory.
+
+```python
+config = load_default_preset()
+config.remote["enabled"] = True
+config.remote["server_urls"] = ["http://your-server:8001/v1"]
+config.remote["max_concurrent_requests"] = 32
+config.trial["remote"]["model_name"] = "Qwen/Qwen3.8-Flash-Next"
+# For patient summarization, update both model_name and tokenizer_name.
+# Optional explicit override:
+config.trial["remote"]["request_params"]["reasoning_effort"] = "medium"
+```
 
 ## `trial`
 
@@ -197,10 +260,10 @@ Task-specific remote chat completion request settings:
 - `extra_body`: provider-specific fields sent as request `extra_body` when
   non-empty.
 
-The package interprets `model_name`. Values inside `request_params` and
-`extra_body` are pass-through: the package does not validate those keys, and
-the OpenAI client or remote endpoint is responsible for accepting or rejecting
-them.
+The package interprets `model_name` and fills missing values from the selected
+sampling profile. Explicit values inside `request_params` and
+`extra_body` otherwise pass through; the Qwen profile validates its supported
+reasoning levels. The OpenAI client or remote endpoint validates other API fields.
 
 ### `trial.boilerplate_marker`
 

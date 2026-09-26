@@ -14,6 +14,8 @@ from .eligibility import (
     extract_trial_space_eligibility_criteria,
 )
 from .structure import structure_trial_space
+from .guidelines import audit_guideline_catalog, list_guidelines, summarize_guidelines
+from .guideline_catalog import load_guideline_catalog, get_guideline_considerations
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -168,6 +170,11 @@ __all__ = [
     "extract_trial_space_eligibility_criteria",
     "structure_trial_space",
     "summarize_trials",
+    "summarize_guidelines",
+    "list_guidelines",
+    "audit_guideline_catalog",
+    "load_guideline_catalog",
+    "get_guideline_considerations",
 ]
 
 
