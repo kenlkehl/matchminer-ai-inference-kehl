@@ -8,6 +8,9 @@ from matchminer_ai._storage import atomic_json
 
 from . import _guideline_prompts as prompts
 from ._guideline_context import ContextBudgetError, pack_messages
+from ._guideline_completeness import (
+    CoverageError, RETRY_TASK, require_coverage, review_coverage,
+)
 from ._guideline_schema import (
     EVIDENCE,
     SPACE,
@@ -226,6 +229,26 @@ def build_selection_call(client, guideline, states):
 def consolidate(
     client, guideline, candidates, output, workers, run_jobs, log, context_chars=None
 ):
+    def covered_complete(key, messages, schema, validate, inputs, states_from):
+        def guarded(value):
+            validate(value)
+            log(f"{guideline.disease}: checking population coverage for {key}")
+            report = review_coverage(client, inputs, states_from(value))
+            atomic_json(output / "population_coverage" / f"{key}.json", report)
+            require_coverage(report)
+
+        try:
+            return client.complete(key, messages, schema, guarded)
+        except CoverageError as error:
+            # An older accepted checkpoint is revalidated before the client's
+            # retry loop. Preserve it as evidence and request a corrected full
+            # catalog under a distinct request fingerprint, on the same endpoint.
+            return client.complete(
+                key + "-restore-populations",
+                [*messages, {"role": "user", "content": RETRY_TASK + "\n\n" + str(error)}],
+                schema, guarded,
+            )
+
     def metadata(packed):
         context, omitted, messages = packed
         return {
@@ -243,11 +266,13 @@ def consolidate(
     def local(key, data):
         members, packed = data
         pages = {p.id: p for p in packed[0]}
-        value = client.complete(
+        value = covered_complete(
             key,
             packed[2],
             CATALOG,
             lambda v: validate_catalog(v, pages, guideline.metadata["title"]),
+            members,
+            lambda v: v["states"],
         )
         return {
             "result": value,
@@ -285,10 +310,12 @@ def consolidate(
     }
     if len(planned) > 1:
         packed = build_selection_call(client, guideline, states)
-        selected = client.complete(
+        selected = covered_complete(
             "catalog-select-content",
             packed[2],
             SELECTION,
+            lambda v: selected_states(v, states),
+            states,
             lambda v: selected_states(v, states),
         )
         atomic_json(
@@ -299,6 +326,11 @@ def consolidate(
         topics.extend(selected["context_only_topics"])
         uncertainties.extend(selected["uncertainties"])
         context_metadata["selection"] = metadata(packed)
+    # Check the final catalog, too: cross-batch selection must not undo local
+    # coverage. Identical review requests reuse the client's validated cache.
+    coverage = review_coverage(client, candidates, states)
+    atomic_json(output / "canonical_coverage.json", coverage)
+    require_coverage(coverage)
     atomic_json(output / "canonical_context.json", context_metadata)
     return {
         "version": VERSION,

@@ -81,6 +81,11 @@ def assign_endpoints(diseases, output, endpoints, previous, new_endpoint=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument(
+        "--source-override", nargs=2, action="append", default=[],
+        metavar=("DISEASE", "SOURCE"),
+        help="Use another verified local library for one disease of the same source edition",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--endpoint", required=True)
     parser.add_argument(
@@ -158,10 +163,24 @@ def main():
             parser.error(f"Unknown diseases: {sorted(unknown)}")
         records = [row for row in records if row["disease"] in args.disease]
     # The immutable collection manifest identifies the current PDF edition.
-    from matchminer_ai.trials._guideline_sources import library_root
+    from matchminer_ai.trials._guideline_sources import library_root, safe_child
 
     manifest = json.loads((library_root(args.source) / "manifest.json").read_text())
     hashes = {row["folder"]: row.get("source_sha256") for row in manifest["guidelines"]}
+    source_overrides = {}
+    for disease, source in args.source_override:
+        if disease not in hashes or disease in source_overrides:
+            parser.error("Source overrides must name distinct diseases in the main collection")
+        alternate = library_root(Path(source).resolve())
+        alternate_manifest = json.loads((alternate / "manifest.json").read_text())
+        entries = {row["folder"]: row for row in alternate_manifest["guidelines"]}
+        if disease not in entries or entries[disease].get("source_sha256") != hashes[disease]:
+            parser.error(f"Source override for {disease} must have the identical PDF edition/hash")
+        alternate_disease = json.loads((safe_child(alternate, disease) / "manifest.json").read_text())
+        if alternate_disease.get("source_sha256") != hashes[disease]:
+            parser.error(f"Source override manifest for {disease} has a different PDF hash")
+        _output_directory(alternate, args.output_dir)
+        source_overrides[disease] = str(alternate)
     skipped = {
         row["disease"]: completed[(row["disease"], hashes[row["disease"]])]
         for row in records
@@ -178,6 +197,8 @@ def main():
             (library_root(args.source) / "manifest.json").read_bytes()
         ),
     }
+    if source_overrides:
+        identity["source_overrides"] = source_overrides
     saved = output / "collection.json"
     previous = json.loads(saved.read_text()) if saved.exists() else {}
     if previous and previous["identity"] != identity:
@@ -234,7 +255,7 @@ def main():
             disease_config = copy.deepcopy(config)
             disease_config.remote["server_urls"] = [assignments[disease]]
             frame = summarize_guidelines(
-                args.source,
+                source_overrides.get(disease, args.source),
                 disease=disease,
                 output_dir=output / disease,
                 config=disease_config,

@@ -178,3 +178,40 @@ def test_collection_dispatches_unstarted_catalog_to_replica(tmp_path, monkeypatc
     assert state["identity"]["endpoint"] == first
     assert state["new_disease_endpoint"] == second
     assert state["diseases"]["fictional"]["endpoint"] == second
+
+
+def test_verified_source_override_preserves_endpoint_and_requires_same_edition(tmp_path, monkeypatch):
+    root = make_library(tmp_path / "original")
+    alternate = make_library(tmp_path / "verified")
+    for library in (root, alternate):
+        source_hash = json.loads((library / "fictional/manifest.json").read_text())["source_sha256"]
+        manifest_path = library / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["guidelines"][0]["source_sha256"] = source_hash
+        manifest_path.write_text(json.dumps(manifest))
+    output = tmp_path / "fresh-results"
+    module = runner_module()
+    calls = []
+
+    def summarize(source, *, disease, output_dir, config, progress_callback):
+        calls.append((str(source), disease, config.remote["server_urls"]))
+        return [1]
+
+    monkeypatch.setattr(module, "summarize_guidelines", summarize)
+    monkeypatch.setattr(sys, "argv", [
+        "runner", "--source", str(root), "--output-dir", str(output),
+        "--endpoint", "http://chosen.invalid:8001/v1", "--source-override", "fictional", str(alternate),
+    ])
+    assert module.main() is False
+    assert calls == [(str(alternate.resolve()), "fictional", ["http://chosen.invalid:8001/v1"])]
+    identity = json.loads((output / "collection.json").read_text())["identity"]
+    assert identity["source_overrides"] == {"fictional": str(alternate.resolve())}
+    assert identity["skipped"] == {}
+    manifest_path = alternate / "fictional/manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["source_sha256"] = "different-edition"
+    manifest_path.write_text(json.dumps(manifest))
+    calls.clear()
+    with pytest.raises(SystemExit):
+        module.main()
+    assert not calls

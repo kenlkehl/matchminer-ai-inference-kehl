@@ -23,6 +23,8 @@ from . import _guideline_prompts as prompts
 from ._guideline_canonical import SELECT_TASK, consolidate
 from ._guideline_canonical import TASK as CATALOG_TASK
 from ._guideline_canonical import VERSION as CATALOG_VERSION
+from ._guideline_completeness import PROMPT_FILES as COVERAGE_PROMPT_FILES
+from ._guideline_completeness import VERSION as COVERAGE_VERSION
 from ._guideline_context import pack_messages
 from ._guideline_details import build_detail_call
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, StructuredConfig
@@ -184,7 +186,15 @@ def _run(
                 old_identity["llm"].pop(key)
             valid_old_digest = digest(old_identity) == previous_config["config_sha256"]
             old_identity["prompt_resources_sha256"].pop("structured.memory_retry.txt", None)
-            if not valid_old_digest or digest(old_identity) != config_id:
+            compatible_identity = json.loads(json.dumps(identity_config))
+            # Adding an independent coverage guard does not change existing
+            # extraction/consolidation/detail requests. Reuse them only after
+            # all old settings match and the new guard revalidates consolidation.
+            # Changes to an existing prompt, model, source or budget still fail.
+            for name in COVERAGE_PROMPT_FILES:
+                if name not in old_identity["prompt_resources_sha256"]:
+                    compatible_identity["prompt_resources_sha256"].pop(name, None)
+            if not valid_old_digest or digest(old_identity) != digest(compatible_identity):
                 raise ValueError(
                     "Source, model, prompt or extraction settings changed; choose a new output_dir"
                 )
@@ -197,6 +207,7 @@ def _run(
             "stage_versions": {
                 "extraction": prompts.PROMPT_VERSION,
                 "catalog": CATALOG_VERSION,
+                "catalog_coverage": COVERAGE_VERSION,
                 "decision_fields": SPECIFICITY_VERSION,
                 "ownership": OWNERSHIP_VERSION,
                 "json_normalization": JSON_NORMALIZATION_VERSION,

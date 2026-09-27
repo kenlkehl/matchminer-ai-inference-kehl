@@ -15,6 +15,8 @@ from ._guideline_canonical import (
 )
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, parse_model_json
 from ._guideline_generation import clinical_content
+from ._guideline_completeness import VERSION as COVERAGE_VERSION
+from ._guideline_completeness import validate_report as validate_coverage_report
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
 from ._guideline_ownership import branch_ledger
 from ._guideline_quotes import VERSION as QUOTE_VERSION
@@ -111,6 +113,16 @@ def audit_catalog(guideline, output):
     )
     candidates = read_json(output / "candidates.json")
     canonical = read_json(output / "canonical_groups.json")
+    if config.get("stage_versions", {}).get("catalog_coverage") == COVERAGE_VERSION:
+        accepted_reviews = set()
+        for path in (output / "checkpoints").glob("*/accepted.json"):
+            accepted = read_json(path)
+            if accepted["job"].startswith("catalog-coverage-"):
+                accepted_reviews.add((accepted["job"], digest(accepted["result"])))
+        validate_coverage_report(
+            read_json(output / "canonical_coverage.json"), candidates, canonical["groups"],
+            accepted_reviews,
+        )
     if canonical.get("version") in CONTENT_VERSIONS:
         batches = read_json(output / "canonical_batches.json")
         require(not batches["failures"], "Canonical batches contain failures")

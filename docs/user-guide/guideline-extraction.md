@@ -104,6 +104,13 @@ assigned to each disease and the preflight model information. Stop the original
 collection process before resuming; do not run two collection writers together.
 Each disease still uses the standard single-endpoint API and provenance checks.
 
+If one disease needs an existing verified source snapshot, supply
+`--source-override DISEASE /path/to/snapshot/markdown`. Its collection manifest
+must identify the same PDF hash as the main collection. The standard source
+reader still verifies every page and the PDF before generation. Overrides are
+recorded in the collection identity and must be retained when resuming. They
+select source files only; they do not import old extraction results or checkpoints.
+
 The existing `MMAIConfig` owns configuration. Shared `config.remote` selects the
 endpoint, concurrency, timeout, and maximum request attempts (`max_retries`).
 The new `config.guideline` stage uses the same `remote.model_name`,
@@ -159,6 +166,23 @@ contains extent, stage, resectability, and disease-severity states. Visceral cri
 is burden and endocrine refractoriness is treatment response. Alternatives across
 fields are split without changing OR to AND. Generic breast HR-negative expands
 to ER-negative AND PR-negative; HR-positive expands to ER-positive OR PR-positive.
+Consolidation and cross-batch selection now have an independent population-coverage
+gate before detail generation. Identical clinical names and nine-field definitions
+pass deterministically; other inputs undergo bounded LLM comparisons against the
+proposed catalog. Every input must receive a review, and missing or uncertain
+coverage rejects the proposed result and triggers a bounded full-catalog retry.
+The review compares clinical content and meaningful population names, not arbitrary
+record IDs. A broader disease umbrella or diagnostic state cannot substitute for
+a treatment-specific population. This adds inference work; it is an LLM judgment
+about preservation, not proof of clinical correctness or source completeness.
+
+The gate also revalidates accepted consolidation checkpoints when resuming an older
+run. Adding only these coverage prompts preserves compatible extraction and detail
+requests; other model, source, prompt, and generation-setting changes still require
+a new output directory. `canonical_coverage.json` records the final per-input
+judgments, input/catalog fingerprints, and accepted-review provenance. The offline
+audit checks that this report belongs to the final catalog and has no missing inputs.
+
 Detail generation freezes the canonical definition and supplies its current menu.
 
 Final-detail generation uses **source excerpts**, not model-selected line numbers.

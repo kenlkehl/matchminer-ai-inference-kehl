@@ -1,0 +1,7 @@
+The proposed catalog failed its population-coverage review. Revisit ALL original clinical
+descriptions and source evidence, not just the examples in the feedback. Return the complete
+catalog required by the original schema. Preserve every already-supported distinct population and
+restore missing populations or restrictions; retain valid equivalences and source-supported splits.
+Do not reduce the catalog to a diagnostic state, an umbrella, or a convenient subset. Correct
+unsupported input details from the original sources and make unresolved conflicts explicit.
+Do not invent a target catalog size or reproduce arbitrary internal record identifiers.
