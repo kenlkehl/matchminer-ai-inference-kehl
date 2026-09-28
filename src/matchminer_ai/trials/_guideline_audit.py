@@ -13,6 +13,7 @@ from ._guideline_canonical import (
     selected_states,
     validate_catalog,
 )
+from ._guideline_batching import validate_ledger
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, parse_model_json
 from ._guideline_generation import clinical_content
 from ._guideline_completeness import VERSION as COVERAGE_VERSION
@@ -21,6 +22,8 @@ from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
 from ._guideline_ownership import branch_ledger
 from ._guideline_quotes import VERSION as QUOTE_VERSION
 from ._guideline_quotes import materialize_quoted_state, resolve_excerpt
+from ._guideline_quote_repair import VERSION as QUOTE_REPAIR_VERSION
+from ._guideline_quote_repair import audit_repair
 from ._guideline_schema import (
     STATE,
     format_space,
@@ -33,6 +36,7 @@ from ._guideline_schema import (
 from ._guideline_specificity import REVISION as SPECIFICITY_REVISION
 from ._guideline_specificity import VERSION as SPECIFICITY_VERSION
 from ._guideline_specificity import validate_decision_fields
+from ._guideline_sources import render_pages
 
 
 def require(condition, message):
@@ -76,7 +80,11 @@ def audit_accepted_response(folder, accepted):
 def audit_catalog(guideline, output):
     """Validate saved results without LLM calls or a clinical-completeness claim."""
     status = read_json(output / "status.json")
-    require(status["status"] == "complete", "Catalog is not complete")
+    require(
+        status["status"] == "complete"
+        or (status["status"] == "running" and status.get("stage") == "audit"),
+        "Catalog is not complete or awaiting its final audit",
+    )
     config = read_json(output / "run_config.json")
     require(
         config["source_fingerprint"] == guideline.fingerprint,
@@ -88,6 +96,16 @@ def audit_catalog(guideline, output):
         config.get("stage_versions", {}).get("json_normalization")
         == JSON_NORMALIZATION_VERSION
     )
+    accepted_repairs = {}
+    if config.get("stage_versions", {}).get("detail_citation_repairs") == QUOTE_REPAIR_VERSION:
+        for path in (output / "checkpoints").glob("*/accepted.json"):
+            accepted = read_json(path)
+            if accepted["job"].startswith(("quote-repair-", "quote-select-")):
+                audit_accepted_response(path.parent, accepted)
+                accepted_repairs[(accepted["job"], digest(accepted["result"]))] = {
+                    "result": accepted["result"],
+                    "request": read_json(path.parent / "request.json"),
+                }
     normalized_results = {"extract": set(), "detail": set()}
     if current_json:
         for path in (output / "checkpoints").glob("*/accepted.json"):
@@ -112,6 +130,9 @@ def audit_catalog(guideline, output):
         len(rows) == len({row["paradigm_id"] for row in rows}), "Duplicate paradigm IDs"
     )
     candidates = read_json(output / "candidates.json")
+    split_path = output / "canonical_batch_splits.json"
+    if split_path.exists():
+        validate_ledger(read_json(split_path), guideline, candidates)
     canonical = read_json(output / "canonical_groups.json")
     if config.get("stage_versions", {}).get("catalog_coverage") == COVERAGE_VERSION:
         accepted_reviews = set()
@@ -357,6 +378,31 @@ def audit_catalog(guideline, output):
             normalized_citations += accepted.get("normalized_citation_items", 0)
             if accepted.get("json_normalization_version") == JSON_NORMALIZATION_VERSION:
                 counts = audit_accepted_response(path.parent, accepted)
+                if (accepted.get("repair_applied")
+                        and accepted["job"].startswith("detail-")
+                        and quoted_details
+                        and config.get("stage_versions", {}).get("detail_citation_repairs") == QUOTE_REPAIR_VERSION):
+                    original = None
+                    for raw_path in path.parent.glob("attempt-*.json"):
+                        response = read_json(raw_path)
+                        if digest(response) == accepted["response_sha256"]:
+                            original, _ = parse_model_json(response["choices"][0]["message"]["content"])
+                            normalize_evidence_lists(original)
+                            break
+                    require(original is not None, "Missing original excerpt repair response")
+                    original_prompt = "\n".join(m["content"] for m in body["messages"])
+                    # Detail calls render CONTEXT pages. Match complete original
+                    # renderings, not model-selected addresses or catalog-wide pages.
+                    # A real page outside that prompt was still an invalid citation.
+                    supplied = {
+                        key: page for key, page in guideline.pages.items()
+                        if render_pages([page]) in original_prompt
+                    }
+                    audit_repair(
+                        original, accepted["result"],
+                        read_json(output / "quote_repairs" / (digest(original) + ".json")),
+                        accepted_repairs, supplied,
+                    )
                 checked_raw_responses += 1
                 for key in json_counts:
                     json_counts[key] += counts[key]

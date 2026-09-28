@@ -173,15 +173,17 @@ class Client(StructuredClient):
         return guards
 
     def retry_feedback(self, schema, error):
-        feedback = super().retry_feedback(schema, error)
+        # Guideline catalog errors can enumerate many independent populations.
+        # The shared client's short feedback limit can omit the actual restriction
+        # or later failing states. Preserve the full findings; context fitting still
+        # protects source text and the configured output reserve.
+        feedback = load_prompt_text("structured.retry.txt").format(error=error).rstrip()
         if schema == EXTRACTION:
             feedback += " " + load_prompt_text("guideline.extraction_retry.txt").strip()
         return feedback
 
     def retry_feedback_history(self, schema, errors):
-        if schema != EXTRACTION:
-            return super().retry_feedback_history(schema, errors)
-        # Whole-packet regeneration can reintroduce an earlier field error.
+        # Whole-packet or whole-catalog regeneration can reintroduce an earlier field error.
         # Retain a bounded set of diagnostics, including on checkpoint resume.
-        recent = list(dict.fromkeys(errors))[-4:]
+        recent = list(reversed(list(dict.fromkeys(reversed(errors)))[:4]))
         return "\n\n".join(self.retry_feedback(schema, error) for error in recent)

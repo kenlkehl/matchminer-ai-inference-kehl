@@ -215,3 +215,55 @@ def test_verified_source_override_preserves_endpoint_and_requires_same_edition(t
     with pytest.raises(SystemExit):
         module.main()
     assert not calls
+
+
+def test_resume_defers_external_worker_without_changing_collection_identity(
+    tmp_path, monkeypatch,
+):
+    root = make_library(tmp_path)
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["guidelines"].append(dict(manifest["guidelines"][0], folder="another"))
+    manifest_path.write_text(json.dumps(manifest))
+    output = tmp_path / "collection-results"
+    module = runner_module()
+    argv = [
+        "runner", "--source", str(root), "--output-dir", str(output),
+        "--endpoint", "http://synthetic.invalid/v1",
+    ]
+    calls = []
+
+    def summarize(*args, **kwargs):
+        calls.append(kwargs["disease"])
+        if kwargs["disease"] == "fictional":
+            raise RuntimeError("Synthetic failure")
+        return [1]
+
+    monkeypatch.setattr(module, "summarize_guidelines", summarize)
+    monkeypatch.setattr(sys, "argv", argv)
+    assert module.main() is True
+    previous = json.loads((output / "collection.json").read_text())
+    calls.clear()
+    monkeypatch.setattr(sys, "argv", [*argv, "--defer-disease", "fictional"])
+    assert module.main() is False
+    deferred = json.loads((output / "collection.json").read_text())
+    assert calls == ["another"]
+    assert deferred["identity"] == previous["identity"]
+    assert deferred["diseases"]["fictional"] == previous["diseases"]["fictional"]
+    assert deferred["deferred_diseases"] == ["fictional"]
+    assert deferred["status"] == "deferred"
+    assert deferred["failed_diseases"] == []
+    before = (output / "collection.json").read_bytes()
+    calls.clear()
+    monkeypatch.setattr(sys, "argv", [*argv, "--defer-disease", "unknown"])
+    with pytest.raises(SystemExit):
+        module.main()
+    assert not calls
+    assert (output / "collection.json").read_bytes() == before
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(module, "summarize_guidelines", lambda *a, **k: [1])
+    assert module.main() is False
+    final = json.loads((output / "collection.json").read_text())
+    assert final["status"] == "complete"
+    assert final["deferred_diseases"] == []
+    assert final["identity"] == previous["identity"]

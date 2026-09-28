@@ -606,15 +606,22 @@ about 1.08x this value. It defaults to 190,000, which pairs with the 262,144
 for a reasoning trace and the final JSON. Evidence beyond the budget is
 discarded round-robin across sources before the model sees it, so a lower value
 silently drops passages rather than failing; when serving a smaller context,
-reduce it to about `(context - completion budget) / 1.08`. The stage-specific `synthesis_llm` override
-defaults to a 50,000-token completion budget so reasoning-enabled models can
-think over a full evidence ledger and still finish the final JSON; a model that
-exhausts this budget mid-trace returns an empty answer with
-`finish_reason=length`, which is retried rather than silently accepted.
+reduce it to about `(context - completion budget) / 1.08`. Synthesis reads the ledger in
+`synthesis_chunk_max_tokens` chunks (default 60,000; classes use
+`class_evidence_max_tokens`) and carries a running set of facts across them.
+The stage-specific `synthesis_llm` override defaults to a 100,000-token
+completion budget so reasoning-enabled models can think over a chunk, rewrite
+the carried facts, and still finish the final JSON; a chunk, the carried facts,
+and this budget must fit together in the served context. A model that exhausts
+the budget mid-trace returns an empty answer with `finish_reason=length`, which
+is retried rather than silently accepted, and if every ordinary attempt ends
+that way the final attempt disables thinking.
 `screening_max_attempts` and `synthesis_max_attempts` control structured-output retries.
-`screening_checkpoint_batch_size` and `synthesis_checkpoint_batch_size` bound
-LLM batches so successfully returned batches can be checkpointed throughout
-long catalog builds. Screening and synthesis LLM overrides inherit from
+`screening_checkpoint_batch_size` and `class_checkpoint_batch_size` bound the
+screening and classify LLM batches so successfully returned batches can be
+checkpointed throughout long catalog builds. Synthesis is not batched: each
+drug or class is its own chain of chunk calls, checkpointed as soon as that
+chain finishes, with up to `remote.max_concurrent_requests` chains in flight. Screening and synthesis LLM overrides inherit from
 `llm_good_option`.
 
 Evidence is also retrieved on two axes beside the drug's own name, and each has

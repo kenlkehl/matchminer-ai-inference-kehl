@@ -74,6 +74,47 @@ def test_drop_is_rejected_and_review_never_receives_internal_identifiers():
     assert len(calls) == 1  # Exact clinical definitions need no model bookkeeping.
 
 
+def test_coverage_keeps_all_full_findings_for_retry_feedback():
+    rows = [{"input_name": f"Synthetic population {i}", "status": "missing",
+             "matched_population_names": [], "reason": "Long synthetic explanation. " * 20 + f"Exact restriction {i}"}
+            for i in range(9)]
+    with pytest.raises(CoverageError) as error:
+        require_coverage({"reviews": rows})
+    assert json.loads(str(error.value).split("Complete coverage findings:\n")[1]) == rows
+
+
+def test_equivalent_comparison_notation_is_exact_but_threshold_changes_are_not():
+    from matchminer_ai.trials._guideline_completeness import identical_population_key
+
+    inputs = populations()[:1]
+    inputs[0]["space"]["age_range_allowed"] = ">=18 years AND <=80 years"
+    proposed = copy.deepcopy(inputs)
+    proposed[0]["space"]["age_range_allowed"] = "≥18 years AND ≤80 years"
+
+    class Reviewer:
+        config = SimpleNamespace(max_concurrent_requests=1)
+
+        def fits(self, messages):
+            return True
+
+        def complete(self, *args, **kwargs):
+            pytest.fail("Identical notation needs no model judgment")
+
+    original = copy.deepcopy(inputs)
+    report = review_coverage(Reviewer(), inputs, proposed)
+    validate_report(report, inputs, proposed, set())
+    assert inputs == original
+    for changed in (">18 years AND <=80 years", ">=19 years AND <=80 years", ">=18 years OR <=80 years"):
+        altered = copy.deepcopy(proposed)
+        altered[0]["space"]["age_range_allowed"] = changed
+        assert identical_population_key(inputs[0]) != identical_population_key(altered[0])
+        bad_report = copy.deepcopy(report)
+        from matchminer_ai.trials._guideline_completeness import population
+        bad_report["catalog_sha256"] = digest([population(s) for s in altered])
+        with pytest.raises(ValueError, match="Nonidentical"):
+            validate_report(bad_report, inputs, altered, set())
+
+
 def test_review_must_account_for_every_input_and_reference_existing_populations():
     inputs = populations()
     value = {"reviews": [{"input_name": inputs[0]["name"], "status": "represented",
@@ -212,3 +253,69 @@ def test_coverage_upgrade_preserves_exact_old_requests_but_rejects_changed_setti
     atomic_json(output / "run_config.json", old)
     with pytest.raises(ValueError, match="changed"):
         run_guideline(guideline, output, config, workers=1)
+
+
+@pytest.mark.parametrize("fix", [True, False])
+def test_final_coverage_repairs_only_affected_source_batches_and_stops_unchanged_failures(
+    tmp_path, monkeypatch, fix,
+):
+    from matchminer_ai.trials import _guideline_canonical as module
+
+    guideline = load_guideline(make_library(tmp_path), "fictional")
+    inputs = populations()
+    client = Client(StructuredConfig(model="synthetic", tokenizer_mode="bytes", attempts=2), tmp_path / "cache")
+    monkeypatch.setattr(module, "MAX_CANDIDATES_PER_BATCH", 1)
+    calls = []
+    selection_catalogs = []
+
+    def respond(endpoint, body, **kwargs):
+        messages = body["messages"]
+        if messages[0]["content"] == TASK:
+            payload = json.loads(messages[1]["content"])
+            # An intermediate review missed the broadening. The final review
+            # catches it against the original inputs and the whole catalog.
+            missing = len(payload["proposed_catalog"]) > 1
+            value = {"reviews": [{
+                "input_name": row["name"],
+                "status": "missing" if missing else "represented",
+                "matched_population_names": [] if missing else [payload["proposed_catalog"][0]["name"]],
+                "reason": "Synthetic burden restriction was broadened" if missing else "Synthetic intermediate review missed distinction",
+            } for row in payload["input_populations"]]}
+        elif messages[1]["content"].startswith(SELECT_TASK):
+            text = messages[1]["content"].split("\n\nRequired JSON schema:\n", 1)[1]
+            _, end = json.JSONDecoder().raw_decode(text)
+            states = json.JSONDecoder().raw_decode(text[end:].lstrip())[0]["source_backed_definitions"]
+            selection_catalogs.append(states)
+            value = {"spaces": [s["space"] for s in states], "context_only_topics": [], "uncertainties": []}
+        else:
+            item = inputs[1] if inputs[1]["name"] in messages[1]["content"] else inputs[0]
+            restored = "FINAL COVERAGE FINDINGS" in messages[-1]["content"]
+            calls.append((item["name"], restored))
+            value = catalog()
+            value["states"] = [{k: copy.deepcopy(item[k]) for k in value["states"][0]}]
+            if item is inputs[0] and not (restored and fix):
+                value["states"][0]["space"]["cancer_burden_allowed"] = "Broader fictional burden"
+            if restored:
+                assert "Synthetic burden restriction was broadened" in messages[-1]["content"]
+                assert "candidate_id" not in messages[-1]["content"]
+                assert body["max_tokens"] == 100000
+        return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(value)}}]}
+
+    monkeypatch.setattr(client, "_http", respond)
+
+    def run_jobs(jobs, workers, function):
+        return {key: function(key, data) for key, data in jobs}, {}
+
+    output = tmp_path / "results"
+    if fix:
+        result = consolidate(client, guideline, inputs, output, 1, run_jobs, lambda _: None)
+        assert [g["space"] for g in result["groups"]] == [s["space"] for s in inputs]
+        validate_report(read_json(output / "canonical_coverage.json"), inputs, result["groups"])
+        assert len(selection_catalogs) == 2
+        monkeypatch.setattr(client, "_http", lambda *a, **k: pytest.fail("Resume should reuse saved calls"))
+        assert consolidate(client, guideline, inputs, output, 1, run_jobs, lambda _: None) == result
+    else:
+        with pytest.raises(CoverageError, match="omitted or broadened"):
+            consolidate(client, guideline, inputs, output, 1, run_jobs, lambda _: None)
+    assert calls == [(inputs[0]["name"], False), (inputs[1]["name"], False), (inputs[0]["name"], True)]
+    assert list((output / "population_coverage").glob("final-*.json"))

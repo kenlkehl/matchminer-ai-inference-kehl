@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from functools import lru_cache
@@ -76,8 +77,12 @@ def get_model_metadata(
             raise ValueError(f"Cached metadata for {model_name} is not a mapping.")
     else:
         model_dict = create_model_metadata(model_name)
-        with open(cache_file, "w", encoding="utf-8") as handle:
+        # Concurrent callers may race to fill the cache; replace atomically so
+        # none of them reads a half-written file.
+        partial = f"{cache_file}.{os.getpid()}.{threading.get_ident()}.tmp"
+        with open(partial, "w", encoding="utf-8") as handle:
             json.dump(model_dict, handle)
+        os.replace(partial, cache_file)
 
     return model_dict
 

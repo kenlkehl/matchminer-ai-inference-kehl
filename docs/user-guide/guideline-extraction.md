@@ -182,6 +182,15 @@ requests; other model, source, prompt, and generation-setting changes still requ
 a new output directory. `canonical_coverage.json` records the final per-input
 judgments, input/catalog fingerprints, and accepted-review provenance. The offline
 audit checks that this report belongs to the final catalog and has no missing inputs.
+Typographic comparison operators (`≥`/`>=` and `≤`/`<=`) are equivalent for the
+exact-definition comparison; thresholds, clinical words, and Boolean grouping
+remain unchanged. This comparison never rewrites source or model output.
+The field validator treats numeric comparators such as `less than or equal to
+2 cm` as a single predicate. It does not mistake their internal `or` for a
+population alternative; separate AND/OR alternatives still require grouping.
+Count phrases such as `one or more lesions` are likewise atomic; this exception
+is limited to explicit count units and does not mask `one OR more advanced
+disease` or an additional population alternative. Stored field text is unchanged.
 
 Detail generation freezes the canonical definition and supplies its current menu.
 
@@ -221,6 +230,68 @@ Every actual retry message is saved in `request-attempt-*.json`. The revision-on
 instruction does not invalidate already accepted generation checkpoints; accepted
 responses still undergo the same grounding and field validation.
 
+Guideline retries retain the four most recent distinct validation errors for all
+stages, including consolidation, with complete findings rather than shortened
+examples. Repeated errors move back into the recent set. Catalog field validation
+reports all failing populations together, so correcting a coverage omission does
+not hide an earlier Boolean-grouping error. Source context and output headroom
+still must fit; feedback is never a license to drop clinical restrictions.
+
+Final-detail citation failures use focused, checkpointed excerpt repairs before
+regenerating any clinical record. Each call receives one rejected excerpt, its
+fixed population and assertion, source context, and the affected pages next to
+the repair task. It starts with the assertion's and population's cited pages;
+if that repair exhausts its attempts, one bounded fallback can use all pages
+from the original detail prompt. Identical repair requests within a record are
+deduplicated before dispatch. The model returns only replacement quotations. Code retains
+all valid citations and every clinical field, checks every replacement for exact
+and unique source occurrence, then validates the complete record again. Missing
+or ambiguous support remains a failure; no fuzzy matching or guessed source
+positions are accepted. Complete saved drafts remain repairable even when a
+later attempt returned empty or malformed JSON.
+
+When both quotation-copying scopes exhaust their attempts, the pipeline switches
+to literal-passage selection. Code prepares a bounded menu of exact source
+fragments with neighboring branch context; the LLM selects the passages supporting
+the fixed assertion. Duplicate table entries gain adjacent literal text to identify
+their occurrence, and text from interleaved PDF columns remains separate excerpts.
+Code copies the selected passages verbatim; it does not decide clinical support.
+An empty or unresolved selection still fails. Previously exhausted copy requests
+are recovered from checkpoints without spending another identical retry budget.
+The audit binds every selected passage and assertion to the recorded model request
+and raw selection response, as well as checking its exact source occurrence.
+
+Repairs retain the configured context, output-token reserve, reasoning, sampling,
+endpoint, concurrency cap, and bounded attempt count. They do not replay the
+model's reasoning. This avoids repeatedly rewriting a full menu to correct one
+quote or losing later errors behind truncated whole-record feedback. Repairs
+write `quote_repairs/` receipts; the offline audit ties each replacement to its
+accepted, raw-provider-backed response and checks that no other fields changed.
+Adding this repair stage preserves compatible existing request checkpoints;
+changes to existing prompts, source, model, or generation settings still require
+a new directory. Exhausted repair jobs remain resumable and never produce a
+partially validated catalog.
+
+If the final population-coverage review finds a distinction missed by intermediate
+reviews, consolidation now sends those full findings back to the affected original
+source batches. It regenerates their complete catalogs, reuses unaffected batch
+checkpoints, and repeats selection and final coverage validation. Every failed
+final review is retained. Recovery is bounded by the configured attempt count and
+stops if the same final failure recurs; closed selection cannot invent missing
+definitions, and a failing final review cannot produce an export.
+
+When a consolidation batch exhausts retries on population coverage or ambiguous
+Boolean grouping, the pipeline divides only that failed batch into source-backed
+groups of at most 12 inputs. A smaller failed group can divide again, down to a
+single input; singleton failures still stop the catalog. Successful batches are
+retained, and a persisted `canonical_batch_splits.json` receipt lets a resume
+skip the exhausted parent and reuse successful child requests. Transport failures
+do not trigger this strategy. Original responses and diagnostics remain available.
+Each child must pass the same field, citation and coverage checks; the combined
+catalog still requires selection and final coverage of every original candidate.
+The source fingerprint, candidate membership and split receipts are audited.
+This changes task size, not clinical definitions, sampling or the output reserve.
+
 ## Persistence and review
 
 Use a separate external output directory for each disease, edition, and generation
@@ -232,7 +303,10 @@ directory outside source control and public artifacts, regardless of debug mode.
 The directory includes `paradigms.jsonl`, `trial_spaces.csv`, `report.md`, source
 provenance, coverage, ownership, run settings, `status.json`, per-request
 checkpoints, and `validation.json`. A failed stage raises rather than returning
-a partial catalog. Repeat the same call to resume completed requests; token counts
+a partial catalog. Exported files alone do not establish success: newly exported
+runs remain `running` with stage `audit` during the final provenance audit.
+Only a successful audit lets the public extraction call mark the run `complete`.
+Repeat the same call to resume completed requests; token counts
 and accepted responses are cached. Changes to concurrency, timeout, retry count,
 or streaming transport are allowed without discarding work. Source, prompt, model,
 and generation changes require a new directory. Use fresh directories when moving
@@ -427,7 +501,24 @@ arguments restrict the run. Missing source files or failed diseases are recorded
 in external `collection.json`; other diseases continue. A collection is marked
 complete only when every selected disease passes its extraction and audit.
 Repeat the identical command to resume accepted checkpoints and retry failures.
+An identical disease run with a completed status, passing audit, matching source
+fingerprint and matching export hash reuses its finished catalog, even when the
+collection summary still records an earlier failure. The public API repeats the
+offline provenance audit before returning; it does not redo extraction or
+population-review prompts. Changed configurations and unaudited outputs still
+follow the normal compatibility checks and checkpoint-resume path.
+On resume, failed diseases are scheduled before still-running and unstarted
+diseases, so recovery does not wait behind long consolidations. The same runner
+then continues the remaining collection with its shared request cap.
 The collection runner keeps all generated content outside the repository.
+
+When restarting a collection alongside separate recovery workers, repeat
+`--defer-disease DISEASE` for each disease those workers own. Deferred diseases
+remain in the original collection identity and retain their saved status, but
+this invocation does not submit them. This permits a code reload without
+duplicate disease writers. If all dispatched work succeeds while deferred work
+remains unfinished, the collection status is `deferred`, not `complete`.
+Omit the flag on a later resume to bring that disease back into this runner.
 
 To recover only diseases currently marked failed, add `--retry-failed` to the
 same command. This writes a separate `recovery.json` rather than competing with

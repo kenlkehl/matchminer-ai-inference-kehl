@@ -13,6 +13,7 @@ VERSION = "population-coverage-v1"
 PROMPT_FILES = (
     "guideline.canonical_coverage.txt",
     "guideline.canonical_coverage_retry.txt",
+    "guideline.canonical_restore.txt",
 )
 TASK = load_prompt_text(PROMPT_FILES[0]).strip()
 RETRY_TASK = load_prompt_text(PROMPT_FILES[1]).strip()
@@ -34,6 +35,13 @@ def population(value):
     return {"name": value["name"], "space": value["space"]}
 
 
+def identical_population_key(value):
+    # Normalize only typographic spellings of the same comparison operators.
+    # No thresholds, clinical words, Boolean grouping, or input records change.
+    text = format_space(value["space"]).replace("≥", ">=").replace("≤", "<=")
+    return value["name"], text
+
+
 def validate_reviews(value, inputs, states):
     validate_shape(value, COVERAGE)
     if len(value["reviews"]) != len(inputs):
@@ -52,13 +60,11 @@ def validate_reviews(value, inputs, states):
 def require_coverage(report):
     missing = [r for r in report["reviews"] if r["status"] != "represented"]
     if missing:
-        examples = "; ".join(
-            f"{row['input_name'][:105]}: {row['reason'][:105]}" for row in missing[:4]
-        )
         raise CoverageError(
             f"Catalog omitted or broadened {len(missing)} of {len(report['reviews'])} "
-            "input populations. Restore all distinct supplied populations, not just "
-            f"these examples: {examples}"
+            "input populations. Recheck the complete original source and preserve "
+            "all distinct supported populations. Complete coverage findings:\n"
+            + json.dumps(missing, ensure_ascii=False)
         )
 
 
@@ -84,10 +90,10 @@ def validate_report(report, candidates, states, accepted_reviews=None):
         ):
             raise ValueError("Population coverage differs from its accepted review response")
         covered.update(positions)
-    exact = {(s["name"], format_space(s["space"])) for s in states}
+    exact = {identical_population_key(s) for s in states}
     for i, candidate in enumerate(candidates):
         if i not in covered and (
-            (candidate["name"], format_space(candidate["space"])) not in exact
+            identical_population_key(candidate) not in exact
             or report["reviews"][i]["matched_population_names"] != [candidate["name"]]
         ):
             raise ValueError("Nonidentical population has no accepted coverage review")
@@ -98,15 +104,15 @@ def review_coverage(client, candidates, states):
     """Keep full output headroom; split review inputs rather than truncate definitions."""
     inputs = [population(c) for c in candidates]
     proposed = [population(s) for s in states]
-    exact = {(s["name"], format_space(s["space"])) for s in states}
+    exact = {identical_population_key(s) for s in states}
     reviews = [None] * len(inputs)
     pending = []
     for index, item in enumerate(inputs):
-        if (item["name"], format_space(item["space"])) in exact:
+        if identical_population_key(item) in exact:
             reviews[index] = {
                 "input_name": item["name"], "status": "represented",
                 "matched_population_names": [item["name"]],
-                "reason": "The same clinical name and nine-field definition are present.",
+                "reason": "The same clinical name and nine-field definition are present (equivalent comparison-operator notation allowed).",
             }
         else:
             pending.append((index, item))

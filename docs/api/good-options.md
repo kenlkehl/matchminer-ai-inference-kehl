@@ -106,7 +106,8 @@ Synthesis retains supported evidence across maturity levels—including ontology
 preclinical, first-in-human, phase 1, registry, and mature clinical evidence—and
 labels its level without requiring approval, randomization, publication, or
 mature outcomes. Token-limited or blank final responses are retried, and the
-default synthesis completion budget is 50,000 tokens. The bundle stores two
+default synthesis completion budget is 100,000 tokens; if every ordinary
+attempt is token-limited, the final attempt disables thinking. The bundle stores two
 clean projections: a
 GoodOption summary without safety and a Help Me Choose summary with safety.
 URLs, queries, source labels, registry metadata, and failure notices remain in

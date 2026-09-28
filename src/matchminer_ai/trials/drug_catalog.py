@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import hashlib
 import inspect
 import json
@@ -13,6 +14,7 @@ import re
 import shutil
 import tempfile
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -25,6 +27,7 @@ from matchminer_ai.help_me_choose import fetch_trial_study, normalize_nct_id
 from matchminer_ai.llm.backends import (
     build_llm_runtime_config,
     get_llm_backend,
+    remote_enabled,
 )
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
@@ -745,6 +748,7 @@ def _run_llm_messages(
     *,
     config: MMAIConfig,
     stage: str,
+    reasoning_off: bool = False,
 ) -> list[_CatalogLLMOutput]:
     def merge(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
         result = dict(base)
@@ -762,6 +766,13 @@ def _run_llm_messages(
     )
     if not llm_config:
         raise ValueError("Config is missing llm_good_option settings.")
+    if reasoning_off:
+        # Applied after the stage merge: served-model profiles enable thinking
+        # on each stage override too, which would otherwise win.
+        disabled = {"chat_template_kwargs": {"enable_thinking": False}}
+        llm_config = merge(
+            llm_config, {"local": disabled, "remote": {"extra_body": disabled}}
+        )
     runtime = build_llm_runtime_config("llm_good_option", llm_config, config=config)
     prompts = build_prompt_list(
         [list(messages) for messages in messages_list], llm_config=runtime
@@ -1486,13 +1497,22 @@ async def synthesize_serially(
     chunk_token_limit: int | None = None,
     scope: str = "agent",
     progress_callback: Callable[[int, int], None] | None = None,
+    on_subject_complete: (
+        Callable[[DrugIdentity, dict[str, list[dict[str, Any]]]], None] | None
+    ) = None,
 ) -> dict[str, dict[str, list[dict[str, Any]]]]:
     """Synthesize each subject by iterating a running summary over its evidence.
 
-    Rounds are organized the way patient serial summarization organizes them:
-    round N carries every subject's Nth chunk, so one batched LLM call keeps the
-    backend saturated while each subject's chunk still sees the summary built
-    from its own earlier chunks.
+    Each subject is its own chain: its chunks run in order, each seeing the
+    summary built from the subject's earlier chunks, but chains never wait on
+    one another. A subject with eleven chunks therefore cannot hold a batch of
+    one-chunk subjects hostage, and ``on_subject_complete`` fires as soon as a
+    chain ends so the caller can checkpoint it immediately. At most
+    ``remote.max_concurrent_requests`` chains call the endpoint at once; a local
+    engine is not thread-safe, so local runs are one chain at a time.
+
+    When the model exhausts its output budget on every ordinary attempt, the
+    final attempt disables thinking so the budget goes to the JSON itself.
 
     Returns validated facts with resolved evidence IDs. Callers must not run
     ``_validate_structured_facts`` over the result: support_ids are already
@@ -1510,112 +1530,128 @@ async def synthesize_serially(
     )
     character_limit = max(4_000, token_limit * 4)
     max_attempts = max(1, int(catalog_config.get("synthesis_max_attempts", 3)))
+    concurrency = (
+        max(1, int(config.remote.get("max_concurrent_requests", 32)))
+        if remote_enabled(config)
+        else 1
+    )
+    # The default executor stops at 32 threads, which would cap the endpoint
+    # below max_concurrent_requests however many chains are ready.
+    executor = ThreadPoolExecutor(
+        max_workers=concurrency, thread_name_prefix="catalog-synthesis"
+    )
+    loop = asyncio.get_running_loop()
+    completed = 0
 
-    chunks_by_subject = {
-        drug.drug_id: chunk_evidence(evidence, character_limit=character_limit)
-        for drug, evidence in drugs_and_evidence
-    }
-    drugs_by_id = {drug.drug_id: drug for drug, _evidence in drugs_and_evidence}
-    facts: dict[str, dict[str, list[dict[str, Any]]]] = {
-        drug_id: {category: [] for category in _SYNTHESIS_CATEGORIES}
-        for drug_id in chunks_by_subject
-    }
-    # Evidence IDs already cited become identity entries in the next round's map,
-    # so carried-forward citations validate without being renumbered.
-    resolved: dict[str, set[str]] = {drug_id: set() for drug_id in chunks_by_subject}
-
-    rounds = max((len(value) for value in chunks_by_subject.values()), default=0)
-    for round_index in range(rounds):
-        pending = [
-            drug_id
-            for drug_id, chunks in chunks_by_subject.items()
-            if round_index < len(chunks)
-        ]
-        errors: dict[str, str] = {}
-        for _attempt in range(1, max_attempts + 1):
-            if not pending:
-                break
-            messages_list = []
-            for drug_id in pending:
-                chunk = chunks_by_subject[drug_id][round_index]
-                messages = build_synthesis_update_messages(
-                    drugs_by_id[drug_id], chunk, facts[drug_id]
-                )
-                previous_error = errors.get(drug_id)
-                if previous_error:
+    async def run_chain(
+        item: tuple[DrugIdentity, Sequence[EvidencePassage]],
+    ) -> dict[str, list[dict[str, Any]]]:
+        nonlocal completed
+        drug, evidence = item
+        facts: dict[str, list[dict[str, Any]]] = {
+            category: [] for category in _SYNTHESIS_CATEGORIES
+        }
+        # Evidence IDs already cited become identity entries in the next
+        # round's map, so carried-forward citations validate without being
+        # renumbered.
+        resolved: set[str] = set()
+        chunks = chunk_evidence(evidence, character_limit=character_limit)
+        for round_index, chunk in enumerate(chunks):
+            error = ""
+            token_limited = False
+            succeeded = False
+            for attempt in range(1, max_attempts + 1):
+                messages = build_synthesis_update_messages(drug, chunk, facts)
+                if error:
                     messages[-1] = {
                         **messages[-1],
                         "content": load_prompt_text(
                             "trial_drug_synthesis.retry.txt"
                         ).format(
                             previous_content=messages[-1]["content"],
-                            attempt=_attempt,
+                            attempt=attempt,
                             max_attempts=max_attempts,
-                            previous_error=previous_error,
+                            previous_error=error,
                         ),
                     }
-                messages_list.append(messages)
-            outputs = await asyncio.to_thread(
-                _run_llm_messages, messages_list, config=config, stage="synthesis"
-            )
-            retry: list[str] = []
-            for drug_id, raw_output in zip(pending, outputs, strict=True):
-                chunk = chunks_by_subject[drug_id][round_index]
-                output = _coerce_catalog_llm_output(raw_output)
-                if _token_limited_finish_reason(output.finish_reason):
-                    errors[drug_id] = (
+                reasoning_off = attempt == max_attempts > 1 and token_limited
+                outputs = await loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        _run_llm_messages,
+                        [messages],
+                        config=config,
+                        stage="synthesis",
+                        reasoning_off=reasoning_off,
+                    ),
+                )
+                output = _coerce_catalog_llm_output(outputs[0])
+                token_limited = _token_limited_finish_reason(output.finish_reason)
+                if token_limited:
+                    error = (
                         "the response reached its output token limit "
                         f"(finish_reason={output.finish_reason})"
                     )
-                    retry.append(drug_id)
                     continue
                 raw_value = _find_json_mapping(output.text, "mechanism_and_targets")
                 if not isinstance(raw_value, Mapping) or any(
                     not isinstance(raw_value.get(category), list)
                     for category in _SYNTHESIS_CATEGORIES
                 ):
-                    errors[drug_id] = (
+                    error = (
                         "the final response did not contain every required JSON array"
                     )
-                    retry.append(drug_id)
                     continue
                 raw = dict(raw_value)
                 raw["__passage_id_map__"] = {
                     **{f"P{index}": item.evidence_id for index, item in enumerate(chunk, start=1)},
-                    **{value: value for value in resolved[drug_id]},
+                    **{value: value for value in resolved},
                 }
-                updated = _validate_structured_facts(
-                    raw, evidence=chunk, scope=scope
-                )
+                updated = _validate_structured_facts(raw, evidence=chunk, scope=scope)
                 if chunk and not any(updated.values()):
-                    errors[drug_id] = (
+                    error = (
                         "the update dropped every previously supported fact; carry "
                         "existing items forward with their resolved support_ids"
-                        if any(facts[drug_id].values())
+                        if any(facts.values())
                         else "all arrays were empty despite supplied passages; "
                         "include relevant supported facts or a limitations item "
                         "explaining the evidence gap"
                     )
-                    retry.append(drug_id)
                     continue
-                facts[drug_id] = updated
-                resolved[drug_id].update(
+                facts = updated
+                resolved.update(
                     value
                     for items in updated.values()
                     for item in items
                     for value in item.get("support_ids", [])
                 )
-            pending = retry
-        for drug_id in pending:
-            logging.warning(
-                "Synthesis round %d for %s failed validation on every attempt: %s",
-                round_index + 1,
-                drugs_by_id[drug_id].preferred_name,
-                errors.get(drug_id, "unknown error"),
-            )
+                succeeded = True
+                break
+            if not succeeded:
+                logging.warning(
+                    "Synthesis round %d for %s failed validation on every attempt: %s",
+                    round_index + 1,
+                    drug.preferred_name,
+                    error or "unknown error",
+                )
+        completed += 1
+        if on_subject_complete:
+            on_subject_complete(drug, facts)
         if progress_callback:
-            progress_callback(round_index + 1, rounds)
-    return facts
+            progress_callback(completed, len(drugs_and_evidence))
+        return facts
+
+    try:
+        results = await _gather_bounded(
+            drugs_and_evidence, run_chain, limit=concurrency
+        )
+    finally:
+        # A failed or cancelled build must not wait for in-flight generations.
+        executor.shutdown(wait=False, cancel_futures=True)
+    return {
+        drug.drug_id: facts
+        for (drug, _evidence), facts in zip(drugs_and_evidence, results, strict=True)
+    }
 
 
 #: Tokens that name the same class in different words. Retrieval is shared by
@@ -1915,7 +1951,6 @@ async def _synthesize_classes(
     summary_max_chars = max(
         1000, int(catalog_config.get("class_option_summary_max_tokens", 1600)) * 4
     )
-    batch_size = max(1, int(catalog_config.get("class_checkpoint_batch_size", 64)))
 
     facts_by_class: dict[str, Mapping[str, Any]] = {}
     pending: list[tuple[DrugIdentity, Sequence[EvidencePassage]]] = []
@@ -1951,45 +1986,50 @@ async def _synthesize_classes(
         else:
             completed += 1
 
-    for start in range(0, len(pending), batch_size):
-        batch = pending[start : start + batch_size]
-        if synthesizer is None:
-            outputs = await synthesize_serially(
-                batch,
-                config=config,
-                chunk_token_limit=evidence_token_limit,
-                scope="class",
+    def record(identity: DrugIdentity, value: Any) -> None:
+        nonlocal completed
+        if isinstance(value, Mapping):
+            facts_by_class[identity.drug_id] = value
+            checkpoint.save(
+                "class_synthesis",
+                identity.drug_id,
+                input_value={
+                    "class_id": identity.drug_id,
+                    "class_name": class_subjects[identity.drug_id][0],
+                    "evidence": [
+                        item.to_record()
+                        for item in class_evidence_by_id.get(identity.drug_id, ())
+                    ],
+                },
+                data={"facts": dict(value)},
             )
-        else:
-            outputs = {}
-            for identity, evidence in batch:
-                result = await _maybe_await(synthesizer(identity, evidence))
-                if isinstance(result, Mapping):
-                    outputs[identity.drug_id] = _validate_structured_facts(
-                        result, evidence=evidence, scope="class"
-                    )
-        for identity, evidence in batch:
-            value = outputs.get(identity.drug_id)
-            if isinstance(value, Mapping):
-                facts_by_class[identity.drug_id] = value
-                checkpoint.save(
-                    "class_synthesis",
-                    identity.drug_id,
-                    input_value={
-                        "class_id": identity.drug_id,
-                        "class_name": class_subjects[identity.drug_id][0],
-                        "evidence": [item.to_record() for item in evidence],
-                    },
-                    data={"facts": dict(value)},
-                )
-            completed += 1
-            if progress_callback:
-                progress_callback(
-                    "class_synthesis",
-                    completed,
-                    len(class_subjects),
-                    identity.preferred_name,
-                )
+        completed += 1
+        if progress_callback:
+            progress_callback(
+                "class_synthesis",
+                completed,
+                len(class_subjects),
+                identity.preferred_name,
+            )
+
+    if synthesizer is None:
+        # Each class is checkpointed the moment its own chain finishes.
+        await synthesize_serially(
+            pending,
+            config=config,
+            chunk_token_limit=evidence_token_limit,
+            scope="class",
+            on_subject_complete=record,
+        )
+    else:
+        for identity, evidence in pending:
+            result = await _maybe_await(synthesizer(identity, evidence))
+            record(
+                identity,
+                _validate_structured_facts(result, evidence=evidence, scope="class")
+                if isinstance(result, Mapping)
+                else None,
+            )
 
     summaries: list[ClassSummary] = []
     for class_id, (class_name, _aliases) in class_subjects.items():
@@ -3250,35 +3290,41 @@ async def build_good_option_catalog(
                     )
             else:
                 nonempty.append((drug, evidence))
-        synthesis_batch_size = max(
-            1, int(catalog_config.get("synthesis_checkpoint_batch_size", 64))
-        )
-        for start in range(0, len(nonempty), synthesis_batch_size):
-            batch = nonempty[start : start + synthesis_batch_size]
-            batch_outputs = await synthesize_serially(
-                batch, config=resolved_config, scope="agent"
+        evidence_by_nonempty = {drug.drug_id: evidence for drug, evidence in nonempty}
+
+        def record_synthesis(
+            drug: DrugIdentity, value: dict[str, list[dict[str, Any]]]
+        ) -> None:
+            nonlocal synthesis_completed
+            synthesized[drug.drug_id] = value
+            checkpoint.save(
+                "synthesis",
+                drug.drug_id,
+                input_value={
+                    "drug": asdict(drug),
+                    "evidence": [
+                        item.to_record()
+                        for item in evidence_by_nonempty[drug.drug_id]
+                    ],
+                },
+                data={"facts": dict(value)},
             )
-            for drug, evidence in batch:
-                value = batch_outputs.get(drug.drug_id)
-                if isinstance(value, Mapping):
-                    synthesized[drug.drug_id] = value
-                    checkpoint.save(
-                        "synthesis",
-                        drug.drug_id,
-                        input_value={
-                            "drug": asdict(drug),
-                            "evidence": [item.to_record() for item in evidence],
-                        },
-                        data={"facts": dict(value)},
-                    )
-                synthesis_completed += 1
-                if progress_callback:
-                    progress_callback(
-                        "synthesis",
-                        synthesis_completed,
-                        len(synthesis_inputs),
-                        drug.preferred_name,
-                    )
+            synthesis_completed += 1
+            if progress_callback:
+                progress_callback(
+                    "synthesis",
+                    synthesis_completed,
+                    len(synthesis_inputs),
+                    drug.preferred_name,
+                )
+
+        # Each drug is checkpointed the moment its own chain finishes.
+        await synthesize_serially(
+            nonempty,
+            config=resolved_config,
+            scope="agent",
+            on_subject_complete=record_synthesis,
+        )
     else:
         for drug, evidence in pending_synthesis:
             raw_value = await _maybe_await(synthesizer(drug, evidence))

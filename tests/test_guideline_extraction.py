@@ -1585,6 +1585,37 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                     validate_decision_fields(value, "Fictional guideline")
                 self.assertEqual(value, original)
 
+    def test_inclusive_numeric_comparisons_are_atomic_without_rewriting(self):
+        for text in (
+            "Extent A AND size less than or equal to 2 cm AND negative margins",
+            "(Extent A OR extent B) AND size less than or equal to 4 cm",
+            "Score greater than or equal to 2.5 AND score less than or equal to 7",
+            "Extent A AND score greater or equal to +2",
+            "Extent A AND value less than or equal to -.5",
+            "Extent A AND SIZE LESS THAN OR EQUAL TO 2 CM",
+        ):
+            with self.subTest(valid=text):
+                value = state()
+                value["space"]["cancer_burden_allowed"] = text
+                original = copy.deepcopy(value)
+                validate_decision_fields(value, "Fictional guideline")
+                self.assertEqual(value, original)
+        for text in (
+            "Extent A AND size less than or equal to 2 cm OR extent B",
+            "Extent A AND (size less than or equal to 2 cm OR extent B AND extent C)",
+            "Extent A AND value greater than OR equal to another population",
+            "Extent A AND value less than OR equal to 2nd population",
+            "Extent A AND value less than OR equal to 2A",
+            "Extent A AND value less than or unequal to 2",
+        ):
+            with self.subTest(invalid=text):
+                value = state()
+                value["space"]["cancer_burden_allowed"] = text
+                original = copy.deepcopy(value)
+                with self.assertRaisesRegex(ValueError, "mixes AND and OR"):
+                    validate_decision_fields(value, "Fictional guideline")
+                self.assertEqual(value, original)
+
     def test_extraction_retries_clinical_error_before_repairing_citations(self):
         g = load_guideline(self.root, "fictional")
         calls = []

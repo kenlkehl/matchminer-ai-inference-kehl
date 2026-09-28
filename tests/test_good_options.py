@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -12,6 +14,7 @@ import pytest
 
 import matchminer_ai.trials.drug_catalog as catalog_module
 from matchminer_ai.config import load_default_preset
+from matchminer_ai.llm.model_profiles import apply_model_profile
 from matchminer_ai.matching import (
     RUBRIC_CRITERIA,
     build_good_option_checker_text,
@@ -606,7 +609,7 @@ def test_synthesis_retries_invalid_json_and_preserves_ledger_support_ids(
 ) -> None:
     calls = 0
 
-    def fake_run(_messages, *, config, stage):
+    def fake_run(_messages, *, config, stage, reasoning_off=False):
         nonlocal calls
         del config
         assert stage == "synthesis"
@@ -628,11 +631,7 @@ def test_synthesis_retries_invalid_json_and_preserves_ledger_support_ids(
             )
         ]
 
-    async def run_inline(function, *args, **kwargs):
-        return function(*args, **kwargs)
-
     monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
-    monkeypatch.setattr(catalog_module.asyncio, "to_thread", run_inline)
     config = load_default_preset()
     config.good_option_catalog["synthesis_max_attempts"] = 2
     evidence = EvidencePassage(
@@ -665,7 +664,7 @@ def test_synthesis_retries_token_limited_or_all_empty_outputs(
 ) -> None:
     calls = 0
 
-    def fake_run(messages_list, *, config, stage):
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
         nonlocal calls
         del config
         calls += 1
@@ -685,6 +684,8 @@ def test_synthesis_retries_token_limited_or_all_empty_outputs(
                 )
             ]
         assert "all arrays were empty" in messages_list[0][-1]["content"]
+        # The last error was not a token limit, so thinking stays on.
+        assert not reasoning_off
         return [
             json.dumps(
                 {
@@ -700,11 +701,7 @@ def test_synthesis_retries_token_limited_or_all_empty_outputs(
             )
         ]
 
-    async def run_inline(function, *args, **kwargs):
-        return function(*args, **kwargs)
-
     monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
-    monkeypatch.setattr(catalog_module.asyncio, "to_thread", run_inline)
     evidence = EvidencePassage(
         evidence_id="ledger:E1",
         drug_id="D1",
@@ -990,7 +987,7 @@ def test_serial_synthesis_carries_facts_across_chunks_with_resolved_ids(
 
     seen: list[str] = []
 
-    def fake_run(messages_list, *, config, stage):
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
         del config, stage
         body = messages_list[0][-1]["content"]
         seen.append(body)
@@ -1013,11 +1010,7 @@ def test_serial_synthesis_carries_facts_across_chunks_with_resolved_ids(
             )
         ]
 
-    async def run_inline(function, *args, **kwargs):
-        return function(*args, **kwargs)
-
     monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
-    monkeypatch.setattr(catalog_module.asyncio, "to_thread", run_inline)
 
     result = asyncio.run(
         catalog_module.synthesize_serially(
@@ -1038,6 +1031,183 @@ def test_serial_synthesis_carries_facts_across_chunks_with_resolved_ids(
     assert [item["text"] for item in items] == ["First.", "Second."]
     assert [item["support_ids"] for item in items] == [["ledger:E1"], ["ledger:E2"]]
     assert all(item["scope"] == "agent" for item in items)
+
+
+def _synthesis_passage(drug_id: str, index: int) -> EvidencePassage:
+    return EvidencePassage(
+        evidence_id=f"ledger:{drug_id}-{index}",
+        drug_id=drug_id,
+        facet="efficacy_by_tumor",
+        source="pubmed",
+        source_type="literature_abstract",
+        title="Abstract",
+        passage="x" * 3000,
+        url="",
+        source_locator=f"{drug_id}-{index}",
+        content_sha256=f"{drug_id}-{index}",
+    )
+
+
+def _one_fact_synthesis() -> str:
+    return json.dumps(
+        {
+            **{category: [] for category in catalog_module._SYNTHESIS_CATEGORIES},
+            "efficacy_by_tumor": [{"text": "Responds.", "support_ids": ["P1"]}],
+        }
+    )
+
+
+def test_synthesis_chains_finish_each_subject_without_waiting_for_others(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A one-chunk subject is checkpointed while a three-chunk one is mid-chain.
+
+    Lock-step rounds held every subject until the longest finished, so a single
+    long ledger delayed every checkpoint in its batch.
+    """
+
+    short_done = threading.Event()
+    lock = threading.Lock()
+    in_flight = 0
+    peak = 0
+    long_calls: list[str] = []
+    short_done_before_long_last_round: list[bool] = []
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        nonlocal in_flight, peak
+        del config, stage, reasoning_off
+        body = messages_list[0][-1]["content"]
+        with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+            if "Long Agent" in body:
+                long_calls.append(body)
+            is_long_last_round = "Long Agent" in body and len(long_calls) == 3
+        try:
+            if is_long_last_round:
+                short_done_before_long_last_round.append(short_done.wait(timeout=5))
+            else:
+                time.sleep(0.05)
+            return [_one_fact_synthesis()]
+        finally:
+            with lock:
+                in_flight -= 1
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    config = load_default_preset()
+    config.remote["enabled"] = True
+    config.remote["max_concurrent_requests"] = 2
+    completed: list[str] = []
+    progress: list[tuple[int, int]] = []
+
+    def on_complete(drug, facts):
+        assert facts["efficacy_by_tumor"]
+        completed.append(drug.drug_id)
+        if drug.drug_id == "SHORT":
+            short_done.set()
+
+    result = asyncio.run(
+        catalog_module.synthesize_serially(
+            [
+                (
+                    DrugIdentity(drug_id="LONG", preferred_name="Long Agent"),
+                    [_synthesis_passage("LONG", index) for index in (1, 2, 3)],
+                ),
+                (
+                    DrugIdentity(drug_id="SHORT", preferred_name="Short Agent"),
+                    [_synthesis_passage("SHORT", 1)],
+                ),
+            ],
+            config=config,
+            chunk_token_limit=1000,  # 4,000 characters: one passage per chunk.
+            on_subject_complete=on_complete,
+            progress_callback=lambda done, total: progress.append((done, total)),
+        )
+    )
+
+    assert len(long_calls) == 3
+    assert short_done_before_long_last_round == [True]
+    assert completed == ["SHORT", "LONG"]
+    assert progress == [(1, 2), (2, 2)]
+    assert peak == 2
+    assert set(result) == {"LONG", "SHORT"}
+
+
+def test_synthesis_disables_thinking_only_after_repeated_token_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[bool] = []
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        del messages_list, config, stage
+        seen.append(reasoning_off)
+        if not reasoning_off:
+            return [
+                catalog_module._CatalogLLMOutput(
+                    text="", finish_reason="length", reasoning="unfinished"
+                )
+            ]
+        return [_one_fact_synthesis()]
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+
+    result = asyncio.run(
+        catalog_module.synthesize_serially(
+            [
+                (
+                    DrugIdentity(drug_id="D1", preferred_name="Novel Agent"),
+                    [_synthesis_passage("D1", 1)],
+                )
+            ],
+            config=load_default_preset(),
+        )
+    )
+
+    assert seen == [False, False, True]
+    assert result["D1"]["efficacy_by_tumor"][0]["support_ids"] == ["ledger:D1-1"]
+
+
+def test_reasoning_off_overrides_thinking_enabled_by_a_stage_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[dict] = []
+
+    class FakeBackend:
+        def generate_llm_outputs(self, *, prompt_list, llm_config, **_kwargs):
+            captured.append(llm_config)
+            return SimpleNamespace(
+                final_outputs=["{}"] * len(prompt_list),
+                finish_reasons=["stop"] * len(prompt_list),
+                reasoning_outputs=[""] * len(prompt_list),
+            )
+
+    monkeypatch.setattr(catalog_module, "get_llm_backend", lambda _config: FakeBackend())
+    config = load_default_preset()
+    config.remote["enabled"] = True
+    # Served-model profiles set enable_thinking on the stage override as well.
+    apply_model_profile(
+        config,
+        "Inferact/Qwen3.8-Flash-Next-NVFP4",
+        sections=("llm_good_option", "good_option_catalog.synthesis_llm"),
+    )
+    messages = [[{"role": "user", "content": "Synthesize."}]]
+
+    catalog_module._run_llm_messages(messages, config=config, stage="synthesis")
+    catalog_module._run_llm_messages(
+        messages, config=config, stage="synthesis", reasoning_off=True
+    )
+
+    thinking = [
+        runtime["remote"]["extra_body"]["chat_template_kwargs"]["enable_thinking"]
+        for runtime in captured
+    ]
+    assert thinking == [True, False]
+    assert "reasoning_effort" not in captured[1]["remote"]["request_params"]
+    assert captured[1]["remote"]["request_params"]["max_tokens"] == 100000
+    # The fallback is per call; the shared config still thinks.
+    assert config.good_option_catalog["synthesis_llm"]["remote"]["extra_body"][
+        "chat_template_kwargs"
+    ]["enable_thinking"] is True
 
 
 def test_class_ids_are_stable_across_wording_of_the_same_class() -> None:

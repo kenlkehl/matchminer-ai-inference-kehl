@@ -34,6 +34,9 @@ from ._guideline_ownership import branch_ledger, page_owners
 from ._guideline_repairs import repair_response
 from ._guideline_quotes import QUOTED_DETAIL, materialize_quoted_state
 from ._guideline_quotes import VERSION as QUOTE_VERSION
+from ._guideline_quote_repair import PROMPT_FILES as QUOTE_REPAIR_PROMPT_FILES
+from ._guideline_quote_repair import VERSION as QUOTE_REPAIR_VERSION
+from ._guideline_quote_repair import repair_quoted_response
 from ._guideline_specificity import validate_decision_field_batch
 from ._guideline_schema import (
     EXTRACTION,
@@ -99,19 +102,23 @@ def run_guideline(
             packet_pages,
             context_chars,
             progress_callback,
+            audit_pending=finalize is not None,
         )
         if finalize is not None:
             try:
                 finalize()
-            except Exception as exc:
+            except (Exception, KeyboardInterrupt) as exc:
                 status.update(
-                    status="failed",
+                    status="interrupted" if isinstance(exc, KeyboardInterrupt) else "failed",
                     stage="audit",
                     updated_utc=now(),
                     error=f"{type(exc).__name__}: {exc}",
                 )
                 atomic_json(output / "status.json", status)
                 raise
+            if status.get("status") == "running" and status.get("stage") == "audit":
+                status.update(status="complete", stage="export", updated_utc=now())
+                atomic_json(output / "status.json", status)
         return status
 
 
@@ -124,6 +131,8 @@ def _run(
     packet_pages,
     context_chars,
     progress_callback=None,
+    *,
+    audit_pending=False,
 ):
     def notify(message):
         log(message)
@@ -191,13 +200,38 @@ def _run(
             # extraction/consolidation/detail requests. Reuse them only after
             # all old settings match and the new guard revalidates consolidation.
             # Changes to an existing prompt, model, source or budget still fail.
-            for name in COVERAGE_PROMPT_FILES:
+            for name in (*COVERAGE_PROMPT_FILES, *QUOTE_REPAIR_PROMPT_FILES):
                 if name not in old_identity["prompt_resources_sha256"]:
                     compatible_identity["prompt_resources_sha256"].pop(name, None)
             if not valid_old_digest or digest(old_identity) != digest(compatible_identity):
                 raise ValueError(
                     "Source, model, prompt or extraction settings changed; choose a new output_dir"
                 )
+        # A collection summary can lag behind a successful independent recovery.
+        # Preserve that disease's audited result instead of rebuilding its
+        # intermediate files and resending coverage reviews. Only an identical
+        # configuration can take this path; migrations still run all new guards.
+        status_path = output / "status.json"
+        audit_path = output / "validation.json"
+        export_path = output / "paradigms.jsonl"
+        if (
+            previous_config["config_sha256"] == config_id
+            and status_path.exists() and audit_path.exists() and export_path.exists()
+        ):
+            saved_status = read_json(status_path)
+            saved_audit = read_json(audit_path)
+            if (
+                saved_status.get("status") == "complete"
+                and saved_audit.get("status") == "passed"
+                and saved_audit.get("source_fingerprint") == guideline.fingerprint
+                and saved_audit.get("paradigms", 0) > 0
+                and saved_audit["paradigms"] == saved_status.get("paradigms")
+                and saved_audit.get("paradigms_sha256") == digest(export_path.read_bytes())
+            ):
+                notify(f"{guideline.disease}: reusing audited completed catalog")
+                # run_guideline still executes its final audit callback under
+                # the directory lock before the public API returns success.
+                return saved_status
     atomic_json(
         config_path,
         {
@@ -212,6 +246,7 @@ def _run(
                 "ownership": OWNERSHIP_VERSION,
                 "json_normalization": JSON_NORMALIZATION_VERSION,
                 "detail_citations": QUOTE_VERSION,
+                "detail_citation_repairs": QUOTE_REPAIR_VERSION,
             },
         },
     )
@@ -430,6 +465,10 @@ def _run(
                 messages,
                 QUOTED_DETAIL,
                 validate,
+                repair_handler=lambda v, error: repair_quoted_response(
+                    client, guideline, supplied, key, v, error, validate,
+                    output=output, notify=notify,
+                ),
             )
             # Stable within a source edition and canonical definition, independent of completion order.
             pid = f"nccn-{guideline.disease}-{digest({'pdf': metadata['source_sha256'], 'space': group['space']})[:16]}"
@@ -480,8 +519,8 @@ def _run(
             )
         export(output, rows)
         status.update(
-            status="complete",
-            stage="export",
+            status="running" if audit_pending else "complete",
+            stage="audit" if audit_pending else "export",
             updated_utc=now(),
             paradigms=len(rows),
             candidates=len(candidates),

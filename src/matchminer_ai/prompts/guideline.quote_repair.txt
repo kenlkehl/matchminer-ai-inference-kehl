@@ -1,0 +1,22 @@
+Repair only the rejected citation for the fixed clinical assertion below. Return the requested
+JSON, not a rewritten clinical record. The fixed population, option, conditions, category, and
+other citations must not change. Use no medical facts from memory.
+
+The rejected excerpt is not trustworthy. Locate source text that supports the SAME assertion
+for the SAME population and conditions. Return one or more evidence items containing page_id
+and source_text. Copy contiguous source words exactly, retaining capitalization, punctuation,
+footnote characters, and hyphens. Do not copy L-number prefixes. Do not reconstruct a sentence
+by joining words from opposite sides of a PDF column or across intervening column text.
+Use separate evidence items for separate wrapped source fragments.
+
+Each source_text must occur exactly once on its page. If the rejected excerpt occurs more than
+once, copy enough adjacent literal source text to identify the appropriate occurrence. Do not
+merely repeat the ambiguous excerpt or append a nearby heading that is not contiguous in the
+source. An excerpt may span at most 12 source lines. A longer excerpt is not evidence of
+applicability unless its actual words and branch context support the fixed assertion.
+
+The affected source pages are repeated next to the fixed assertion to make exact copying easier.
+Other originally supplied pages are available for supporting context. Never substitute a passage
+only because it has similar vocabulary. If the assertion cannot be supported without changing
+clinical content, return no replacement evidence and explain why in unresolved. Do not invent
+support, drop the assertion, or claim a repair succeeded.

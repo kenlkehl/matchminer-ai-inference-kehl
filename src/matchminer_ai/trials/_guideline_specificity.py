@@ -5,7 +5,7 @@ import re
 VERSION = "trialspace-field-semantics-v3"
 # A backward-compatible checker fix does not change generation prompts or the
 # representation contract. Offline audits record the implementation revision.
-REVISION = "trialspace-field-semantics-v3.3-numeric-thresholds"
+REVISION = "trialspace-field-semantics-v3.5-count-quantifiers"
 
 _ORDINALS = {
     word: str(i)
@@ -52,6 +52,20 @@ _NUMERIC_THRESHOLD = re.compile(
     r"(?:higher|lower|greater|less|more|fewer|older|younger|above|below)"
     r"(?=\s*(?:$|[),.;:]|\b(?:and|or)\b))"
 )
+# The OR within a spelled-out numeric comparator also belongs to one predicate.
+# Require an actual numeric bound, so prose alternatives are not masked.
+_INCLUSIVE_COMPARISON = re.compile(
+    r"\b(?:less|greater)\s+(?:than\s+)?(?P<operator>or)\s+equal\s+to\s+"
+    r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?![\w.])"
+)
+# Count quantifiers are atomic too. Restrict the following word to count units:
+# "one OR more advanced disease" must remain an ungrouped alternative.
+_COUNT_QUANTIFIER = re.compile(
+    r"\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    r"(?P<operator>or)\s+(?:more|fewer)\s+"
+    r"(?:tumou?rs|lesions|nodes|sites|cycles|lines|doses|agents|therapies|"
+    r"treatments|regimens|mutations|abnormalities|episodes|courses)\b"
+)
 
 
 def explicit_lines(text):
@@ -68,9 +82,12 @@ def has_ungrouped_mixed_logic(text):
     text = text.casefold()
     # Mask only the comparison's operator while tokenizing. Never rewrite the
     # stored field or turn an ungrouped population alternative into conjunction.
-    for match in reversed(list(_NUMERIC_THRESHOLD.finditer(text))):
-        start, end = match.span("operator")
-        text = text[:start] + " " * (end - start) + text[end:]
+    for comparison in (
+        _NUMERIC_THRESHOLD, _INCLUSIVE_COMPARISON, _COUNT_QUANTIFIER,
+    ):
+        for match in reversed(list(comparison.finditer(text))):
+            start, end = match.span("operator")
+            text = text[:start] + " " * (end - start) + text[end:]
     levels = [set()]
     for token in re.findall(r"[()]|\band\s*/\s*or\b|\b(?:and|or)\b", text):
         if token == "(":

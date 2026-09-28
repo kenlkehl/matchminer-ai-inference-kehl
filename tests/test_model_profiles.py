@@ -125,6 +125,6 @@ def test_thinking_floor_raises_catalog_stage_budgets_only_upward():
     catalog = config.good_option_catalog
     for stage in ("screening_llm", "class_llm"):
         assert catalog[stage]["remote"]["request_params"]["max_tokens"] == floor
-    assert catalog["synthesis_llm"]["remote"]["request_params"]["max_tokens"] == 50000
+    assert catalog["synthesis_llm"]["remote"]["request_params"]["max_tokens"] == 100000
     assert config.llm_good_option["remote"]["request_params"]["max_tokens"] == 100000
     assert "reasoning_parser" not in catalog["screening_llm"]

@@ -424,8 +424,10 @@ async def generate_remote_llm_outputs_async(
             finish_reasons[result.row_idx] = result.finish_reason
         return texts, reasonings, finish_reasons
     finally:
+        # AsyncOpenAI exposes close(), not aclose(); skipping it leaked one
+        # CLOSE-WAIT socket per request across long catalog builds.
         close_tasks = [
-            client.aclose() for client, _ in server_clients if hasattr(client, "aclose")
+            client.close() for client, _ in server_clients if hasattr(client, "close")
         ]
         if close_tasks:
             await asyncio.gather(*close_tasks, return_exceptions=True)

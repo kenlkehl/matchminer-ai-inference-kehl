@@ -382,7 +382,9 @@ good_option_catalog:
   # Evidence is no longer truncated to fit one call. It is chunked, and a running
   # synthesis is carried across the chunks, so nothing is discarded unread. This
   # bounds one chunk; the whole ledger is covered however many chunks that takes.
-  synthesis_chunk_max_tokens: 100000
+  # A chunk, the carried-forward facts (up to ~30k tokens), and the 100k
+  # synthesis completion budget must fit together in a 262,144-token context.
+  synthesis_chunk_max_tokens: 60000
   # Retained for tooling that still reports a whole-ledger budget.
   synthesis_evidence_max_tokens: 190000
   # Class synthesis is a separate call on its own budget, so a large shared
@@ -394,7 +396,6 @@ good_option_catalog:
   synthesis_max_attempts: 3
   class_assignment_max_attempts: 3
   screening_checkpoint_batch_size: 64
-  synthesis_checkpoint_batch_size: 64
   class_checkpoint_batch_size: 64
   screening_llm:
     local:
@@ -406,10 +407,10 @@ good_option_catalog:
   synthesis_llm:
     local:
       generation:
-        max_tokens: 50000
+        max_tokens: 100000
     remote:
       request_params:
-        max_tokens: 50000
+        max_tokens: 100000
   class_llm:
     local:
       generation:

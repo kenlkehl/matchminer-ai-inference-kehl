@@ -51,7 +51,8 @@ class FakeAsyncOpenAI:
         self.closed = False
         FakeAsyncOpenAI.clients.append(self)
 
-    async def aclose(self):
+    # Mirrors the real SDK, which has close() and no aclose().
+    async def close(self):
         self.closed = True
         await self.http_client.aclose()
 

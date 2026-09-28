@@ -4,9 +4,10 @@ import copy
 import difflib
 import json
 
-from matchminer_ai._storage import atomic_json
+from matchminer_ai._storage import atomic_json, digest
 
 from . import _guideline_prompts as prompts
+from ._guideline_batching import run_batches
 from ._guideline_context import ContextBudgetError, pack_messages
 from ._guideline_completeness import (
     CoverageError, RETRY_TASK, require_coverage, review_coverage,
@@ -22,7 +23,7 @@ from ._guideline_schema import (
     validate_evidence,
     validate_shape,
 )
-from ._guideline_specificity import validate_decision_fields
+from ._guideline_specificity import validate_decision_field_batch
 from .prompt_builder import load_prompt_text
 
 LEAN_STATE = obj(
@@ -111,8 +112,8 @@ def validate_catalog(value, pages, guideline_title=None):
     for state in value["states"]:
         format_space(state["space"])
         validate_evidence(state["evidence"], pages)
-        if guideline_title is not None:
-            validate_decision_fields(state, guideline_title)
+    if guideline_title is not None:
+        validate_decision_field_batch(value["states"], guideline_title)
 
 
 def partition_calls(client, guideline, candidates, context_chars=None):
@@ -227,7 +228,8 @@ def build_selection_call(client, guideline, states):
 
 
 def consolidate(
-    client, guideline, candidates, output, workers, run_jobs, log, context_chars=None
+    client, guideline, candidates, output, workers, run_jobs, log, context_chars=None,
+    *, coverage_repairs=(),
 ):
     def covered_complete(key, messages, schema, validate, inputs, states_from):
         def guarded(value):
@@ -266,6 +268,24 @@ def consolidate(
     def local(key, data):
         members, packed = data
         pages = {p.id: p for p in packed[0]}
+        messages = packed[2]
+        member_ids = {c["candidate_id"] for c in members}
+        for report in coverage_repairs:
+            findings = [
+                row for candidate, row in zip(candidates, report["reviews"])
+                if candidate["candidate_id"] in member_ids and row["status"] != "represented"
+            ]
+            if findings:
+                messages = [*messages, {"role": "user", "content":
+                    load_prompt_text("guideline.canonical_restore.txt")
+                    + json.dumps(findings, ensure_ascii=False)}]
+        if messages is not packed[2]:
+            if not client.fits(messages):
+                raise ContextBudgetError(
+                    "Final coverage repair exceeds input budget; source and output reserve are unchanged"
+                )
+            key += "-final-coverage-" + digest(messages)[:16]
+            packed = (packed[0], packed[1], messages)
         value = covered_complete(
             key,
             packed[2],
@@ -280,10 +300,9 @@ def consolidate(
             "input_candidate_ids": [c["candidate_id"] for c in members],
         }
 
-    values, failures = run_jobs(
-        [(f"catalog-content-{i:04d}", data) for i, data in enumerate(planned, 1)],
-        workers,
-        local,
+    values, failures = run_batches(
+        planned, guideline, candidates, output, workers, run_jobs, local,
+        lambda members: build_call(client, guideline, members, context_chars), log,
     )
     atomic_json(
         output / "canonical_batches.json",
@@ -305,10 +324,10 @@ def consolidate(
         raise ValueError("No source-backed disease-state definitions extracted")
     context_metadata = {
         "mode": VERSION,
-        "batch_count": len(planned),
+        "batch_count": len(values),
         "batches": {key: v["context"] for key, v in values.items()},
     }
-    if len(planned) > 1:
+    if len(values) > 1:
         packed = build_selection_call(client, guideline, states)
         selected = covered_complete(
             "catalog-select-content",
@@ -330,7 +349,23 @@ def consolidate(
     # coverage. Identical review requests reuse the client's validated cache.
     coverage = review_coverage(client, candidates, states)
     atomic_json(output / "canonical_coverage.json", coverage)
-    require_coverage(coverage)
+    try:
+        require_coverage(coverage)
+    except CoverageError:
+        # Final reviews can catch distinctions that intermediate reviews missed.
+        # A retry must revisit the originating source batches, not repeat the
+        # unchanged final review or ask closed selection to invent definitions.
+        atomic_json(output / "population_coverage" / ("final-" + digest(coverage) + ".json"), coverage)
+        if (
+            len(coverage_repairs) >= client.config.attempts
+            or any(digest(previous) == digest(coverage) for previous in coverage_repairs)
+        ):
+            raise
+        log(f"{guideline.disease}: restoring source batches after final population-coverage failure")
+        return consolidate(
+            client, guideline, candidates, output, workers, run_jobs, log, context_chars,
+            coverage_repairs=(*coverage_repairs, coverage),
+        )
     atomic_json(output / "canonical_context.json", context_metadata)
     return {
         "version": VERSION,

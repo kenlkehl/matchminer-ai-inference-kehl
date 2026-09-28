@@ -94,9 +94,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help=(
-            "Subjects per screening, class, and synthesis checkpoint batch. A "
-            "batch waits on its slowest subject, so larger batches keep a slow "
-            "reasoning model saturated. Part of the checkpoint fingerprint."
+            "Subjects per screening and classify checkpoint batch. A batch "
+            "waits on its slowest subject, so larger batches keep a slow "
+            "reasoning model saturated. Synthesis is not batched: each subject "
+            "is checkpointed when its own chain finishes, with up to "
+            "--max-concurrent-requests chains in flight. Part of the checkpoint "
+            "fingerprint."
         ),
     )
     parser.add_argument("--research-concurrency", type=int, default=None)
@@ -143,7 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     config.remote["max_concurrent_requests"] = args.max_concurrent_requests
     if args.llm_batch_size is not None:
-        for stage in ("screening", "synthesis", "class"):
+        for stage in ("screening", "class"):
             config.good_option_catalog[f"{stage}_checkpoint_batch_size"] = (
                 args.llm_batch_size
             )

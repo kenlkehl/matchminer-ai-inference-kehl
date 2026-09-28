@@ -108,6 +108,10 @@ def main():
     parser.add_argument("--completed-catalog", type=Path, action="append", default=[])
     parser.add_argument("--disease", action="append", help="Optional explicit subset")
     parser.add_argument(
+        "--defer-disease", action="append", default=[],
+        help="Keep a disease in collection identity/status but leave it to another worker",
+    )
+    parser.add_argument(
         "--retry-failed",
         action="store_true",
         help="Resume only failed diseases from collection.json; write recovery.json",
@@ -203,6 +207,9 @@ def main():
     previous = json.loads(saved.read_text()) if saved.exists() else {}
     if previous and previous["identity"] != identity:
         parser.error("Collection inputs changed; use a new output directory")
+    deferred = set(args.defer_disease)
+    if deferred - set(diseases):
+        parser.error(f"Deferred diseases are outside this collection: {sorted(deferred - set(diseases))}")
     if args.retry_failed:
         if not saved.exists():
             parser.error("--retry-failed requires an existing collection.json")
@@ -227,6 +234,7 @@ def main():
         "endpoints": endpoints,
         "endpoint_models": endpoint_models,
         "new_disease_endpoint": new_endpoint,
+        "deferred_diseases": sorted(deferred & set(diseases)),
         "diseases": {
             d: {
                 **previous.get("diseases", {}).get(d, {"status": "pending"}),
@@ -273,18 +281,29 @@ def main():
             e: stack.enter_context(ThreadPoolExecutor(max_workers=args.disease_workers))
             for e in endpoints
         }
-        priority = {"running": 0, "failed": 1, "pending": 2, "complete": 3}
+        # A resume should repair known failures promptly instead of leaving them
+        # behind every already-running disease's potentially long consolidation.
+        priority = {"failed": 0, "running": 1, "pending": 2, "complete": 3}
         ordered = sorted(
-            diseases, key=lambda d: priority.get(state["diseases"][d]["status"], 2)
+            (d for d in diseases if d not in deferred),
+            key=lambda d: priority.get(state["diseases"][d]["status"], 2),
         )
         for future in as_completed(
             [executors[assignments[d]].submit(run, d) for d in ordered]
         ):
             future.result()
     failed = [
-        d for d, status in state["diseases"].items() if status["status"] != "complete"
+        d for d, status in state["diseases"].items()
+        if d not in deferred and status["status"] != "complete"
     ]
-    update(status="failed" if failed else "complete", failed_diseases=failed)
+    outstanding_deferred = [
+        d for d in state["deferred_diseases"]
+        if state["diseases"][d]["status"] != "complete"
+    ]
+    update(
+        status="failed" if failed else "deferred" if outstanding_deferred else "complete",
+        failed_diseases=failed,
+    )
     return bool(failed)
 
 

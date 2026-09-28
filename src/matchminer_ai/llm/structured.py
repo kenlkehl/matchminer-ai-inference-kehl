@@ -394,7 +394,10 @@ class StructuredClient:
                 return revision
         return fallback
 
-    def complete(self, job, messages, schema, validator, repair_handler=None):
+    def complete(
+        self, job, messages, schema, validator, repair_handler=None,
+        *, reuse_exhausted=False,
+    ):
         body = {
             "model": self.config.model,
             "messages": messages,
@@ -577,6 +580,14 @@ class StructuredClient:
                     return accept_response(read_json(path))
                 except (ValueError, KeyError, TypeError, IndexError):
                     continue
+        # A caller with an alternate repair strategy need not repeat an already
+        # exhausted strategy on every resume. Still recover valid saved answers
+        # above, and never count an interrupted request as a failed response.
+        if (
+            reuse_exhausted
+            and len(list(folder.glob("failure-*.json"))) >= self.config.attempts
+        ):
+            raise EndpointError(f"{job}: saved attempts exhausted: {last_error}")
         for attempt in range(1, self.config.attempts + 1):
             attempt_body = dict(body)
             if self.config.stream:
