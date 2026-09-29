@@ -62,7 +62,7 @@ Task-specific request payload settings live under each task's `remote` block.
 The remote backend reads the API key from the `OPENAI_API_KEY` environment
 variable. API keys are not stored in preset files.
 
-Google Agent Platform MaaS is also supported through its OpenAI-compatible Chat
+Google Agent Platform (Gemini and MaaS) is supported through its OpenAI-compatible Chat
 Completions route. Set `remote.provider` to `google_agent_platform`; the package
 then uses Google Application Default Credentials (ADC), refreshes the OAuth
 access token for each request, converts a leading system message to the
@@ -110,6 +110,36 @@ authorized for the sensitivity of any clinical text sent to it.
 
 `check_openai_endpoint()` uses a minimal patient-free chat completion for this
 provider because the MaaS OpenAI route does not document `/models`.
+
+Gemini 3.8 Flash uses the same global endpoint and ADC profile with model
+`google/gemini-3.8-flash`. System messages are retained for Gemini. Its supported
+reasoning efforts are `low`, `medium`, and `high`; the provider maps an `xhigh`
+request to `high`. Explicit sampling fields and vLLM extensions are omitted,
+because [Gemini 3.8 manages sampling internally](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-3-8-flash).
+
+For patient summarization and `review_patient_workup`, configure the patient task
+after setting the Google remote profile above:
+
+```python
+config.patient.update(
+    sampling_profile="none", reasoning_effort="high",
+    context_window=1048576, tokenizer_mode="bytes",
+)
+config.patient["local"]["engine"]["max_model_len"] = 1048576
+config.patient["local"]["chat_template_kwargs"] = {}
+config.patient["remote"].update(
+    model_name="google/gemini-3.8-flash",
+    tokenizer_name="Qwen/Qwen3-0.6B",
+    request_params={"max_tokens": 65536, "reasoning_effort": "high"},
+    extra_body={},
+)
+```
+
+The local tokenizer supplies chunk boundaries only; byte accounting conservatively
+bounds the hosted-model prompt instead of claiming exact Gemini token counts.
+Workup review skips vLLM discovery/tokenization routes, refreshes ADC for structured
+requests, and retains its normal JSON schema and exact patient-note quote validation.
+These settings do not change a separately configured guideline catalog run.
 
 ### `remote.google_project_id`
 

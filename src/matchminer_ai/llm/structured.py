@@ -13,6 +13,11 @@ from urllib.request import Request, urlopen
 
 from matchminer_ai._storage import atomic_json, digest, read_json
 
+from .remote_auth import (
+    GOOGLE_AGENT_PLATFORM_PROVIDER,
+    remote_bearer_token,
+    remote_provider_name,
+)
 from .remote_inference import build_remote_request_config, normalize_remote_server_urls
 
 
@@ -38,9 +43,16 @@ class StructuredConfig:
 
     request_params: dict = field(default_factory=dict)
     extra_body: dict = field(default_factory=dict)
+    provider: str = "openai"
+    google_project_id: str = ""
 
     def public_dict(self):
-        return asdict(self)  # Contains only the key's environment-variable NAME.
+        result = asdict(self)  # Contains only the key's environment-variable NAME.
+        if self.provider == "openai" and not self.google_project_id:
+            # Preserve existing local endpoint checkpoint identities.
+            result.pop("provider")
+            result.pop("google_project_id")
+        return result
 
 
 class EndpointError(RuntimeError):
@@ -226,6 +238,20 @@ class StructuredClient:
     def _http(self, endpoint, body=None, *, server_root=False, output_schema=None):
         headers = {"Content-Type": "application/json"}
         key = os.environ.get(self.config.api_key_env)
+        if self.config.provider == GOOGLE_AGENT_PLATFORM_PROVIDER:
+            parsed = urlsplit(self.config.base_url)
+            if (
+                parsed.scheme != "https"
+                or not re.fullmatch(
+                    r"(?:[a-z0-9-]+-)?aiplatform\.googleapis\.com", parsed.hostname or ""
+                )
+                or parsed.username or parsed.password or parsed.port not in (None, 443)
+            ):
+                raise ValueError("Google credentials require an HTTPS Agent Platform endpoint.")
+            key = remote_bearer_token({
+                "provider": self.config.provider,
+                "google_project_id": self.config.google_project_id,
+            })
         if key:
             headers["Authorization"] = "Bearer " + key
         base = self.config.base_url.rstrip("/")
@@ -238,10 +264,19 @@ class StructuredClient:
         )
         from .request_limits import endpoint_slot
 
+        # These CPU/metadata routes do not generate tokens. Sharing their slots
+        # with long completions can delay each exact-tokenizer packing check by
+        # an entire generation. Keep preparation bounded independently.
+        preparation = endpoint in {"/models", "/tokenize"}
+        limit = self.config.max_concurrent_requests
+        if preparation:
+            limit = min(limit, 4)
         try:
             with (
                 endpoint_slot(
-                    self.config.base_url, self.config.max_concurrent_requests
+                    self.config.base_url,
+                    limit,
+                    pool="preparation" if preparation else "generation",
                 ),
                 urlopen(request, timeout=self.config.timeout) as response,
             ):
@@ -424,6 +459,16 @@ class StructuredClient:
             }
         body.update(self.config.request_params)
         body.update(self.config.extra_body)
+        if (
+            self.config.provider == GOOGLE_AGENT_PLATFORM_PROVIDER
+            and self.config.model.removeprefix("google/").startswith("gemini-3.8-")
+        ):
+            for name in (
+                "temperature", "top_p", "top_k", "min_p", "presence_penalty",
+                "frequency_penalty", "repetition_penalty", "candidate_count",
+                "chat_template_kwargs",
+            ):
+                body.pop(name, None)
         if not self.fits(messages):
             raise ValueError(
                 f"{job}: prompt exceeds {self.prompt_budget} available input tokens "
@@ -743,6 +788,8 @@ def resolve_structured_config(
         raise ValueError("stream must be boolean.")
     config = StructuredConfig(
         base_url=urls[0],
+        provider=remote_provider_name(runtime),
+        google_project_id=runtime.get("google_project_id", ""),
         model=model,
         context_window=context or maximum + safety + 1,
         max_tokens=maximum,

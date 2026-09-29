@@ -5,7 +5,7 @@ import re
 VERSION = "trialspace-field-semantics-v3"
 # A backward-compatible checker fix does not change generation prompts or the
 # representation contract. Offline audits record the implementation revision.
-REVISION = "trialspace-field-semantics-v3.5-count-quantifiers"
+REVISION = "trialspace-field-semantics-v3.6-temporal-comparators"
 
 _ORDINALS = {
     word: str(i)
@@ -58,6 +58,12 @@ _INCLUSIVE_COMPARISON = re.compile(
     r"\b(?:less|greater)\s+(?:than\s+)?(?P<operator>or)\s+equal\s+to\s+"
     r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?![\w.])"
 )
+# A numeric time boundary is one predicate, including its endpoint. Require
+# both the number and a time unit; "at OR after treatment" remains unmasked.
+_TEMPORAL_COMPARISON = re.compile(
+    r"\bat\s+(?P<operator>or)\s+(?:before|after)\s+"
+    r"\d+(?:\.\d+)?\s+(?:days?|weeks?|months?|years?)(?=\s|[),.;:]|$)"
+)
 # Count quantifiers are atomic too. Restrict the following word to count units:
 # "one OR more advanced disease" must remain an ungrouped alternative.
 _COUNT_QUANTIFIER = re.compile(
@@ -83,7 +89,8 @@ def has_ungrouped_mixed_logic(text):
     # Mask only the comparison's operator while tokenizing. Never rewrite the
     # stored field or turn an ungrouped population alternative into conjunction.
     for comparison in (
-        _NUMERIC_THRESHOLD, _INCLUSIVE_COMPARISON, _COUNT_QUANTIFIER,
+        _NUMERIC_THRESHOLD, _INCLUSIVE_COMPARISON, _TEMPORAL_COMPARISON,
+        _COUNT_QUANTIFIER,
     ):
         for match in reversed(list(comparison.finditer(text))):
             start, end = match.span("operator")

@@ -190,11 +190,13 @@ def test_catalog_validation_lists_all_bad_fields_without_mutating_draft(tmp_path
     assert value == original
 
 
-def test_resume_revalidates_numeric_comparator_without_regenerating(client, monkeypatch):
+@pytest.mark.parametrize("field,text", [
+    ("cancer_burden_allowed", "Extent A AND size less than or equal to 2 cm AND negative margins"),
+    ("prior_treatment_required", "Prior initial therapy AND relapse at or after 2 years after therapy"),
+])
+def test_resume_revalidates_numeric_comparator_without_regenerating(client, monkeypatch, field, text):
     value = {"name": "Synthetic extent", "space": dict.fromkeys(FIELDS, "NA")}
-    value["space"]["cancer_burden_allowed"] = (
-        "Extent A AND size less than or equal to 2 cm AND negative margins"
-    )
+    value["space"][field] = text
     client.config = replace(client.config, attempts=1)
     monkeypatch.setattr(client, "_http", lambda *args, **kwargs: response(value))
 

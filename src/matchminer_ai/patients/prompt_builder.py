@@ -187,12 +187,21 @@ def build_prompt_worker(item: PromptWorkItem) -> Prompt:
     prompt_token_count = len(
         _worker_tokenizer(prompt_text, add_special_tokens=False).input_ids
     )
+    if _worker_config.get("tokenizer_mode") == "bytes":
+        # Hosted models may not publish a tokenizer. Use the local tokenizer for
+        # chunk boundaries, but budget conservatively instead of claiming its
+        # counts describe the remote model.
+        prompt_token_count = 64 + sum(
+            len(message["content"].encode("utf-8")) + 32 for message in messages
+        )
     max_tokens = int(_worker_config["sampling_params"]["max_tokens"])
     available_generation_tokens = (
         int(_worker_config["max_model_len"])
         - prompt_token_count
         - _RESPONSE_TOKEN_MARGIN
     )
+    if _worker_config.get("tokenizer_mode") == "bytes" and available_generation_tokens <= 0:
+        raise ValueError("Patient prompt exceeds the configured context budget.")
     gen_tokens = max(1, min(available_generation_tokens, max_tokens))
     return Prompt(
         row_idx=item.row_idx,

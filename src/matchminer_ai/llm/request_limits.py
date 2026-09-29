@@ -5,20 +5,24 @@ from contextlib import contextmanager
 from threading import Condition
 
 _condition = Condition()
-_states: dict[str, dict] = {}
+_states: dict[tuple[str, str], dict] = {}
 
 
 @contextmanager
-def endpoint_slot(base_url, limit):
+def endpoint_slot(base_url, limit, *, pool="generation"):
     """Hold a slot through the complete response stream, including error paths.
 
-    Calls sharing an endpoint share the cap even across separate disease clients.
+    Calls sharing an endpoint and pool share the cap across disease clients.
+    Preparation requests use a separate bounded pool so token counting need not
+    wait for long generation streams to finish.
     If simultaneous callers specify different limits, respect the smallest cap.
     Independent Python processes have independent caps.
     """
     if type(limit) is not int or limit < 1:
         raise ValueError("max_concurrent_requests must be a positive integer")
-    key = base_url.rstrip("/")
+    if pool not in {"generation", "preparation"}:
+        raise ValueError("Request pool must be generation or preparation")
+    key = (base_url.rstrip("/"), pool)
     with _condition:
         state = _states.setdefault(key, {"active": 0, "limits": Counter()})
         state["limits"][limit] += 1

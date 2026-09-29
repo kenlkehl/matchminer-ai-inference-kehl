@@ -135,6 +135,9 @@ def prepare_messages_for_provider(
     ]
     if remote_provider_name(remote_config) != GOOGLE_AGENT_PLATFORM_PROVIDER:
         return normalized_messages
+    if str(remote_config.get("model_name", "")).removeprefix("google/").startswith("gemini-"):
+        # Gemini supports system instructions; the flattening below is for MaaS.
+        return normalized_messages
 
     system_parts: list[str] = []
     while normalized_messages and normalized_messages[0]["role"] == "system":

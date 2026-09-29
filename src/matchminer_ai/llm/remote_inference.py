@@ -81,6 +81,18 @@ def build_remote_request_config(
     request_params, extra_body = remote_sampling(llm_config)
     if remote_provider_name(llm_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
         extra_body = {}
+        model = str(llm_config.get("model_name", "")).removeprefix("google/")
+        if model.startswith("gemini-3.8-"):
+            # Gemini 3.8 manages sampling internally; these fields are unsupported.
+            for name in (
+                "temperature", "top_p", "top_k", "min_p", "presence_penalty",
+                "frequency_penalty", "repetition_penalty", "candidate_count",
+            ):
+                request_params.pop(name, None)
+            effort = request_params.get(
+                "reasoning_effort", llm_config.get("reasoning_effort", "high")
+            )
+            request_params["reasoning_effort"] = "high" if effort == "xhigh" else effort
     return request_params, extra_body
 
 

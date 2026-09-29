@@ -104,6 +104,14 @@ assigned to each disease and the preflight model information. Stop the original
 collection process before resuming; do not run two collection writers together.
 Each disease still uses the standard single-endpoint API and provenance checks.
 
+The structured client's generation cap is shared across disease clients within
+one process and held until each response stream ends. Exact `/tokenize` checks
+and `/models` discovery share a separate preparation pool, limited to at most
+four requests per endpoint (or the configured concurrency if smaller). This
+keeps prompt preparation from waiting behind long generations without increasing
+the generation cap. Context packing, output reserves and checkpoint identities
+are unchanged. Separate processes still have separate limits.
+
 If one disease needs an existing verified source snapshot, supply
 `--source-override DISEASE /path/to/snapshot/markdown`. Its collection manifest
 must identify the same PDF hash as the main collection. The standard source
@@ -191,6 +199,9 @@ population alternative; separate AND/OR alternatives still require grouping.
 Count phrases such as `one or more lesions` are likewise atomic; this exception
 is limited to explicit count units and does not mask `one OR more advanced
 disease` or an additional population alternative. Stored field text is unchanged.
+Inclusive time comparisons such as `at or after 2 years` and `at or before 3
+months` are also atomic when both a numeric bound and an explicit time unit are
+present. Other population alternatives remain subject to the same grouping checks.
 
 Detail generation freezes the canonical definition and supplies its current menu.
 
