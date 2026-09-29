@@ -45,6 +45,7 @@ class NoteREPL:
                     "history": history,
                     "memory_mb": limits.worker_memory_mb,
                     "max_output_chars": limits.max_output_chars,
+                    "max_scan_patterns": getattr(limits, "max_scan_patterns", 128),
                 },
                 timeout=limits.cell_timeout_seconds,
             )

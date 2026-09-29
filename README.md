@@ -124,6 +124,8 @@ notebook. `answer_patient_question_batch` adds bounded concurrency across patien
 and within each patient's questions. Both automatically retain original excerpts
 shown to the model, with exact character spans; the model supplies no citation IDs
 or copied quotes. These are review context, not selected supporting citations.
+The `scan` helper accepts up to 128 patterns per call by default, configurable
+with `NoteSearchLimits(max_scan_patterns=...)`, while keeping results bounded.
 Both return answered/unknown/error statuses and cost metadata. The optional
 `review_patient_workup_with_note_search` adapter uses this same harness for workup
 items; full-note review and patient summarization remain available. See the

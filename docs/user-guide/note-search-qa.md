@@ -68,7 +68,7 @@ result = answer_patient_questions(
     "Fabricated record. Day 1: assay ordered. Day 8: assay completed, result pending.",
     ["Was the assay performed?", "Is the assay result documented?"],
     llm=llm,
-    limits=NoteSearchLimits(max_cells=8),
+    limits=NoteSearchLimits(max_cells=8, max_scan_patterns=128),
     max_parallel_questions=4,
 )
 for answer in result["answers"]:
@@ -235,6 +235,22 @@ Unknown/missing documentation does not establish that care was omitted. The
 prompt distinguishes planned/ordered from performed/completed and asks for
 alternate searches and contradictory evidence. A generated answer is a research
 documentation-review result for human review, not definitive guideline concordance.
+
+## Search-pattern allowance
+
+`scan` accepts up to 128 regular expressions in one call by default. Set
+`NoteSearchLimits(max_scan_patterns=...)` to another positive integer; the
+same setting reaches the worker and the mini-agent system prompt. The model
+can supply its complete synonym list without splitting it into small calls.
+This also applies to the optional workup-review mini-agents.
+
+The scanner merges match iterators across the supplied patterns and retains
+exact counts, deduplicating identical spans even across many patterns.
+`limit` still caps returned hits at 2-20, with omission/truncation flags;
+each regex remains limited to 2000 characters. Output, source-excerpt,
+memory, and cell-time budgets remain in force. A larger pattern allowance
+does not establish that every relevant finding was reviewed. The configured
+allowance is recorded in answer and batch metadata.
 
 ## Execution limits
 

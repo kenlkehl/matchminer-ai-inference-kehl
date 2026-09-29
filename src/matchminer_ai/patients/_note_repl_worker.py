@@ -100,7 +100,10 @@ def main():
     setup = json.loads(incoming.readline())
     history = setup.pop("history")
     output_limit = setup["max_output_chars"]
+    max_scan_patterns = setup.get("max_scan_patterns", 128)
     try:
+        if type(max_scan_patterns) is not int or max_scan_patterns < 1:
+            raise ValueError("max_scan_patterns must be a positive integer")
         isolate(setup["memory_mb"])
     except Exception:
         outgoing.write('{"ready":false}\n')
@@ -187,7 +190,7 @@ def main():
             patterns = [patterns]
         if (
             not isinstance(patterns, (list, tuple))
-            or not 1 <= len(patterns) <= 12
+            or not 1 <= len(patterns) <= max_scan_patterns
             or any(not isinstance(p, str) or not 1 <= len(p) <= 2000 for p in patterns)
             or type(context) is not int
             or not 0 <= context <= 2000
@@ -195,7 +198,8 @@ def main():
             or not 2 <= limit <= 20
         ):
             raise ValueError(
-                "scan expects 1-12 regex strings, context 0-2000, limit 2-20"
+                f"scan expects 1-{max_scan_patterns} regex strings, "
+                "context 0-2000, limit 2-20"
             )
         buckets, small = {}, []
         count, previous = 0, None

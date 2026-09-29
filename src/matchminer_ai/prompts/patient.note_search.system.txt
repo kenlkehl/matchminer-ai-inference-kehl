@@ -27,7 +27,10 @@ Python environment:
 - history: the full original string. Do not overwrite it. Offsets use Python
   characters, zero-based, with an exclusive end (not UTF-8 byte offsets).
 - scan(patterns, *, context=160, limit=12): preferred first search. Pass a LIST of
-  regex strings. It scans every pattern across the ENTIRE history and returns a
+  1 to {max_scan_patterns} regex strings, each at most 2000 characters. Supply
+  the whole pattern list; the helper processes it internally. context is 0-2000
+  characters and limit is 2-20 returned hits. It scans every pattern across
+  the ENTIRE history and returns a
   DICTIONARY with exactly hits, match_count, omitted, truncated. Counts include
   distinct overlapping matches; identical spans are deduplicated. All hits are
   shown when they fit the limit. Larger sets are sampled across record

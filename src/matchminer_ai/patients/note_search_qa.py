@@ -153,6 +153,7 @@ class NoteSearchLimits:
     cell_timeout_seconds: float = 5.0
     worker_memory_mb: int = 512
     max_calls: int | None = None
+    max_scan_patterns: int = 128
 
     def __post_init__(self):
         for name in self.__dataclass_fields__:
@@ -588,6 +589,7 @@ def _answer(
         "worker_startup_seconds": round(worker_startup_seconds, 4),
         "cell_seconds": cell_seconds,
         "max_calls": limits.max_calls,
+        "max_scan_patterns": limits.max_scan_patterns,
         "model": llm.model,
         "elapsed_seconds": round(time.monotonic() - started, 4),
         "prompt_tokens": client.prompt_tokens if complete_usage else None,
@@ -753,6 +755,7 @@ def _run_question_batch(
         resources.files("matchminer_ai.prompts")
         .joinpath("patient.note_search.system.txt")
         .read_text(encoding="utf-8")
+        .replace("{max_scan_patterns}", str(limits.max_scan_patterns))
     )
     if answer_format is not None:
         system += "\n\n" + answer_format.instructions
@@ -827,6 +830,7 @@ def _run_question_batch(
             "max_concurrent_requests": llm.max_concurrent_requests,
             "max_calls_per_question": limits.max_calls,
             "max_cells_per_question": limits.max_cells,
+            "max_scan_patterns_per_call": limits.max_scan_patterns,
             "model": llm.model,
             "thinking": llm.thinking,
             "reasoning_effort": llm.request_params.get("reasoning_effort"),

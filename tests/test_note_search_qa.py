@@ -328,8 +328,9 @@ def test_excerpts_not_sent_due_to_context_limit_are_not_retained(monkeypatch, ll
     monkeypatch.setattr(
         qa._MeasuredClient,
         "fits",
-        lambda self, messages: json.loads(messages[1]["content"])["last_cell_result"]
-        is None,
+        lambda self, messages: (
+            json.loads(messages[1]["content"])["last_cell_result"] is None
+        ),
     )
     answer = answer_patient_questions("synthetic", ["q"], llm=llm)["answers"][0]
     assert answer["metadata"]["termination_reason"] == "context_limit"
@@ -866,6 +867,8 @@ def test_isolation_unavailable_fails_before_any_llm_request(monkeypatch, llm):
     "field,value",
     [
         ("max_cells", 0),
+        ("max_scan_patterns", 0),
+        ("max_scan_patterns", True),
         ("max_output_chars", True),
         ("cell_timeout_seconds", float("nan")),
         ("worker_memory_mb", 64),
@@ -888,3 +891,69 @@ def test_input_validation_precedes_worker_or_endpoint(monkeypatch, llm):
         answer_patient_question_batch(
             [dict(patient_id="x", history="a", questions=["q"])] * 2, llm=llm
         )
+
+
+@pytest.mark.parametrize("count", [13, 128])
+def test_scan_large_pattern_lists_preserve_counts_provenance_and_output_bounds(count):
+    history = "é: " + " ".join(f"F{i:03d}" for i in range(count))
+    with NoteREPL(history, NoteSearchLimits(max_output_chars=1200)) as worker:
+        observation = worker.execute(
+            rf"scan([r'\bF%03d\b' % i for i in range({count})], context=0)"
+        )
+    assert observation["error"] is None and not observation["truncated"]
+    result = ast.literal_eval(observation["output"])
+    assert result["match_count"] == count and result["omitted"]
+    assert 2 <= len(result["hits"]) <= 12
+    assert result["hits"][0]["quote"] == "F000"
+    assert result["hits"][-1]["quote"] == f"F{count - 1:03d}"
+    assert len(observation["output"]) <= 1200
+    for hit in result["hits"]:
+        assert history[hit["start"] : hit["end"]] == hit["quote"]
+        assert [hit["start"], hit["end"]] in observation["source_spans"]
+
+
+def test_scan_enforces_configured_pattern_cap_and_deduplicates_large_lists():
+    with NoteREPL("Assay completed.", NoteSearchLimits()) as worker:
+        result = ast.literal_eval(worker.execute("scan(['assay'] * 128)")["output"])
+        assert result["match_count"] == len(result["hits"]) == 1
+        assert not result["omitted"]
+        rejected = worker.execute("scan(['assay'] * 129)")
+        assert rejected["error"] == "ValueError"
+        assert "1-128 regex strings" in rejected["error_detail"]
+        assert rejected["source_spans"] == []
+    with NoteREPL("Assay completed.", NoteSearchLimits(max_scan_patterns=16)) as worker:
+        assert worker.execute("scan(['assay'] * 16)")["error"] is None
+        rejected = worker.execute("scan(['assay'] * 17)")
+        assert rejected["error"] == "ValueError"
+        assert "1-16 regex strings" in rejected["error_detail"]
+
+
+def test_large_pattern_question_reaches_worker_and_renders_configured_limit(
+    monkeypatch, llm
+):
+    history = "Fabricated note: imaginary assay completed."
+    patterns = [f"unused{i}" for i in range(13)] + ["imaginary assay"]
+
+    def handler(payload):
+        if payload["last_cell_result"] is None:
+            return cell(f"scan({patterns!r})")
+        return final(history, history)
+
+    messages = mock_model(monkeypatch, handler)
+    result = answer_patient_questions(
+        history,
+        ["Was the imaginary assay completed?"],
+        llm=llm,
+        limits=NoteSearchLimits(max_scan_patterns=24),
+    )
+    answer = result["answers"][0]
+    assert answer["status"] == "answered"
+    assert answer["metadata"]["successful_cells"] == 1
+    assert answer["metadata"]["cell_errors"] == []
+    assert answer["metadata"]["max_scan_patterns"] == 24
+    assert result["metadata"]["max_scan_patterns_per_call"] == 24
+    assert answer["evidence"][0]["quote"] == history
+    assert len(messages) == 2
+    for message in messages:
+        assert "1 to 24 regex strings" in message[0]["content"]
+        assert "{max_scan_patterns}" not in message[0]["content"]
