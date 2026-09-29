@@ -28,6 +28,13 @@ from .pdf import (
 from .structure import structure_patient_summaries, structure_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
+from .workup_search import review_patient_workup_with_note_search
+from .note_search_qa import (
+    NoteSearchLLMConfig,
+    NoteSearchLimits,
+    answer_patient_question_batch,
+    answer_patient_questions,
+)
 
 
 def summarize_patients(
@@ -201,12 +208,17 @@ __all__ = [
     "RawPatientNoteQuestionError",
     "PatientPDFInput",
     "PatientPDFProgress",
+    "NoteSearchLimits",
+    "NoteSearchLLMConfig",
+    "answer_patient_question_batch",
+    "answer_patient_questions",
     "answer_question_with_raw_patient_notes",
     "concatenate_patient_note_pdfs",
     "full_patient_screen",
     "structure_patient_summaries",
     "structure_patient_summary",
     "review_patient_workup",
+    "review_patient_workup_with_note_search",
     "summarize_patient_notes",
     "summarize_patients",
 ]

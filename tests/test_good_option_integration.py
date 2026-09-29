@@ -62,7 +62,8 @@ def outputs(c, s):
             drug, c._ncit_definition_evidence(drug, ncit_version="test")
         ),
         "scoring": messages,
-        "checker": s.build_good_option_checker_text(patient, summary),
+        # Deprecated with the checker; its input is still pinned while it ships.
+        "checker": s._checker_text(patient, summary),
         "retry": s._append_good_option_retry_feedback(
             messages,
             response="{}",

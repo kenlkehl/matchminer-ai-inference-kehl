@@ -113,8 +113,8 @@ Structured facts become plain text. Each bullet carries its scope and
 attribution:
 
 ```
-- [scope: agent | tumor type: Colon Cancer | histology: Stage III dMMR
-   | regimen: Atezolizumab and mFOLFOX6 | evidence level: mature trial results]
+- [scope: agent | evidence level: mature trial results | tumor type: Colon Cancer
+   | histology: Stage III dMMR | regimen: Atezolizumab and mFOLFOX6]
   In a phase 3 trial of resected stage III dMMR colon cancer, adjuvant
   atezolizumab plus mFOLFOX6 improved 3-year DFS to 86.3% versus 76.2%
   (HR 0.50, p<0.001).
@@ -122,10 +122,32 @@ attribution:
 
 Two versions per drug — one without safety for scoring, one with safety for Help
 Me Choose — plus one per class. The character budget is shared across sections
-by max-min fair share rather than split evenly, so a section with one short line
-releases its remainder to the section holding the disease-specific results.
+by weighted max-min fair share: a section with one short line releases its
+remainder, and when every section overflows, tumor and biomarker efficacy get
+three and two shares to each other section's one.
 
-These summaries are the only thing a patient-bearing prompt ever sees. URLs,
+Large classes synthesize hundreds of facts, so what the budget keeps matters:
+
+- Efficacy and safety facts are ranked by their evidence-level label (phase
+  3/regulatory/guideline, then randomized/phase 2/meta-analysis, then other
+  human evidence, then case reports), taking turns across tumor types within a
+  rank so one disease cannot crowd out another.
+- Efficacy findings labelled preclinical (in vitro, animal, xenograft, and
+  nothing marking them as human) move out of the human efficacy sections into
+  "Preclinical efficacy (not human evidence)", which only receives budget the
+  other sections leave unused.
+- A truncated section ends with a count of omitted findings, passage handles
+  such as `(P3)` are removed, and repeated statements are printed once.
+
+Ranking reads free-text labels with patterns, so it is a heuristic ordering, not
+a validated evidence grade. It changes only the rendered text; structured facts
+are stored unchanged.
+
+The stored scoring version is fixed-size. At scoring time the same renderer
+runs again from the stored facts with a budget sized to the trial (see Part B),
+so the ranking above decides what survives there too.
+
+These renders are the only thing a patient-bearing prompt ever sees. URLs,
 source names, queries, and registry metadata stay in the internal tables.
 
 ### Step 7 — Write and validate
@@ -150,10 +172,15 @@ than restarting.
    scoreable drug, or any scoreable drug failed research or synthesis, the pair
    comes back explicitly unscored with a reason. There is no fallback to live
    search.
-2. **Collect the Good Options summary for each scoreable drug.**
+2. **Collect the stored facts for each scoreable drug.**
 3. **Collect one class block per distinct class** across those drugs, each
    labelled with which drugs it speaks for. Two drugs sharing a class produce
    one block, not two.
+   The drugs and classes are rendered from their facts to fit what the
+   teacher's context leaves, not the fixed-size projections stored in the
+   catalog. They share that room by weighted fair share, drugs ahead of classes;
+   a subject short of room first shortens each line to keep every fact, and
+   drops the weakest facts only when that is not enough.
 4. **Build the prompt:** the patient's cancer history first, then the drug
    summaries and class blocks, then the rubric, then the exact list of drug
    names to score.
@@ -171,8 +198,9 @@ than restarting.
    individually with the exact parser error, and optionally once more with model
    thinking disabled.
 
-A second scoring path exists: a four-logit classifier reading one patient and
-one drug summary. It is wired up but ships with no trained model configured.
+A second scoring path, a four-logit classifier reading one patient and one
+drug summary, is deprecated: it never saw class evidence and no trained model
+was published.
 
 ## Known limits
 

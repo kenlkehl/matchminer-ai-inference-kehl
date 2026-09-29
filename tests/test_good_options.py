@@ -20,6 +20,8 @@ from matchminer_ai.matching import (
     build_good_option_checker_text,
     build_good_option_messages,
     evaluate_good_options,
+    good_option_evidence_budget,
+    pack_good_option_evidence,
     parse_good_option_response,
     score_good_options,
     score_good_options_with_llm,
@@ -441,14 +443,19 @@ def test_classifier_aggregates_every_drug_by_criterion(
             }
         ]
     )
-    output, metadata = score_good_options(
-        pairs, catalog=_catalog(), config=config, return_metadata=True
-    )
+    with pytest.deprecated_call(match="GoodOptionChecker"):
+        output, metadata = score_good_options(
+            pairs, catalog=_catalog(), config=config, return_metadata=True
+        )
 
     assert output.loc[0, "good_option_score"] == pytest.approx(0.75)
     assert len(captured) == 2
     assert all("Control Agent" not in prompt for prompt in captured)
     assert metadata["checker_input_version"].endswith("four-logit")
+    with pytest.deprecated_call(match="score_good_options is deprecated"):
+        evaluate_good_options(
+            pairs, catalog=_catalog(), config=config, method="classifier"
+        )
 
 
 def test_legacy_research_argument_is_rejected() -> None:
@@ -906,6 +913,98 @@ def test_projection_gives_a_full_section_the_budget_thin_ones_do_not_use() -> No
     assert len(rendered) <= 4000
 
 
+def _efficacy(text: str, level: str | None, tumor: str = "prostate cancer") -> dict:
+    return {
+        "text": text + " " + "detail " * 25,
+        "tumor_type": tumor,
+        "evidence_level": level,
+        "scope": "class",
+        "support_ids": [],
+    }
+
+
+def test_projection_keeps_the_strongest_evidence_when_it_must_truncate() -> None:
+    drug = DrugIdentity(drug_id="C1", preferred_name="Radioligand")
+    facts = {
+        "efficacy_by_tumor": [
+            *(_efficacy(f"Registry {index}.", "retrospective cohort") for index in range(8)),
+            _efficacy("Case.", "case report"),
+            _efficacy("VISION result.", "phase III randomized trial"),
+            _efficacy("NETTER-1 result.", "phase 3", tumor="neuroendocrine tumor"),
+            _efficacy("Phase 2 result.", "single-arm phase II"),
+        ],
+        "limitations": [
+            {"text": f"Limitation {index}. " + "detail " * 25, "support_ids": []}
+            for index in range(12)
+        ],
+    }
+
+    rendered = catalog_module._render_summary(
+        drug, facts, include_safety=False, max_chars=3000
+    )
+    efficacy = rendered.split("Human efficacy by tumor type:")[1].split("\n", 1)[1]
+    efficacy = efficacy.split("Biomarker prevalence:")[0]
+
+    # Emission order put these after every registry line, where truncation
+    # dropped them; both tumor types' phase III results lead now.
+    assert efficacy.index("VISION result.") < efficacy.index("Phase 2 result.")
+    assert efficacy.index("NETTER-1 result.") < efficacy.index("Phase 2 result.")
+    assert "Case." not in efficacy
+    assert "further finding(s) omitted for length." in efficacy
+    # Efficacy outweighs limitations when both overflow.
+    assert efficacy.count("\n- [") > rendered.count("Limitation ")
+    assert len(rendered) <= 3000
+
+
+def test_projection_files_preclinical_findings_apart_from_human_evidence() -> None:
+    drug = DrugIdentity(drug_id="D1", preferred_name="Novel Agent")
+    facts = {
+        "efficacy_by_tumor": [
+            _efficacy("Xenograft shrinkage.", "preclinical mouse model"),
+            _efficacy("PDX response.", None) | {
+                "text": "In patient-derived xenografts, tumors regressed."
+            },
+            _efficacy("Murine and patient data.", "preclinical murine study and case report"),
+        ],
+        "biomarker_directed_efficacy": [
+            _efficacy("Cell-line sensitivity.", "preclinical in vitro"),
+        ],
+    }
+
+    rendered = catalog_module._render_summary(
+        drug, facts, include_safety=False, max_chars=6000
+    )
+    human, preclinical = rendered.split("Preclinical efficacy (not human evidence):")
+
+    assert "Xenograft shrinkage." in preclinical
+    assert "patient-derived xenografts" in preclinical
+    assert "Cell-line sensitivity." in preclinical
+    # A label naming a patient keeps the finding in the human section.
+    assert "Murine and patient data." in human
+    assert "No human evidence for this category" in human
+
+
+def test_projection_strips_passage_handles_and_repeats() -> None:
+    drug = DrugIdentity(drug_id="D1", preferred_name="Novel Agent")
+    facts = {
+        "efficacy_by_tumor": [
+            {"text": "Responses in 7 of 12 patients (P3,P10).", "support_ids": []},
+        ],
+        "biomarker_directed_efficacy": [
+            {"text": "Responses in 7 of 12 patients [P3].", "support_ids": []},
+        ],
+        "limitations": [{"text": "Small cohort. [P2, P5]", "support_ids": []}],
+    }
+
+    rendered = catalog_module._render_summary(
+        drug, facts, include_safety=False, max_chars=4000
+    )
+
+    assert "(P3" not in rendered and "[P" not in rendered
+    assert rendered.count("Responses in 7 of 12 patients.") == 1
+    assert "- Small cohort." in rendered
+
+
 def test_structural_background_read_survives_the_screen_calling_it_investigational() -> None:
     """Lymphodepletion sits in the experimental arm and is not the tested agent.
 
@@ -1338,6 +1437,190 @@ def test_class_blocks_are_deduplicated_and_name_the_drugs_they_cover() -> None:
     assert prompt.index("Drug: Novel Agent") < prompt.index(
         "DRUG CLASS EVIDENCE — PD-L1 inhibitor"
     )
+
+
+def _facts(prefix: str, count: int) -> dict:
+    return {
+        "mechanism_and_targets": [
+            {"text": f"{prefix} targets Marker A.", "scope": "agent", "support_ids": []}
+        ],
+        "efficacy_by_tumor": [
+            _efficacy(f"{prefix} result {index}.", "phase II", tumor=f"tumor {index}")
+            | {"text": f"{prefix} result {index}. " + "detail " * 60}
+            for index in range(count)
+        ],
+    }
+
+
+def _packable(name: str, count: int) -> DrugSummary:
+    return DrugSummary(
+        drug_id=name,
+        preferred_name=name,
+        ncit_code="",
+        research_status="complete",
+        synthesis_status="ok",
+        structured_facts=_facts(name, count),
+        good_option_summary=f"Drug: {name}\nSTALE STORED PROJECTION",
+        help_me_choose_summary="",
+        evidence_count=count,
+    )
+
+
+def _class_block(name: str, count: int, covers: tuple[str, ...]):
+    from matchminer_ai.trials.drug_evidence import TrialClassEvidence
+
+    return TrialClassEvidence(
+        class_id=name,
+        class_name=name,
+        drug_names=covers,
+        class_option_summary=f"Drug class: {name}\nSTALE STORED PROJECTION",
+        structured_facts=_facts(name, count),
+    )
+
+
+def test_packing_renders_everything_from_facts_when_the_budget_allows() -> None:
+    text, report = pack_good_option_evidence(
+        [_packable("Agent A", 30)],
+        [_class_block("Class K", 40, ("Agent A",))],
+        max_chars=500_000,
+    )
+
+    # Re-rendered from the facts rather than the catalog's fixed-size projection.
+    assert "STALE STORED PROJECTION" not in text
+    assert all(f"Agent A result {index}." in text for index in range(30))
+    assert all(f"Class K result {index}." in text for index in range(40))
+    assert "omitted for length" not in text
+    assert text.index("Drug: Agent A") < text.index(
+        "DRUG CLASS EVIDENCE — Class K (covers: Agent A)\nDrug class: Class K"
+    )
+    assert [item["granularity"] for item in report] == ["full", "full"]
+
+
+def test_packing_coarsens_before_it_drops_and_weights_drugs_over_classes() -> None:
+    drug, block = _packable("Agent A", 30), _class_block("Class K", 30, ("Agent A",))
+    _full, report = pack_good_option_evidence([drug], [block], max_chars=10**9)
+    full_total = sum(item["full_chars"] for item in report)
+
+    text, report = pack_good_option_evidence(
+        [drug], [block], max_chars=int(full_total * 0.8)
+    )
+
+    # The drug's weighted share covers it in full; the class block coarsens,
+    # and shorter attribution and statements keep every result visible.
+    assert "omitted for length" not in text
+    assert all(f"Class K result {index}." in text for index in range(30))
+    assert report[0]["granularity"] == "full"
+    assert report[1]["granularity"] in {"condensed", "brief"}
+    assert len(text) <= int(full_total * 0.8)
+
+    text, report = pack_good_option_evidence(
+        [drug], [block], max_chars=int(full_total * 0.3)
+    )
+    drug_report, class_report = report
+    assert class_report["truncated"] and drug_report["truncated"]
+    assert drug_report["budget_chars"] >= 2 * class_report["budget_chars"] - 1
+    assert text.count("omitted for length") == 2
+    assert len(text) <= int(full_total * 0.3)
+
+
+def test_packing_releases_unused_share_and_caps_each_subject() -> None:
+    small, large = _packable("Small", 1), _packable("Large", 60)
+    _text, report = pack_good_option_evidence([small, large], max_chars=10**9)
+    small_full = report[0]["full_chars"]
+
+    _text, report = pack_good_option_evidence(
+        [small, large], max_chars=small_full + 6000
+    )
+    assert report[0]["granularity"] == "full"
+    assert report[1]["budget_chars"] >= 6000 - 2
+
+    _text, report = pack_good_option_evidence(
+        [small, large], max_chars=10**9, max_drug_chars=3000
+    )
+    assert report[1]["rendered_chars"] <= 3000
+    assert report[1]["truncated"]
+
+
+def test_packing_uses_stored_summaries_without_structured_facts() -> None:
+    summaries = _catalog().scoreable_summaries_for_trial("NCT12345678")
+    text, report = pack_good_option_evidence(summaries, max_chars=10**9)
+
+    assert text == "\n\n".join(item.good_option_summary for item in summaries)
+    assert not any(item["from_structured_facts"] for item in report)
+
+
+def test_evidence_budget_follows_the_teacher_context_and_completion() -> None:
+    config = load_default_preset()
+    budget = good_option_evidence_budget(config, fixed_prompt_chars=20_000)
+
+    assert budget["context_tokens"] == 262144
+    assert budget["output_tokens"] == 100000
+    assert budget["evidence_max_chars"] == int((262144 - 100000 - 4096) * 3.5) - (
+        20_000 + 14_000
+    )
+    assert budget["max_class_chars"] == 70_000
+
+    config.raw["good_option_prompt"]["context_tokens"] = 131072
+    config.remote["enabled"] = True
+    config.llm_good_option["remote"]["request_params"]["max_tokens"] = 32000
+    budget = good_option_evidence_budget(config, fixed_prompt_chars=0)
+    assert budget["output_tokens"] == 32000
+    assert budget["evidence_max_chars"] == int((131072 - 32000 - 4096) * 3.5) - 14_000
+
+    config.raw["good_option_prompt"]["context_tokens"] = 40000
+    with pytest.raises(ValueError, match="characters for evidence"):
+        build_good_option_messages(
+            patient_summary="Synthetic patient",
+            drug_summaries=[_packable("Agent A", 2)],
+            config=config,
+        )
+
+
+def test_llm_scoring_packs_class_facts_and_records_the_packing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[list[dict[str, str]]] = []
+
+    def fake_run(messages_list, *, config):
+        del config
+        captured.extend(messages_list)
+        return SimpleNamespace(
+            final_outputs=[_response()],
+            reasoning_outputs=[""],
+            finish_reasons=["stop"],
+            model_metadata={},
+        )
+
+    monkeypatch.setattr(
+        "matchminer_ai.matching.good_options._run_good_option_llm", fake_run
+    )
+    catalog = _catalog()
+    block = _class_block("Class K", 3, ("Novel Agent",))
+    monkeypatch.setattr(catalog, "class_evidence_for_trial", lambda _trial: (block,))
+    config = load_default_preset()
+    config.debug_mode = True
+    pairs = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "trial_id": "NCT12345678",
+                "cancer_history_summary": "Synthetic TARGET_MARKER cancer",
+            }
+        ]
+    )
+
+    output, metadata = score_good_options_with_llm(
+        pairs, catalog=catalog, config=config, return_metadata=True
+    )
+
+    prompt = captured[0][1]["content"]
+    assert "Class K result 2." in prompt
+    assert "STALE STORED PROJECTION" not in prompt
+    assert metadata["evidence_packing_version"] == "good-option-evidence-packing-v1"
+    assert metadata["evidence_packing"]["subjects"] == 3
+    assert metadata["evidence_packing"]["truncated_subjects"] == 0
+    packing = output.loc[0, "good_option_evidence_packing"]
+    assert [item["kind"] for item in packing["subjects"]] == ["drug", "drug", "class"]
 
 
 STUDY = {
@@ -2212,7 +2495,10 @@ def test_catalog_resumes_completed_drug_synthesis(
 
 
 def test_checker_text_contains_only_patient_and_clean_drug_summary() -> None:
-    text = build_good_option_checker_text("Synthetic patient", _summary("D1", "Novel"))
+    with pytest.deprecated_call():
+        text = build_good_option_checker_text(
+            "Synthetic patient", _summary("D1", "Novel")
+        )
     assert text.index("Patient cancer history") < text.index(
         "Investigational drug evidence summary"
     )

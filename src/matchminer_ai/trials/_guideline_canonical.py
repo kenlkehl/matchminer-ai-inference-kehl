@@ -109,11 +109,29 @@ def build_call(client, guideline, candidates, context_chars=None):
 
 def validate_catalog(value, pages, guideline_title=None):
     validate_shape(value, CATALOG)
+    errors = []
     for state in value["states"]:
-        format_space(state["space"])
-        validate_evidence(state["evidence"], pages)
+        try:
+            format_space(state["space"])
+        except ValueError as error:
+            errors.append(f"{state['name']!r}: {error}")
+        # Report every invalid citation, including later items in one state.
+        # A blank-line citation must not hide another state's field errors.
+        for evidence in [[item] for item in state["evidence"]] or [[]]:
+            try:
+                validate_evidence(evidence, pages)
+            except ValueError as error:
+                errors.append(
+                    f"{state['name']!r}: {error}. Rejected citation: "
+                    + json.dumps(evidence, ensure_ascii=False)
+                )
     if guideline_title is not None:
-        validate_decision_field_batch(value["states"], guideline_title)
+        try:
+            validate_decision_field_batch(value["states"], guideline_title)
+        except ValueError as error:
+            errors.append(str(error))
+    if errors:
+        raise ValueError("\n\n".join(errors))
 
 
 def partition_calls(client, guideline, candidates, context_chars=None):

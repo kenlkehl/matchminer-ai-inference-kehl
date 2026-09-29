@@ -190,6 +190,42 @@ def test_catalog_validation_lists_all_bad_fields_without_mutating_draft(tmp_path
     assert value == original
 
 
+def test_catalog_feedback_keeps_blank_split_citations_and_later_field_errors(tmp_path):
+    from matchminer_ai.trials._guideline_canonical import validate_catalog
+    from matchminer_ai.trials._guideline_schema import normalize_evidence_lists
+    from matchminer_ai.trials._guideline_sources import load_guideline
+    from test_guideline_extraction import TEXT, catalog, make_library
+
+    source = "\n".join([TEXT] * 12 + ["", "Additional synthetic source"])
+    guideline = load_guideline(make_library(tmp_path, source), "fictional")
+    value = catalog()
+    first = value["states"][0]
+    first["name"] = "Synthetic citation failure"
+    first["evidence"] = [
+        {"page_id": "p0002", "line_ids": list(range(1, 14))},
+        {"page_id": "p0002", "line_ids": [99]},
+    ]
+    second = copy.deepcopy(first)
+    second["name"] = "Synthetic independent field failure"
+    second["evidence"] = []
+    second["space"]["cancer_burden_allowed"] = "Extent A OR extent B AND extent C"
+    value["states"].append(second)
+    assert normalize_evidence_lists(value) == 1
+    assert first["evidence"][1]["line_ids"] == [13]
+    original = copy.deepcopy(value)
+
+    with pytest.raises(ValueError) as error:
+        validate_catalog(value, guideline.pages, "Fictional disease")
+    feedback = str(error.value)
+    for diagnostic in (
+        first["name"], "entirely of blank lines", '"line_ids": [13]',
+        "nonexistent source line IDs [99]", second["name"],
+        "at least one source-line citation", "mixes AND and OR",
+    ):
+        assert diagnostic in feedback
+    assert value == original
+
+
 @pytest.mark.parametrize("field,text", [
     ("cancer_burden_allowed", "Extent A AND size less than or equal to 2 cm AND negative margins"),
     ("prior_treatment_required", "Prior initial therapy AND relapse at or after 2 years after therapy"),

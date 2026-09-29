@@ -342,6 +342,7 @@ def review_patient_workup(
         "assessments": assessments,
         "notice": NOTICE,
         "metadata": {
+            "method": "full_notes",
             "note_count": len(source),
             "initial_chunk_count": len(packets),
             "requests": calls,

@@ -1245,14 +1245,16 @@ def stamp_fact_scope(
     return stamped
 
 
+#: Evidence level leads because the prefix is capped and a long histology field
+#: otherwise pushed it off the end, and maturity is what the rubric grades.
 _ATTRIBUTION_FIELDS = {
-    "efficacy_by_tumor": ("tumor_type", "histology", "regimen", "evidence_level"),
+    "efficacy_by_tumor": ("evidence_level", "tumor_type", "histology", "regimen"),
     "biomarker_directed_efficacy": (
+        "evidence_level",
         "biomarker",
         "tumor_type",
         "histology",
         "regimen",
-        "evidence_level",
     ),
     "biomarker_prevalence": ("biomarker", "tumor_type", "prevalence", "denominator"),
 }
@@ -1286,6 +1288,87 @@ def _attribution_prefix(
     return prefix if len(prefix) <= max_chars else f"{prefix[: max_chars - 1].rstrip()}…"
 
 
+#: Synthesis sometimes copies its passage handles into the prose; they resolve to
+#: nothing outside the synthesis prompt.
+_PASSAGE_MARKER = re.compile(r"\s*[(\[]\s*P\d+(?:\s*[,;]\s*P\d+)*\s*[)\]]")
+_PRECLINICAL_TERMS = re.compile(
+    r"preclinical|nonclinical|non-clinical|in vitro|in vivo|in silico|xenograft|"
+    r"\bmice\b|\bmouse\b|murine|\brats?\b|animal|cell[- ]lines?|organoid",
+    re.IGNORECASE,
+)
+_HUMAN_TERMS = re.compile(
+    r"\bpatients?\b(?!-derived)|participants?|first-in-human|\bphase\b|\btrials?\b|"
+    r"\bcohort|\bcase\b|registry|retrospective|prospective|real-world|"
+    r"(?<![-\w])clinical\b|randomi[sz]ed|meta-analys|regulatory|approval|guideline",
+    re.IGNORECASE,
+)
+#: Lower is stronger; a label takes the first tier it matches. Phase 1,
+#: retrospective and unlabelled human evidence share the middle tier.
+_EVIDENCE_TIERS = (
+    (
+        0,
+        re.compile(
+            r"\bphase\s*(?:iii|3|iv|4)\b|regulatory|\bapproval\b|guideline|consensus",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        1,
+        re.compile(
+            r"randomi[sz]ed|\bphase\s*(?:ii|2)\b|meta-analys|systematic review|pooled",
+            re.IGNORECASE,
+        ),
+    ),
+    (3, re.compile(r"single[- ]patient|case reports?\b", re.IGNORECASE)),
+)
+_UNRANKED_TIER = 2
+_PRECLINICAL_TIER = 4
+_PRECLINICAL_LABEL = "Preclinical efficacy (not human evidence)"
+_HUMAN_EFFICACY_CATEGORIES = ("efficacy_by_tumor", "biomarker_directed_efficacy")
+_OMISSION_NOTE_CHARS = 60
+
+
+def _evidence_tier(item: Mapping[str, Any]) -> int:
+    """Rank a fact by the maturity of the evidence behind it; lower is stronger.
+
+    Ranking reads the synthesis's own ``evidence_level`` label and falls back to
+    the statement when the label is missing. A finding counts as preclinical only
+    when nothing marks it as human: "preclinical murine study and case report"
+    carries a patient and "biomarker analysis of a phase II trial" is a trial.
+    """
+
+    label = clean_text(item.get("evidence_level"), max_chars=300)
+    text = label or clean_text(item.get("text"), max_chars=1500)
+    if _PRECLINICAL_TERMS.search(text) and not _HUMAN_TERMS.search(text):
+        return _PRECLINICAL_TIER
+    for tier, pattern in _EVIDENCE_TIERS:
+        if pattern.search(text):
+            return tier
+    return _UNRANKED_TIER
+
+
+def _rank_facts(items: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Order facts strongest first, taking turns across tumor types within a tier.
+
+    Truncation keeps a prefix, so the order is what decides what the scorer sees.
+    Emission order put a single-center registry ahead of VISION and NETTER-1 in
+    the radiopharmaceutical class. Within a tier, one tumor type's results
+    cannot crowd out another's: a prostate-heavy class still shows its
+    neuroendocrine phase III.
+    """
+
+    by_tier: dict[int, dict[str, list[Mapping[str, Any]]]] = {}
+    for item in items:
+        tumor = clean_text(item.get("tumor_type"), max_chars=200).casefold()
+        by_tier.setdefault(_evidence_tier(item), {}).setdefault(tumor, []).append(item)
+    ranked: list[Mapping[str, Any]] = []
+    for tier in sorted(by_tier):
+        queues = list(by_tier[tier].values())
+        for position in range(max(len(queue) for queue in queues)):
+            ranked.extend(queue[position] for queue in queues if position < len(queue))
+    return ranked
+
+
 def _render_summary(
     drug: DrugIdentity,
     facts: Mapping[str, Sequence[Mapping[str, Any]]],
@@ -1293,6 +1376,8 @@ def _render_summary(
     include_safety: bool,
     max_chars: int,
     header: str | None = None,
+    prefix_chars: int = 300,
+    text_chars: int = 1500,
 ) -> str:
     labels = {
         "mechanism_and_targets": "Mechanism and targets",
@@ -1307,26 +1392,58 @@ def _render_summary(
         categories.remove("safety")
     resolved_header = header or f"Drug: {drug.preferred_name}"
     heading_chars = sum(len(labels[category]) + 2 for category in categories)
-    newline_chars = 2 * (len(categories) + 1)
+    heading_chars += len(_PRECLINICAL_LABEL) + 2
+    newline_chars = 2 * (len(categories) + 2)
     available = max(
         256 * len(categories),
         max_chars - len(resolved_header) - heading_chars - newline_chars,
     )
 
+    # Synthesis keeps preclinical findings on purpose, but filed under "human
+    # efficacy" they read as human evidence and, being numerous, displaced the
+    # trials. They get their own section, funded only from what the human
+    # sections leave unused.
+    ordered: dict[str, list[Mapping[str, Any]]] = {}
+    preclinical: list[tuple[str, Mapping[str, Any]]] = []
+    for category in categories:
+        items = [item for item in facts.get(category, ()) if isinstance(item, Mapping)]
+        if category in _HUMAN_EFFICACY_CATEGORIES:
+            human = []
+            for item in items:
+                if _evidence_tier(item) == _PRECLINICAL_TIER:
+                    preclinical.append((category, item))
+                else:
+                    human.append(item)
+            items = human
+        if category in (*_HUMAN_EFFICACY_CATEGORIES, "safety"):
+            items = _rank_facts(items)
+        ordered[category] = items
+
     # Synthesis records which tumor, biomarker and regimen each statement belongs
     # to. Rendering the text alone strips that attribution, so a reader sees
     # "prolonged PFS (15.1 vs 10.6 months)" with no disease attached and cannot
     # tell whether it applies to this patient.
-    rendered_lines: dict[str, list[str]] = {}
-    for category in categories:
-        lines_for_category: list[str] = []
-        for item in facts.get(category, ()):
-            text = clean_text(item.get("text"), max_chars=1500)
-            if not text:
-                continue
-            prefix = _attribution_prefix(category, item, max_chars=300)
-            lines_for_category.append(f"- [{prefix}] {text}" if prefix else f"- {text}")
-        rendered_lines[category] = lines_for_category
+    seen: set[str] = set()
+
+    def render(category: str, item: Mapping[str, Any]) -> str | None:
+        text = _PASSAGE_MARKER.sub("", clean_text(item.get("text"), max_chars=1500))
+        text = text.strip()
+        if len(text) > text_chars:
+            text = f"{text[: text_chars - 1].rstrip()}…"
+        key = " ".join(text.casefold().split())
+        if not text or key in seen:
+            return None
+        seen.add(key)
+        prefix = _attribution_prefix(category, item, max_chars=prefix_chars)
+        return f"- [{prefix}] {text}" if prefix else f"- {text}"
+
+    rendered_lines: dict[str, list[str]] = {
+        category: [line for item in items if (line := render(category, item))]
+        for category, items in ordered.items()
+    }
+    preclinical_lines = [line for pair in preclinical if (line := render(*pair))]
+    if preclinical_lines:
+        available -= _OMISSION_NOTE_CHARS
 
     budgets = _fair_section_budgets(
         {
@@ -1336,56 +1453,138 @@ def _render_summary(
         },
         available,
     )
+    budgets["preclinical"] = _OMISSION_NOTE_CHARS + max(
+        0, available - sum(budgets.values())
+    )
+
+    def emit(section_lines: list[str], budget: int) -> list[str]:
+        if sum(len(line) + 1 for line in section_lines) <= budget:
+            return section_lines
+        # Say how much was left out, so an absent result reads as omitted rather
+        # than as never found.
+        budget -= _OMISSION_NOTE_CHARS
+        kept: list[str] = []
+        used = 0
+        for line in section_lines:
+            if used + len(line) + 1 > budget:
+                break
+            kept.append(line)
+            used += len(line) + 1
+        omitted = len(section_lines) - len(kept)
+        return [*kept, f"- {omitted} further finding(s) omitted for length."]
 
     lines = [resolved_header]
     for category in categories:
         lines.append(f"{labels[category]}:")
         if not rendered_lines[category]:
+            kind = "human" if category in _HUMAN_EFFICACY_CATEGORIES else "relevant"
             lines.append(
-                "- No relevant evidence for this category was identified in the "
+                f"- No {kind} evidence for this category was identified in the "
                 "retrieved passages."
             )
-            continue
-        used = 0
-        budget = budgets[category]
-        for line in rendered_lines[category]:
-            if used + len(line) + 1 > budget:
-                break
-            lines.append(line)
-            used += len(line) + 1
+        else:
+            lines.extend(emit(rendered_lines[category], budgets[category]))
+        if category == "biomarker_directed_efficacy" and preclinical_lines:
+            lines.append(f"{_PRECLINICAL_LABEL}:")
+            lines.extend(emit(preclinical_lines, budgets["preclinical"]))
     rendered = "\n".join(lines)
     if len(rendered) > max_chars:
         rendered = f"{rendered[: max_chars - 1].rstrip()}…"
     return rendered
 
 
+#: Relative claim on the projection budget when every section overflows. The
+#: human efficacy sections carry the disease-specific results a patient is
+#: matched against; an even split gave limitations as much room as efficacy by
+#: tumor type, which in the radiopharmaceutical class kept 15 limitations and 5
+#: efficacy results.
+_SECTION_WEIGHTS = {"efficacy_by_tumor": 3, "biomarker_directed_efficacy": 2}
+
+
 def _fair_section_budgets(demands: Mapping[str, int], available: int) -> dict[str, int]:
-    """Split the projection budget across sections by max-min fair share.
+    """Split the projection budget across sections by weighted max-min fair share.
 
     An equal split wastes it. Efficacy by tumor type is where disease-specific
     results live and is always the fullest section, while limitations often runs
     to a line or two; giving each a fifth of the budget truncated atezolizumab's
     projection at 5,368 of 9,600 available characters and dropped the stage III
     dMMR colon cancer result the patient's own trial reported. Sections that want
-    less than their share release the remainder to the ones that want more.
+    less than their share release the remainder to the ones that want more, and
+    among sections that all want more, efficacy is weighted ahead.
     """
 
     budgets: dict[str, int] = {}
     pending = dict(demands)
     remaining = max(0, available)
     while pending:
-        share = remaining // len(pending)
+        unit = remaining / sum(_SECTION_WEIGHTS.get(category, 1) for category in pending)
         satisfied = {
-            category: demand for category, demand in pending.items() if demand <= share
+            category: demand
+            for category, demand in pending.items()
+            if demand <= unit * _SECTION_WEIGHTS.get(category, 1)
         }
         if not satisfied:
-            budgets.update({category: share for category in pending})
+            budgets.update(
+                {
+                    category: int(unit * _SECTION_WEIGHTS.get(category, 1))
+                    for category in pending
+                }
+            )
             break
         for category, demand in satisfied.items():
             budgets[category] = demand
             remaining -= demand
             del pending[category]
     return {category: budgets.get(category, 0) for category in demands}
+
+
+#: Rendering detail per fact, finest first, as (attribution prefix, statement)
+#: character caps. What a coarser level buys is room for more facts before the
+#: ranked truncation starts dropping them. On 1,389 v12 class syntheses,
+#: ``condensed`` renders at a median 88% of ``full`` and ``brief`` at 58%, the
+#: latter keeping roughly a statement's headline sentence. The prefix lists
+#: evidence level and biomarker before histology and regimen, so a shorter cap
+#: sheds those last.
+EVIDENCE_GRANULARITIES: dict[str, tuple[int, int]] = {
+    "full": (300, 1500),
+    "condensed": (160, 300),
+    "brief": (100, 160),
+}
+
+
+def render_fact_summary(
+    name: str,
+    facts: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    kind: str = "drug",
+    include_safety: bool = False,
+    max_chars: int,
+    granularity: str = "full",
+) -> str:
+    """Render stored structured facts for one drug or class at a chosen detail.
+
+    The catalog stores facts and renders fixed-budget projections at write time.
+    Patient-time prompt construction re-renders from the same facts so the
+    budget can follow how much evidence a trial has in total. ``full`` detail
+    with a catalog-sized ``max_chars`` reproduces the stored projection.
+    """
+
+    if kind not in {"drug", "class"}:
+        raise ValueError("kind must be 'drug' or 'class'.")
+    if granularity not in EVIDENCE_GRANULARITIES:
+        raise ValueError(
+            "granularity must be one of " + ", ".join(EVIDENCE_GRANULARITIES) + "."
+        )
+    prefix_chars, text_chars = EVIDENCE_GRANULARITIES[granularity]
+    return _render_summary(
+        DrugIdentity(drug_id=name, preferred_name=name),
+        facts,
+        include_safety=include_safety,
+        max_chars=max_chars,
+        header=f"Drug class: {name}" if kind == "class" else f"Drug: {name}",
+        prefix_chars=prefix_chars,
+        text_chars=text_chars,
+    )
 
 
 def bound_evidence(
@@ -4040,6 +4239,7 @@ __all__ = [
     "INTERVENTION_SCREENING_DISPOSITIONS",
     "ROLE_PROMPT_VERSION",
     "SYNTHESIS_PROMPT_VERSION",
+    "EVIDENCE_GRANULARITIES",
     "ClassResolver",
     "RoleResolver",
     "SummarySynthesizer",
@@ -4054,6 +4254,7 @@ __all__ = [
     "class_id_for",
     "load_good_option_catalog",
     "normalize_class_name",
+    "render_fact_summary",
     "stamp_fact_scope",
     "synthesize_serially",
     "validate_good_option_catalog",

@@ -291,9 +291,9 @@ final review is retained. Recovery is bounded by the configured attempt count an
 stops if the same final failure recurs; closed selection cannot invent missing
 definitions, and a failing final review cannot produce an export.
 
-When a consolidation batch exhausts retries on population coverage or ambiguous
-Boolean grouping, the pipeline divides only that failed batch into source-backed
-groups of at most 12 inputs. A smaller failed group can divide again, down to a
+When a consolidation batch exhausts retries on population coverage, ambiguous
+Boolean grouping, or invalid source-line citations, the pipeline divides only
+that failed batch into source-backed groups of at most 12 inputs. A smaller failed group can divide again, down to a
 single input; singleton failures still stop the catalog. Successful batches are
 retained, and a persisted `canonical_batch_splits.json` receipt lets a resume
 skip the exhausted parent and reuse successful child requests. Transport failures
@@ -302,6 +302,10 @@ Each child must pass the same field, citation and coverage checks; the combined
 catalog still requires selection and final coverage of every original candidate.
 The source fingerprint, candidate membership and split receipts are audited.
 This changes task size, not clinical definitions, sampling or the output reserve.
+Catalog validation reports all invalid citations with their state names and line
+references, together with field errors, so retries can address them in one pass.
+Blank-only citation fragments remain invalid, including fragments produced by
+splitting a model's citation longer than 12 lines.
 
 ## Persistence and review
 

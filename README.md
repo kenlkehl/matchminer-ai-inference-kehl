@@ -59,8 +59,9 @@ Optional source-grounded extensions can also:
   mechanism, efficacy, biomarker prevalence, biomarker-directed benefit, and
   safety, then resume compatible atomic screening, research, and synthesis
   checkpoints, and
-  estimate patient-specific option quality from clean drug summaries with either
-  a four-point-per-drug LLM rubric or a four-logit GoodOptionChecker; and
+  estimate patient-specific option quality with a four-point-per-drug LLM
+  rubric over drug and class evidence packed to the teacher's context (the
+  four-logit GoodOptionChecker is deprecated); and
 - contextualize a trial space using heading-aware NCI PDQ, FDA
   companion-diagnostic and DailyMed material, accepted CIViC evidence, focused
   PubMed searches, and permissively licensed Europe PMC guideline/consensus
@@ -74,12 +75,14 @@ recommendations, guideline compliance, or eligibility determinations.
 Good Option APIs follow the same stage boundaries as the other matching
 components: import `build_good_option_catalog`, `load_good_option_catalog`, and
 `validate_good_option_catalog` from `matchminer_ai.trials`, and import
-`score_good_options`, `score_good_options_with_llm`, or `evaluate_good_options`
-from `matchminer_ai.matching`. Screening, synthesis, scoring, retry, and checker
+`score_good_options_with_llm` or `evaluate_good_options` from
+`matchminer_ai.matching` (the classifier `score_good_options` is deprecated). Screening, synthesis, scoring, retry, and checker
 input templates live in `src/matchminer_ai/prompts/`. The former
 `matchminer_ai.good_options` imports remain compatibility aliases. This source
 refactor preserves prompt text, score semantics, and existing artifact and
-checkpoint compatibility.
+checkpoint compatibility. Scoring prompts now re-render drug and class
+evidence from stored facts at a trial-sized budget (`good_option_prompt`);
+the template, rubric, and catalog compatibility are unchanged.
 
 The optional space-paradigm roll-up does not bundle a canonical paradigm
 catalog. It consumes caller-supplied trial spaces, exact membership edges, and
@@ -112,6 +115,19 @@ per-item statuses, applicability, bottom lines and validated verbatim note evide
 This opt-in documentation review uses the patient remote LLM configuration, not
 the patient summary, and writes no patient checkpoints. See the
 [patient API guide](docs/api/patients.md#workup-documentation-review).
+
+For an experimental alternative that explores selected excerpts,
+`patients.answer_patient_questions` accepts a full-text history, arbitrary
+questions, and an explicit LLM endpoint configuration. A persistent isolated
+Python REPL searches the local history while the model carries a compact evidence
+notebook. `answer_patient_question_batch` adds bounded concurrency across patients
+and within each patient's questions. Both automatically retain original excerpts
+shown to the model, with exact character spans; the model supplies no citation IDs
+or copied quotes. These are review context, not selected supporting citations.
+Both return answered/unknown/error statuses and cost metadata. The optional
+`review_patient_workup_with_note_search` adapter uses this same harness for workup
+items; full-note review and patient summarization remain available. See the
+[note-search REPL guide](docs/user-guide/note-search-qa.md).
 
 ## Ontology attribution
 

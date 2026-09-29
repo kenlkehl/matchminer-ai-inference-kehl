@@ -207,6 +207,11 @@ class TrialClassEvidence:
     class_name: str
     drug_names: tuple[str, ...]
     class_option_summary: str
+    #: The class synthesis the summary was rendered from, so patient-time prompt
+    #: construction can re-render it at a trial-sized budget.
+    structured_facts: Mapping[str, Any] = field(
+        default_factory=dict, compare=False, hash=False
+    )
 
 
 @dataclass(frozen=True)
@@ -426,6 +431,7 @@ class GoodOptionCatalog:
                 class_name=summary.class_name,
                 drug_names=tuple(drug_names),
                 class_option_summary=summary.class_option_summary,
+                structured_facts=summary.structured_facts,
             )
             for summary, drug_names in by_class.values()
         )

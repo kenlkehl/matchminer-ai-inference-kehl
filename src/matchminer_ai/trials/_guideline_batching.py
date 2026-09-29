@@ -7,10 +7,18 @@ MAX_RETRY_BATCH = 12
 
 
 def can_split(error, size):
-    """Only diagnosed clinical-validation exhaustion warrants smaller batches."""
+    """Split exhausted population or grounding checks, never transport failures."""
     return size > 1 and "exhausted" in error and any(
         marker in error
-        for marker in ("Catalog omitted or broadened", "mixes AND and OR")
+        for marker in (
+            "Catalog omitted or broadened",
+            "mixes AND and OR",
+            "evidence may not consist entirely of blank lines",
+            "nonexistent source line IDs",
+            "Unknown or unsupplied evidence page:",
+            "Each state and option needs at least one source-line citation",
+            "cite 1-12 distinct source line numbers per evidence item",
+        )
     )
 
 

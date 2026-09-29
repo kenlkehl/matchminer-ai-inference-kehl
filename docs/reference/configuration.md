@@ -666,9 +666,9 @@ that stage reads, and `class_llm` gives it its own completion budget.
 reads. Class synthesis is a separate call from agent synthesis rather than a
 larger pooled one: 165 drugs already use more than half the agent budget and the
 largest uses 91% of it, so pooling would let a flood of same-class passages evict
-the agent's own data. `class_option_summary_max_tokens` (1,600) bounds each
-rendered class block in the scoring prompt, where one block is emitted per
-distinct class across the trial's drugs.
+the agent's own data. `class_option_summary_max_tokens` bounds each class's
+stored projection. The scoring prompt re-renders classes and drugs from their
+structured facts instead, under `good_option_prompt`.
 
 Retrieval settings for both axes live on `ResearchSettings` rather than in this
 block: `class_facets`, `class_sources`, `class_research_rounds`, and the
@@ -681,14 +681,30 @@ and cacheable. Both axes call only the query-driven sources; the registry, label
 and curation adapters search by exact agent name and return nothing for a class
 name.
 
+## `good_option_prompt`
+
+Patient-time packing of catalog drug and class evidence into the
+`llm_good_option` prompt. It lives outside `llm_good_option` and
+`good_option_catalog` because those sections fingerprint catalog checkpoints.
+
+- `context_tokens` (default `null`): the teacher's context window. `null` uses
+  `llm_good_option.local.engine.max_model_len` (262,144); set it when a remote
+  endpoint serves a different length.
+- `chars_per_token` (3.5): conversion rate for the budget. Conservative for
+  Gemma 4, which averages about 4.4 characters per token on catalog text.
+- `safety_tokens` (4,096): margin kept beyond the completion allowance, which
+  is the active backend's `llm_good_option` `max_tokens`.
+- `max_drug_section_tokens`, `max_class_section_tokens` (20,000 each): upper
+  bound on any one drug or class, however much room remains; `null` removes it.
+
+See [Evidence packing](../api/good-options.md#evidence-packing) for how the
+budget is shared and when evidence is condensed.
+
 ## `good_option_checker`
 
-Configuration for the optional local GoodOptionChecker regression model. Its
-input is the patient summary followed by one clean synthesized investigational-
-drug summary; URLs, registry metadata, and raw evidence are excluded.
-`model_name` is empty by default until a versioned trained artifact is
-configured. `device` and `max_length` are passed to the text-classification
-checker pipeline.
+Deprecated. Configuration for the retired GoodOptionChecker classifier, kept so
+existing configs load. GoodOption scoring uses the LLM teacher
+(`llm_good_option`); the classifier APIs emit `DeprecationWarning`.
 
 ## `trial_space_contextualization`
 

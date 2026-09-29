@@ -418,6 +418,22 @@ good_option_catalog:
     remote:
       request_params:
         max_tokens: 6000
+# Patient-time packing of catalog drug and class evidence into the
+# llm_good_option prompt. Kept outside llm_good_option and good_option_catalog,
+# which fingerprint catalog checkpoints. Evidence gets what the context leaves
+# after the completion allowance (llm_good_option max_tokens) and this margin.
+good_option_prompt:
+  # null uses llm_good_option.local.engine.max_model_len; set it explicitly
+  # when a remote endpoint serves a different context length.
+  context_tokens: null
+  # Conservative: Gemma 4 averages ~4.4 characters per token on catalog text.
+  chars_per_token: 3.5
+  safety_tokens: 4096
+  # Upper bound on any one drug or class, however much room remains.
+  max_drug_section_tokens: 20000
+  max_class_section_tokens: 20000
+# Deprecated: GoodOption scoring uses the LLM teacher (llm_good_option). Kept so
+# existing configs load; no checker artifact is published or maintained.
 good_option_checker:
   model_name: ""
   device: cuda

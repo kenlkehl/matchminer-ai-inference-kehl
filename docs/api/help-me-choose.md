@@ -7,8 +7,8 @@ this ordering:
 1. An offline catalog build receives the complete run's NCT IDs and completes
    patient-free, drug-only research and synthesis.
 2. `evaluate_good_options` introduces one patient's cancer-history summary and
-   scores only investigational or unresolved drugs with either the unchanged
-   four-point-per-drug LLM rubric or a compatible four-logit GoodOptionChecker.
+   scores only investigational or unresolved drugs with the four-point-per-drug
+   LLM rubric (the four-logit GoodOptionChecker is deprecated).
 3. `build_comparison_messages` combines the patient context with the catalog's
    clean Help Me Choose drug projections. Raw passages, snippets, URLs, search
    queries, source metadata, trial registry metadata, and research failures are

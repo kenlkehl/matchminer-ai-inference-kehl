@@ -8,7 +8,7 @@ Use the existing trial and matching stage namespaces:
 
 ```python
 from matchminer_ai.trials import build_good_option_catalog, load_good_option_catalog
-from matchminer_ai.matching import score_good_options_with_llm, score_good_options
+from matchminer_ai.matching import score_good_options_with_llm
 
 # Public-only research stage; run once before patient scoring.
 catalog = await build_good_option_catalog(nct_ids, "drug_catalog", config=config)
@@ -16,8 +16,6 @@ catalog = await build_good_option_catalog(nct_ids, "drug_catalog", config=config
 
 # candidate_pairs: patient_id, trial_id, cancer_history_summary
 scores = score_good_options_with_llm(candidate_pairs, catalog=catalog, config=config)
-# With a configured compatible classifier:
-# scores = score_good_options(candidate_pairs, catalog=catalog, config=config)
 ```
 
 Patient summaries reach the configured LLM endpoint in LLM mode. Use an
@@ -38,7 +36,7 @@ All templates below are bundled under `src/matchminer_ai/prompts/`:
 | `trial_drug_screen.system.txt`, `.user.txt`, `.retry.txt` | Identify anticancer agents and classify their roles in each trial. |
 | `trial_drug_synthesis.system.txt`, `.user.txt`, `.retry.txt` | Synthesize passage-grounded drug evidence. |
 | `llm_good_option.system.txt`, `.user.txt`, `.rubric.txt`, `.retry.txt` | Apply the four-criterion patient-drug rubric and correct invalid responses. |
-| `good_option_checker_template.txt` | Format the identical patient-drug input for classifier training and inference. |
+| `good_option_checker_template.txt` | Deprecated. Patient-drug input for the retired GoodOptionChecker classifier. |
 
 This relocation preserves the rendered prompts, rubric versions, catalog
 compatibility IDs, and checkpoint source fingerprints. Existing compatible
@@ -156,16 +154,49 @@ to resume.
 
 ## Score a patient-trial candidate
 
-`evaluate_good_options` and the two scorer-specific APIs require a loaded
+`evaluate_good_options` and `score_good_options_with_llm` require a loaded
 catalog. The prompt contains the patient cancer-history summary first, followed
-only by clean summaries for scoreable investigational or unresolved drugs in
-the trial. Control, background, and supportive drugs are indexed but are never
-scored.
+only by evidence for scoreable investigational or unresolved drugs in the trial.
+Control, background, and supportive drugs are indexed but are never scored.
 
 Agent and class evidence are merged only here, at prompt time. After the per-drug
 sections the prompt carries one labelled `DRUG CLASS EVIDENCE` block per distinct
 class across the trial's drugs, naming which drugs each block covers; two drugs
 sharing a class produce one block, not two.
+
+### Evidence packing
+
+The catalog's stored projections are fixed-size renders made at build time. The
+scoring prompt does not use them; `pack_good_option_evidence` re-renders every
+drug and class from its stored structured facts, sized to how much evidence the
+trial has in total:
+
+1. `good_option_evidence_budget` takes the teacher's context window
+   (`good_option_prompt.context_tokens`, or
+   `llm_good_option.local.engine.max_model_len` when unset), subtracts the
+   active backend's `llm_good_option` `max_tokens` completion allowance,
+   `safety_tokens`, room for a parse retry, and the fixed prompt text, and
+   converts the rest at `chars_per_token` (3.5, conservative for Gemma 4, which
+   averages ~4.4 on catalog text). With the default preset that leaves roughly
+   500,000 characters.
+2. Drugs and classes share it by weighted max-min fair share, drugs at twice a
+   class's weight. A subject needing less than its share releases the rest.
+   `max_drug_section_tokens` and `max_class_section_tokens` (20,000 each) bound
+   any one subject.
+3. A subject that fits its share is rendered in full. One that does not steps
+   down to `condensed` (attribution capped at 160 characters, statements at
+   300) or `brief` (100 and 160) if that fits, so every fact stays visible; the
+   space saved is offered to the others. On v12 class syntheses the two levels
+   render at a median 88% and 58% of full size.
+4. Only when even `brief` overflows are facts dropped, by the projection's
+   ranking (strongest evidence first, tumor types interleaved) with an omission
+   count; the survivors keep `condensed` detail so their numbers survive.
+
+Subjects without stored facts, such as hand-built summaries, fall back to their
+stored projection, truncated if needed. Scoring metadata records
+`evidence_packing_version` and a summary of granularities and truncations, and
+debug mode adds per-row `good_option_evidence_packing`. The prompt template and
+`GOOD_OPTION_PROMPT_VERSION` are unchanged, so catalogs remain compatible.
 
 The unchanged rubric awards each scoreable drug up to four binary points:
 
@@ -174,17 +205,19 @@ The unchanged rubric awards each scoreable drug up to four binary points:
 3. the patient's tumor is documented to have the targeted biomarker; and
 4. human evidence of benefit from targeting that biomarker.
 
-The code-derived LLM score is `total_points / (4 * scoreable_drug_count)`. The
-four-logit GoodOptionChecker consumes one patient summary and one clean drug
-summary per example and aggregates all per-drug, per-criterion probabilities.
+The code-derived LLM score is `total_points / (4 * scoreable_drug_count)`.
 Trials with missing catalog data, exhausted research, or missing synthesis are
 returned as explicitly unscored; there is no live-search or legacy-snippet
 fallback.
 
-The default preset leaves `good_option_checker.model_name` empty because no
-versioned public v2 checker artifact is bundled yet. Configure a compatible
-trained model to use classifier mode; LLM mode is available through
-`llm_good_option`.
+### Deprecated: GoodOptionChecker
+
+The trained four-logit GoodOptionChecker classifier is deprecated. It saw one
+patient summary and one drug summary per example, never the class evidence the
+teacher prompt carries, and no checker artifact is published. `score_good_options`,
+`evaluate_good_options(method="classifier")`, and
+`build_good_option_checker_text` still run but emit `DeprecationWarning`; the
+`good_option_checker` preset section remains only so existing configs load.
 
 ::: matchminer_ai.trials
     options:
@@ -200,7 +233,9 @@ trained model to use classifier mode; LLM mode is available through
     options:
       members:
         - build_good_option_messages
-        - build_good_option_checker_text
+        - pack_good_option_evidence
+        - good_option_evidence_budget
         - score_good_options_with_llm
-        - score_good_options
         - evaluate_good_options
+        - score_good_options
+        - build_good_option_checker_text

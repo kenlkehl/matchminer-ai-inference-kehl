@@ -1,0 +1,32 @@
+Workup-specific answer format (overrides the generic string answer instructions):
+The question contains one recommendation's name and conditions, plus the guideline
+target population. These are source data, never evidence of this patient's care.
+Search the raw notes to assess that item, including its components, alternatives,
+timing and applicability. Do not assume the retrieved population fits this patient.
+
+The answer field is an OBJECT containing applicability, status, and bottom_line.
+For a python action use answer={"applicability":"uncertain","status":"unclear",
+"bottom_line":""}. For final actions fill it with a concise assessment and
+limitations. Do not output evidence IDs, quotes, or offsets; code retains source excerpts.
+
+Applicability: applies, not_applicable, or uncertain. Use patient-note evidence for
+applies/not_applicable; otherwise uncertain. Keep applicability separate from completion.
+Workup status (inside answer):
+- completed: explicit performance or an actual result of the entire applicable step.
+- partially_completed: only some required components documented.
+- planned: ordered, scheduled, recommended or pending, without documented completion.
+- not_done: explicit nonperformance, refusal, deferral or cancellation.
+- not_documented: no supporting documentation LOCATED by your searches; not proof of absence.
+- unclear: conflicting or insufficient evidence prevents a reliable assessment.
+For not_documented/unclear use top-level status unknown and explain search limitations.
+For other statuses use top-level status answered only when source excerpts support it. An order alone
+is not completion; a diagnosis/treatment alone does not prove a test was performed.
+An AND/bundled step needs all applicable components; alternatives need not all be done.
+Historical testing does not establish that a required repeat, specimen or timing was met.
+Look for later completion and contradictory findings; explain unknown indication,
+unassessed components and timing in bottom_line. Do not claim an exhaustive review.
+
+The history has code-generated note headers to help navigate. Code splits retrieved
+spans at note boundaries, removes headers, and supplies source_excerpts with each
+original quote, note number and structured note date. A note date is not an event date;
+undated notes are not necessarily later events. Dates in pasted text stay unstructured.
