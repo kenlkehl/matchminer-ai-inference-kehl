@@ -5,7 +5,7 @@ import re
 VERSION = "trialspace-field-semantics-v3"
 # A backward-compatible checker fix does not change generation prompts or the
 # representation contract. Offline audits record the implementation revision.
-REVISION = "trialspace-field-semantics-v3.6-temporal-comparators"
+REVISION = "trialspace-field-semantics-v3.7-named-anatomic-region"
 
 _ORDINALS = {
     word: str(i)
@@ -72,6 +72,9 @@ _COUNT_QUANTIFIER = re.compile(
     r"(?:tumou?rs|lesions|nodes|sites|cycles|lines|doses|agents|therapies|"
     r"treatments|regimens|mutations|abnormalities|episodes|courses)\b"
 )
+# This conventional anatomic region is one named concept. Only its internal
+# conjunction is masked; surrounding population operators are still checked.
+_NAMED_ANATOMIC_REGION = re.compile(r"\bhead\s+(?P<operator>and)\s+neck\b")
 
 
 def explicit_lines(text):
@@ -86,11 +89,11 @@ def explicit_lines(text):
 def has_ungrouped_mixed_logic(text):
     """Check each parenthesis level for mixed operators, without interpreting concepts."""
     text = text.casefold()
-    # Mask only the comparison's operator while tokenizing. Never rewrite the
+    # Mask only an atomic phrase's operator while tokenizing. Never rewrite the
     # stored field or turn an ungrouped population alternative into conjunction.
     for comparison in (
         _NUMERIC_THRESHOLD, _INCLUSIVE_COMPARISON, _TEMPORAL_COMPARISON,
-        _COUNT_QUANTIFIER,
+        _COUNT_QUANTIFIER, _NAMED_ANATOMIC_REGION,
     ):
         for match in reversed(list(comparison.finditer(text))):
             start, end = match.span("operator")

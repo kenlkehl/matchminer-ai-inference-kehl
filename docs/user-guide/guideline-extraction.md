@@ -248,6 +248,11 @@ reports all failing populations together, so correcting a coverage omission does
 not hide an earlier Boolean-grouping error. Source context and output headroom
 still must fit; feedback is never a license to drop clinical restrictions.
 
+The Boolean checker treats the conventional anatomic region "head and neck" as
+one named concept. Its internal conjunction is ignored only during operator
+checking; the stored field is unchanged and surrounding AND/OR conditions still
+require explicit grouping. Audit metadata records the checker revision.
+
 Final-detail citation failures use focused, checkpointed excerpt repairs before
 regenerating any clinical record. Each call receives one rejected excerpt, its
 fixed population and assertion, source context, and the affected pages next to
