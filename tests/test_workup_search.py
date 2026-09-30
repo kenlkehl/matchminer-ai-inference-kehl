@@ -1,6 +1,7 @@
 """Fabricated workup notes; use the real REPL and stub only endpoint generation."""
 
 from dataclasses import replace
+import copy
 import json
 from threading import Barrier
 
@@ -249,7 +250,7 @@ def test_config_preserves_endpoint_provider_profile_and_no_reasoning_replay(
 
     monkeypatch.setattr(workup, "_run_question_batch", batch)
     review_patient_workup_with_note_search(
-        "Fabricated text", [{"name": "CT"}], config=config
+        "Fabricated text", [{"name": "CT"}], config=config, thinking=None
     )
     llm = captured[0]
     assert llm.base_url == resolved.base_url and llm.provider == provider
@@ -260,3 +261,59 @@ def test_config_preserves_endpoint_provider_profile_and_no_reasoning_replay(
         assert llm.thinking == "on"
     else:
         assert "chat_template_kwargs" not in llm.extra_body
+
+
+@pytest.mark.parametrize(
+    "thinking,expected",
+    [("default", False), ("off", False), ("on", True), (None, True)],
+)
+def test_public_thinking_default_override_and_inheritance(
+    monkeypatch, thinking, expected
+):
+    config = load_default_preset()
+    config.remote.update(enabled=True, server_urls=["http://fabricated.invalid/v1"])
+    config.patient.update(context_window=32768, tokenizer_mode="bytes")
+    config.patient["local"]["chat_template_kwargs"] = {"enable_thinking": True}
+    config.patient["remote"].update(
+        model_name="Qwen/Qwen3.8-27B",
+        request_params={"max_tokens": 2048},
+        extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+    )
+    original = copy.deepcopy(config.patient)
+    captured = []
+
+    def batch(patients, *, llm, **kwargs):
+        captured.append(qa._resolve_llm(llm))
+        return {
+            "patients": [
+                {
+                    "answers": [
+                        {
+                            "status": "error",
+                            "answer": None,
+                            "evidence": [],
+                            "limitations": [],
+                            "metadata": {"requests": 0},
+                        }
+                    ]
+                }
+            ],
+            "metadata": {},
+            "notice": "test",
+        }
+
+    monkeypatch.setattr(workup, "_run_question_batch", batch)
+    options = {} if thinking == "default" else {"thinking": thinking}
+    review_patient_workup_with_note_search(
+        "Fabricated text",
+        [{"name": "CT"}],
+        config=config,
+        review=WorkupSearchReviewConfig(max_review_passes=0),
+        **options,
+    )
+    llm = captured[0]
+    assert llm.extra_body["chat_template_kwargs"]["enable_thinking"] is expected
+    assert llm.thinking == ("on" if expected else "off")
+    assert llm.temperature == (1.0 if expected else 0.7)
+    assert llm.top_p == (0.95 if expected else 0.8)
+    assert config.patient == original

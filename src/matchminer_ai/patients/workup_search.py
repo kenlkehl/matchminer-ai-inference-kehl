@@ -148,6 +148,7 @@ def review_patient_workup_with_note_search(
     population_context: str | None = None,
     limits: NoteSearchLimits | None = None,
     max_parallel_questions: int | None = None,
+    thinking: str | None = "off",
     search_reasoning_effort: str | None = "low",
     review: WorkupSearchReviewConfig | None = None,
     progress_callback=None,
@@ -164,8 +165,10 @@ def review_patient_workup_with_note_search(
     shared search vocabulary and up to two focused evidence reviews follow it;
     unresolved/coverage-limited items can use bounded serial full-record review.
     Pass WorkupSearchReviewConfig(max_review_passes=0) to disable follow-up.
-    Thinking is on by default and reasoning
-    traces are never replayed. Structured input dates are assigned by code after
+    Thinking is off by default. Pass thinking="on" to enable it or None to inherit
+    the configured patient endpoint switch. Providers without an off switch retain
+    their supported effort setting. Reasoning traces are never replayed.
+    Structured input dates are assigned by code after
     automatic capture of original pandas/search/read excerpts. The model does not emit
     quotes, offsets or citation IDs. Excerpts are reviewed context, not individually
     selected supporting citations. String input has unavailable dates. Per-item failures
@@ -187,6 +190,8 @@ def review_patient_workup_with_note_search(
     config = config or load_default_preset()
     if not isinstance(config, MMAIConfig):
         raise TypeError("config must be an MMAIConfig instance.")
+    if thinking is not None and thinking not in ("on", "off"):
+        raise ValueError("thinking must be on, off, or None.")
     if not remote_enabled(config):
         raise ValueError("Workup review requires a configured remote LLM endpoint.")
     limits = limits or NoteSearchLimits()
@@ -235,7 +240,15 @@ def review_patient_workup_with_note_search(
     ]
     progress = progress_callback or (lambda _: None)
     progress(f"Preparing agentic note search for {len(questions)} workup items")
-    runtime = build_llm_runtime_config("patient", config.patient, config=config)
+    patient = copy.deepcopy(config.patient)
+    if thinking is not None:
+        patient.setdefault("local", {}).setdefault("chat_template_kwargs", {})[
+            "enable_thinking"
+        ] = thinking == "on"
+        patient.setdefault("remote", {}).setdefault("extra_body", {}).setdefault(
+            "chat_template_kwargs", {}
+        )["enable_thinking"] = thinking == "on"
+    runtime = build_llm_runtime_config("patient", patient, config=config)
     runtime["max_retries"] = 3
     resolved, _ = resolve_structured_config(runtime, cache_dir=None)
     llm = NoteSearchLLMConfig(

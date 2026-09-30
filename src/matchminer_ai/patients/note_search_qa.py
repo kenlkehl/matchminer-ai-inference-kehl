@@ -40,7 +40,7 @@ NOTICE = (
 
 @dataclass(frozen=True)
 class NoteSearchLLMConfig(StructuredConfig):
-    """Endpoint using shared vendor sampling, thinking on, and no trace replay.
+    """Endpoint using shared vendor sampling, thinking off, and no trace replay.
 
     Optional sampling fields override vendor defaults. With max_tokens omitted,
     the existing model profile supplies its completion-budget floor, or 8192.
@@ -60,6 +60,7 @@ class NoteSearchLLMConfig(StructuredConfig):
     tokenizer_mode: str = "bytes"
     response_format: str = "json_schema"
     sampling_profile: str = "auto"
+    thinking: str = "off"
     reasoning_effort: str = "xhigh"
     search_reasoning_effort: str | None = "low"
 
@@ -130,7 +131,11 @@ def _resolve_search_llm(config, resolved):
         raise ValueError(
             "search_reasoning_effort must be None, low, medium, high, or xhigh."
         )
-    if effort is None or "reasoning_effort" not in resolved.request_params:
+    if (
+        resolved.thinking == "off"
+        or effort is None
+        or "reasoning_effort" not in resolved.request_params
+    ):
         return resolved
     params, extra = (
         copy.deepcopy(config.request_params),

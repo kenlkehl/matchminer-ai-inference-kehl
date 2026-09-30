@@ -22,10 +22,13 @@ sixteen-attempt budget. The normal initial path is one multi-pattern search cell
 The default follow-up review has separate budgets, described below.
 A further cell is reserved for a concrete gap, conflict, or execution error;
 the prompt explicitly asks the model to stop when it has sufficient evidence.
-`search_reasoning_effort="low"` applies to the initial search-only request where
+Thinking is off by default. Pass `thinking="on"` to enable it, or `thinking=None`
+to inherit the configured patient endpoint switch. Providers without an off
+switch, such as the supported Gemini profile, retain their supported effort.
+`search_reasoning_effort="low"` applies when thinking is enabled to the initial search-only request where
 graded effort is supported. Subsequent turns retain the configured assessment
 effort because each can answer. Set this option to `None` to inherit the assessment
-effort on every request. Thinking remains enabled and traces are never replayed.
+effort on every request. Reasoning traces are never replayed.
 The configured remote request cap also applies. The guideline fetcher sets that
 cap to the number of workup items; other jobs retain their existing settings.
 
@@ -228,14 +231,15 @@ for answer in result["answers"]:
     print(answer["status"], answer["answer"], answer["evidence"])
 ```
 
-`NoteSearchLLMConfig` defaults to `sampling_profile="auto"` and thinking on.
+`NoteSearchLLMConfig` defaults to `sampling_profile="auto"` and `thinking="off"`.
 It calls the repository's shared sampling resolver: Gemma 4 and Qwen 3.8 settings
-are inherited from that implementation, not copied into this harness. Qwen uses
+are inherited from that implementation, not copied into this harness. With thinking
+explicitly enabled, Qwen uses
 `xhigh` assessment reasoning effort by default (configurable to `medium` or `low`).
 The separate `search_reasoning_effort` defaults to `"low"` for the first,
 search-only turn, or `None` to inherit the assessment effort. The shared resolver
 keeps Qwen's API and chat-template effort synchronized. Gemma 4 uses an on/off
-switch, so it keeps thinking enabled without an invented graded effort setting.
+switch, disabled by default, without an invented graded effort setting.
 Unknown models receive no new effort parameter unless one was already configured.
 An omitted
 `max_tokens` uses the existing model-profile budget floor when present (currently
@@ -481,5 +485,5 @@ small synthetic example. No full-record answers were generated for this
 comparison, so it does **not** establish relative latency, total generation cost,
 or clinical accuracy. Server load was substantial during testing. The large
 completion-token count makes reasoning effort a useful next evaluation variable;
-this earlier run used uniform xhigh effort. The current implementation uses the
-separate low initial-search effort described above.
+this earlier run used uniform xhigh effort. The current default disables thinking;
+when enabled, it uses the separate low initial-search effort described above.

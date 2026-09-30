@@ -27,6 +27,7 @@ def llm():
         context_window=32768,
         tokenizer_mode="bytes",
         response_format="json_schema",
+        thinking="on",
         attempts=1,
         timeout=5,
     )
@@ -672,6 +673,7 @@ def test_search_effort_override_preserves_sampling_and_caller_config():
         temperature=0.4,
         top_k=12,
         reasoning_effort="medium",
+        thinking="on",
         extra_body={"chat_template_kwargs": {"reasoning_effort": "medium"}},
     )
     assessment = qa._resolve_llm(config)
@@ -837,16 +839,21 @@ def test_invalid_total_call_limits(value):
         ("nvidia/Gemma-4-31B-IT-NVFP4", 64, 8192),
     ],
 )
-def test_shared_vendor_defaults_and_no_reasoning_preservation(model, k, budget):
-    config = NoteSearchLLMConfig(base_url="http://synthetic.invalid/v1", model=model)
+@pytest.mark.parametrize("thinking", ["on", "off"])
+def test_shared_vendor_defaults_and_no_reasoning_preservation(model, k, budget, thinking):
+    config = NoteSearchLLMConfig(
+        base_url="http://synthetic.invalid/v1", model=model, thinking=thinking
+    )
     resolved = qa._resolve_llm(config)
     assert resolved.top_k == k and resolved.max_tokens == budget
-    assert resolved.temperature == 1.0 and resolved.top_p == 0.95
+    qwen_off = k == 20 and thinking == "off"
+    assert resolved.temperature == (0.7 if qwen_off else 1.0)
+    assert resolved.top_p == (0.8 if qwen_off else 0.95)
     template = resolved.extra_body["chat_template_kwargs"]
-    assert template["enable_thinking"] is True
+    assert template["enable_thinking"] is (thinking == "on")
     assert template["preserve_thinking"] is False
     assert config.extra_body == {}  # No mutation of caller configuration.
-    if k == 20:
+    if k == 20 and thinking == "on":
         assert template["reasoning_effort"] == "xhigh"
         assert resolved.request_params["reasoning_effort"] == "xhigh"
         assert resolved.extra_body["min_p"] == 0.0
@@ -862,6 +869,7 @@ def test_sampling_overrides_use_shared_resolver():
         temperature=0.4,
         top_k=12,
         reasoning_effort="medium",
+        thinking="on",
         extra_body={"chat_template_kwargs": {"preserve_thinking": True}},
     )
     resolved = qa._resolve_llm(config)
@@ -872,6 +880,17 @@ def test_sampling_overrides_use_shared_resolver():
         replace(config, thinking="off", temperature=None, top_k=None)
     )
     assert nonthinking.temperature == 0.7 and nonthinking.top_p == 0.8
+
+
+def test_default_disables_thinking_and_search_effort_override():
+    config = NoteSearchLLMConfig(
+        base_url="http://synthetic.invalid/v1", model="Qwen/Qwen3.8-27B"
+    )
+    resolved = qa._resolve_llm(config)
+    assert resolved.thinking == "off"
+    assert resolved.extra_body["chat_template_kwargs"]["enable_thinking"] is False
+    assert resolved.temperature == 0.7 and resolved.top_p == 0.8
+    assert qa._resolve_search_llm(config, resolved) is resolved
 
 
 def test_isolation_unavailable_fails_before_any_llm_request(monkeypatch, llm):
