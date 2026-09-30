@@ -80,8 +80,18 @@ def build_remote_request_config(
 
     request_params, extra_body = remote_sampling(llm_config)
     if remote_provider_name(llm_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
-        extra_body = {}
         model = str(llm_config.get("model_name", "")).removeprefix("google/")
+        if model == "gemma-4-26b-a4b-it-maas":
+            # MaaS supports these Gemma fields, but not other vLLM extensions.
+            template = extra_body.get("chat_template_kwargs", {})
+            extra_body = {key: extra_body[key] for key in ("top_k",) if key in extra_body}
+            if "enable_thinking" in template:
+                extra_body["chat_template_kwargs"] = {
+                    "enable_thinking": template["enable_thinking"]
+                }
+            request_params.pop("reasoning_effort", None)
+        else:
+            extra_body = {}
         if model.startswith("gemini-3.8-"):
             # Gemini 3.8 manages sampling internally; these fields are unsupported.
             for name in (

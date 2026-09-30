@@ -9,6 +9,7 @@ import copy
 from importlib import resources
 import json
 import math
+import re
 import time
 from typing import Callable
 
@@ -381,6 +382,16 @@ class _MeasuredClient(StructuredClient):
             started = time.monotonic()
         try:
             result = super()._http(endpoint, body, **kwargs)
+        except EndpointError as exc:
+            if endpoint == "/chat/completions":
+                # Transport failures otherwise look like model validation errors.
+                # Store only the fixed HTTP status, never server bodies/URLs,
+                # authentication errors, or exception text that might echo input.
+                metric["transport_error"] = True
+                match = re.fullmatch(r"Endpoint HTTP (\d{3}) for /chat/completions", str(exc))
+                if match:
+                    metric["http_status"] = int(match[1])
+            raise
         finally:
             if endpoint == "/chat/completions":
                 metric["seconds"] = round(time.monotonic() - started, 4)

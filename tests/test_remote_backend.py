@@ -427,7 +427,9 @@ def test_google_agent_platform_uses_adc_callback_and_user_first_messages(
             ),
         }
     ]
-    assert "extra_body" not in client.calls[0]
+    assert client.calls[0]["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": True}
+    }
     assert result.final_outputs == [
         "http://server-a/v1:Instructions:\nFollow the schema.\n\n"
         "Request:\nSummarize this record."

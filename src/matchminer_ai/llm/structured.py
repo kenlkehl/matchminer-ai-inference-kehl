@@ -433,6 +433,11 @@ class StructuredClient:
         self, job, messages, schema, validator, repair_handler=None,
         *, reuse_exhausted=False,
     ):
+        from .remote_auth import prepare_messages_for_provider
+
+        messages = prepare_messages_for_provider(
+            messages, {"provider": self.config.provider, "model_name": self.config.model}
+        )
         body = {
             "model": self.config.model,
             "messages": messages,

@@ -741,6 +741,26 @@ def test_reserved_third_call_recovers_a_failed_early_answer(monkeypatch, llm, fa
     assert answer["metadata"]["requests"] == 3
     assert len(answer["metadata"]["request_metrics"]) == 3
     assert answer["metadata"]["cells"] == 1
+    metrics = answer["metadata"]["request_metrics"]
+    if failure == "http":
+        assert metrics[1]["transport_error"] is True
+        assert metrics[1]["http_status"] == 500
+    else:
+        assert all("transport_error" not in metric for metric in metrics)
+    assert "fabricated failure" not in json.dumps(metrics)
+
+
+def test_transport_metrics_never_retain_arbitrary_error_text(monkeypatch, llm):
+    def fail(*args, **kwargs):
+        raise EndpointError("secret credential or patient text must not survive")
+
+    monkeypatch.setattr(qa.StructuredClient, "_http", fail)
+    client = qa._MeasuredClient(qa._resolve_llm(llm))
+    with pytest.raises(EndpointError):
+        client._http("/chat/completions", {})
+    assert client.request_metrics[0]["transport_error"] is True
+    assert "http_status" not in client.request_metrics[0]
+    assert "secret" not in json.dumps(client.request_metrics)
 
 
 @pytest.mark.parametrize(
