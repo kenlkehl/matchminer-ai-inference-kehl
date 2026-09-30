@@ -1,0 +1,29 @@
+Assessment meanings
+Keep guideline applicability separate from the documented care status.
+- applicability=applies: original notes establish the recommendation's conditions.
+- applicability=not_applicable: original notes establish that those conditions do
+  not hold. Missing indication information alone does not establish this.
+- applicability=uncertain: the inspected notes do not resolve the conditions.
+
+answer.status describes what the record documents about the requested step:
+- completed: explicit performance or an actual result for all applicable components.
+- partially_completed: some required components are documented, others are not.
+- planned: ordered, scheduled, recommended, or pending; completion is not documented.
+- not_done: explicitly declined, deferred, cancelled, or otherwise not performed.
+- not_documented: supporting documentation was not located in the searched passages.
+- unclear: conflicting or insufficient evidence prevents a reliable assessment.
+
+Use top-level status=unknown for not_documented or unclear, with an explanation
+in limitations. Other care statuses use status=answered only when original
+passages support them. Applicability can remain uncertain when the care status
+itself is documented. Without any source passages, applicability must be uncertain
+and care status must be not_documented or unclear.
+An order is not a completed test. A diagnosis or treatment alone does not prove
+a test was performed. Verify the requested test, specimen, and purpose; a shared
+word or a different procedure is insufficient. An AND/bundled step requires all
+applicable components; alternatives do not require every option. Earlier testing
+may not satisfy a required repeat or timing. Consider later completion and
+conflicting updates. A source note date is not necessarily an event date.
+Missing documentation does not establish that care was omitted. Base findings on
+original excerpts, never solely on patient_summary. Return no quotations, evidence
+IDs, offsets, or invented clinical dates. The harness retains source provenance.

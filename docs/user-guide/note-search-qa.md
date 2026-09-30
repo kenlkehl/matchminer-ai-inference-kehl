@@ -29,6 +29,16 @@ effort on every request. Thinking remains enabled and traces are never replayed.
 The configured remote request cap also applies. The guideline fetcher sets that
 cap to the number of workup items; other jobs retain their existing settings.
 
+Prompt roles are separate. The initial REPL agent searches and answers one item;
+the follow-up vocabulary generator supplies patient-free literal terms for Python
+to search; the evidence reviewer reads the passages Python supplies. Every role
+starts by explaining the overall patient-versus-guideline documentation task.
+The shared care-status definitions live in `patient.workup_assessment.txt` and
+contain no Python protocol. Initial search instructions and response examples are
+rendered with the correct string or workup-object answer shape and include
+`needs_review` only when the response schema requires it. Follow-up review uses
+its own four-field response contract and receives no REPL instructions.
+
 It returns the existing workup `assessments` shape: recommendation, applicability,
 status, bottom_line, automatically retained original excerpts and code-derived note numbers/dates. Structured
 dates come only from DataFrame input; pasted text remains undated. Quotes cannot

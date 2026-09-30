@@ -206,6 +206,11 @@ class _AnswerFormat:
     validate: Callable
     prepare_evidence: Callable | None = None
     request_review: bool = False
+    search_instructions: str = ""
+    python_answer: str | dict = ""
+    example_answer: str | dict = "The reviewed note documents a completed chest CT."
+    example_limitations: tuple[str, ...] = ()
+    unknown_answer: str | dict = "Unknown: supporting documentation was not located."
 
 
 def _schema(limits, answer_format=None):
@@ -239,6 +244,69 @@ def _schema(limits, answer_format=None):
         schema["properties"]["needs_review"] = {"type": "boolean"}
         schema["required"].append("needs_review")
     return schema
+
+
+def _search_system(limits, answer_format=None):
+    """Render one task contract and examples matching this invocation's schema."""
+    prompts = resources.files("matchminer_ai.prompts")
+
+    def read(name):
+        return prompts.joinpath(name).read_text(encoding="utf-8")
+
+    task = (
+        answer_format.search_instructions or answer_format.instructions
+        if answer_format is not None
+        else read("patient.note_search_answer.system.txt")
+    )
+    examples = {
+        "python": {
+            "action": "python",
+            "code": [r"scan([r'\bCT\b', 'computed tomography'])"],
+            "memory": "",
+            "status": "unknown",
+            "answer": copy.deepcopy(answer_format.python_answer)
+            if answer_format
+            else "",
+            "limitations": [],
+        },
+        "final": {
+            "action": "final",
+            "code": [],
+            "memory": "",
+            "status": "answered",
+            "answer": copy.deepcopy(answer_format.example_answer)
+            if answer_format
+            else "The reviewed note documents a completed chest CT.",
+            "limitations": list(answer_format.example_limitations)
+            if answer_format
+            else [],
+        },
+        "unknown final": {
+            "action": "final",
+            "code": [],
+            "memory": "",
+            "status": "unknown",
+            "answer": copy.deepcopy(answer_format.unknown_answer)
+            if answer_format
+            else "Unknown: supporting documentation was not located.",
+            "limitations": ["No supporting documentation was located by the searches."],
+        },
+    }
+    if answer_format and answer_format.request_review:
+        for example in examples.values():
+            example["needs_review"] = False
+    rendered_examples = "\n".join(
+        f"{action} action:\n{json.dumps(value, ensure_ascii=False)}"
+        for action, value in examples.items()
+    )
+    # Render task text last: supplied/custom task instructions are literal text,
+    # never a second template to interpolate.
+    return (
+        read("patient.note_search.system.txt")
+        .replace("{max_scan_patterns}", str(limits.max_scan_patterns))
+        .replace("{response_examples}", rendered_examples)
+        .replace("{task_instructions}", task)
+    )
 
 
 def _validate(
@@ -393,7 +461,9 @@ class _MeasuredClient(StructuredClient):
                 # Store only the fixed HTTP status, never server bodies/URLs,
                 # authentication errors, or exception text that might echo input.
                 metric["transport_error"] = True
-                match = re.fullmatch(r"Endpoint HTTP (\d{3}) for /chat/completions", str(exc))
+                match = re.fullmatch(
+                    r"Endpoint HTTP (\d{3}) for /chat/completions", str(exc)
+                )
                 if match:
                     metric["http_status"] = int(match[1])
             raise
@@ -402,7 +472,9 @@ class _MeasuredClient(StructuredClient):
                 metric["seconds"] = round(time.monotonic() - started, 4)
                 self.request_metrics.append(metric)
         if endpoint == "/chat/completions":
-            metric["dispatch_wait_seconds"] = result.get("transport", {}).get("dispatch_wait_seconds", 0.0)
+            metric["dispatch_wait_seconds"] = result.get("transport", {}).get(
+                "dispatch_wait_seconds", 0.0
+            )
             self.finish_reasons.append(
                 result.get("choices", [{}])[0].get("finish_reason")
             )
@@ -493,12 +565,15 @@ def _answer(
                     "final_only": final_only,
                     "search_only": search_only,
                     "next_step": (
-                        "Explore notes with pandas filters or regex; display relevant original excerpts."
+                        "Return a final assessment from the evidence already gathered; "
+                        "report any remaining uncertainty."
+                        if final_only
+                        else "Write one simple Python cell to locate original passages "
+                        "that will answer this question."
                         if search_only
-                        else "Answer when evidence is sufficient, or navigate additional notes "
-                        "to resolve missing components, timing or conflicting updates. "
-                        "Do not reread to extract quotes, "
-                        "recalculate offsets, or assign source dates; code handles provenance."
+                        else "Return the final assessment if the passages answer the question. "
+                        "Otherwise use one cell to resolve a specific evidence gap, "
+                        "or finish unknown if useful searches cannot resolve it."
                     ),
                     "max_memory_chars": limits.max_memory_chars,
                     "max_output_chars": limits.max_output_chars,
@@ -823,14 +898,7 @@ def _run_question_batch(
     # Fail closed before any endpoint sees patient questions if isolation is unavailable.
     with NoteREPL("", limits):
         pass
-    system = (
-        resources.files("matchminer_ai.prompts")
-        .joinpath("patient.note_search.system.txt")
-        .read_text(encoding="utf-8")
-        .replace("{max_scan_patterns}", str(limits.max_scan_patterns))
-    )
-    if answer_format is not None:
-        system += "\n\n" + answer_format.instructions
+    system = _search_system(limits, answer_format)
     results = [
         dict(patient_id=p["patient_id"], answers=[None] * len(p["questions"]))
         for p in normalized

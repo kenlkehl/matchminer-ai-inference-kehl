@@ -96,8 +96,14 @@ def _answer_format(spans, *, request_review=False):
 
     instructions = (
         resources.files("matchminer_ai.prompts")
+        .joinpath("patient.workup_assessment.txt")
+        .read_text(encoding="utf-8")
+    )
+    search_instructions = (
+        resources.files("matchminer_ai.prompts")
         .joinpath("patient.workup_search.system.txt")
         .read_text(encoding="utf-8")
+        .replace("{assessment_contract}", instructions)
     )
     return _AnswerFormat(
         schema=_object(
@@ -111,6 +117,24 @@ def _answer_format(spans, *, request_review=False):
         validate=validate,
         prepare_evidence=prepare_evidence,
         request_review=request_review,
+        search_instructions=search_instructions,
+        python_answer={
+            "applicability": "uncertain",
+            "status": "unclear",
+            "bottom_line": "",
+        },
+        example_answer={
+            "applicability": "uncertain",
+            "status": "completed",
+            "bottom_line": "The reviewed note documents a completed chest CT; "
+            "guideline applicability remains uncertain.",
+        },
+        example_limitations=("The guideline indication remains uncertain.",),
+        unknown_answer={
+            "applicability": "uncertain",
+            "status": "not_documented",
+            "bottom_line": "Chest CT documentation was not located in the searched passages.",
+        },
     )
 
 

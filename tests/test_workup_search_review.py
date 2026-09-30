@@ -165,6 +165,55 @@ def test_zero_match_alternative_recovers_and_cache_is_patient_free(harness):
     assert "PatientALPHA" not in json.dumps(second)
 
 
+def test_each_phase_receives_its_own_role_and_response_contract(harness, monkeypatch):
+    config, install, _ = harness
+    install(lambda p: {"terms": ["CT"]} if "unsuccessful_terms" in p else assessment())
+    installed = StructuredClient._http
+    captured = []
+
+    def inspect(self, endpoint, body=None, **kwargs):
+        captured.append((body["messages"], kwargs["output_schema"]))
+        return installed(self, endpoint, body, **kwargs)
+
+    monkeypatch.setattr(StructuredClient, "_http", inspect)
+    result = run(config, "PatientALPHA: CT ordered. Later CT completed.")
+    assert result["assessments"][0]["status"] == "completed"
+    assert len(captured) == 4
+    for messages, schema in captured:
+        prompt = messages[0]["content"]
+        payload = json.loads(messages[1]["content"])
+        assert "{assessment_contract}" not in prompt
+        if "unsuccessful_terms" in payload:
+            assert set(payload["workup_item"]) == {
+                "recommendation",
+                "guideline_population",
+            }
+            assert "task" not in payload["workup_item"]
+            assert "PatientALPHA" not in json.dumps(messages)
+            assert prompt.startswith("Cancer guidelines recommend tests")
+            assert "Python will search the patient's record" in prompt
+            assert set(schema["required"]) == {"terms"}
+        elif "source_excerpts" in payload:
+            assert prompt.startswith("Cancer guidelines recommend tests")
+            assert "follow-up evidence reviewer" in prompt
+            assert "How to carry out your role" not in prompt
+            assert "For a Python action" not in prompt
+            assert "Python reference" not in prompt
+            assert set(schema["required"]) == {
+                "status",
+                "answer",
+                "limitations",
+                "needs_more_evidence",
+            }
+            example, _ = json.JSONDecoder().raw_decode(
+                prompt.split("ordered chest CT:\n", 1)[1]
+            )
+            assert set(example) == set(schema["required"])
+        else:
+            assert "initial record-search and answering agent" in prompt
+            assert schema["properties"]["answer"]["type"] == "object"
+
+
 def test_zero_matches_never_turn_into_explicit_nonperformance(harness):
     config, install, calls = harness
     install(

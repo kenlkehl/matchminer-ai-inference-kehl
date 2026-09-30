@@ -358,6 +358,7 @@ def test_final_turn_enforced_and_unknown_is_explicit(monkeypatch, llm):
         if not payload["final_only"]:
             return cell("search('absentterm')")
         assert payload["cells_remaining"] == 0
+        assert payload["next_step"].startswith("Return a final assessment")
         assert "'hits': []" in payload["last_cell_result"]["output"]
         return final(
             "No relevant fabricated information.", answer="Unknown from these notes."

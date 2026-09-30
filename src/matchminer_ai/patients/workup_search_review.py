@@ -213,10 +213,14 @@ class _ItemReview:
 
     def vocabulary(self, unsuccessful=None):
         prompt = _prompt("patient.workup_search_terms.system.txt")
-        # This question contains only the catalog item and population, constructed
-        # by the workup adapter. Never include a provisional patient assessment.
+        item = json.loads(self.answer["question"])
+        # Pass only source recommendation fields. The assessment task belongs to
+        # the initial reviewer, not to this patient-free vocabulary generator.
         payload = {
-            "workup_item": json.loads(self.answer["question"]),
+            "workup_item": {
+                "recommendation": item["recommendation"],
+                "guideline_population": item.get("guideline_population"),
+            },
             "unsuccessful_terms": unsuccessful,
         }
         key = hashlib.sha256(
@@ -351,9 +355,9 @@ class _ItemReview:
 
         result = self.request(
             phase,
-            self.contract.instructions
-            + "\n\n"
-            + _prompt("patient.workup_search_review.system.txt"),
+            _prompt("patient.workup_search_review.system.txt").replace(
+                "{assessment_contract}", self.contract.instructions
+            ),
             self.review_payload(excerpts, reasons),
             schema,
             validate,
@@ -583,7 +587,9 @@ def review_answers(
         if not indices:
             return
         with ThreadPoolExecutor(max_workers=min(concurrency, len(indices))) as pool:
-            futures = {submit_cancellable(pool, getattr(items[i], method)): i for i in indices}
+            futures = {
+                submit_cancellable(pool, getattr(items[i], method)): i for i in indices
+            }
             for count, future in enumerate(as_completed(futures), 1):
                 future.result()
                 progress(f"Agentic {label}: {count}/{len(indices)} items finished")
