@@ -11,6 +11,7 @@ from matchminer_ai import load_default_preset
 from matchminer_ai.llm.structured import EndpointError, StructuredConfig
 from matchminer_ai.patients import (
     NoteSearchLimits,
+    WorkupSearchReviewConfig,
     review_patient_workup_with_note_search,
 )
 from matchminer_ai.patients import note_search_qa as qa, workup_search as workup
@@ -90,6 +91,7 @@ def test_dated_evidence_conditions_order_and_structured_answer(harness, monkeypa
         recommendations,
         config=config,
         population_context="Fabricated population",
+        review=WorkupSearchReviewConfig(max_review_passes=0),
         progress_callback=progress.append,
         limits=NoteSearchLimits(max_cells=2),
     )
@@ -162,6 +164,7 @@ def test_default_workup_schedules_more_than_four_questions_together(
     result = review_patient_workup_with_note_search(
         "Fabricated unrelated note.",
         [{"name": f"Workup {i}"} for i in range(6)],
+        review=WorkupSearchReviewConfig(max_review_passes=0),
         config=config,
     )
     assert len(result["assessments"]) == 6

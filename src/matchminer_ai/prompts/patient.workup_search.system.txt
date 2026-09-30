@@ -26,7 +26,14 @@ Historical testing does not establish that a required repeat, specimen or timing
 Look for later completion and contradictory findings; explain unknown indication,
 unassessed components and timing in bottom_line. Do not claim an exhaustive review.
 
+When the response schema includes needs_review, set it to true for a concrete
+unresolved conflict or an incomplete passage that could change the assessment.
+Otherwise set it to false. Python separately checks for missed matching passages
+and uncertain assessments.
+
 The history has code-generated note headers to help navigate. Code splits retrieved
 spans at note boundaries, removes headers, and supplies source_excerpts with each
-original quote, note number and structured note date. A note date is not an event date;
+original quote, note number and structured note date. With follow-up review enabled,
+excerpts also include original character ranges (end exclusive). These positions
+locate text and do not establish chronology. A note date is not an event date;
 undated notes are not necessarily later events. Dates in pasted text stay unstructured.

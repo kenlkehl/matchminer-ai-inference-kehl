@@ -14,10 +14,11 @@ uses the patient endpoint in `MMAIConfig` and the same isolated search loop, wit
 one structured assessment per catalog workup item. It accepts raw text or a
 single-patient note DataFrame, with optional `population_context`, `limits`,
 `max_parallel_questions` (default `None`, meaning all supplied items) and a
-string-valued `progress_callback`. Default workup limits are
-`NoteSearchLimits(max_cells=2, max_calls=3)`: up to two search cells plus the final
-answer, with validation and transport retries sharing the same three-call budget.
-The normal path is one multi-pattern search cell followed by a final assessment.
+string-valued `progress_callback`. Default initial workup limits are
+`NoteSearchLimits(max_cells=2, max_calls=3)`: up to two search cells plus the
+provisional answer, with validation and transport retries sharing that three-call
+budget. The normal initial path is one multi-pattern search cell and an assessment.
+The default follow-up review has separate budgets, described below.
 A further cell is reserved for a concrete gap, conflict, or execution error;
 the prompt explicitly asks the model to stop when it has sufficient evidence.
 `search_reasoning_effort="low"` applies to the initial search-only request where
@@ -32,8 +33,11 @@ status, bottom_line, automatically retained original excerpts and code-derived n
 dates come only from DataFrame input; pasted text remains undated. Quotes cannot
 include generated headers or cross note boundaries. Each item additionally retains
 `review_status` (answered/unknown/error), limitations and search metrics. Endpoint
-or worker failures become `status="error"`; they never imply missing documentation.
-No extra synthesis agent is used. The existing full-note API remains available.
+or worker failures during the initial search become `status="error"`; they never
+imply missing documentation. Failed follow-up retains the last validated assessment
+with an explicit limitation and `metadata.followup_review.status="incomplete"`.
+An invalid review reply can use bounded full-record fallback; an endpoint failure
+stops further requests for that item. The existing full-note API remains available.
 
 Agentic results have `metadata.method="agentic"` and `scope="searched_excerpts"`.
 They also have `evidence_selection="automatic_reviewed_excerpts"`. The model
@@ -44,6 +48,78 @@ supplied to the model, not individually selected supporting citations.
 not that all notes were clinically reviewed. The frontend and exports display
 this distinction, as well as limitations and the actual method used. Both modes
 use the browser session's saved endpoint/provider, model and reasoning settings.
+
+### Coverage and follow-up review for guideline items
+
+The agentic guideline adapter enables this follow-up by default. Generic
+`answer_patient_questions` and `answer_patient_question_batch` retain their
+existing search-only workflow.
+
+1. Each workup item gets up to eight literal search terms from a patient-free
+   vocabulary request: clinical names, synonyms, abbreviations and component
+   terms. A bounded in-memory cache shares vocabulary across patients with the
+   same item, guideline population, prompt and endpoint settings. It stores no
+   patient passages or assessments. Concurrent identical requests share one plan.
+2. Python searches every original note, excluding generated headers. Matching is
+   case-insensitive with escaped literals and flexible spaces, hyphens and
+   underscores. It counts all matches and stores at most 512 positions (first
+   256 and last 256). It tracks coverage against excerpts already supplied.
+3. For an uncertain assessment with zero matches, one vocabulary expansion asks
+   for alternative wording. Python removes duplicate/equivalent terms and
+   searches again. Zero matches leave documentation uncertain; they do not
+   establish nonperformance.
+4. Unseen matches, uncertain answers with matching passages, and model-flagged
+   conflicts receive up to two focused review passes. Each request contains only
+   that guideline item, its provisional assessment, review reasons and original
+   passages. It samples up to four positions, including prior context when
+   available, with 360 characters around each hit on the first pass and 720 on
+   the second. Excerpts stay inside original notes, with code-derived positions,
+   note numbers and structured dates. Dates are not inferred from text order.
+5. Remaining conflicts or incomplete retrieval coverage can use serial full-record
+   fallback for at most five items per patient. Unresolved findings take priority,
+   then original item order breaks ties. Python visits the original notes with
+   overlapping chunks, fitting each prompt to the configured context and output
+   reserve. It carries the validated assessment forward between chunks. At most
+   eight chunks per item run; reaching a chunk, request or context limit is
+   reported as incomplete coverage. Patient text is never silently discarded
+   while claiming a complete review.
+
+Follow-up requests share the configured endpoint concurrency, provider, sampling,
+thinking and assessment-effort settings. They add no recursive tool calls or
+reasoning-trace replay. Initial-search progress and follow-up progress are reported
+separately. Vocabulary is reused only within the current process; there are no
+new on-disk patient checkpoints.
+
+```python
+from matchminer_ai.patients import WorkupSearchReviewConfig
+
+review = WorkupSearchReviewConfig(
+    max_review_passes=2,                 # 0 disables all follow-up and fallback
+    retry_zero_match_missing=True,
+    review_hits_per_item=4,
+    review_context_chars=360,
+    max_evidence_chars=16000,             # per focused request / fallback chunk
+    max_calls_per_item=12,               # extra HTTP attempts, including retries
+    max_full_record_fallback_items=5,    # per patient invocation
+    max_full_record_chunks=8,            # per eligible item
+)
+result = review_patient_workup_with_note_search(
+    notes, recommendations, config=config, review=review
+)
+```
+
+`metadata.requests` includes initial and follow-up requests.
+`metadata.initial_search_requests` and `metadata.followup_review.requests` separate
+the two; `max_calls` continues to describe the initial search budget. The follow-up
+audit includes vocabulary, zero-match expansion, changes by pass, supplied ranges,
+match coverage, fallback completion and failures. Top-level metadata retains the
+review settings and counts incomplete reviews. A successful full-record fallback
+can resolve a failed focused review without discarding its failure audit.
+
+This adds retrieval checks, not a claim that all clinically relevant evidence was
+found. Vocabulary and sampled passages can still miss evidence; populated answers
+can still be wrong. No measured speed or accuracy advantage is established by the
+synthetic regression tests.
 
 ## One patient
 
@@ -194,7 +270,8 @@ Invalid batch inputs and unavailable isolation fail before endpoint requests.
    the reserved last request can still produce a final answer from that evidence.
    Model discovery and token-counting requests are not generation
    calls. The general-purpose QA API defaults to `max_calls=None`; the workup
-   wrapper defaults to three. Endpoint retry limits apply within the total budget.
+   wrapper defaults to three for its initial search, followed by the separately
+   bounded review above. Endpoint retry limits apply within each budget.
 
 There is one model-controlled action (Python execution), no agent framework or
 multi-tool router, no recursive submodel calls, no embeddings, and no web search.

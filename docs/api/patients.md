@@ -7,8 +7,9 @@
         - concatenate_patient_note_pdfs
         - full_patient_screen
         - summarize_patients
-      - review_patient_workup
-      - review_patient_workup_with_note_search
+        - review_patient_workup
+        - review_patient_workup_with_note_search
+        - WorkupSearchReviewConfig
         - answer_patient_questions
         - answer_patient_question_batch
         - NoteSearchLimits

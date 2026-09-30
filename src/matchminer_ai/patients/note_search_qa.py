@@ -194,10 +194,11 @@ class _AnswerFormat:
     instructions: str
     validate: Callable
     prepare_evidence: Callable | None = None
+    request_review: bool = False
 
 
 def _schema(limits, answer_format=None):
-    return _object(
+    schema = _object(
         {
             "action": {"type": "string", "enum": ["final", "python"]},
             "code": {
@@ -223,12 +224,24 @@ def _schema(limits, answer_format=None):
         }
     )
 
+    if answer_format and answer_format.request_review:
+        schema["properties"]["needs_review"] = {"type": "boolean"}
+        schema["required"].append("needs_review")
+    return schema
+
 
 def _validate(
     value, history, limits, final_only, cells, answer_format=None, evidence=()
 ):
-    if not isinstance(value, dict) or set(value) != set(_schema(limits)["properties"]):
+    expected = set(_schema(limits, answer_format)["properties"])
+    # Accept older endpoint replies without the optional conflict flag.
+    if not isinstance(value, dict) or set(value) not in (
+        expected,
+        expected - {"needs_review"},
+    ):
         raise ValueError("Return all response fields.")
+    if "needs_review" in value and type(value["needs_review"]) is not bool:
+        raise ValueError("needs_review must be boolean.")
     text_fields = [("memory", limits.max_memory_chars)]
     if answer_format is None:
         text_fields.append(("answer", 6000))
@@ -297,7 +310,11 @@ def _source_observation(observation, history, limits, answer_format=None):
     for candidate in candidates:
         if not candidate["quote"].strip():
             continue
-        visible = {k: v for k, v in candidate.items() if k not in {"start", "end"}}
+        visible = (
+            dict(candidate)
+            if answer_format and answer_format.request_review
+            else {k: v for k, v in candidate.items() if k not in {"start", "end"}}
+        )
         cost = len(json.dumps(visible, ensure_ascii=False)) + 2
         if cost > remaining:
             omitted = True
@@ -509,6 +526,8 @@ def _answer(
                     termination = (
                         "answered" if value["status"] == "answered" else "model_unknown"
                     )
+                    if answer_format and answer_format.request_review:
+                        result["needs_review"] = value.get("needs_review", False)
                     result.update(
                         {
                             k: value[k]

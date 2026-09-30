@@ -127,8 +127,14 @@ or copied quotes. These are review context, not selected supporting citations.
 The `scan` helper accepts up to 128 patterns per call by default, configurable
 with `NoteSearchLimits(max_scan_patterns=...)`, while keeping results bounded.
 Both return answered/unknown/error statuses and cost metadata. The optional
-`review_patient_workup_with_note_search` adapter uses this same harness for workup
-items; full-note review and patient summarization remain available. See the
+`review_patient_workup_with_note_search` adapter uses this harness for workup
+items, then checks retrieval coverage with shared patient-free vocabulary,
+alternative wording after zero-match searches, and up to two focused review
+passes. Unresolved or incompletely retrieved items can use bounded serial
+full-record fallback (at most five items). `WorkupSearchReviewConfig` controls
+these follow-ups, including a separate twelve-call budget per item; set
+`max_review_passes=0` to disable them. Source quotes and dates remain code-owned.
+Full-note review and patient summarization remain available. See the
 [note-search REPL guide](docs/user-guide/note-search-qa.md).
 
 ## Ontology attribution

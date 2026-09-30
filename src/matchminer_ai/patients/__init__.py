@@ -29,6 +29,7 @@ from .structure import structure_patient_summaries, structure_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
 from .workup_search import review_patient_workup_with_note_search
+from .workup_search_review import WorkupSearchReviewConfig
 from .note_search_qa import (
     NoteSearchLLMConfig,
     NoteSearchLimits,
@@ -209,6 +210,7 @@ __all__ = [
     "PatientPDFInput",
     "PatientPDFProgress",
     "NoteSearchLimits",
+    "WorkupSearchReviewConfig",
     "NoteSearchLLMConfig",
     "answer_patient_question_batch",
     "answer_patient_questions",

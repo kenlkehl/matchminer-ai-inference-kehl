@@ -6,6 +6,7 @@ import copy
 from dataclasses import asdict
 from importlib import resources
 import json
+import time
 
 import pandas as pd
 
@@ -19,8 +20,10 @@ from .note_search_qa import (
     _AnswerFormat,
     _object,
     _run_question_batch,
+    _resolve_llm,
 )
 from .workup import APPLICABILITY, STATUSES, _notes
+from .workup_search_review import WorkupSearchReviewConfig, review_answers
 
 
 def _history(source):
@@ -46,7 +49,7 @@ def _source_note(evidence, spans):
     )
 
 
-def _answer_format(spans):
+def _answer_format(spans, *, request_review=False):
     def prepare_evidence(excerpts):
         # A search context may cross headers/notes. Split in code, preserving
         # only original text and assigning each fragment its own note date.
@@ -132,6 +135,7 @@ def _answer_format(spans):
         instructions=instructions,
         validate=validate,
         prepare_evidence=prepare_evidence,
+        request_review=request_review,
     )
 
 
@@ -144,25 +148,36 @@ def review_patient_workup_with_note_search(
     limits: NoteSearchLimits | None = None,
     max_parallel_questions: int | None = None,
     search_reasoning_effort: str | None = "low",
+    review: WorkupSearchReviewConfig | None = None,
     progress_callback=None,
 ) -> dict:
     """Search for each workup item in parallel, retaining the workup review schema.
 
     Uses the configured patient endpoint and sampling profile. Each item has an
-    isolated Python REPL and a structured final assessment within the same loop;
-    there is no second synthesis agent. Thinking is on by default and reasoning
+    isolated Python REPL and a provisional structured assessment. By default,
+    shared search vocabulary and up to two focused evidence reviews follow it;
+    unresolved/coverage-limited items can use bounded serial full-record review.
+    Pass WorkupSearchReviewConfig(max_review_passes=0) to disable follow-up.
+    Thinking is on by default and reasoning
     traces are never replayed. Structured input dates are assigned by code after
     automatic capture of original search/read excerpts. The model does not emit
     quotes, offsets or citation IDs. Excerpts are reviewed context, not individually
     selected supporting citations. String input has unavailable dates. Per-item failures
     are status ``error``, never missing-documentation findings.
-    Defaults to three total generation calls per item (including final answer
-    and retries), and all items eligible to run concurrently. The configured
+    Defaults to three initial generation calls per item (including its answer
+    and retries), plus at most twelve follow-up calls per item including vocabulary
+    and retries. Up to five items can use full-record fallback, at most eight
+    chunks each. Failed follow-up preserves the last validated assessment with an
+    explicit limitation and audit status. All items may run concurrently. The configured
     endpoint request cap still applies. Pass explicit limits/concurrency to override.
     The first search-only request uses low effort where supported; subsequent
     assessment/follow-up turns retain the configured effort. Pass None to inherit
     that effort for every request instead.
     """
+    started = time.monotonic()
+    review = review or WorkupSearchReviewConfig()
+    if not isinstance(review, WorkupSearchReviewConfig):
+        raise TypeError("review must be a WorkupSearchReviewConfig instance.")
     config = config or load_default_preset()
     if not isinstance(config, MMAIConfig):
         raise TypeError("config must be an MMAIConfig instance.")
@@ -220,6 +235,7 @@ def review_patient_workup_with_note_search(
             f"(item {event['question_index'] + 1}: {event['status']})"
         )
 
+    contract = _answer_format(spans, request_review=review.max_review_passes > 0)
     result = _run_question_batch(
         [{"patient_id": "patient", "history": history, "questions": questions}],
         llm=llm,
@@ -228,9 +244,23 @@ def review_patient_workup_with_note_search(
         max_parallel_questions=max_parallel_questions,
         max_active_questions=max_parallel_questions,
         progress_callback=on_progress,
-        answer_format=_answer_format(spans),
+        answer_format=contract,
     )
     answers = result["patients"][0]["answers"]
+    if review.max_review_passes:
+        progress(
+            "Checking search coverage and reviewing provisional workup assessments"
+        )
+        answers = review_answers(
+            answers,
+            history=history,
+            spans=spans,
+            llm=_resolve_llm(llm),
+            config=review,
+            contract=contract,
+            concurrency=max_parallel_questions,
+            progress=progress,
+        )
     assessments = []
     for i, (answer, recommendation) in enumerate(
         zip(answers, recommendations, strict=True)
@@ -274,6 +304,12 @@ def review_patient_workup_with_note_search(
         "metadata": {
             **result["metadata"],
             "method": "agentic",
+            "elapsed_seconds": round(time.monotonic() - started, 4),
+            "followup_review": asdict(review),
+            "incomplete_review_items": sum(
+                a["metadata"].get("followup_review", {}).get("status") == "incomplete"
+                for a in answers
+            ),
             "scope": "searched_excerpts",
             "evidence_selection": "automatic_reviewed_excerpts",
             "note_count": len(source),
