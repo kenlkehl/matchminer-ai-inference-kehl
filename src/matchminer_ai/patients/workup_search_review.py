@@ -126,6 +126,7 @@ def _excerpt(history, note, start, end):
         "quote": history[start:end],
         "note_number": note["note_number"],
         "note_date": note["note_date"],
+        **({"note_type": note["note_type"]} if note.get("note_type") else {}),
     }
 
 
@@ -153,11 +154,14 @@ class _ReviewClient(_MeasuredClient):
 
 
 class _ItemReview:
-    def __init__(self, answer, *, history, spans, llm, config, contract):
+    def __init__(
+        self, answer, *, history, spans, llm, config, contract, patient_summary=None
+    ):
         self.started = time.monotonic()
         self.answer = copy.deepcopy(answer)
         self.history, self.spans = history, spans
         self.llm, self.config, self.contract = llm, config, contract
+        self.patient_summary = patient_summary
         self.client = _ReviewClient(llm)
         self.client.max_calls = config.max_calls_per_item
         self.seen = list(self.answer["evidence"])
@@ -301,6 +305,7 @@ class _ItemReview:
             "review_reasons": reasons,
             "source_excerpts": excerpts,
             "record_characters": len(self.history),
+            "patient_summary": self.patient_summary,
         }
 
     def assess(self, excerpts, reasons, phase):
@@ -545,12 +550,27 @@ class _ItemReview:
 
 
 def review_answers(
-    answers, *, history, spans, llm, config, contract, concurrency, progress
+    answers,
+    *,
+    history,
+    spans,
+    llm,
+    config,
+    contract,
+    concurrency,
+    progress,
+    patient_summary=None,
 ):
     """Parallel focused review, then deterministic bounded fallback by input order."""
     items = [
         _ItemReview(
-            a, history=history, spans=spans, llm=llm, config=config, contract=contract
+            a,
+            history=history,
+            spans=spans,
+            llm=llm,
+            config=config,
+            contract=contract,
+            patient_summary=patient_summary,
         )
         if a["status"] != "error" and isinstance(a["answer"], dict)
         else None

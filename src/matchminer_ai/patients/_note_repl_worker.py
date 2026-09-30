@@ -17,6 +17,15 @@ import re
 import resource
 import sys
 
+# Paths come from the parent launcher, not model code or the patient payload.
+sys.path[:0] = json.loads(sys.argv[1])
+import pandas as pd  # noqa: E402 -- trusted bootstrap before syscall isolation
+
+# Keep string operations on Python storage. Arrow-backed inferred strings can
+# reserve gigabytes of virtual allocator space for even a tiny table.
+pd.options.future.infer_string = False
+pd.options.mode.string_storage = "python"
+
 
 def isolate(memory_mb):
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -34,11 +43,17 @@ def isolate(memory_mb):
         ctypes.c_uint,
     ]
     lib.seccomp_load.argtypes = [ctypes.c_void_p]
+    lib.seccomp_attr_set.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32]
+    lib.seccomp_attr_set.restype = ctypes.c_int
     lib.seccomp_release.argtypes = [ctypes.c_void_p]
     policy = lib.seccomp_init(0x00050000 | errno.EPERM)  # default: deny
     if not policy:
         raise RuntimeError("seccomp initialization failed")
     try:
+        # Pandas/numeric dependencies can create threads during startup. Apply
+        # the policy to every existing thread, failing closed if TSYNC fails.
+        if lib.seccomp_attr_set(policy, 4, 1):  # SCMP_FLTATR_CTL_TSYNC
+            raise RuntimeError("seccomp thread synchronization unavailable")
         for name in (
             "read",
             "write",
@@ -99,6 +114,38 @@ def main():
     incoming, outgoing = sys.stdin, sys.stdout
     setup = json.loads(incoming.readline())
     history = setup.pop("history")
+    source_notes = setup.pop("notes", None) or [
+        {
+            "note_number": 1,
+            "note_date": None,
+            "note_type": None,
+            "text": history,
+            "start": 0,
+            "end": len(history),
+        }
+    ]
+    originals = {n["note_number"]: n for n in source_notes}
+    notes = pd.DataFrame(
+        [
+            {
+                "note_number": n["note_number"],
+                "note_date": n["note_date"],
+                "note_type": n.get("note_type"),
+                "note_text": n["text"],
+            }
+            for n in source_notes
+        ],
+        dtype=object,
+    )
+    notes["note_date"] = pd.to_datetime(notes.note_date, utc=True, format="mixed")
+    notes["note_type"] = notes.note_type.astype(pd.StringDtype(storage="python"))
+    notes["note_text"] = notes.note_text.astype(object)
+    # Warm common lazy imports before disk access is denied, including pandas
+    # string/datetime indexing and rendering. No patient output leaves startup.
+    notes.note_text.str.contains("", na=False)
+    notes.note_date.dt.year
+    notes.head(0).to_string()
+    notes.head(0).to_dict("records")
     output_limit = setup["max_output_chars"]
     max_scan_patterns = setup.get("max_scan_patterns", 128)
     try:
@@ -262,12 +309,86 @@ def main():
         retain(hits)
         return result
 
+    def show_notes(
+        selection, *, start=0, limit=6, chars=1600, pattern=None, context=250
+    ):
+        """Display bounded ORIGINAL excerpts from a pandas selection."""
+        if (
+            type(start) is not int
+            or start < 0
+            or type(limit) is not int
+            or not 1 <= limit <= 20
+            or type(chars) is not int
+            or not 1 <= chars <= 4000
+            or type(context) is not int
+            or not 0 <= context <= 2000
+        ):
+            raise ValueError("Invalid show_notes bounds")
+        if pattern is not None and (
+            not isinstance(pattern, str) or len(pattern) > 2000
+        ):
+            raise ValueError("Supply a bounded regex pattern")
+        if isinstance(selection, pd.Series):
+            if "note_text" in selection.index:
+                selection = selection.to_frame().T
+            else:
+                selection = pd.DataFrame({"note_text": selection})
+        if not isinstance(selection, pd.DataFrame) or "note_text" not in selection:
+            raise ValueError("Select note rows including note_text")
+        displayed = []
+        for index, row in selection.iloc[start : start + limit].iterrows():
+            number = row.get(
+                "note_number", index + 1 if isinstance(index, int) else None
+            )
+            original = originals.get(number)
+            if original is None or row["note_text"] != original["text"]:
+                raise ValueError("Display original, unmodified note rows")
+            text = original["text"]
+            offset = 0
+            if pattern is not None:
+                match = re.search(pattern, text, re.I)
+                if match is None:
+                    continue
+                offset = max(0, match.start() - context)
+            end = min(len(text), offset + chars)
+            hit = excerpt(original["start"] + offset, original["start"] + end)
+            hit.update(
+                note_number=original["note_number"],
+                note_date=original["note_date"],
+                note_type=original.get("note_type"),
+            )
+            hit["truncated"] |= offset > 0 or end < len(text)
+            displayed.append(hit)
+        retain(displayed)
+        return {
+            "notes": displayed,
+            "has_more": start + limit < len(selection),
+            "next_start": start + limit if start + limit < len(selection) else None,
+        }
+
+    def display(value):
+        if isinstance(value, pd.DataFrame) and "note_text" in value:
+            return show_notes(value)
+        if isinstance(value, pd.Series) and (
+            "note_text" in value.index or value.name == "note_text"
+        ):
+            return show_notes(value)
+        return value
+
+    def cell_print(*values, **kwargs):
+        print(*(display(value) for value in values), **kwargs)
+
     namespace = {
         "__builtins__": __builtins__,
         "history": history,
         "read": read,
         "search": search,
         "scan": scan,
+        "pd": pd,
+        "notes": notes,
+        "patient_summary": setup.get("patient_summary"),
+        "show_notes": show_notes,
+        "print": cell_print,
         "re": re,
         "json": json,
         "math": math,
@@ -292,7 +413,7 @@ def main():
                         namespace,
                     )
                     if result is not None:
-                        print(repr(result))
+                        print(repr(display(result)))
                 else:
                     exec(compile(tree, "<note-cell>", "exec"), namespace)
         except BaseException as exc:

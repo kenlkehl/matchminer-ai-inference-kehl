@@ -22,20 +22,14 @@ from .note_search_qa import (
     _run_question_batch,
     _resolve_llm,
 )
-from .workup import APPLICABILITY, STATUSES, _notes
+from .workup import APPLICABILITY, STATUSES, _notes as _notes
+from ._note_record import history_from_notes, prepare_record, source_excerpts
 from .workup_search_review import WorkupSearchReviewConfig, review_answers
 
 
 def _history(source):
     """Preserve original note text and map exact spans to structured provenance."""
-    parts, spans, cursor = [], [], 0
-    for note in source:
-        header = f"\n[Note {note['note_number']} | {note['note_date'] or 'date unavailable'}]\n"
-        parts.extend([header, note["text"]])
-        start = cursor + len(header)
-        cursor = start + len(note["text"])
-        spans.append({**note, "start": start, "end": cursor})
-    return "".join(parts), spans
+    return history_from_notes(source)
 
 
 def _source_note(evidence, spans):
@@ -53,26 +47,7 @@ def _answer_format(spans, *, request_review=False):
     def prepare_evidence(excerpts):
         # A search context may cross headers/notes. Split in code, preserving
         # only original text and assigning each fragment its own note date.
-        result = []
-        for item in excerpts:
-            for note in spans:
-                start, end = (
-                    max(item["start"], note["start"]),
-                    min(item["end"], note["end"]),
-                )
-                if start < end:
-                    result.append(
-                        {
-                            "start": start,
-                            "end": end,
-                            "quote": item["quote"][
-                                start - item["start"] : end - item["start"]
-                            ],
-                            "note_number": note["note_number"],
-                            "note_date": note["note_date"],
-                        }
-                    )
-        return result
+        return source_excerpts(excerpts, spans)
 
     def validate(value):
         answer = value["answer"]
@@ -140,9 +115,11 @@ def _answer_format(spans, *, request_review=False):
 
 
 def review_patient_workup_with_note_search(
-    notes: str | pd.DataFrame,
-    recommendations: list[dict],
+    notes: str | pd.DataFrame | None = None,
+    recommendations: list[dict] | None = None,
     *,
+    history: str | None = None,
+    patient_summary: str | None = None,
     config: MMAIConfig | None = None,
     population_context: str | None = None,
     limits: NoteSearchLimits | None = None,
@@ -153,6 +130,11 @@ def review_patient_workup_with_note_search(
 ) -> dict:
     """Search for each workup item in parallel, retaining the workup review schema.
 
+    Supply a notes DataFrame, concatenated text, or both (using history=). The
+    DataFrame is authoritative when both exist; note_text is required and
+    note_date/note_type are optional. An existing patient_summary guides pandas
+    and regex navigation but is never a source of patient-note evidence.
+
     Uses the configured patient endpoint and sampling profile. Each item has an
     isolated Python REPL and a provisional structured assessment. By default,
     shared search vocabulary and up to two focused evidence reviews follow it;
@@ -160,13 +142,13 @@ def review_patient_workup_with_note_search(
     Pass WorkupSearchReviewConfig(max_review_passes=0) to disable follow-up.
     Thinking is on by default and reasoning
     traces are never replayed. Structured input dates are assigned by code after
-    automatic capture of original search/read excerpts. The model does not emit
+    automatic capture of original pandas/search/read excerpts. The model does not emit
     quotes, offsets or citation IDs. Excerpts are reviewed context, not individually
     selected supporting citations. String input has unavailable dates. Per-item failures
     are status ``error``, never missing-documentation findings.
-    Defaults to three initial generation calls per item (including its answer
-    and retries), plus at most twelve follow-up calls per item including vocabulary
-    and retries. Up to five items can use full-record fallback, at most eight
+    Defaults to twelve Python cells and sixteen initial request attempts per item,
+    including its answer and retries, plus at most twelve follow-up calls per item
+    including vocabulary and retries. Up to five items can use full-record fallback, at most eight
     chunks each. Failed follow-up preserves the last validated assessment with an
     explicit limitation and audit status. All items may run concurrently. The configured
     endpoint request cap still applies. Pass explicit limits/concurrency to override.
@@ -183,7 +165,17 @@ def review_patient_workup_with_note_search(
         raise TypeError("config must be an MMAIConfig instance.")
     if not remote_enabled(config):
         raise ValueError("Workup review requires a configured remote LLM endpoint.")
-    source = _notes(notes)
+    limits = limits or NoteSearchLimits()
+    if not isinstance(limits, NoteSearchLimits):
+        raise TypeError("limits must be a NoteSearchLimits instance.")
+    record = prepare_record(
+        history,
+        notes,
+        patient_summary,
+        max_bytes=limits.max_history_bytes,
+        max_summary_chars=limits.max_summary_chars,
+    )
+    source = record.spans
     if not isinstance(recommendations, list) or not recommendations:
         raise ValueError("Supply at least one diagnostic/workup recommendation.")
     if population_context is not None and not isinstance(population_context, str):
@@ -196,10 +188,13 @@ def review_patient_workup_with_note_search(
             or not isinstance(item.get("conditions", ""), str)
         ):
             raise ValueError("Each recommendation requires a name and text conditions.")
-    limits = limits or NoteSearchLimits(max_cells=2, max_calls=3)
     if max_parallel_questions is None:
         max_parallel_questions = len(recommendations)
-    history, spans = _history(source)
+    if record.structured:
+        history, spans = record.history, record.spans
+    else:
+        history, spans = _history(source)
+        record.history, record.spans = history, spans
     questions = [
         json.dumps(
             {
@@ -245,6 +240,7 @@ def review_patient_workup_with_note_search(
         max_active_questions=max_parallel_questions,
         progress_callback=on_progress,
         answer_format=contract,
+        prepared_records=[record],
     )
     answers = result["patients"][0]["answers"]
     if review.max_review_passes:
@@ -260,6 +256,7 @@ def review_patient_workup_with_note_search(
             contract=contract,
             concurrency=max_parallel_questions,
             progress=progress,
+            patient_summary=record.patient_summary,
         )
     assessments = []
     for i, (answer, recommendation) in enumerate(
@@ -313,7 +310,11 @@ def review_patient_workup_with_note_search(
             "scope": "searched_excerpts",
             "evidence_selection": "automatic_reviewed_excerpts",
             "note_count": len(source),
-            "patient_summary_used": False,
+            "patient_summary_used": record.patient_summary is not None,
+            "patient_summary_role": "navigation_context_only",
+            "structured_notes": record.structured,
+            "text_supplied": record.text_supplied,
+            "input_precedence": "dataframe" if record.structured else "history",
             "requests": sum(a["metadata"]["requests"] for a in answers),
             "failed_items": sum(a["status"] == "error" for a in answers),
             "undated_notes": sum(n["note_date"] is None for n in source),

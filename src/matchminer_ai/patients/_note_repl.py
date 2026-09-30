@@ -8,6 +8,7 @@ from pathlib import Path
 import selectors
 import subprocess
 import sys
+import sysconfig
 import threading
 import time
 
@@ -17,22 +18,47 @@ class NoteREPLError(RuntimeError):
 
 
 class NoteREPL:
-    def __init__(self, history, limits):
+    def __init__(self, history, limits, *, notes=None, patient_summary=None):
         if sys.platform != "linux":
             raise NoteREPLError("The isolated note REPL requires Linux and libseccomp.")
         self.limits = limits
         self.history_length = len(history)
+        # Trusted dependency paths only. Keep -I -S: do not execute site/.pth
+        # startup hooks, inherit PYTHONPATH, or expose the parent's environment.
+        import pandas
+
+        package_paths = list(
+            dict.fromkeys(
+                [
+                    sysconfig.get_path("purelib"),
+                    sysconfig.get_path("platlib"),
+                    str(Path(pandas.__file__).resolve().parent.parent),
+                ]
+            )
+        )
         self.process = subprocess.Popen(
             [
                 sys.executable,
                 "-I",
                 "-S",
                 str(Path(__file__).with_name("_note_repl_worker.py")),
+                json.dumps(package_paths),
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            env={},
+            env={
+                name: "1"
+                for name in (
+                    "OPENBLAS_NUM_THREADS",
+                    "OMP_NUM_THREADS",
+                    "MKL_NUM_THREADS",
+                    "NUMEXPR_NUM_THREADS",
+                    "NUMEXPR_MAX_THREADS",
+                    "BLIS_NUM_THREADS",
+                    "VECLIB_MAXIMUM_THREADS",
+                )
+            },
             cwd="/",
             close_fds=True,
             bufsize=0,
@@ -43,11 +69,13 @@ class NoteREPL:
             ready = self._exchange(
                 {
                     "history": history,
+                    "notes": notes,
+                    "patient_summary": patient_summary,
                     "memory_mb": limits.worker_memory_mb,
                     "max_output_chars": limits.max_output_chars,
                     "max_scan_patterns": getattr(limits, "max_scan_patterns", 128),
                 },
-                timeout=limits.cell_timeout_seconds,
+                timeout=limits.worker_startup_timeout_seconds,
             )
             if ready != {"ready": True}:
                 raise NoteREPLError(

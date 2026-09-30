@@ -195,7 +195,7 @@ def test_timeout_kills_worker_including_catastrophic_regex(code):
 
 
 def test_worker_memory_limit_rejects_large_allocation():
-    with NoteREPL("Fabricated text.", NoteSearchLimits(worker_memory_mb=128)) as worker:
+    with NoteREPL("Fabricated text.", NoteSearchLimits(worker_memory_mb=512)) as worker:
         result = worker.execute("large = 'a' * (1024**3)")
         assert result["error"] == "MemoryError"
 

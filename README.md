@@ -117,15 +117,21 @@ the patient summary, and writes no patient checkpoints. See the
 [patient API guide](docs/api/patients.md#workup-documentation-review).
 
 For an experimental alternative that explores selected excerpts,
-`patients.answer_patient_questions` accepts a full-text history, arbitrary
-questions, and an explicit LLM endpoint configuration. A persistent isolated
-Python REPL searches the local history while the model carries a compact evidence
+`patients.answer_patient_questions` accepts a notes DataFrame, a full-text history,
+or both, arbitrary questions, an optional existing patient summary and an explicit
+LLM endpoint configuration. DataFrame columns are `note_text`, optional `note_date`
+and `note_type`; the DataFrame is authoritative when both forms exist. A persistent
+isolated Python REPL navigates the actual pandas table and searches the local text
+while the model carries a compact evidence
 notebook. `answer_patient_question_batch` adds bounded concurrency across patients
 and within each patient's questions. Both automatically retain original excerpts
 shown to the model, with exact character spans; the model supplies no citation IDs
 or copied quotes. These are review context, not selected supporting citations.
 The `scan` helper accepts up to 128 patterns per call by default, configurable
 with `NoteSearchLimits(max_scan_patterns=...)`, while keeping results bounded.
+Pandas selections automatically retain bounded original excerpts with dates and
+types; summaries guide navigation but do not supply evidence. Defaults allow twelve
+Python cells and sixteen initial request attempts per question, including retries.
 Both return answered/unknown/error statuses and cost metadata. The optional
 `review_patient_workup_with_note_search` adapter uses this harness for workup
 items, then checks retrieval coverage with shared patient-free vocabulary,

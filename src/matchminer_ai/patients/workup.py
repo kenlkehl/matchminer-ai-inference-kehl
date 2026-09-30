@@ -88,6 +88,10 @@ def _notes(notes):
         raise ValueError("Every note must contain nonempty text.")
     if "note_date" not in frame:
         frame["note_date"] = None
+    if "note_type" not in frame:
+        frame["note_type"] = None
+    if any(not pd.isna(t) and not isinstance(t, str) for t in frame.note_type):
+        raise ValueError("note_type must contain strings or missing values.")
     dates = pd.to_datetime(frame.note_date, errors="coerce", format="mixed", utc=True)
     supplied = frame.note_date.notna() & frame.note_date.astype(str).str.strip().ne("")
     if (dates.isna() & supplied).any():
@@ -98,6 +102,9 @@ def _notes(notes):
         dict(
             note_number=i,
             note_date=None if pd.isna(row.note_date) else row.note_date.isoformat(),
+            note_type=None
+            if pd.isna(row.note_type) or not row.note_type.strip()
+            else row.note_type,
             text=row.note_text,
         )
         for i, row in enumerate(frame.itertuples(), 1)

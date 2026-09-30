@@ -169,7 +169,7 @@ def test_default_workup_schedules_more_than_four_questions_together(
     )
     assert len(result["assessments"]) == 6
     assert result["metadata"]["max_parallel_questions"] == 6
-    assert all(a["metadata"]["max_calls"] == 3 for a in result["assessments"])
+    assert all(a["metadata"]["max_calls"] == 16 for a in result["assessments"])
 
 
 def test_validator_rejects_headers_cross_note_quotes_and_unsupported_findings():

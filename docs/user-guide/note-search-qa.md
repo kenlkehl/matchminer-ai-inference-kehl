@@ -1,7 +1,7 @@
 # Experimental note-search question answering
 
-`answer_patient_questions` answers arbitrary questions about one full-text
-patient history. `answer_patient_question_batch` runs the same workflow across
+`answer_patient_questions` answers arbitrary questions about original patient notes
+in a DataFrame, concatenated text, or both, with optional existing-summary context. `answer_patient_question_batch` runs the same workflow across
 patients and questions concurrently. This is a standalone, opt-in alternative to
 reading every note chunk for every question. The guideline fetcher also offers
 this harness as an optional workup-review method; full-note review stays the default.
@@ -12,12 +12,13 @@ Embedding-based raw-note QA and summarization are unchanged.
 `review_patient_workup_with_note_search(notes, recommendations, config=config)`
 uses the patient endpoint in `MMAIConfig` and the same isolated search loop, with
 one structured assessment per catalog workup item. It accepts raw text or a
-single-patient note DataFrame, with optional `population_context`, `limits`,
+single-patient note DataFrame (or both using `history=`), plus optional
+`patient_summary`, `population_context`, `limits`,
 `max_parallel_questions` (default `None`, meaning all supplied items) and a
 string-valued `progress_callback`. Default initial workup limits are
-`NoteSearchLimits(max_cells=2, max_calls=3)`: up to two search cells plus the
-provisional answer, with validation and transport retries sharing that three-call
-budget. The normal initial path is one multi-pattern search cell and an assessment.
+`NoteSearchLimits(max_cells=12, max_calls=16)`: up to twelve Python cells plus
+the provisional answer, with validation and transport retries sharing that
+sixteen-attempt budget. The normal initial path is one multi-pattern search cell and an assessment.
 The default follow-up review has separate budgets, described below.
 A further cell is reserved for a concrete gap, conflict, or execution error;
 the prompt explicitly asks the model to stop when it has sufficient evidence.
@@ -123,6 +124,72 @@ synthetic regression tests.
 
 ## One patient
 
+### Structured notes and optional summary
+
+With an already configured `llm` (see the endpoint example below):
+
+```python
+import pandas as pd
+
+notes = pd.DataFrame([
+    {"note_date": "2026-01-01", "note_type": "Oncology", "note_text": "CT ordered."},
+    {"note_date": "2026-02-01", "note_type": "Radiology", "note_text": "CT completed."},
+])
+result = answer_patient_questions(
+    notes=notes,
+    history=concatenated_text,       # optional; DataFrame is authoritative
+    patient_summary=existing_summary,  # optional navigation context only
+    questions=["Was the CT completed after January?"],
+    llm=llm,
+)
+```
+
+`note_text` is required; `note_date` and `note_type` may be absent or missing.
+Dates are validated, sorted stably, and converted to UTC. Undated rows follow
+dated rows. Text-only input creates a one-row DataFrame with unavailable date/type.
+Duplicate source indexes do not affect the code-derived note numbers. Supplied
+DataFrames are copied and unrelated columns are not exposed to the worker.
+
+The REPL exposes `pd`, `notes`, `history`, and `patient_summary`. It can combine
+`.str.contains(..., case=False, na=False)`, note-type filters and date ranges:
+
+```python
+selected = notes.loc[
+    notes.note_text.str.contains(r"\bCT\b|computed tomography", case=False, na=False)
+    & notes.note_date.between(
+        pd.Timestamp("2026-02-01", tz="UTC"), pd.Timestamp("2026-03-01", tz="UTC")
+    )
+]
+selected
+```
+
+A final DataFrame/row/text-Series expression or `print` displays bounded original
+passages and registers evidence automatically. Metadata-only selections/counts
+do not register patient evidence. `show_notes(selected, start=0, limit=6, chars=1600)`
+controls pagination. Add `pattern="CT", context=250` to focus a long note around
+its first match. Unshown/truncated passages are not treated as reviewed evidence.
+The model does not copy quotes or choose evidence IDs. Date/type filters can hide
+unknown metadata and older/later evidence; the prompt directs the model to broaden
+them when needed. A note date is not necessarily an event date.
+
+An existing summary may orient searches but is never appended to source notes or
+accepted in place of note excerpts. Patient-bearing summaries remain out of the
+shared guideline vocabulary cache. If both text and a DataFrame are provided,
+only the DataFrame supplies evidence; this avoids duplicate text and stale dates.
+Use text-only input explicitly when that text is the intended authoritative record.
+
+The workup adapter accepts the same options:
+
+```python
+review_patient_workup_with_note_search(
+    notes=notes, history=concatenated_text, patient_summary=existing_summary,
+    recommendations=workup_items, config=config,
+)
+```
+
+For batch QA, each patient dictionary may contain `notes`, `history`, or both and
+an optional `patient_summary`, alongside its `patient_id` and `questions`.
+
 ```python
 from matchminer_ai.patients import (
     NoteSearchLLMConfig, NoteSearchLimits, answer_patient_questions,
@@ -144,7 +211,7 @@ result = answer_patient_questions(
     "Fabricated record. Day 1: assay ordered. Day 8: assay completed, result pending.",
     ["Was the assay performed?", "Is the assay result documented?"],
     llm=llm,
-    limits=NoteSearchLimits(max_cells=8, max_scan_patterns=128),
+    limits=NoteSearchLimits(max_cells=12, max_calls=16, max_scan_patterns=128),
     max_parallel_questions=4,
 )
 for answer in result["answers"]:
@@ -269,8 +336,8 @@ Invalid batch inputs and unavailable isolation fail before endpoint requests.
    past that cap. If an early answer/follow-up fails after a successful search,
    the reserved last request can still produce a final answer from that evidence.
    Model discovery and token-counting requests are not generation
-   calls. The general-purpose QA API defaults to `max_calls=None`; the workup
-   wrapper defaults to three for its initial search, followed by the separately
+   calls. Both the general-purpose QA API and workup wrapper default to twelve Python
+   cells and sixteen initial request attempts, followed by the separately
    bounded review above. Endpoint retry limits apply within each budget.
 
 There is one model-controlled action (Python execution), no agent framework or
@@ -294,7 +361,8 @@ Each answer contains:
   deduplicated; earlier distinct excerpts survive subsequent turns. Excerpts that
   could not be supplied because of the context limit are not labeled reviewed.
   Offsets count Python characters, not UTF-8 bytes.
-  `note_date` is always `null` for this full-text API; dates are not inferred.
+  `note_date` is null for text-only input. DataFrame input retains code-derived
+  dates, note numbers and any supplied note types; dates/types are never inferred.
 - `limitations`: unresolved clinical/documentation gaps or a sanitized failure.
 - `metadata`: executed cell count, actual generation request attempts, elapsed
   time per generation request (including failures, with requested effort), worker
@@ -332,17 +400,21 @@ allowance is recorded in answer and batch metadata.
 ## Execution limits
 
 The REPL requires Linux with `libseccomp.so.2`. It launches Python with `-I -S`,
-an empty inherited environment, closed extra file descriptors, and no package
-site initialization. Before any model code executes, a default-deny syscall
+a scrubbed environment containing only numeric-library thread limits, closed
+extra file descriptors, and no package site initialization. Trusted pandas dependencies
+are preloaded from the launcher's installed package paths before isolation. Before any model code executes, a default-deny syscall
 allowlist blocks filesystem opens, network sockets, process/thread creation,
 execution of programs, and changes to resource limits. Only operations needed
 for in-memory Python and its existing communication pipes are allowed. Imports
 requiring new files consequently fail; `re`, `json`, `math`, and `collections`
-are preloaded. Python namespace restrictions are not used as the isolation boundary.
+and `pandas` are preloaded. Thread synchronization applies the filter to
+all dependency threads. Python namespace restrictions are not used as the isolation boundary.
 
-Each cell has a parent-enforced wall deadline (default 5 seconds); this also
+Worker startup has a separate 20-second deadline for dependency loading. Each cell
+has a parent-enforced wall deadline (default 5 seconds); this also
 terminates catastrophic regex searches. The process has a default 512 MiB address
-space limit and cannot write core dumps. Cell output defaults to 12,000 characters,
+space limit (minimum 512 MiB with pandas) and cannot write core dumps.
+The worker uses Python-backed string columns to avoid Arrow's large virtual reservations. Cell output defaults to 12,000 characters,
 memory to 6,000 characters, and history to 32 MB of UTF-8 text. Limits are adjustable
 with `NoteSearchLimits`. If isolation cannot be installed, the harness fails closed;
 there is no unsandboxed fallback. Model code may alter its own Python variables,

@@ -12,6 +12,8 @@ import math
 import time
 from typing import Callable
 
+import pandas as pd
+
 from matchminer_ai.llm.structured import (
     EndpointError,
     StructuredClient,
@@ -21,6 +23,7 @@ from matchminer_ai.llm.structured import (
 from matchminer_ai.llm.model_profiles import resolve_model_profile
 
 from ._note_repl import NoteREPL, NoteREPLError
+from ._note_record import prepare_record, source_excerpts
 
 NOTICE = (
     "Research documentation review of selected excerpts from supplied notes. "
@@ -144,15 +147,17 @@ def _resolve_search_llm(config, resolved):
 
 @dataclass(frozen=True)
 class NoteSearchLimits:
-    max_cells: int = 8
+    max_cells: int = 12
     max_output_chars: int = 12000
     max_memory_chars: int = 6000
     max_code_chars: int = 6000
     max_question_chars: int = 6000
     max_history_bytes: int = 32_000_000
+    max_summary_chars: int = 100_000
     cell_timeout_seconds: float = 5.0
+    worker_startup_timeout_seconds: float = 20.0
     worker_memory_mb: int = 512
-    max_calls: int | None = None
+    max_calls: int | None = 16
     max_scan_patterns: int = 128
 
     def __post_init__(self):
@@ -161,7 +166,7 @@ class NoteSearchLimits:
             if name == "max_calls":
                 if value is not None and (type(value) is not int or value < 2):
                     raise ValueError("max_calls must be None or an integer >= 2.")
-            elif name == "cell_timeout_seconds":
+            elif name in {"cell_timeout_seconds", "worker_startup_timeout_seconds"}:
                 if (
                     isinstance(value, bool)
                     or not isinstance(value, (int, float))
@@ -173,8 +178,8 @@ class NoteSearchLimits:
                     )
             elif type(value) is not int or value < 1:
                 raise ValueError(f"{name} must be a positive integer.")
-        if self.worker_memory_mb < 128:
-            raise ValueError("worker_memory_mb must be at least 128.")
+        if self.worker_memory_mb < 512:
+            raise ValueError("worker_memory_mb must be at least 512 for pandas.")
 
 
 def _object(properties):
@@ -283,7 +288,7 @@ def _validate(
         answer_format.validate({**value, "evidence": evidence})
 
 
-def _source_observation(observation, history, limits, answer_format=None):
+def _source_observation(observation, history, limits, answer_format=None, record=None):
     """Rebuild bounded original excerpts in the parent, never from worker text.
 
     Helpers register spans automatically, even when a cell does not print them.
@@ -305,6 +310,8 @@ def _source_observation(observation, history, limits, answer_format=None):
         candidates.append({"start": start, "end": stop, "quote": history[start:stop]})
     if answer_format and answer_format.prepare_evidence:
         candidates = answer_format.prepare_evidence(candidates)
+    elif record and record.structured:
+        candidates = source_excerpts(candidates, record.spans)
     sources, display = [], []
     remaining = max(0, limits.max_output_chars - 100)
     for candidate in candidates:
@@ -394,7 +401,15 @@ class _MeasuredClient(StructuredClient):
 
 
 def _answer(
-    history, question, index, llm, limits, system, answer_format=None, search_llm=None
+    history,
+    question,
+    index,
+    llm,
+    limits,
+    system,
+    answer_format=None,
+    search_llm=None,
+    record=None,
 ):
     started = time.monotonic()
     client = _MeasuredClient(llm)
@@ -417,7 +432,12 @@ def _answer(
     }
     try:
         worker_started = time.monotonic()
-        with NoteREPL(history, limits) as worker:
+        with NoteREPL(
+            history,
+            limits,
+            notes=record.spans if record else None,
+            patient_summary=record.patient_summary if record else None,
+        ) as worker:
             worker_startup_seconds = time.monotonic() - worker_started
             for turn in range(limits.max_cells + 1):
                 remaining = (
@@ -447,6 +467,8 @@ def _answer(
                     "question": question,
                     "history_chars": len(history),
                     "history_lines": history_lines,
+                    "notes_metadata": record.describe() if record else None,
+                    "patient_summary": record.patient_summary if record else None,
                     "memory": memory,
                     "last_cell_result": observation,
                     "cells_remaining": cells_remaining,
@@ -454,11 +476,11 @@ def _answer(
                     "final_only": final_only,
                     "search_only": search_only,
                     "next_step": (
-                        "Search synonyms/components together in one simple Python cell."
+                        "Explore notes with pandas filters or regex; display relevant original excerpts."
                         if search_only
-                        else "Return the final assessment from the gathered excerpts now. "
-                        "Only request another cell for specific missing patient evidence "
-                        "that could change the finding. Do not reread to extract quotes, "
+                        else "Answer when evidence is sufficient, or navigate additional notes "
+                        "to resolve missing components, timing or conflicting updates. "
+                        "Do not reread to extract quotes, "
                         "recalculate offsets, or assign source dates; code handles provenance."
                     ),
                     "max_memory_chars": limits.max_memory_chars,
@@ -544,7 +566,7 @@ def _answer(
                 observation = worker.execute(code)
                 cell_seconds.append(round(time.monotonic() - cell_started, 4))
                 pending_evidence = _source_observation(
-                    observation, history, limits, answer_format
+                    observation, history, limits, answer_format, record
                 )
                 sources_truncated |= observation["sources_truncated"]
                 # Code helps recover from a failed cell or recall variable names;
@@ -608,6 +630,10 @@ def _answer(
         "worker_startup_seconds": round(worker_startup_seconds, 4),
         "cell_seconds": cell_seconds,
         "max_calls": limits.max_calls,
+        "max_cells": limits.max_cells,
+        "structured_notes": bool(record and record.structured),
+        "patient_summary_used": bool(record and record.patient_summary),
+        "patient_summary_role": "navigation_context_only",
         "max_scan_patterns": limits.max_scan_patterns,
         "model": llm.model,
         "elapsed_seconds": round(time.monotonic() - started, 4),
@@ -643,8 +669,10 @@ def answer_patient_question_batch(
 ) -> dict:
     """Answer per-patient question lists with bounded two-level concurrency.
 
-    Each input contains ``patient_id``, ``history`` (full text), and ``questions``
-    (a list of strings). Results preserve both input orders. Endpoint calls share
+    Each input contains ``patient_id`` and ``questions`` plus ``history`` (text),
+    ``notes`` (single-patient DataFrame), or both. An optional ``patient_summary``
+    guides navigation but is not evidence. Structured notes take precedence when
+    both inputs exist. Results preserve both input orders. Endpoint calls share
     ``llm.max_concurrent_requests`` across this process. No patient checkpoints,
     embeddings, web searches, recursive LLM calls, or application integration.
     Progress callbacks run on the caller thread and contain numeric indices only.
@@ -670,6 +698,7 @@ def _run_question_batch(
     max_active_questions=8,
     progress_callback=None,
     answer_format=None,
+    prepared_records=None,
 ):
     limits = limits or NoteSearchLimits()
     if not isinstance(limits, NoteSearchLimits) or not isinstance(
@@ -728,28 +757,30 @@ def _run_question_batch(
     if not isinstance(patients, list) or not patients:
         raise ValueError("Supply at least one patient question set.")
     normalized, ids = [], set()
-    for patient in patients:
-        if not isinstance(patient, dict) or set(patient) != {
-            "patient_id",
-            "history",
-            "questions",
-        }:
-            raise ValueError(
-                "Each patient requires patient_id, history, and questions."
-            )
-        identity, history, questions = (
-            patient[k] for k in ("patient_id", "history", "questions")
-        )
-        if not isinstance(identity, str) or not identity.strip() or identity in ids:
-            raise ValueError("Patient IDs must be unique, nonempty strings.")
+    for pi, patient in enumerate(patients):
         if (
-            not isinstance(history, str)
-            or not history.strip()
-            or len(history.encode("utf-8")) > limits.max_history_bytes
+            not isinstance(patient, dict)
+            or not {"patient_id", "questions"} <= set(patient)
+            or set(patient)
+            - {"patient_id", "history", "notes", "questions", "patient_summary"}
         ):
             raise ValueError(
-                "Supply nonempty full-text history within max_history_bytes."
+                "Each patient requires patient_id, questions, and notes or history."
             )
+        identity, questions = patient["patient_id"], patient["questions"]
+        if not isinstance(identity, str) or not identity.strip() or identity in ids:
+            raise ValueError("Patient IDs must be unique, nonempty strings.")
+        record = (
+            prepared_records[pi]
+            if prepared_records is not None
+            else prepare_record(
+                patient.get("history"),
+                patient.get("notes"),
+                patient.get("patient_summary"),
+                max_bytes=limits.max_history_bytes,
+                max_summary_chars=limits.max_summary_chars,
+            )
+        )
         if (
             not isinstance(questions, list)
             or not questions
@@ -764,7 +795,12 @@ def _run_question_batch(
                 "Supply a nonempty list of questions within max_question_chars."
             )
         normalized.append(
-            dict(patient_id=identity, history=history, questions=list(questions))
+            dict(
+                patient_id=identity,
+                history=record.history,
+                questions=list(questions),
+                record=record,
+            )
         )
         ids.add(identity)
     # Fail closed before any endpoint sees patient questions if isolation is unavailable.
@@ -812,6 +848,7 @@ def _run_question_batch(
                             system,
                             answer_format,
                             search_llm,
+                            patient["record"],
                         )
                     ] = (pi, qi)
                     state["next"] += 1
@@ -869,17 +906,32 @@ def _run_question_batch(
 
 
 def answer_patient_questions(
-    history: str,
-    questions: list[str],
+    history: str | pd.DataFrame | None = None,
+    questions: list[str] | None = None,
     *,
+    notes: pd.DataFrame | None = None,
+    patient_summary: str | None = None,
     llm: NoteSearchLLMConfig,
     limits: NoteSearchLimits | None = None,
     max_parallel_questions: int = 4,
     progress_callback=None,
 ) -> dict:
-    """Answer questions about one full-text history; see the batch API for concurrency."""
+    """Search text and/or original notes, optionally guided by a patient summary.
+
+    DataFrame note_text is required; note_date and note_type are optional. The
+    DataFrame is authoritative when both forms exist. Summary text is navigation
+    context, never a substitute for original-note evidence.
+    """
     result = answer_patient_question_batch(
-        [{"patient_id": "patient", "history": history, "questions": questions}],
+        [
+            {
+                "patient_id": "patient",
+                "history": history,
+                "notes": notes,
+                "patient_summary": patient_summary,
+                "questions": questions,
+            }
+        ],
         llm=llm,
         limits=limits,
         max_parallel_patients=1,
