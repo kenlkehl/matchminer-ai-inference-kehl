@@ -12,6 +12,8 @@ import sysconfig
 import threading
 import time
 
+from matchminer_ai.cancellation import check_cancelled
+
 
 class NoteREPLError(RuntimeError):
     """A worker failed without exposing note text or executed source code."""
@@ -19,6 +21,7 @@ class NoteREPLError(RuntimeError):
 
 class NoteREPL:
     def __init__(self, history, limits, *, notes=None, patient_summary=None):
+        check_cancelled()
         if sys.platform != "linux":
             raise NoteREPLError("The isolated note REPL requires Linux and libseccomp.")
         self.limits = limits
@@ -105,9 +108,12 @@ class NoteREPL:
         chunks, size = [], 0
         try:
             while True:
+                check_cancelled()
                 remaining = deadline - time.monotonic()
-                if remaining <= 0 or not self.selector.select(remaining):
+                if remaining <= 0:
                     raise NoteREPLError("Worker exceeded its wall-time limit.")
+                if not self.selector.select(min(remaining, 0.1)):
+                    continue
                 chunk = os.read(self.process.stdout.fileno(), 8192)
                 size += len(chunk)
                 if not chunk or failed.is_set():

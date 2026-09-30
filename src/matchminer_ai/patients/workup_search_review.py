@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass, replace
 from importlib import resources
 
 from matchminer_ai.llm.structured import EndpointError
+from matchminer_ai.cancellation import check_cancelled, submit_cancellable
 
 from .note_search_qa import _MeasuredClient, _object, _remember_excerpts
 
@@ -578,10 +579,11 @@ def review_answers(
     ]
 
     def run(indices, method, label):
+        check_cancelled()
         if not indices:
             return
         with ThreadPoolExecutor(max_workers=min(concurrency, len(indices))) as pool:
-            futures = {pool.submit(getattr(items[i], method)): i for i in indices}
+            futures = {submit_cancellable(pool, getattr(items[i], method)): i for i in indices}
             for count, future in enumerate(as_completed(futures), 1):
                 future.result()
                 progress(f"Agentic {label}: {count}/{len(indices)} items finished")

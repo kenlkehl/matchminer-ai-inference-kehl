@@ -1,10 +1,12 @@
 """OpenAI-compatible HTTP client with bounded retries and per-request checkpoints."""
 
 import json
+import math
 import os
 import re
 import time
 from dataclasses import asdict, dataclass, field, replace
+from email.utils import parsedate_to_datetime
 from importlib import resources
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -12,6 +14,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from matchminer_ai._storage import atomic_json, digest, read_json
+from matchminer_ai.cancellation import cancel_sleep, check_cancelled, run_cancellable
 
 from .remote_auth import (
     GOOGLE_AGENT_PLATFORM_PROVIDER,
@@ -45,9 +48,34 @@ class StructuredConfig:
     extra_body: dict = field(default_factory=dict)
     provider: str = "openai"
     google_project_id: str = ""
+    request_start_interval_seconds: float = 0.0
+    capacity_retry_initial_seconds: float = 0.0
+    capacity_retry_max_seconds: float = 60.0
+
+    def __post_init__(self):
+        for name in (
+            "request_start_interval_seconds", "capacity_retry_initial_seconds",
+            "capacity_retry_max_seconds",
+        ):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value < 0
+            ):
+                raise ValueError(f"{name} must be finite and nonnegative.")
+        if self.capacity_retry_max_seconds < self.capacity_retry_initial_seconds:
+            raise ValueError("Capacity retry maximum must be at least its initial delay.")
 
     def public_dict(self):
         result = asdict(self)  # Contains only the key's environment-variable NAME.
+        # Keep existing checkpoint identities when pacing is not configured.
+        for name, default in (
+            ("request_start_interval_seconds", 0.0),
+            ("capacity_retry_initial_seconds", 0.0),
+            ("capacity_retry_max_seconds", 60.0),
+        ):
+            if result[name] == default:
+                result.pop(name)
         if self.provider == "openai" and not self.google_project_id:
             # Preserve existing local endpoint checkpoint identities.
             result.pop("provider")
@@ -56,7 +84,24 @@ class StructuredConfig:
 
 
 class EndpointError(RuntimeError):
-    pass
+    def __init__(self, message, *, http_status=None, retry_after=None):
+        super().__init__(message)
+        self.http_status = http_status
+        self.retry_after = retry_after
+
+
+def _retry_after_seconds(value):
+    """Parse only a delay; never retain arbitrary provider header text."""
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+    except (ValueError, TypeError):
+        try:
+            seconds = parsedate_to_datetime(value).timestamp() - time.time()
+        except (ValueError, TypeError, OverflowError):
+            return None
+    return max(0.0, seconds) if math.isfinite(seconds) else None
 
 
 class RepairError(EndpointError):
@@ -128,6 +173,7 @@ def read_chat_stream(lines, *, guards=()):
     tails = {"content": "", "reasoning": ""}
     choice = result["choices"][0]
     for raw in lines:
+        check_cancelled()
         line = raw.decode("utf-8").strip() if isinstance(raw, bytes) else raw.strip()
         if not line.startswith("data:"):
             continue
@@ -236,6 +282,12 @@ class StructuredClient:
         )
 
     def _http(self, endpoint, body=None, *, server_root=False, output_schema=None):
+        return run_cancellable(lambda: self._http_request(
+            endpoint, body, server_root=server_root, output_schema=output_schema,
+        ))
+
+    def _http_request(self, endpoint, body=None, *, server_root=False, output_schema=None):
+        check_cancelled()
         headers = {"Content-Type": "application/json"}
         key = os.environ.get(self.config.api_key_env)
         if self.config.provider == GOOGLE_AGENT_PLATFORM_PROVIDER:
@@ -271,23 +323,43 @@ class StructuredClient:
         limit = self.config.max_concurrent_requests
         if preparation:
             limit = min(limit, 4)
+        dispatch_wait = 0.0
         try:
-            with (
-                endpoint_slot(
-                    self.config.base_url,
-                    limit,
-                    pool="preparation" if preparation else "generation",
-                ),
-                urlopen(request, timeout=self.config.timeout) as response,
+            with endpoint_slot(
+                self.config.base_url,
+                limit,
+                pool="preparation" if preparation else "generation",
             ):
-                if endpoint == "/chat/completions" and body and body.get("stream"):
-                    return read_chat_stream(
-                        response, guards=self.stream_guards(output_schema)
-                    )
-                return json.load(response)
+                if endpoint == "/chat/completions" and (
+                    self.config.request_start_interval_seconds
+                    or self.config.capacity_retry_initial_seconds
+                ):
+                    from .request_pacing import endpoint_pacer
+
+                    dispatch_wait = endpoint_pacer(
+                        self.config.base_url, self.config.model
+                    ).wait(self.config.request_start_interval_seconds)
+                check_cancelled()
+                with urlopen(request, timeout=self.config.timeout) as response:
+                    if endpoint == "/chat/completions" and body and body.get("stream"):
+                        result = read_chat_stream(
+                            response, guards=self.stream_guards(output_schema)
+                        )
+                    else:
+                        result = json.load(response)
+                check_cancelled()
+                if endpoint == "/chat/completions" and isinstance(result, dict):
+                    if not isinstance(result.get("transport"), dict):
+                        result["transport"] = {}
+                    result["transport"]["dispatch_wait_seconds"] = round(dispatch_wait, 4)
+                return result
         except HTTPError as exc:
             # Deliberately don't persist server bodies (they may echo credentials).
-            raise EndpointError(f"Endpoint HTTP {exc.code} for {endpoint}") from exc
+            raise EndpointError(
+                f"Endpoint HTTP {exc.code} for {endpoint}",
+                http_status=exc.code,
+                retry_after=_retry_after_seconds(exc.headers.get("Retry-After")) if exc.headers else None,
+            ) from exc
         except (URLError, TimeoutError, OSError) as exc:
             raise EndpointError(
                 f"Endpoint request failed: {type(exc).__name__}: {exc}"
@@ -392,14 +464,36 @@ class StructuredClient:
                 value, _ = parse_model_json(choice["message"]["content"])
                 validator(value)
                 return value
-            except (ValueError, KeyError, TypeError, IndexError, EndpointError):
+            except (ValueError, KeyError, TypeError, IndexError, EndpointError) as exc:
+                if self._capacity_retry(exc, attempt):
+                    # Capacity rejection does not invalidate the prompt or add
+                    # model feedback. The next HTTP attempt waits at dispatch.
+                    continue
                 # Do not echo provider output, invalid quotes, or patient content.
                 feedback = resources.files("matchminer_ai.prompts").joinpath(
                     "structured.memory_retry.txt"
                 ).read_text(encoding="utf-8")
                 if attempt + 1 < self.config.attempts:
-                    time.sleep(min(2 ** attempt, 8))
+                    cancel_sleep(min(2 ** attempt, 8))
         raise EndpointError("Structured review failed validation after bounded retries.")
+
+    def _capacity_retry(self, error, attempt):
+        if (
+            not isinstance(error, EndpointError)
+            or error.http_status not in {429, 503}
+            or not self.config.capacity_retry_initial_seconds
+        ):
+            return False
+        from .request_pacing import capacity_delay, endpoint_pacer
+
+        delay = capacity_delay(
+            attempt, self.config.capacity_retry_initial_seconds,
+            self.config.capacity_retry_max_seconds, error.retry_after,
+        )
+        # Share cooldown even after the last attempt: other question workers
+        # must not immediately replace a rejected request with another burst.
+        endpoint_pacer(self.config.base_url, self.config.model).defer(delay)
+        return True
 
     def fits(self, messages, *, use_safety_margin=False):
         if (
@@ -638,6 +732,7 @@ class StructuredClient:
             and len(list(folder.glob("failure-*.json"))) >= self.config.attempts
         ):
             raise EndpointError(f"{job}: saved attempts exhausted: {last_error}")
+        last_capacity_error = None
         for attempt in range(1, self.config.attempts + 1):
             attempt_body = dict(body)
             if self.config.stream:
@@ -675,6 +770,13 @@ class StructuredClient:
                 )
                 raise
             except (ValueError, KeyError, TypeError, IndexError, EndpointError) as exc:
+                if self._capacity_retry(exc, attempt - 1):
+                    last_capacity_error = str(exc)
+                    atomic_json(
+                        folder / f"failure-{offset + attempt}.json",
+                        {"error": str(exc), "job": job},
+                    )
+                    continue
                 last_error = str(exc)
                 draft = retry_draft(response)
                 if draft is not None:
@@ -685,9 +787,9 @@ class StructuredClient:
                     {"error": last_error, "job": job},
                 )
                 if attempt < self.config.attempts:
-                    time.sleep(min(2 ** (attempt - 1), 8))
+                    cancel_sleep(min(2 ** (attempt - 1), 8))
         raise EndpointError(
-            f"{job}: exhausted {self.config.attempts} attempts: {last_error}"
+            f"{job}: exhausted {self.config.attempts} attempts: {last_error or last_capacity_error}"
         )
 
 
@@ -795,6 +897,9 @@ def resolve_structured_config(
         base_url=urls[0],
         provider=remote_provider_name(runtime),
         google_project_id=runtime.get("google_project_id", ""),
+        request_start_interval_seconds=runtime.get("request_start_interval_seconds", 0.0),
+        capacity_retry_initial_seconds=runtime.get("capacity_retry_initial_seconds", 0.0),
+        capacity_retry_max_seconds=runtime.get("capacity_retry_max_seconds", 60.0),
         model=model,
         context_window=context or maximum + safety + 1,
         max_tokens=maximum,

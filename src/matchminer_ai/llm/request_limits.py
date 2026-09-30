@@ -4,6 +4,8 @@ from collections import Counter
 from contextlib import contextmanager
 from threading import Condition
 
+from matchminer_ai.cancellation import check_cancelled
+
 _condition = Condition()
 _states: dict[tuple[str, str], dict] = {}
 
@@ -26,9 +28,22 @@ def endpoint_slot(base_url, limit, *, pool="generation"):
     with _condition:
         state = _states.setdefault(key, {"active": 0, "limits": Counter()})
         state["limits"][limit] += 1
-        while state["active"] >= min(state["limits"]):
-            _condition.wait()
-        state["active"] += 1
+        acquired = False
+        try:
+            while state["active"] >= min(state["limits"]):
+                check_cancelled()
+                _condition.wait(0.1)
+            check_cancelled()
+            state["active"] += 1
+            acquired = True
+        finally:
+            if not acquired:
+                state["limits"][limit] -= 1
+                if not state["limits"][limit]:
+                    del state["limits"][limit]
+                if not state["limits"]:
+                    del _states[key]
+                _condition.notify_all()
     try:
         yield
     finally:

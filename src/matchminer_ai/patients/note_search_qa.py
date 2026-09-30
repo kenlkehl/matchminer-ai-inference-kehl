@@ -15,6 +15,8 @@ from typing import Callable
 
 import pandas as pd
 
+from matchminer_ai.cancellation import check_cancelled, submit_cancellable
+
 from matchminer_ai.llm.structured import (
     EndpointError,
     StructuredClient,
@@ -96,6 +98,9 @@ def _resolve_llm(config):
             "context_window": config.context_window,
             "safety_tokens": config.safety_tokens,
             "max_concurrent_requests": config.max_concurrent_requests,
+            "request_start_interval_seconds": config.request_start_interval_seconds,
+            "capacity_retry_initial_seconds": config.capacity_retry_initial_seconds,
+            "capacity_retry_max_seconds": config.capacity_retry_max_seconds,
             "request_timeout": config.timeout,
             "max_retries": config.attempts,
             "response_format": config.response_format,
@@ -397,6 +402,7 @@ class _MeasuredClient(StructuredClient):
                 metric["seconds"] = round(time.monotonic() - started, 4)
                 self.request_metrics.append(metric)
         if endpoint == "/chat/completions":
+            metric["dispatch_wait_seconds"] = result.get("transport", {}).get("dispatch_wait_seconds", 0.0)
             self.finish_reasons.append(
                 result.get("choices", [{}])[0].get("finish_reason")
             )
@@ -834,6 +840,7 @@ def _run_question_batch(
     started = time.monotonic()
     with ThreadPoolExecutor(max_workers=max_active_questions) as pool:
         while waiting or active:
+            check_cancelled()
             while waiting and len(active) < max_parallel_patients:
                 active[waiting.popleft()] = {"next": 0, "running": 0, "done": 0}
             # Round-robin scheduling gives each active patient an opportunity per pass.
@@ -849,7 +856,8 @@ def _run_question_batch(
                         continue
                     qi = state["next"]
                     futures[
-                        pool.submit(
+                        submit_cancellable(
+                            pool,
                             _answer,
                             patient["history"],
                             patient["questions"][qi],
@@ -867,7 +875,7 @@ def _run_question_batch(
                     submitted = True
                 if not submitted:
                     break
-            done, _ = wait(futures, return_when=FIRST_COMPLETED)
+            done, _ = wait(futures, timeout=0.1, return_when=FIRST_COMPLETED)
             for future in done:
                 pi, qi = futures.pop(future)
                 result = future.result()

@@ -121,13 +121,18 @@ def request_params_for_prompt(
 
 def _run_sync(awaitable_factory: Callable[[], Coroutine[Any, Any, T]]) -> T:
     """Run an async task from sync code, including notebook event loops."""
+    from matchminer_ai.cancellation import await_cancellable, submit_cancellable
+
+    async def run():
+        return await await_cancellable(awaitable_factory())
+
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(awaitable_factory())
+        return asyncio.run(run())
 
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future: Future[T] = executor.submit(lambda: asyncio.run(awaitable_factory()))
+        future: Future[T] = submit_cancellable(executor, lambda: asyncio.run(run()))
         return future.result()
 
 
@@ -201,7 +206,10 @@ async def single_inference_request(
     parsers expose the final text as ``message.content`` and the reasoning
     trace as ``message.reasoning`` (``reasoning_content`` on older servers).
     """
+    from matchminer_ai.cancellation import check_cancelled
+
     for attempt in range(max_retries):
+        check_cancelled()
         try:
             extra = dict(extra_body_params)
             if chat_template_kwargs:
@@ -217,6 +225,7 @@ async def single_inference_request(
                 client.chat.completions.create(**request_kwargs),
                 timeout=base_timeout,
             )
+            check_cancelled()
             choice = response.choices[0]
             message = getattr(choice, "message", None)
             content = cast(str, getattr(message, "content", "") or "")

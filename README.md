@@ -143,6 +143,33 @@ these follow-ups, including a separate twelve-call budget per item; set
 Full-note review and patient summarization remain available. See the
 [note-search REPL guide](docs/user-guide/note-search-qa.md).
 
+Structured note/workup requests can pace starts without reducing question-worker
+concurrency. Configure `request_start_interval_seconds`,
+`capacity_retry_initial_seconds` and `capacity_retry_max_seconds` on
+`NoteSearchLLMConfig` or the shared remote runtime. Defaults leave pacing disabled.
+Clients share dispatch spacing and capacity cooldowns by endpoint/model within
+one Python process; different processes need their own coordination. HTTP 429/503
+retries use randomized exponential backoff when enabled. Numeric or HTTP-date
+`Retry-After` delays are applied up to the configured ceiling. Capacity failures
+preserve the original request, count toward existing attempt/call limits and do
+not add model-validation feedback. Preparation/tokenizer routes use their
+separate pool. No patient text, credentials or provider error bodies enter pacing
+state; accepted-request metadata records dispatch wait time.
+
+Patient applications can opt into cooperative cancellation using
+`CancellationToken` and `cancellation_scope` from `matchminer_ai.cancellation`.
+Wrap the patient workflow in the scope and call `token.cancel()` from the Stop
+handler. Question and coverage thread pools inherit the scope; endpoint-capacity
+and cooldown waits, retry delays and Python cells check it. Cancellation raises
+`InferenceCancelled`, a control-flow `BaseException`, rather than returning a
+clinical finding or retrying it as model failure. Isolated REPL processes close
+on cancellation. Blocking HTTP calls stop being awaited promptly; their transport
+thread retains the concurrency slot until the response closes or times out.
+Requests already accepted by the remote model may continue there, with late
+responses discarded locally. Remote async summarization cancels its pending tasks
+and closes clients; native local model operations finish their current operation.
+Without a scope, existing workflow behavior is unchanged.
+
 ## Ontology attribution
 
 The optional structured patient-summary and trial-space workflows bundle and
