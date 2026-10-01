@@ -2,6 +2,16 @@
 
 ## Overview
 
+LLM stages with `sampling_profile: auto` recognize Qwen 3.5 model names, including
+`Qwen/Qwen3.5-4B`, and apply Alibaba's
+[general-task sampling defaults](https://huggingface.co/Qwen/Qwen3.5-4B#best-practices).
+With `chat_template_kwargs.enable_thinking=false`, temperature is 0.7 and top-p 0.8;
+with thinking enabled, they are 1.0 and 0.95. Both modes use top-k 20, min-p 0,
+presence penalty 1.5 and repetition penalty 1.0. Qwen 3.5 uses a boolean thinking
+switch rather than Qwen 3.8's graded effort; no graded effort is inferred for it.
+Explicit caller sampling parameters still override these defaults. An opaque served
+alias can use `sampling_profile: qwen3.5` to select the same profile explicitly.
+
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a

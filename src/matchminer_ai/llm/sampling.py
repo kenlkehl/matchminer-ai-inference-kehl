@@ -4,6 +4,8 @@ Sources (verified 2026-09-24):
 https://ai.google.dev/gemma/docs/core/model_card_4
 https://huggingface.co/Qwen/Qwen3.8-Flash-Next
 https://huggingface.co/Qwen/Qwen3.8-27B
+Qwen 3.5 general-task defaults (verified 2026-10-01):
+https://huggingface.co/Qwen/Qwen3.5-4B#best-practices
 """
 
 from __future__ import annotations
@@ -17,21 +19,24 @@ def vendor_defaults(
 ):
     """Return sampling/template defaults; explicit caller settings take precedence.
 
-    Gemma 4 has a thinking switch, not graded effort. Qwen 3.8 supports xhigh,
+    Gemma 4 and Qwen 3.5 have a thinking switch, not graded effort. Qwen 3.8 supports xhigh,
     medium and low. Unknown models receive no guessed vendor parameters.
     """
     template = dict(template or {})
     if profile in (None, "none"):
         return {}, template
-    if profile not in {"auto", "gemma4", "qwen3.8"}:
-        raise ValueError("sampling_profile must be auto, gemma4, qwen3.8, or none")
+    if profile not in {"auto", "gemma4", "qwen3.5", "qwen3.8"}:
+        raise ValueError("sampling_profile must be auto, gemma4, qwen3.5, qwen3.8, or none")
     model = str(model_name or "").lower()
     family = profile
     if profile == "auto":
         family = (
             "gemma4"
             if re.search(r"gemma[-_ ]?4", model)
-            else ("qwen3.8" if re.search(r"qwen[-_ ]?3[._]8", model) else None)
+            else (
+                "qwen3.5" if re.search(r"qwen[-_ ]?3[._]5", model)
+                else "qwen3.8" if re.search(r"qwen[-_ ]?3[._]8", model) else None
+            )
         )
     if family is None:
         return {}, template
@@ -41,6 +46,15 @@ def vendor_defaults(
     if family == "gemma4":
         return {"temperature": 1.0, "top_p": 0.95, "top_k": 64}, template
     thinking = template["enable_thinking"]
+    if family == "qwen3.5":
+        return {
+            "temperature": 1.0 if thinking else 0.7,
+            "top_p": 0.95 if thinking else 0.8,
+            "top_k": 20,
+            "min_p": 0.0,
+            "presence_penalty": 1.5,
+            "repetition_penalty": 1.0,
+        }, template
     template.setdefault("preserve_thinking", True)
     if thinking:
         effort = template.get("reasoning_effort", reasoning_effort)
