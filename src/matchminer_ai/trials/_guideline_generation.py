@@ -20,6 +20,11 @@ from ._guideline_schema import (
 from .prompt_builder import load_prompt_text
 from ._guideline_quotes import QUOTED_DETAIL
 
+RETRY_ONLY_PROMPT_FILES = (
+    "guideline.boolean_retry.txt",
+    "guideline.unsupported_detail_retry.txt",
+)
+
 
 def clinical_content(value):
     """Retain every field except those citation-only repair may replace."""
@@ -172,7 +177,15 @@ class Client(StructuredClient):
             )
         return guards
 
-    def retry_feedback(self, schema, error):
+    def _retry_guidance(self, error):
+        guidance = []
+        if "mixes AND and OR" in error:
+            guidance.append(load_prompt_text("guideline.boolean_retry.txt").strip())
+        if "Citation-only repair found no supporting passage" in error:
+            guidance.append(load_prompt_text("guideline.unsupported_detail_retry.txt").strip())
+        return "\n\n".join(guidance)
+
+    def retry_feedback(self, schema, error, *, include_guidance=True):
         # Guideline catalog errors can enumerate many independent populations.
         # The shared client's short feedback limit can omit the actual restriction
         # or later failing states. Preserve the full findings; context fitting still
@@ -180,10 +193,19 @@ class Client(StructuredClient):
         feedback = load_prompt_text("structured.retry.txt").format(error=error).rstrip()
         if schema == EXTRACTION:
             feedback += " " + load_prompt_text("guideline.extraction_retry.txt").strip()
+        if include_guidance and (guidance := self._retry_guidance(error)):
+            feedback += "\n\n" + guidance
         return feedback
 
     def retry_feedback_history(self, schema, errors):
         # Whole-packet or whole-catalog regeneration can reintroduce an earlier field error.
         # Retain a bounded set of diagnostics, including on checkpoint resume.
         recent = list(reversed(list(dict.fromkeys(reversed(errors)))[:4]))
-        return "\n\n".join(self.retry_feedback(schema, error) for error in recent)
+        feedback = "\n\n".join(
+            self.retry_feedback(schema, error, include_guidance=False) for error in recent
+        )
+        # Shared instructions appear once; retain all diagnostics without spending
+        # the context headroom on four copies of the same grouping examples.
+        if guidance := self._retry_guidance("\n".join(recent)):
+            feedback += "\n\n" + guidance
+        return feedback

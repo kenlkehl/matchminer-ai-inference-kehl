@@ -178,3 +178,56 @@ def test_pending_audit_still_rejects_corrupt_provenance(completed):
     atomic_json(output / "extraction_ownership.json", ledger)
     with pytest.raises(ValueError, match="ownership ledger differs"):
         audit_catalog(guideline, output)
+
+
+def rewrite_config_digest(config):
+    from matchminer_ai._storage import digest
+    identity = {k: v for k, v in config.items() if k not in ('config_sha256', 'runtime', 'stage_versions')}
+    identity = json.loads(json.dumps(identity))
+    for key in ('timeout', 'attempts', 'api_key_env', 'stream', 'max_concurrent_requests'):
+        identity['llm'].pop(key)
+    config['config_sha256'] = digest(identity)
+
+
+@pytest.mark.parametrize('change', ['added', 'revised'])
+def test_retry_only_prompt_updates_resume_and_audit_without_generation(completed, monkeypatch, change):
+    from matchminer_ai.trials._guideline_generation import RETRY_ONLY_PROMPT_FILES
+    guideline, output, config, finalize = completed
+    saved = read_json(output / 'run_config.json')
+    for name in RETRY_ONLY_PROMPT_FILES:
+        if change == 'added':
+            saved['prompt_resources_sha256'].pop(name)
+        else:
+            saved['prompt_resources_sha256'][name] = 'previous-retry-guidance-hash'
+    rewrite_config_digest(saved)
+    atomic_json(output / 'run_config.json', saved)
+    before = {p: p.read_bytes() for p in (output / 'checkpoints').glob('*/attempt-*.json')}
+    monkeypatch.setattr(Client, '_http', lambda *a, **k: pytest.fail('Accepted work must be reused'))
+    result = pipeline.run_guideline(guideline, output, replace(config, max_concurrent_requests=64), workers=8, finalize=finalize)
+    assert result['status'] == 'complete'
+    assert audit_catalog(guideline, output)['status'] == 'passed'
+    assert all(p.read_bytes() == value for p, value in before.items())
+    assert read_json(output / 'run_config.json')['prompt_resources_sha256'] != saved['prompt_resources_sha256']
+
+
+@pytest.mark.parametrize('change', ['core_prompt', 'source', 'model', 'budget', 'corrupt_digest'])
+def test_retry_prompt_compatibility_still_rejects_real_changes(completed, change):
+    from matchminer_ai.trials._guideline_generation import RETRY_ONLY_PROMPT_FILES
+    guideline, output, config, finalize = completed
+    saved = read_json(output / 'run_config.json')
+    for name in RETRY_ONLY_PROMPT_FILES:
+        saved['prompt_resources_sha256'].pop(name)
+    if change == 'core_prompt':
+        saved['prompt_resources_sha256']['guideline.extract.txt'] = 'different-core-prompt'
+    elif change == 'source':
+        saved['source_fingerprint'] = 'different-source'
+    elif change == 'model':
+        saved['llm']['model'] = 'different-model'
+    elif change == 'budget':
+        saved['llm']['max_tokens'] -= 1
+    rewrite_config_digest(saved)
+    if change == 'corrupt_digest':
+        saved['config_sha256'] = 'tampered'
+    atomic_json(output / 'run_config.json', saved)
+    with pytest.raises(ValueError, match='settings changed'):
+        pipeline.run_guideline(guideline, output, config, finalize=finalize)

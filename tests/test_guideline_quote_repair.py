@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from matchminer_ai._storage import atomic_json, digest, read_json
-from matchminer_ai.llm.structured import StructuredConfig
+from matchminer_ai.llm.structured import EndpointError, StructuredConfig
 from matchminer_ai.trials._guideline_audit import audit_catalog
 from matchminer_ai.trials._guideline_generation import Client, clinical_content
 from matchminer_ai.trials._guideline_pipeline import run_guideline
@@ -341,3 +341,89 @@ def test_pipeline_resumes_old_failed_draft_and_audits_repair_provenance(
     atomic_json(receipt_path, receipt)
     with pytest.raises(ValueError, match="accepted model"):
         audit_catalog(guideline, output)
+
+
+@pytest.mark.parametrize("diagnostic,expected", [
+    ("quote-select: exhausted 6 attempts: No supporting literal passage selected: synthetic wrong phase", ValueError),
+    ("quote-select: exhausted 6 attempts: HTTP 503", EndpointError),
+])
+def test_unsupported_fixed_assertion_returns_to_generation_but_transport_does_not(
+    setup, tmp_path, monkeypatch, diagnostic, expected,
+):
+    from matchminer_ai.llm.structured import EndpointError
+    import matchminer_ai.trials._guideline_quote_repair as repair
+
+    guideline, client = setup
+    value = quoted_state()
+    value["diagnostic_workup"][0]["evidence"][0]["source_text"] = "Synthetic unsupported components"
+    original = copy.deepcopy(value)
+
+    def exhausted(*args, **kwargs):
+        raise EndpointError("citation repair exhausted 6 attempts")
+
+    def unsupported(*args, **kwargs):
+        raise EndpointError(diagnostic)
+
+    monkeypatch.setattr(client, "complete", exhausted)
+    monkeypatch.setattr(repair, "select_literal_passages", unsupported)
+    with pytest.raises(expected) as error:
+        repair_quoted_response(client, guideline, guideline.pages, "detail-0001", value,
+            "Correct every invalid excerpt in the draft: unsupported", lambda v: None,
+            output=tmp_path)
+    assert value == original
+    if expected is ValueError:
+        assert "Fixed draft assertion" in str(error.value)
+        assert "Synthetic unsupported components" in str(error.value)
+        assert not list((tmp_path / "quote_repairs").glob("*.json"))
+
+
+@pytest.mark.parametrize("issue", ["components", "category"])
+def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
+    setup, tmp_path, monkeypatch, issue,
+):
+    import matchminer_ai.trials._guideline_quote_repair as repair
+    from matchminer_ai.trials._guideline_quotes import QUOTED_DETAIL
+
+    guideline, client = setup
+    output = tmp_path / "catalog"
+    detail_calls = []
+
+    def no_support(*args, **kwargs):
+        raise EndpointError(
+            "quote-select: exhausted 6 attempts: No supporting literal passage selected: "
+            + ("synthetic wrong phase" if issue == "components" else "category annotation belongs to adjacent option")
+        )
+
+    def respond(self, endpoint, body, **kwargs):
+        schema = kwargs.get("output_schema")
+        if schema == REPAIR:
+            raise EndpointError("citation repair exhausted 6 attempts")
+        prompt = body["messages"][1]["content"]
+        if prompt.startswith(prompts.EXTRACT_TASK):
+            value = extraction()
+        elif prompt.startswith(CATALOG_TASK):
+            value = catalog()
+        else:
+            assert schema == QUOTED_DETAIL
+            detail_calls.append(copy.deepcopy(body))
+            value = quoted_state()
+            if len(detail_calls) == 1:
+                value["diagnostic_workup"][0]["evidence"][0]["source_text"] = "Synthetic unsupported components from another phase"
+                if issue == "category":
+                    value["diagnostic_workup"][0]["category"] = "Category 2B"
+            else:
+                assert "Citation-only repair found no supporting passage" in body["messages"][-1]["content"]
+                assert "exact unchanged canonical space" in body["messages"][-1]["content"]
+                assert "attached to an adjacent option" in body["messages"][-1]["content"]
+                assert body["max_tokens"] == 100000
+        return response(value)
+
+    monkeypatch.setattr(Client, "_http", respond)
+    monkeypatch.setattr(repair, "select_literal_passages", no_support)
+    run_guideline(guideline, output, client.config, workers=1)
+    assert len(detail_calls) == 2
+    assert read_json(output / "details.json")["records"]["detail-0001"]["space"] == quoted_state()["space"]
+    assert read_json(output / "details.json")["records"]["detail-0001"]["diagnostic_workup"][0]["category"] == quoted_state()["diagnostic_workup"][0]["category"]
+    assert audit_catalog(guideline, output)["status"] == "passed"
+    monkeypatch.setattr(Client, "_http", lambda *a, **k: pytest.fail("No regeneration on successful resume"))
+    run_guideline(guideline, output, client.config, workers=1)

@@ -170,9 +170,23 @@ def repair_quoted_response(
                 break
         else:
             notify(f"{job}: selecting literal source passages for {owner['name']}")
-            patch, selection = select_literal_passages(
-                client, guideline, pages, assertion
-            )
+            try:
+                patch, selection = select_literal_passages(
+                    client, guideline, pages, assertion
+                )
+            except EndpointError as exc:
+                if "No supporting literal passage selected:" not in str(exc):
+                    raise
+                # Copy-only repair cannot correct an assertion from the wrong
+                # population or treatment phase. Return this specific grounding
+                # failure to the original bounded detail-generation retry. Keep
+                # transport failures terminal and never accept an empty citation.
+                raise ValueError(
+                    "Citation-only repair found no supporting passage for the fixed "
+                    "draft assertion. Fixed draft assertion: "
+                    + json.dumps(assertion, ensure_ascii=False)
+                    + "\nLiteral selection diagnostic: " + str(exc)
+                ) from exc
             repair_job = selection["job"]
         notify(f"{job}: repaired citation for {owner['name']}")
         return {

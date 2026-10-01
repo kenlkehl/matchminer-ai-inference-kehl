@@ -28,7 +28,7 @@ from ._guideline_completeness import VERSION as COVERAGE_VERSION
 from ._guideline_context import pack_messages
 from ._guideline_details import build_detail_call
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, StructuredConfig
-from ._guideline_generation import Client
+from ._guideline_generation import Client, RETRY_ONLY_PROMPT_FILES
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
 from ._guideline_ownership import branch_ledger, page_owners
 from ._guideline_repairs import repair_response
@@ -203,6 +203,14 @@ def _run(
             for name in (*COVERAGE_PROMPT_FILES, *QUOTE_REPAIR_PROMPT_FILES):
                 if name not in old_identity["prompt_resources_sha256"]:
                     compatible_identity["prompt_resources_sha256"].pop(name, None)
+            # These explicitly named prompts only guide rejected responses;
+            # they never enter an initial generation request or validate an
+            # accepted response. Keep their hashes in the run audit record, but
+            # permit additions/revisions after verifying the old config digest.
+            # Core clinical prompts, model/source/settings still must match.
+            for name in RETRY_ONLY_PROMPT_FILES:
+                old_identity["prompt_resources_sha256"].pop(name, None)
+                compatible_identity["prompt_resources_sha256"].pop(name, None)
             if not valid_old_digest or digest(old_identity) != digest(compatible_identity):
                 raise ValueError(
                     "Source, model, prompt or extraction settings changed; choose a new output_dir"

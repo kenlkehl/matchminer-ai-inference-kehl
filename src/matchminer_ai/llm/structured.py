@@ -722,7 +722,12 @@ class StructuredClient:
             for path in previous:
                 try:
                     return accept_response(read_json(path))
-                except (ValueError, KeyError, TypeError, IndexError):
+                except (ValueError, KeyError, TypeError, IndexError) as exc:
+                    # A failed repair may expose a more specific grounding error
+                    # than raw draft validation. Preserve it for regeneration on
+                    # resume rather than replaying only the original quote error.
+                    last_error = str(exc)
+                    retry_errors.append(last_error)
                     continue
         # A caller with an alternate repair strategy need not repeat an already
         # exhausted strategy on every resume. Still recover valid saved answers

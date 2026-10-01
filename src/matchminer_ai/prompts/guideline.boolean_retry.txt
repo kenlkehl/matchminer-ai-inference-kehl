@@ -1,0 +1,9 @@
+Check the scope of EVERY conjunction in each rejected field, including conjunctions inside a disease-setting phrase or a treatment indication. Parenthesizing only the response alternatives does not fix an ungrouped disease-setting alternative elsewhere in the same field.
+
+Synthetic examples (not guideline facts):
+- Ambiguous: Prior therapy for setting A OR setting B AND (response C OR response D).
+- If the source requires prior therapy in either setting and either response: (Prior therapy for (setting A OR setting B)) AND (response C OR response D).
+- Ambiguous: Prior therapy for setting A OR setting B AND disease control AND (late progression OR late relapse).
+- If the source requires all three concepts: (Prior therapy for (setting A OR setting B)) AND disease control AND (late progression OR late relapse).
+
+Determine the intended grouping from the supplied source. Preserve every source-defined setting, response, timing threshold and treatment boundary. Do not fix grouping by changing OR to AND, deleting an alternative, adding an exclusion, broadening the disease state or moving prior treatment into cancer burden. Review every affected candidate, then return the complete revised JSON, preserving the other source-supported populations, options, citations and page accounting.

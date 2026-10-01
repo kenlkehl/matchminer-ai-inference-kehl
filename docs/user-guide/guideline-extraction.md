@@ -248,10 +248,24 @@ reports all failing populations together, so correcting a coverage omission does
 not hide an earlier Boolean-grouping error. Source context and output headroom
 still must fit; feedback is never a license to drop clinical restrictions.
 
+Mixed-logic retries also use `guideline.boolean_retry.txt`, with synthetic
+examples showing how alternatives inside a disease setting must be grouped
+independently of response alternatives. This applies to resumed failures and
+future runs without changing accepted checkpoints or relaxing the checker.
+
 The Boolean checker treats the conventional anatomic region "head and neck" as
 one named concept. Its internal conjunction is ignored only during operator
 checking; the stored field is unchanged and surrounding AND/OR conditions still
 require explicit grouping. Audit metadata records the checker revision.
+
+If bounded literal citation selection reports that a fixed detail assertion
+has no supporting passage, the original detail task may regenerate its draft
+against the original source using `guideline.unsupported_detail_retry.txt`.
+Citation-only repair still cannot change clinical content. The original task
+must keep the canonical space exactly unchanged and pass all field, exact-quote
+and provenance checks. Its failed assertion and the selection diagnostic remain
+in retry feedback, including on resume. Transport failures do not take this path;
+unresolved details remain failures, never empty or silently removed citations.
 
 Final-detail citation failures use focused, checkpointed excerpt repairs before
 regenerating any clinical record. Each call receives one rejected excerpt, its
@@ -328,8 +342,12 @@ runs remain `running` with stage `audit` during the final provenance audit.
 Only a successful audit lets the public extraction call mark the run `complete`.
 Repeat the same call to resume completed requests; token counts
 and accepted responses are cached. Changes to concurrency, timeout, retry count,
-or streaming transport are allowed without discarding work. Source, prompt, model,
-and generation changes require a new directory. Use fresh directories when moving
+or streaming transport are allowed without discarding work. The two explicit
+retry-only resources, `guideline.boolean_retry.txt` and
+`guideline.unsupported_detail_retry.txt`, can also be added or revised on resume:
+they guide failed attempts without changing initial extraction prompts. Their
+current hashes remain recorded, and accepted responses are revalidated. Source,
+core prompt, model, and generation changes require a new directory. Use fresh directories when moving
 from the standalone prototype; its old generated outputs are not imported.
 
 ```python

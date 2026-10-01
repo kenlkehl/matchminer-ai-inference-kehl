@@ -336,3 +336,71 @@ def test_count_exceptions_preserve_real_population_alternatives(text):
     with pytest.raises(ValueError, match="mixes AND and OR"):
         validate_decision_fields(value, "Fictional guideline")
     assert value == original
+
+
+def test_nested_setting_retry_guidance_survives_resume(client, monkeypatch):
+    from matchminer_ai.trials._guideline_generation import Client
+    from matchminer_ai.trials._guideline_schema import EXTRACTION
+
+    bad = {"name": "Synthetic response population", "space": dict.fromkeys(FIELDS, "NA")}
+    bad["space"]["prior_treatment_required"] = "Prior therapy for setting A OR setting B AND (response C OR response D)"
+    good = copy.deepcopy(bad)
+    good["space"]["prior_treatment_required"] = "(Prior therapy for (setting A OR setting B)) AND (response C OR response D)"
+    one = replace(client.config, attempts=1)
+    original = Client(one, client.cache_dir)
+    monkeypatch.setattr(original, "_http", lambda *a, **k: response(bad))
+    def check(value):
+        validate_decision_fields(value, "Synthetic guideline")
+    with pytest.raises(EndpointError):
+        original.complete("nested-setting", MESSAGES, EXTRACTION, check)
+    path = next(client.cache_dir.glob("*/attempt-1.json"))
+    raw = path.read_bytes()
+    resumed = Client(one, client.cache_dir)
+
+    def generate(endpoint, body, **kwargs):
+        feedback = body["messages"][-1]["content"]
+        assert "including conjunctions inside a disease-setting phrase" in feedback
+        assert "(Prior therapy for (setting A OR setting B)) AND" in feedback
+        assert "Preserve every source-defined setting" in feedback
+        assert body["messages"][:-2] == MESSAGES
+        assert json.loads(body["messages"][-2]["content"]) == bad
+        assert body["max_tokens"] == 100000
+        return response(good)
+
+    monkeypatch.setattr(resumed, "_http", generate)
+    assert resumed.complete("nested-setting", MESSAGES, EXTRACTION, check) == good
+    assert path.read_bytes() == raw
+    with pytest.raises(ValueError, match="mixes AND and OR"):
+        check(bad)
+    feedback = resumed.retry_feedback_history(EXTRACTION, [
+        f"Synthetic field {i} mixes AND and OR" for i in range(4)
+    ])
+    assert feedback.count("Synthetic examples (not guideline facts)") == 1
+    assert all(f"Synthetic field {i}" in feedback for i in range(4))
+
+
+def test_resume_keeps_grounding_failure_from_targeted_repair(client, monkeypatch):
+    from matchminer_ai.trials._guideline_generation import Client
+    from matchminer_ai.trials._guideline_quotes import QUOTED_DETAIL
+
+    one = replace(client.config, attempts=1)
+    original = Client(one, client.cache_dir)
+    monkeypatch.setattr(original, "_http", lambda *a, **k: response(BAD))
+    with pytest.raises(EndpointError):
+        original.complete("unsupported-detail", MESSAGES, QUOTED_DETAIL, validate)
+    resumed = Client(one, client.cache_dir)
+    reason = "Citation-only repair found no supporting passage for the fixed draft assertion. Synthetic components belong to another phase."
+
+    def repair(value, error):
+        raise ValueError(reason)
+
+    def generate(endpoint, body, **kwargs):
+        feedback = body["messages"][-1]["content"]
+        assert reason in feedback
+        assert "exact unchanged canonical space" in feedback
+        assert "Do not silently drop" in feedback
+        assert body["messages"][:-2] == MESSAGES
+        return response(GOOD)
+
+    monkeypatch.setattr(resumed, "_http", generate)
+    assert resumed.complete("unsupported-detail", MESSAGES, QUOTED_DETAIL, validate, repair_handler=repair) == GOOD
