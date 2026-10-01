@@ -321,6 +321,28 @@ are returned or written. Three bounded attempts reject incomplete, malformed or
 ungrounded output. Provider and validation errors are not echoed with patient text.
 The configured endpoint receives raw notes and must be authorized for the input.
 
+Both this function and `review_patient_workup_with_note_search` accept
+`backup_config=None` and `max_consecutive_failures=3` (an integer from 1 to 10).
+Pass a separate `MMAIConfig` with the backup's endpoint, model, sampling and reasoning
+to opt in. No implicit backup or extra endpoint probe occurs on the successful path.
+After repeated failed request/validation attempts, full-note review switches once,
+retries the failed packet against the backup's context capacity, and retains all
+validated prior assessments and evidence. Remaining packets use the backup.
+Metadata includes `primary_model`, `backup_used`, `backup_events`, actual request
+attempts, and `validated_packets`.
+
+Agent review also switches after consecutive Python errors within a question,
+resetting that streak after a successful cell. Only the failed item restarts in a
+fresh isolated REPL; the backup gets the same bounded per-attempt cell/request
+budget and source record. Successful items and clinical unknown findings are
+retained. Follow-up uses the producing model, can switch once after repeated
+failures, and retains its existing total call budget. A failed backup never
+triggers another model switch. Errors remain errors and failed follow-up retains
+the last validated finding with an explicit incomplete status. Per-item metadata
+records each switch, primary/backup models, reasons, combined costs and caps;
+request metrics identify their actual models. Backups never bypass worker isolation,
+cancellation, output/context reserves or exact-evidence validation.
+
 This is a documentation review for human review, **not an overall guideline
 concordance determination**. Not documented does not mean not done. Conditional
 indications, compound items, alternatives, historical tests, timing and conflicting

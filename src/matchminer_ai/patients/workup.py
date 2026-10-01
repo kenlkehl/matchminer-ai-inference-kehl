@@ -12,7 +12,13 @@ import pandas as pd
 
 from matchminer_ai.config import MMAIConfig, load_default_preset
 from matchminer_ai.llm.backends import build_llm_runtime_config, remote_enabled
-from matchminer_ai.llm.structured import StructuredClient, resolve_structured_config
+from matchminer_ai.llm.structured import (
+    EndpointError,
+    StructuredClient,
+    resolve_structured_config,
+)
+
+from ._workup_backup import WorkupBackup, backup_event
 
 STATUSES = (
     "completed",
@@ -203,6 +209,8 @@ def review_patient_workup(
     recommendations: list[dict],
     *,
     config: MMAIConfig | None = None,
+    backup_config: MMAIConfig | None = None,
+    max_consecutive_failures: int = 3,
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,
     recommendation_batch_size: int = 6,
@@ -218,12 +226,16 @@ def review_patient_workup(
     Context is discovered from the endpoint unless patient.context_window is set;
     the configured output reserve is never reduced to squeeze in notes.
     No patient prompts, responses or checkpoints are written to disk.
+    An explicit backup_config enables one switch after max_consecutive_failures
+    failed request/validation attempts on a packet. Validated prior assessments
+    are retained; the failed packet and remaining packets use the backup.
     """
     config = config or load_default_preset()
     if not isinstance(config, MMAIConfig):
         raise TypeError("config must be an MMAIConfig instance.")
     if not remote_enabled(config):
         raise ValueError("Workup review requires a configured remote LLM endpoint.")
+    backup = WorkupBackup(backup_config, max_consecutive_failures)
     source = _notes(notes)
     if not isinstance(recommendations, list) or not recommendations:
         raise ValueError("Supply at least one diagnostic/workup recommendation.")
@@ -253,9 +265,31 @@ def review_patient_workup(
     progress = progress_callback or (lambda _: None)
     progress("Preparing raw notes for workup review")
     runtime = build_llm_runtime_config("patient", config.patient, config=config)
-    runtime["max_retries"] = 3
+    runtime["max_retries"] = backup.threshold if backup.enabled else 3
     client_config, _ = resolve_structured_config(runtime, cache_dir=None)
-    client = StructuredClient(client_config, None)
+
+    class ReviewClient(StructuredClient):
+        def __init__(self, selected):
+            super().__init__(selected, None)
+            self.requests = 0
+
+        def _http(self, endpoint, body=None, **kwargs):
+            if endpoint == "/chat/completions":
+                self.requests += 1
+            return super()._http(endpoint, body, **kwargs)
+
+    client = ReviewClient(client_config)
+    primary_config = client_config
+    fallback_events = []
+    failed_primary_requests = 0
+
+    def resolve_backup(backup_config):
+        backup_runtime = build_llm_runtime_config(
+            "patient", backup_config.patient, config=backup_config
+        )
+        backup_runtime["max_retries"] = 3
+        return resolve_structured_config(backup_runtime, cache_dir=None)[0], backup_runtime
+
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -321,12 +355,28 @@ def review_patient_workup(
                 f"for workup items {batch_start + 1}–{batch_start + len(batch)} "
                 f"of {len(recommendations)}"
             )
-            value = client.complete(
-                "patient-workup",
-                messages,
-                _schema(len(batch)),
-                lambda v: _validate(v, batch, previous, packet),
-            )
+            try:
+                value = client.complete(
+                    "patient-workup",
+                    messages,
+                    _schema(len(batch)),
+                    lambda v: _validate(v, batch, previous, packet),
+                )
+            except EndpointError:
+                if not backup.enabled or fallback_events:
+                    raise
+                client_config, runtime = backup.get(resolve_backup)
+                failed_primary_requests = client.requests
+                fallback_events.append(backup_event(
+                    primary_config, client_config, "request_or_validation_failures",
+                    backup.threshold, recommendation_start=batch_start,
+                    completed_packets=processed,
+                ))
+                client = ReviewClient(client_config)
+                progress("Primary full-note model failed repeatedly; trying the configured backup model")
+                # Recheck packing against the backup's own input/output budget.
+                pending.insert(0, packet)
+                continue
             for row, prior in zip(value["assessments"], previous, strict=True):
                 merged = list(prior["evidence"])
                 for evidence in row["evidence"]:
@@ -352,8 +402,13 @@ def review_patient_workup(
             "method": "full_notes",
             "note_count": len(source),
             "initial_chunk_count": len(packets),
-            "requests": calls,
+            "requests": max(calls, failed_primary_requests + client.requests),
+            "validated_packets": calls,
             "model": client_config.model,
+            "primary_model": primary_config.model,
+            "backup_used": bool(fallback_events),
+            "backup_events": fallback_events,
+            "failed_primary_attempts": backup.threshold if fallback_events else 0,
             "context_window": client_config.context_window,
             "reserved_output_tokens": client_config.max_tokens,
             "chunk_size": size,

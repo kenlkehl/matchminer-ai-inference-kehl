@@ -84,6 +84,8 @@ def test_single_note_normalizes_before_dispatch_and_returns_only_final_text(endp
             "Compress this note to extreme but lossless token density while "
             "remaining understandable. Return only the compressed note, with "
             "no explanatory text, commentary, or preamble."
+            " Use common clinical abbreviations, but if you invent abbreviations, "
+            "define them at first use."
         ),
     }
     assert "response_format" not in body

@@ -19,10 +19,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, replace
 from importlib import resources
 
-from matchminer_ai.llm.structured import EndpointError
 from matchminer_ai.cancellation import check_cancelled, submit_cancellable
+from matchminer_ai.llm.structured import EndpointError
 
-from .note_search_qa import _MeasuredClient, _object, _remember_excerpts
+from ._workup_backup import backup_event
+from .note_search_qa import _MeasuredClient, _object, _remember_excerpts, _resolve_llm
 
 VERSION = "workup-targeted-review-v1"
 _VOCABULARY = OrderedDict()
@@ -156,13 +157,16 @@ class _ReviewClient(_MeasuredClient):
 
 class _ItemReview:
     def __init__(
-        self, answer, *, history, spans, llm, config, contract, patient_summary=None
+        self, answer, *, history, spans, llm, config, contract, patient_summary=None,
+        backup_llm_factory=None, failure_threshold=3,
     ):
         self.started = time.monotonic()
         self.answer = copy.deepcopy(answer)
         self.history, self.spans = history, spans
         self.llm, self.config, self.contract = llm, config, contract
         self.patient_summary = patient_summary
+        self.backup_llm_factory = backup_llm_factory
+        self.failure_threshold = failure_threshold
         self.client = _ReviewClient(llm)
         self.client.max_calls = config.max_calls_per_item
         self.seen = list(self.answer["evidence"])
@@ -182,6 +186,32 @@ class _ItemReview:
         }
 
     def request(self, phase, prompt, payload, schema, validator):
+        try:
+            return self._request(phase, prompt, payload, schema, validator)
+        except (_ReviewValidation, EndpointError):
+            if (
+                self.backup_llm_factory is None
+                or self.client.config.attempts < self.failure_threshold
+                or self.client.requests >= self.config.max_calls_per_item
+            ):
+                raise
+            try:
+                backup = _resolve_llm(self.backup_llm_factory())
+            except (EndpointError, ValueError):
+                self.answer["metadata"]["backup_resolution_failed"] = True
+                raise EndpointError("The configured backup endpoint could not be prepared.") from None
+            metadata = self.answer["metadata"]
+            metadata.setdefault("primary_model", self.llm.model)
+            metadata["backup_used"] = True
+            metadata.setdefault("backup_events", []).append(backup_event(
+                self.llm, backup, "request_or_validation_failures",
+                self.failure_threshold, stage="followup_review", phase=phase,
+            ))
+            self.llm = backup
+            self.backup_llm_factory = None
+            return self._request(phase, prompt, payload, schema, validator)
+
+    def _request(self, phase, prompt, payload, schema, validator):
         remaining = self.config.max_calls_per_item - self.client.requests
         if remaining <= 0:
             raise _ReviewLimit("request_budget")
@@ -280,8 +310,14 @@ class _ItemReview:
                 if _term_key(term) not in seen:
                     terms.append(term.strip())
                     seen.add(_term_key(term))
+            # A switch during generation must not cache the backup's plan
+            # under the primary model's configuration key.
+            current_key = hashlib.sha256(json.dumps(
+                {"version": VERSION, "prompt": prompt, "payload": payload,
+                 "llm": self.llm.public_dict()}, sort_keys=True,
+            ).encode()).hexdigest()
             with _CACHE_LOCK:
-                _VOCABULARY[key] = tuple(terms)
+                _VOCABULARY[current_key] = tuple(terms)
                 while len(_VOCABULARY) > 256:
                     _VOCABULARY.popitem(last=False)
             return terms
@@ -364,6 +400,7 @@ class _ItemReview:
         )
         changed = result["answer"] != self.answer["answer"]
         self.answer.update({k: result[k] for k in ("status", "answer", "limitations")})
+        self.answer["metadata"]["model"] = self.llm.model
         self.answer["evidence"] = evidence
         _remember_excerpts(self.seen, excerpts)
         self.unresolved = (
@@ -565,6 +602,8 @@ def review_answers(
     concurrency,
     progress,
     patient_summary=None,
+    backup_llm_factory=None,
+    failure_threshold=3,
 ):
     """Parallel focused review, then deterministic bounded fallback by input order."""
     items = [
@@ -572,10 +611,15 @@ def review_answers(
             a,
             history=history,
             spans=spans,
-            llm=llm,
+            llm=(
+                _resolve_llm(backup_llm_factory())
+                if a["metadata"].get("backup_used") and backup_llm_factory else llm
+            ),
             config=config,
             contract=contract,
             patient_summary=patient_summary,
+            backup_llm_factory=(None if a["metadata"].get("backup_used") else backup_llm_factory),
+            failure_threshold=failure_threshold,
         )
         if a["status"] != "error" and isinstance(a["answer"], dict)
         else None

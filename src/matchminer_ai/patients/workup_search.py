@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import asdict
-from importlib import resources
 import json
 import time
+from dataclasses import asdict
+from importlib import resources
 
 import pandas as pd
 
@@ -14,16 +14,18 @@ from matchminer_ai.config import MMAIConfig, load_default_preset
 from matchminer_ai.llm.backends import build_llm_runtime_config, remote_enabled
 from matchminer_ai.llm.structured import resolve_structured_config
 
+from ._note_record import history_from_notes, prepare_record, source_excerpts
+from ._workup_backup import WorkupBackup
 from .note_search_qa import (
-    NoteSearchLLMConfig,
     NoteSearchLimits,
+    NoteSearchLLMConfig,
     _AnswerFormat,
     _object,
-    _run_question_batch,
     _resolve_llm,
+    _run_question_batch,
 )
-from .workup import APPLICABILITY, STATUSES, _notes as _notes
-from ._note_record import history_from_notes, prepare_record, source_excerpts
+from .workup import APPLICABILITY, STATUSES
+from .workup import _notes as _notes
 from .workup_search_review import WorkupSearchReviewConfig, review_answers
 
 
@@ -145,6 +147,8 @@ def review_patient_workup_with_note_search(
     history: str | None = None,
     patient_summary: str | None = None,
     config: MMAIConfig | None = None,
+    backup_config: MMAIConfig | None = None,
+    max_consecutive_failures: int = 3,
     population_context: str | None = None,
     limits: NoteSearchLimits | None = None,
     max_parallel_questions: int | None = None,
@@ -182,6 +186,11 @@ def review_patient_workup_with_note_search(
     The first search-only request uses low effort where supported; subsequent
     assessment/follow-up turns retain the configured effort. Pass None to inherit
     that effort for every request instead.
+    An explicit backup_config retries only failed items after repeated Python
+    errors or failed request/validation attempts. Each initial attempt gets a
+    fresh isolated REPL and the same bounded budget; combined costs are reported.
+    Follow-up retains validated findings and can switch once within its existing
+    call budget. Backup sampling and reasoning use backup_config independently.
     """
     started = time.monotonic()
     review = review or WorkupSearchReviewConfig()
@@ -194,6 +203,7 @@ def review_patient_workup_with_note_search(
         raise ValueError("thinking must be on, off, or None.")
     if not remote_enabled(config):
         raise ValueError("Workup review requires a configured remote LLM endpoint.")
+    backup = WorkupBackup(backup_config, max_consecutive_failures)
     limits = limits or NoteSearchLimits()
     if not isinstance(limits, NoteSearchLimits):
         raise TypeError("limits must be a NoteSearchLimits instance.")
@@ -249,7 +259,7 @@ def review_patient_workup_with_note_search(
             "chat_template_kwargs", {}
         )["enable_thinking"] = thinking == "on"
     runtime = build_llm_runtime_config("patient", patient, config=config)
-    runtime["max_retries"] = 3
+    runtime["max_retries"] = backup.threshold if backup.enabled else 3
     resolved, _ = resolve_structured_config(runtime, cache_dir=None)
     llm = NoteSearchLLMConfig(
         **asdict(resolved),
@@ -257,6 +267,22 @@ def review_patient_workup_with_note_search(
         reasoning_effort=runtime.get("reasoning_effort", "xhigh"),
         search_reasoning_effort=search_reasoning_effort,
     )
+
+    def resolve_backup(backup_config):
+        progress("Primary agent model failed repeatedly; trying the configured backup model")
+        runtime = build_llm_runtime_config(
+            "patient", backup_config.patient, config=backup_config
+        )
+        runtime["max_retries"] = 3
+        resolved, _ = resolve_structured_config(runtime, cache_dir=None)
+        return NoteSearchLLMConfig(
+            **asdict(resolved), sampling_profile=runtime.get("sampling_profile", "auto"),
+            reasoning_effort=runtime.get("reasoning_effort", "xhigh"),
+            search_reasoning_effort=search_reasoning_effort,
+        )
+
+    def backup_factory():
+        return backup.get(resolve_backup)
     completed = 0
 
     def on_progress(event):
@@ -278,6 +304,8 @@ def review_patient_workup_with_note_search(
         progress_callback=on_progress,
         answer_format=contract,
         prepared_records=[record],
+        backup_llm_factory=backup_factory if backup.enabled else None,
+        failure_threshold=backup.threshold,
     )
     answers = result["patients"][0]["answers"]
     if review.max_review_passes:
@@ -294,6 +322,8 @@ def review_patient_workup_with_note_search(
             concurrency=max_parallel_questions,
             progress=progress,
             patient_summary=record.patient_summary,
+            backup_llm_factory=backup_factory if backup.enabled else None,
+            failure_threshold=backup.threshold,
         )
     assessments = []
     for i, (answer, recommendation) in enumerate(
@@ -354,6 +384,8 @@ def review_patient_workup_with_note_search(
             "input_precedence": "dataframe" if record.structured else "history",
             "requests": sum(a["metadata"]["requests"] for a in answers),
             "failed_items": sum(a["status"] == "error" for a in answers),
+            "backup_used": any(a["metadata"].get("backup_used") for a in answers),
+            "backup_items": sum(bool(a["metadata"].get("backup_used")) for a in answers),
             "undated_notes": sum(n["note_date"] is None for n in source),
         },
     }

@@ -2,31 +2,31 @@
 
 from __future__ import annotations
 
-from collections import deque
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from dataclasses import dataclass, replace
 import copy
-from importlib import resources
 import json
 import math
 import re
 import time
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from dataclasses import dataclass, replace
+from importlib import resources
 from typing import Callable
 
 import pandas as pd
 
 from matchminer_ai.cancellation import check_cancelled, submit_cancellable
-
+from matchminer_ai.llm.model_profiles import resolve_model_profile
 from matchminer_ai.llm.structured import (
     EndpointError,
     StructuredClient,
     StructuredConfig,
     resolve_structured_config,
 )
-from matchminer_ai.llm.model_profiles import resolve_model_profile
 
-from ._note_repl import NoteREPL, NoteREPLError
 from ._note_record import prepare_record, source_excerpts
+from ._note_repl import NoteREPL, NoteREPLError
+from ._workup_backup import backup_event
 
 NOTICE = (
     "Research documentation review of selected excerpts from supplied notes. "
@@ -456,7 +456,10 @@ class _MeasuredClient(StructuredClient):
             if self.max_calls is not None and self.requests >= self.max_calls:
                 raise EndpointError("Question LLM call budget exhausted.")
             self.requests += 1
-            metric = {"reasoning_effort": (body or {}).get("reasoning_effort")}
+            metric = {
+                "reasoning_effort": (body or {}).get("reasoning_effort"),
+                "model": (body or {}).get("model"),
+            }
             started = time.monotonic()
         try:
             result = super()._http(endpoint, body, **kwargs)
@@ -504,6 +507,7 @@ def _answer(
     answer_format=None,
     search_llm=None,
     record=None,
+    max_consecutive_cell_failures=None,
 ):
     started = time.monotonic()
     client = _MeasuredClient(llm)
@@ -513,6 +517,8 @@ def _answer(
     sources_truncated = False
     cells, output_chars, truncated_cells = 0, 0, 0
     successful_cells, cell_errors = 0, []
+    consecutive_errors, max_error_streak = 0, 0
+    failed_request_attempts = 0
     worker_startup_seconds, cell_seconds = 0.0, []
     history_lines = history.count("\n") + 1
     termination = "search_budget"
@@ -672,11 +678,26 @@ def _answer(
                 cells += 1
                 if observation["error"] is None:
                     successful_cells += 1
+                    consecutive_errors = 0
                 else:
                     cell_errors.append(observation["error"])
+                    consecutive_errors += 1
+                    max_error_streak = max(max_error_streak, consecutive_errors)
                 output_chars += len(observation["output"])
                 truncated_cells += int(observation["truncated"])
+                if (
+                    max_consecutive_cell_failures is not None
+                    and consecutive_errors >= max_consecutive_cell_failures
+                ):
+                    termination = "consecutive_python_errors"
+                    result.update(
+                        status="error", answer=None,
+                        limitations=["Repeated Python errors prevented a validated assessment."],
+                    )
+                    break
     except (EndpointError, NoteREPLError) as exc:
+        if isinstance(exc, EndpointError):
+            failed_request_attempts = client.config.attempts
         termination = (
             "endpoint_failure" if isinstance(exc, EndpointError) else "worker_failure"
         )
@@ -699,7 +720,7 @@ def _answer(
                 else "Isolated worker failed or exceeded its resource limits."
             ],
         )
-    if cells and not successful_cells:
+    if cells and not successful_cells and termination != "consecutive_python_errors":
         termination = "cell_execution_failure"
         result.update(
             status="error",
@@ -722,6 +743,8 @@ def _answer(
         "cells": cells,
         "successful_cells": successful_cells,
         "cell_errors": cell_errors,
+        "max_consecutive_cell_errors": max_error_streak,
+        "failed_request_attempts": failed_request_attempts,
         "requests": client.requests,
         "request_metrics": client.request_metrics,
         "worker_startup_seconds": round(worker_startup_seconds, 4),
@@ -746,6 +769,70 @@ def _answer(
         "source_excerpts_truncated": sources_truncated,
         "termination_reason": termination,
     }
+    return result
+
+
+def _answer_with_backup(
+    history, question, index, llm, limits, system, answer_format, search_llm,
+    record, backup_factory, failure_threshold,
+):
+    started = time.monotonic()
+    primary = _answer(
+        history, question, index, llm, limits, system, answer_format,
+        search_llm, record, failure_threshold if backup_factory else None,
+    )
+    if backup_factory is None:
+        return primary
+    metadata = primary["metadata"]
+    reason = metadata["termination_reason"]
+    repeated_failure = reason == "consecutive_python_errors" or (
+        reason in {"endpoint_failure", "call_budget", "cell_execution_failure"}
+        and metadata["failed_request_attempts"] >= failure_threshold
+    )
+    if not repeated_failure:
+        return primary
+    try:
+        backup = backup_factory()
+    except (EndpointError, ValueError):
+        metadata["backup_resolution_failed"] = True
+        primary["limitations"].append("The configured backup endpoint could not be prepared.")
+        return primary
+    resolved = _resolve_llm(backup)
+    result = _answer(
+        history, question, index, resolved, limits, system, answer_format,
+        _resolve_search_llm(backup, resolved), record,
+    )
+    combined = result["metadata"]
+    combined["backup_used"] = True
+    combined["backup_events"] = [backup_event(
+        llm, resolved, reason, failure_threshold, stage="initial_search",
+        primary_status=primary["status"], backup_status=result["status"],
+        primary_requests=metadata["requests"], primary_cells=metadata["cells"],
+    )]
+    combined["primary_model"] = llm.model
+    combined["max_consecutive_cell_errors"] = max(
+        combined["max_consecutive_cell_errors"], metadata["max_consecutive_cell_errors"]
+    )
+    # Each attempt has the same hard budget and a fresh isolated REPL; report
+    # combined costs and caps instead of hiding the failed primary's work.
+    for key in (
+        "requests", "cells", "successful_cells", "worker_startup_seconds",
+        "cell_output_chars", "truncated_cells",
+    ):
+        combined[key] += metadata[key]
+    combined["elapsed_seconds"] = round(time.monotonic() - started, 4)
+    for key in ("max_calls", "max_cells"):
+        if combined[key] is not None:
+            combined[key] += metadata[key]
+    for key in (
+        "request_metrics", "finish_reasons", "validation_errors", "cell_seconds", "cell_errors",
+    ):
+        combined[key] = metadata[key] + combined[key]
+    combined["usage_complete"] &= metadata["usage_complete"]
+    for key in ("prompt_tokens", "completion_tokens"):
+        combined[key] = (
+            combined[key] + metadata[key] if combined["usage_complete"] else None
+        )
     return result
 
 
@@ -796,6 +883,8 @@ def _run_question_batch(
     progress_callback=None,
     answer_format=None,
     prepared_records=None,
+    backup_llm_factory=None,
+    failure_threshold=3,
 ):
     limits = limits or NoteSearchLimits()
     if not isinstance(limits, NoteSearchLimits) or not isinstance(
@@ -931,7 +1020,7 @@ def _run_question_batch(
                     futures[
                         submit_cancellable(
                             pool,
-                            _answer,
+                            _answer_with_backup,
                             patient["history"],
                             patient["questions"][qi],
                             qi,
@@ -941,6 +1030,8 @@ def _run_question_batch(
                             answer_format,
                             search_llm,
                             patient["record"],
+                            backup_llm_factory,
+                            failure_threshold,
                         )
                     ] = (pi, qi)
                     state["next"] += 1

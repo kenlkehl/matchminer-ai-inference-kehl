@@ -168,6 +168,20 @@ these follow-ups, including a separate twelve-call budget per item; set
 Full-note review and patient summarization remain available. See the
 [note-search REPL guide](docs/user-guide/note-search-qa.md).
 
+Both workup APIs accept an optional explicit `backup_config` and
+`max_consecutive_failures=3` (1–10). Without a backup their normal behavior is
+unchanged. The backup is resolved lazily after repeated request/validation failures;
+agent search also switches after consecutive Python errors, resetting the streak
+after a successful cell. Unknown clinical findings do not trigger a backup.
+Full-note review retains validated state and switches once for the failed and
+remaining packets, repacking for the backup's context budget. Agent search retries
+only a failed item with a fresh isolated REPL and the same bounded per-attempt
+budget. Follow-up uses that model and can independently switch after repeated
+failures within its existing call budget, retaining validated findings. Backups use
+their own sampling/reasoning configuration and the same selected notes; no primary
+endpoint settings or reasoning traces are replayed. Results record safe backup
+provenance and combined per-item costs. No backup model is chosen implicitly.
+
 Structured note/workup requests can pace starts without reducing question-worker
 concurrency. Configure `request_start_interval_seconds`,
 `capacity_retry_initial_seconds` and `capacity_retry_max_seconds` on
