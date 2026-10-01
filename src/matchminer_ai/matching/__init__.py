@@ -47,6 +47,7 @@ __all__ = [
 _GOOD_OPTION_EXPORTS = {
     "build_good_option_checker_text": "matching.good_options",
     "build_good_option_messages": "matching.good_options",
+    "check_good_options": "matching.good_options",
     "evaluate_good_options": "matching.good_options",
     "good_option_evidence_budget": "matching.good_options",
     "pack_good_option_evidence": "matching.good_options",

@@ -30,6 +30,8 @@ from matchminer_ai.paradigms import (
 )
 from matchminer_ai.patients import (
     answer_question_with_raw_patient_notes,
+    compress_patient_note,
+    compress_patient_notes,
     concatenate_patient_note_pdfs,
     full_patient_screen,
     review_patient_workup,
@@ -59,6 +61,8 @@ def test_imports():
     assert extract_trial_space_eligibility_criteria is not None
     assert structure_trial_space is not None
     assert summarize_patients is not None
+    assert compress_patient_note is not None
+    assert compress_patient_notes is not None
     assert structure_patient_summaries is not None
     assert structure_patient_summary is not None
     assert answer_question_with_raw_patient_notes is not None

@@ -75,7 +75,8 @@ recommendations, guideline compliance, or eligibility determinations.
 Good Option APIs follow the same stage boundaries as the other matching
 components: import `build_good_option_catalog`, `load_good_option_catalog`, and
 `validate_good_option_catalog` from `matchminer_ai.trials`, and import
-`score_good_options_with_llm` or `evaluate_good_options` from
+`check_good_options` (the on-demand check, configured by `good_option_check`),
+`score_good_options_with_llm`, or `evaluate_good_options` from
 `matchminer_ai.matching` (the classifier `score_good_options` is deprecated). Screening, synthesis, scoring, retry, and checker
 input templates live in `src/matchminer_ai/prompts/`. The former
 `matchminer_ai.good_options` imports remain compatibility aliases. This source
@@ -115,6 +116,20 @@ per-item statuses, applicability, bottom lines and validated verbatim note evide
 This opt-in documentation review uses the patient remote LLM configuration, not
 the patient summary, and writes no patient checkpoints. See the
 [patient API guide](docs/api/patients.md#workup-documentation-review).
+
+`patients.compress_patient_notes` is an opt-in note-compression module using the
+configured remote patient LLM. It normalizes whitespace runs to one space,
+compresses independent notes concurrently, and adds `compressed_note_text` to a
+copy of the input table while preserving original notes, metadata and row order.
+`compress_patient_note` returns only compressed text for a single string. The
+short prompt requests extreme but lossless token density and forbids explanatory
+text; it contains no preservation checklist. Reasoning defaults to off through
+the endpoint request argument where supported. Otherwise the switch is omitted
+and the endpoint's configured reasoning settings are retained.
+`thinking="on"` explicitly enables it for compression.
+This experimental compression does not certify losslessness or change serial
+summarization or note-search defaults.
+See [note compression](docs/api/patients.md#note-compression).
 
 For an experimental alternative that explores selected excerpts,
 `patients.answer_patient_questions` accepts a notes DataFrame, a full-text history,

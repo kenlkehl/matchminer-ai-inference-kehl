@@ -8,15 +8,18 @@ Use the existing trial and matching stage namespaces:
 
 ```python
 from matchminer_ai.trials import build_good_option_catalog, load_good_option_catalog
-from matchminer_ai.matching import score_good_options_with_llm
+from matchminer_ai.matching import check_good_options
 
 # Public-only research stage; run once before patient scoring.
 catalog = await build_good_option_catalog(nct_ids, "drug_catalog", config=config)
-# For subsequent runs: catalog = load_good_option_catalog("drug_catalog")
 
 # candidate_pairs: patient_id, trial_id, cancer_history_summary
-scores = score_good_options_with_llm(candidate_pairs, catalog=catalog, config=config)
+scores = check_good_options(candidate_pairs, catalog="drug_catalog", config=config)
 ```
+
+`check_good_options` is the supported on-demand entry point; see
+[On-demand check](#on-demand-check). `score_good_options_with_llm` is the
+lower-level scorer it wraps.
 
 Patient summaries reach the configured LLM endpoint in LLM mode. Use an
 endpoint authorized for the sensitivity of the input. Catalog construction
@@ -210,6 +213,31 @@ Trials with missing catalog data, exhausted research, or missing synthesis are
 returned as explicitly unscored; there is no live-search or legacy-snippet
 fallback.
 
+### On-demand check
+
+`check_good_options` runs the LLM rubric for patient-trial pairs with
+production defaults from the `good_option_check` preset section:
+
+- `catalog` may be a loaded `GoodOptionCatalog` or a bundle path. A path is
+  loaded with `load_good_option_catalog(path, cache=True)`, which validates once
+  and reuses the catalog until any bundle file's size or modification time
+  changes.
+- The `llm_good_option` completion is capped at `max_output_tokens` (50,000)
+  on a copy of the config, leaving more of the context for evidence.
+- Unless `good_option_prompt.context_tokens` is set, the evidence budget follows
+  the smallest `max_model_len` that the configured OpenAI-compatible servers
+  report at `/v1/models`. If the lookup fails, packing uses the configured
+  context and the warning is returned.
+- Invalid answers get `max_parse_attempts` (3) attempts in total, then one
+  attempt with thinking disabled when `reasoning_off_fallback` is true.
+
+Output columns match `score_good_options_with_llm`. With
+`return_metadata=True`, `metadata["good_option_check"]` reports
+`max_output_tokens`, `context_tokens`, `context_source` (`configured`,
+`endpoint`, or `preset`), and `context_warning`. The caller's config is never
+mutated, and the `llm_good_option` section that fingerprints catalog builds is
+left unchanged.
+
 ### Deprecated: GoodOptionChecker
 
 The trained four-logit GoodOptionChecker classifier is deprecated. It saw one
@@ -232,6 +260,7 @@ teacher prompt carries, and no checker artifact is published. `score_good_option
 ::: matchminer_ai.matching
     options:
       members:
+        - check_good_options
         - build_good_option_messages
         - pack_good_option_evidence
         - good_option_evidence_budget

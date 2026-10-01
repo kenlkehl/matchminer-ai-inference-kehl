@@ -128,3 +128,23 @@ def test_thinking_floor_raises_catalog_stage_budgets_only_upward():
     assert catalog["synthesis_llm"]["remote"]["request_params"]["max_tokens"] == 100000
     assert config.llm_good_option["remote"]["request_params"]["max_tokens"] == 100000
     assert "reasoning_parser" not in catalog["screening_llm"]
+
+
+def test_discover_served_context_tokens_reads_vllm_max_model_len(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payloads = {
+        "http://vllm:8000/v1/models": {
+            "data": [{"id": "served", "max_model_len": 131072}]
+        },
+        "http://other:8000/v1/models": {"data": [{"id": "served"}]},
+    }
+
+    def fake_get(url: str, **_: object) -> httpx.Response:
+        return httpx.Response(
+            200, json=payloads[url], request=httpx.Request("GET", url)
+        )
+
+    monkeypatch.setattr(model_profiles.httpx, "get", fake_get)
+    assert model_profiles.discover_served_context_tokens("vllm:8000") == 131072
+    assert model_profiles.discover_served_context_tokens("other:8000") is None

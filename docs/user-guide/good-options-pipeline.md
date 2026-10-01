@@ -198,6 +198,13 @@ than restarting.
    individually with the exact parser error, and optionally once more with model
    thinking disabled.
 
+`check_good_options` runs these steps on demand with production defaults. It
+loads the catalog once and reuses it until its files change. It caps the
+model's answer at 50,000 tokens and fits the evidence to the context length
+the serving endpoint reports. A malformed answer gets three tries, then one
+more with thinking off. Those settings live in the `good_option_check` preset
+section.
+
 A second scoring path, a four-logit classifier reading one patient and one
 drug summary, is deprecated: it never saw class evidence and no trained model
 was published.

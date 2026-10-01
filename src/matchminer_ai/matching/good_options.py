@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import math
 import re
 import warnings
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -20,12 +22,21 @@ from matchminer_ai.llm.backends import (
     LLMGenerationResult,
     build_llm_runtime_config,
     get_llm_backend,
+    remote_enabled,
 )
+from matchminer_ai.llm.model_profiles import discover_served_context_tokens
+from matchminer_ai.llm.remote_auth import (
+    OPENAI_COMPATIBLE_PROVIDER,
+    remote_bearer_token,
+    remote_provider_name,
+)
+from matchminer_ai.llm.remote_inference import normalize_remote_server_urls
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
 from matchminer_ai.matching.inference import run_checker
 from matchminer_ai.trials.drug_catalog import (
     EVIDENCE_GRANULARITIES,
+    load_good_option_catalog,
     render_fact_summary,
 )
 from matchminer_ai.trials.drug_evidence import (
@@ -40,6 +51,8 @@ from matchminer_ai.trials.drug_evidence import (
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _clean_text(value: Any, *, max_chars: int) -> str:
@@ -1056,10 +1069,14 @@ def evaluate_good_options(
     method: str = "llm",
     config: MMAIConfig | None = None,
     return_metadata: bool = False,
+    max_parse_attempts: int = 1,
+    reasoning_off_fallback: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     """Dispatch catalog-backed GoodOption scoring to the LLM or checker.
 
-    ``method="classifier"`` is deprecated; use the default ``"llm"``.
+    ``method="classifier"`` is deprecated; use the default ``"llm"``. For
+    on-demand checks prefer :func:`check_good_options`, which applies the
+    ``good_option_check`` production settings.
     """
 
     normalized = str(method or "").strip().casefold()
@@ -1069,6 +1086,8 @@ def evaluate_good_options(
             catalog=catalog,
             research=research,
             config=config,
+            max_parse_attempts=max_parse_attempts,
+            reasoning_off_fallback=reasoning_off_fallback,
             return_metadata=return_metadata,
         )
     if normalized == "classifier":
@@ -1082,10 +1101,135 @@ def evaluate_good_options(
     raise ValueError("method must be 'llm' or 'classifier'.")
 
 
+def _discover_good_option_context(
+    config: MMAIConfig, *, timeout: float
+) -> tuple[int | None, str]:
+    """Smallest ``max_model_len`` across the configured vLLM servers, if any."""
+
+    remote = dict(config.remote or {})
+    if remote_provider_name(remote) != OPENAI_COMPATIBLE_PROVIDER:
+        return None, ""
+    try:
+        urls = normalize_remote_server_urls(remote)
+    except ValueError as exc:
+        return None, str(exc)
+    token = remote_bearer_token(remote)
+    discovered: list[int] = []
+    for url in urls:
+        try:
+            value = discover_served_context_tokens(url, api_key=token, timeout=timeout)
+        except Exception as exc:  # noqa: BLE001 - reported, then fall back
+            return None, f"{url}: {exc}"
+        if value:
+            discovered.append(value)
+    return (min(discovered) if discovered else None), ""
+
+
+def _good_option_check_config(
+    config: MMAIConfig, settings: Mapping[str, Any]
+) -> tuple[MMAIConfig, dict[str, Any]]:
+    """Apply the on-demand output cap and endpoint context to a config copy."""
+
+    checked = deepcopy(config)
+    max_output_tokens = settings.get("max_output_tokens")
+    if max_output_tokens is not None:
+        cap = int(max_output_tokens)
+        if cap < 1:
+            raise ValueError("good_option_check.max_output_tokens must be positive.")
+        local = checked.llm_good_option.setdefault("local", {})
+        local.setdefault("generation", {})["max_tokens"] = cap
+        request_params = checked.llm_good_option.setdefault(
+            "remote", {}
+        ).setdefault("request_params", {})
+        key = (
+            "max_completion_tokens"
+            if "max_completion_tokens" in request_params
+            and "max_tokens" not in request_params
+            else "max_tokens"
+        )
+        request_params[key] = cap
+
+    prompt_settings = checked.raw.setdefault("good_option_prompt", {})
+    report: dict[str, Any] = {
+        "max_output_tokens": max_output_tokens,
+        "context_tokens": prompt_settings.get("context_tokens"),
+        "context_source": "configured",
+        "context_warning": "",
+    }
+    if prompt_settings.get("context_tokens"):
+        return checked, report
+    report["context_source"] = "preset"
+    if remote_enabled(checked) and settings.get("discover_context_tokens", True):
+        context_tokens, warning = _discover_good_option_context(
+            checked,
+            timeout=float(settings.get("discovery_timeout_seconds", 10.0)),
+        )
+        if context_tokens:
+            prompt_settings["context_tokens"] = context_tokens
+            report.update(context_tokens=context_tokens, context_source="endpoint")
+        elif warning:
+            report["context_warning"] = (
+                f"Could not read the endpoint context length ({warning}); "
+                "packing evidence for the configured context."
+            )
+            LOGGER.warning("%s", report["context_warning"])
+    return checked, report
+
+
+def check_good_options(
+    candidate_pairs: pd.DataFrame,
+    *,
+    catalog: GoodOptionCatalog | str | Path,
+    config: MMAIConfig | None = None,
+    return_metadata: bool = False,
+) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
+    """Run the on-demand LLM GoodOption check for patient-trial pairs.
+
+    This is the supported entry point for checking whether a trial's
+    experimental drugs are evidence-backed options for a patient. It wraps
+    :func:`score_good_options_with_llm` with the ``good_option_check`` settings:
+
+    - a catalog path is loaded, validated and cached until its files change;
+    - the completion is capped at ``max_output_tokens`` (50,000 by default) so
+      more of the context carries evidence;
+    - unless ``good_option_prompt.context_tokens`` is set, the evidence budget
+      follows the smallest ``max_model_len`` the configured vLLM servers report;
+    - invalid answers get ``max_parse_attempts`` attempts in total, then one
+      attempt with thinking disabled when ``reasoning_off_fallback`` is true.
+
+    ``candidate_pairs`` needs ``patient_id``, ``trial_id`` and
+    ``cancer_history_summary``. Output columns match
+    :func:`score_good_options_with_llm`. The score is an evidence fraction for
+    human review, not an eligibility decision or treatment recommendation.
+    """
+
+    resolved_config = config or load_default_preset()
+    settings = dict(resolved_config.raw.get("good_option_check") or {})
+    resolved_catalog = (
+        catalog
+        if isinstance(catalog, GoodOptionCatalog)
+        else load_good_option_catalog(catalog, cache=True)
+    )
+    checked_config, context_report = _good_option_check_config(
+        resolved_config, settings
+    )
+    output, metadata = score_good_options_with_llm(
+        candidate_pairs,
+        catalog=resolved_catalog,
+        config=checked_config,
+        max_parse_attempts=int(settings.get("max_parse_attempts", 3)),
+        reasoning_off_fallback=bool(settings.get("reasoning_off_fallback", True)),
+        return_metadata=True,
+    )
+    metadata["good_option_check"] = context_report
+    return (output, metadata) if return_metadata else output
+
+
 __all__ = [
     "GOOD_OPTION_EVIDENCE_PACKING_VERSION",
     "build_good_option_checker_text",
     "build_good_option_messages",
+    "check_good_options",
     "evaluate_good_options",
     "good_option_evidence_budget",
     "pack_good_option_evidence",

@@ -700,6 +700,26 @@ Patient-time packing of catalog drug and class evidence into the
 See [Evidence packing](../api/good-options.md#evidence-packing) for how the
 budget is shared and when evidence is condensed.
 
+## `good_option_check`
+
+Settings for `check_good_options`, the on-demand patient-trial check. They are
+applied to a copy of the config at call time and stay outside `llm_good_option`
+so catalog-build fingerprints are unaffected.
+
+- `max_output_tokens` (50,000): completion cap for the scoring request,
+  replacing the active backend's `llm_good_option` `max_tokens` (100,000) so
+  more of the context carries evidence. `null` keeps the `llm_good_option`
+  value.
+- `discover_context_tokens` (`true`): when `good_option_prompt.context_tokens`
+  is unset and remote inference is enabled with an OpenAI-compatible provider,
+  size evidence packing to the smallest `max_model_len` the servers report at
+  `/v1/models`.
+- `discovery_timeout_seconds` (10.0): timeout for each lookup. A failed lookup
+  falls back to the configured context and is reported in the metadata.
+- `max_parse_attempts` (3): total attempts for answers that fail validation.
+- `reasoning_off_fallback` (`true`): add one final attempt with thinking
+  disabled.
+
 ## `good_option_checker`
 
 Deprecated. Configuration for the retired GoodOptionChecker classifier, kept so

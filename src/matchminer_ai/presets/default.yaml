@@ -432,6 +432,20 @@ good_option_prompt:
   # Upper bound on any one drug or class, however much room remains.
   max_drug_section_tokens: 20000
   max_class_section_tokens: 20000
+# On-demand check_good_options settings. Kept apart from llm_good_option, whose
+# values feed catalog-build checkpoint fingerprints.
+good_option_check:
+  # Completion cap for on-demand checks; the rest of the context carries
+  # evidence. Catalog builds keep llm_good_option's own max_tokens.
+  max_output_tokens: 50000
+  # When good_option_prompt.context_tokens is null and the remote backend is
+  # OpenAI-compatible, size evidence to the smallest max_model_len reported by
+  # the configured servers' /models listing.
+  discover_context_tokens: true
+  discovery_timeout_seconds: 10.0
+  # Attempts for an invalid answer, then one more with thinking disabled.
+  max_parse_attempts: 3
+  reasoning_off_fallback: true
 # Deprecated: GoodOption scoring uses the LLM teacher (llm_good_option). Kept so
 # existing configs load; no checker artifact is published or maintained.
 good_option_checker:

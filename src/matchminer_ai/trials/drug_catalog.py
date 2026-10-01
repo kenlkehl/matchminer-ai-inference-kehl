@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -4204,12 +4205,53 @@ def _validate_class_tables(
                     )
 
 
+#: Validated catalogs reused by ``load_good_option_catalog(..., cache=True)``,
+#: keyed by resolved path and validation mode, with the file signature they were
+#: loaded from.
+_CATALOG_CACHE: dict[
+    tuple[Path, bool], tuple[tuple[tuple[str, int, int], ...], GoodOptionCatalog]
+] = {}
+_CATALOG_CACHE_LOCK = threading.Lock()
+
+
+def _catalog_file_signature(root: Path) -> tuple[tuple[str, int, int], ...]:
+    """Relative path, mtime and size of every file in a catalog bundle."""
+
+    signature = []
+    for item in sorted(root.rglob("*")):
+        if item.is_file():
+            stat = item.stat()
+            signature.append(
+                (item.relative_to(root).as_posix(), stat.st_mtime_ns, stat.st_size)
+            )
+    return tuple(signature)
+
+
 def load_good_option_catalog(
-    path: str | Path, *, validate: bool = True
+    path: str | Path, *, validate: bool = True, cache: bool = False
 ) -> GoodOptionCatalog:
-    """Load a Parquet bundle and optionally verify its full manifest contract."""
+    """Load a Parquet bundle and optionally verify its full manifest contract.
+
+    With ``cache=True`` the loaded catalog is kept in memory and returned again
+    until any file in the bundle changes, so on-demand callers pay the read and
+    validation cost once. Treat a cached catalog as read-only.
+    """
 
     root = Path(path).expanduser().resolve()
+    if not cache:
+        return _read_good_option_catalog(root, validate=validate)
+    signature = _catalog_file_signature(root)
+    key = (root, bool(validate))
+    with _CATALOG_CACHE_LOCK:
+        cached = _CATALOG_CACHE.get(key)
+        if cached is not None and cached[0] == signature:
+            return cached[1]
+        catalog = _read_good_option_catalog(root, validate=validate)
+        _CATALOG_CACHE[key] = (signature, catalog)
+        return catalog
+
+
+def _read_good_option_catalog(root: Path, *, validate: bool) -> GoodOptionCatalog:
     manifest = (
         validate_good_option_catalog(root)
         if validate

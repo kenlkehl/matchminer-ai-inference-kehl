@@ -101,6 +101,37 @@ def discover_served_model(
     return model_ids[0]
 
 
+def discover_served_context_tokens(
+    server_url: str,
+    *,
+    api_key: str | None = None,
+    timeout: float = 10.0,
+) -> int | None:
+    """Return the ``max_model_len`` a vLLM server reports at ``/models``.
+
+    Returns ``None`` when the server lists no positive ``max_model_len``, which
+    is normal for OpenAI-compatible servers other than vLLM.
+    """
+    base_url = normalize_openai_base_url(server_url)
+    token = api_key or os.environ.get("OPENAI_API_KEY") or "not-needed"
+    response = httpx.get(
+        f"{base_url.rstrip('/')}/models",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    for item in response.json().get("data", []):
+        if not isinstance(item, Mapping):
+            continue
+        try:
+            value = int(item.get("max_model_len") or 0)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+    return None
+
+
 def _config_section(config: MMAIConfig, path: str) -> dict[str, Any]:
     """Resolve ``section`` or a dotted stage override such as
     ``good_option_catalog.screening_llm``, creating the override if absent."""
@@ -197,6 +228,7 @@ __all__ = [
     "QWEN3_8_FLASH_NEXT_THINKING",
     "apply_model_profile",
     "configure_served_model",
+    "discover_served_context_tokens",
     "discover_served_model",
     "resolve_model_profile",
 ]

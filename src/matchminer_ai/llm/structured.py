@@ -84,10 +84,36 @@ class StructuredConfig:
 
 
 class EndpointError(RuntimeError):
-    def __init__(self, message, *, http_status=None, retry_after=None):
+    def __init__(
+        self, message, *, http_status=None, retry_after=None, thinking_unsupported=False,
+    ):
         super().__init__(message)
         self.http_status = http_status
         self.retry_after = retry_after
+        self.thinking_unsupported = thinking_unsupported
+
+
+def _thinking_control_rejected(error, body):
+    """Classify a bounded error body without retaining provider or patient text."""
+    if (
+        error.code not in (400, 422)
+        or not body
+        or body.get("chat_template_kwargs", {}).get("enable_thinking") is not False
+    ):
+        return False
+    try:
+        message = error.read(8192).decode("utf-8", errors="replace").lower()
+    except (OSError, ValueError, AttributeError):
+        return False
+    return bool(
+        re.search(r"\b(?:enable_thinking|chat_template_kwargs)\b", message)
+        and re.search(
+            r"unsupported|not supported|unexpected|unknown|unrecognized|"
+            r"not allowed|not permitted|extra inputs|invalid|"
+            r"must (?:be|equal)\s+true|cannot.*(?:disable|false)",
+            message,
+        )
+    )
 
 
 def _retry_after_seconds(value):
@@ -359,6 +385,7 @@ class StructuredClient:
                 f"Endpoint HTTP {exc.code} for {endpoint}",
                 http_status=exc.code,
                 retry_after=_retry_after_seconds(exc.headers.get("Retry-After")) if exc.headers else None,
+                thinking_unsupported=_thinking_control_rejected(exc, body),
             ) from exc
         except (URLError, TimeoutError, OSError) as exc:
             raise EndpointError(

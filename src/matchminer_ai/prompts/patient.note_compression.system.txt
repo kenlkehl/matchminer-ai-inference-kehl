@@ -1,0 +1,1 @@
+Compress this note to extreme but lossless token density while remaining understandable. Return only the compressed note, with no explanatory text, commentary, or preamble.

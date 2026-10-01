@@ -10,32 +10,38 @@ import pandas as pd
 from matchminer_ai._metadata import package_metadata
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 
+from .compression import (
+    NoteCompressionError,
+    NoteCompressionProgress,
+    compress_patient_note,
+    compress_patient_notes,
+)
 from .full_screen import (
     FullPatientScreenError,
     FullPatientScreenProgress,
     full_patient_screen,
 )
-from .raw_note_qa import (
-    RawPatientNoteQAProgress,
-    RawPatientNoteQuestionError,
-    answer_question_with_raw_patient_notes,
+from .note_search_qa import (
+    NoteSearchLimits,
+    NoteSearchLLMConfig,
+    answer_patient_question_batch,
+    answer_patient_questions,
 )
 from .pdf import (
     PatientPDFInput,
     PatientPDFProgress,
     concatenate_patient_note_pdfs,
 )
+from .raw_note_qa import (
+    RawPatientNoteQAProgress,
+    RawPatientNoteQuestionError,
+    answer_question_with_raw_patient_notes,
+)
 from .structure import structure_patient_summaries, structure_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
 from .workup_search import review_patient_workup_with_note_search
 from .workup_search_review import WorkupSearchReviewConfig
-from .note_search_qa import (
-    NoteSearchLLMConfig,
-    NoteSearchLimits,
-    answer_patient_question_batch,
-    answer_patient_questions,
-)
 
 
 def summarize_patients(
@@ -205,22 +211,26 @@ def summarize_patients(
 __all__ = [
     "FullPatientScreenError",
     "FullPatientScreenProgress",
-    "RawPatientNoteQAProgress",
-    "RawPatientNoteQuestionError",
+    "NoteCompressionError",
+    "NoteCompressionProgress",
+    "NoteSearchLLMConfig",
+    "NoteSearchLimits",
     "PatientPDFInput",
     "PatientPDFProgress",
-    "NoteSearchLimits",
+    "RawPatientNoteQAProgress",
+    "RawPatientNoteQuestionError",
     "WorkupSearchReviewConfig",
-    "NoteSearchLLMConfig",
     "answer_patient_question_batch",
     "answer_patient_questions",
     "answer_question_with_raw_patient_notes",
+    "compress_patient_note",
+    "compress_patient_notes",
     "concatenate_patient_note_pdfs",
     "full_patient_screen",
-    "structure_patient_summaries",
-    "structure_patient_summary",
     "review_patient_workup",
     "review_patient_workup_with_note_search",
+    "structure_patient_summaries",
+    "structure_patient_summary",
     "summarize_patient_notes",
     "summarize_patients",
 ]

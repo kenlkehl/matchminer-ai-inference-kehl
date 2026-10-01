@@ -3,6 +3,9 @@
 ::: matchminer_ai.patients
     options:
       members:
+        - compress_patient_note
+        - compress_patient_notes
+        - NoteCompressionError
         - answer_question_with_raw_patient_notes
         - concatenate_patient_note_pdfs
         - full_patient_screen
@@ -16,6 +19,76 @@
         - NoteSearchLLMConfig
         - structure_patient_summaries
         - structure_patient_summary
+
+## Note compression
+
+`compress_patient_notes` sends one independent request per nonblank `note_text`
+row to the configured remote patient LLM. Before dispatch, every run of
+whitespace (including spaces, tabs and newlines) becomes one ASCII space, and
+leading/trailing whitespace is removed. Original source text stays intact in the
+returned DataFrame; `compressed_note_text` holds only the final compressed note.
+Input row order, index, patient IDs, dates and other columns are preserved, and
+only note text is sent to the endpoint. The API accepts multiple patients without
+mixing their notes or adding patient metadata to the prompt.
+
+```python
+from matchminer_ai import load_default_preset
+from matchminer_ai.patients import compress_patient_note, compress_patient_notes
+
+config = load_default_preset()
+config.remote["enabled"] = True
+config.remote["server_urls"] = ["http://localhost:8002/v1"]
+config.patient["remote"]["model_name"] = "my-endpoint-model"
+
+compressed = compress_patient_notes(
+    notes_dataframe,
+    config=config,
+    max_concurrent_requests=8,
+    progress_callback=lambda completed, total: print(completed, total),
+)
+one_note = compress_patient_note("Fabricated note text.", config=config)
+```
+
+Concurrency defaults to `config.remote["max_concurrent_requests"]`. Requests
+share the existing process-wide endpoint cap, authentication, model sampling,
+streaming, timeout, bounded retries, optional dispatch pacing and capacity
+cooldowns. The existing cancellation scope also stops compression workers. The
+module requires one endpoint, so model discovery and context accounting describe
+the same server. If the endpoint supplies no model context limit, set
+`config.remote["context_window"]` explicitly. For providers without vLLM's
+`/tokenize` route, explicitly set `config.remote["tokenizer_mode"] = "bytes"` to
+use conservative UTF-8 byte budgeting. Output-token reserves follow the patient
+LLM request parameters.
+
+Reasoning defaults to off for both APIs where supported, even if the patient LLM
+configuration enables thinking. The request sends
+`chat_template_kwargs.enable_thinking=false`, with inherited reasoning-effort
+fields removed. An adapter that cannot disable reasoning, including Gemini,
+omits this switch and retains its configured reasoning settings. If an endpoint
+explicitly rejects the switch with HTTP 400 or 422, the request is retried once
+at the same endpoint without the switch. Other failures keep the normal bounded
+retry behavior. Set `thinking="on"` to opt in. The prompt stays the same;
+reasoning mode is controlled only by the API argument. These overrides do not
+mutate the shared configuration. The returned table's `attrs["note_compression"]`
+records `thinking_requested` and dispatched `thinking` (`off`, `on`, `default`,
+`mixed`, or `not_requested` for entirely blank input). `default` means that no
+thinking switch was sent; it does not establish whether the model reasoned.
+
+The prompt is: “Compress this note to extreme but lossless token density while
+remaining understandable. Return only the compressed note, with no explanatory
+text, commentary, or preamble.” No preservation checklist is appended. Separate
+reasoning is discarded; blank, refused, token-limited, malformed and recognizable
+explanatory/inline-reasoning responses are rejected with bounded retries. No
+patient checkpoints are created and no clinical text is logged. A failure raises
+instead of returning a partial table or inserting an error as a compressed note.
+Oversized notes are rejected, never truncated or automatically split.
+
+Blank strings produce `""` without a request. Null/non-string text and an existing
+`compressed_note_text` column are rejected. Compression is experimental: asking
+for losslessness does not establish it. Keep original notes for human review and
+exact evidence quotations. Use only an endpoint authorized for the input data.
+This is a standalone research workflow; existing summarization and note-question
+answering do not automatically use compressed notes.
 
 ## PDF patient records
 

@@ -19,6 +19,7 @@ from matchminer_ai.matching import (
     RUBRIC_CRITERIA,
     build_good_option_checker_text,
     build_good_option_messages,
+    check_good_options,
     evaluate_good_options,
     good_option_evidence_budget,
     pack_good_option_evidence,
@@ -405,6 +406,153 @@ def test_llm_scoring_retries_parse_failures_with_feedback_then_disables_reasonin
     assert config.llm_good_option["local"]["chat_template_kwargs"] == {
         "enable_thinking": True
     }
+
+
+def _check_pairs() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "trial_id": "NCT12345678",
+                "cancer_history_summary": "Synthetic TARGET_MARKER cancer",
+            }
+        ]
+    )
+
+
+def _recording_run(calls: list[Any], outputs: list[str]):
+    def fake_run(messages_list, *, config):
+        calls.append(config)
+        output = outputs[min(len(calls) - 1, len(outputs) - 1)]
+        return SimpleNamespace(
+            final_outputs=[output] * len(messages_list),
+            reasoning_outputs=[""] * len(messages_list),
+            finish_reasons=["stop"] * len(messages_list),
+            model_metadata={"model_name": "teacher"},
+        )
+
+    return fake_run
+
+
+def test_check_good_options_caps_output_and_retries_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        "matchminer_ai.matching.good_options._run_good_option_llm",
+        _recording_run(calls, ["{}", "{}", _response()]),
+    )
+    config = load_default_preset()
+
+    output, metadata = check_good_options(
+        _check_pairs(), catalog=_catalog(), config=config, return_metadata=True
+    )
+
+    assert output["good_option_status"].tolist() == ["ok"]
+    assert len(calls) == 3
+    for call in calls:
+        assert call.llm_good_option["local"]["generation"]["max_tokens"] == 50000
+        assert call.llm_good_option["remote"]["request_params"]["max_tokens"] == 50000
+    assert metadata["max_parse_attempts"] == 3
+    assert metadata["reasoning_off_fallback"] is True
+    assert metadata["good_option_check"]["max_output_tokens"] == 50000
+    # The caller's config, and so catalog-build fingerprints, are untouched.
+    assert config.llm_good_option["local"]["generation"]["max_tokens"] == 100000
+    assert config.llm_good_option["remote"]["request_params"]["max_tokens"] == 100000
+
+
+def test_check_good_options_sizes_evidence_to_the_served_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        "matchminer_ai.matching.good_options._run_good_option_llm",
+        _recording_run(calls, [_response()]),
+    )
+    served = {"http://a:8000/v1": 131072, "http://b:8000/v1": 98304}
+    discovered: list[str] = []
+
+    def fake_discover(url, *, api_key=None, timeout=10.0):
+        discovered.append(url)
+        return served[url]
+
+    monkeypatch.setattr(
+        "matchminer_ai.matching.good_options.discover_served_context_tokens",
+        fake_discover,
+    )
+    config = load_default_preset()
+    config.remote["enabled"] = True
+    config.remote["server_urls"] = list(served)
+
+    _output, metadata = check_good_options(
+        _check_pairs(), catalog=_catalog(), config=config, return_metadata=True
+    )
+
+    assert discovered == list(served)
+    assert metadata["good_option_check"]["context_source"] == "endpoint"
+    assert metadata["good_option_check"]["context_tokens"] == 98304
+    assert calls[0].raw["good_option_prompt"]["context_tokens"] == 98304
+    assert config.raw["good_option_prompt"]["context_tokens"] is None
+    expected = good_option_evidence_budget(calls[0], fixed_prompt_chars=0)
+    assert expected["context_tokens"] == 98304
+    assert expected["output_tokens"] == 50000
+
+    # An explicit context wins without asking the servers.
+    discovered.clear()
+    config.raw["good_option_prompt"]["context_tokens"] = 65536
+    _output, metadata = check_good_options(
+        _check_pairs(), catalog=_catalog(), config=config, return_metadata=True
+    )
+    assert discovered == []
+    assert metadata["good_option_check"]["context_source"] == "configured"
+
+    # A failed lookup is reported and falls back to the configured context.
+    config.raw["good_option_prompt"]["context_tokens"] = None
+
+    def refuse(url, *, api_key=None, timeout=10.0):
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(
+        "matchminer_ai.matching.good_options.discover_served_context_tokens", refuse
+    )
+    output, metadata = check_good_options(
+        _check_pairs(), catalog=_catalog(), config=config, return_metadata=True
+    )
+    assert output["good_option_status"].tolist() == ["ok"]
+    assert metadata["good_option_check"]["context_source"] == "preset"
+    assert "refused" in metadata["good_option_check"]["context_warning"]
+
+
+def test_catalog_cache_reloads_only_when_bundle_files_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "manifest.json").write_text("{}", encoding="utf-8")
+    reads: list[Path] = []
+
+    def fake_read(root, *, validate):
+        reads.append(root)
+        return _catalog()
+
+    monkeypatch.setattr(catalog_module, "_read_good_option_catalog", fake_read)
+    monkeypatch.setattr(catalog_module, "_CATALOG_CACHE", {})
+
+    first = load_good_option_catalog(tmp_path, cache=True)
+    assert load_good_option_catalog(tmp_path, cache=True) is first
+    assert len(reads) == 1
+    load_good_option_catalog(tmp_path)
+    assert len(reads) == 2
+
+    (tmp_path / "manifest.json").write_text('{"changed": true}', encoding="utf-8")
+    assert load_good_option_catalog(tmp_path, cache=True) is not first
+    assert len(reads) == 3
+
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        "matchminer_ai.matching.good_options._run_good_option_llm",
+        _recording_run(calls, [_response()]),
+    )
+    check_good_options(_check_pairs(), catalog=str(tmp_path))
+    assert len(reads) == 3
 
 
 def test_classifier_aggregates_every_drug_by_criterion(
