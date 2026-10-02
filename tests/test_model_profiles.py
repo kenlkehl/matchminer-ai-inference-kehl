@@ -11,6 +11,7 @@ from matchminer_ai.cli.build_good_option_catalog import (
 from matchminer_ai.llm import model_profiles
 from matchminer_ai.llm.backends import build_llm_runtime_config
 from matchminer_ai.llm.model_profiles import (
+    GEMMA_4_THINKING,
     QWEN3_8_FLASH_NEXT_THINKING,
     apply_model_profile,
     configure_served_model,
@@ -36,7 +37,52 @@ def test_qwen3_8_flash_next_variants_resolve_to_thinking_profile(model_name):
 
 
 def test_unregistered_model_has_no_profile():
-    assert resolve_model_profile("google/gemma-4-31B-it") is None
+    assert resolve_model_profile("meta-llama/Llama-3.3-70B-Instruct") is None
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    ["google/gemma-4-31B-it", "RedHatAI/Gemma-4-31B-IT-FP8-Dynamic", "gemma4-31b"],
+)
+def test_gemma_4_variants_resolve_to_thinking_profile(model_name):
+    assert resolve_model_profile(model_name) is GEMMA_4_THINKING
+
+
+def test_gemma_4_profile_sends_google_sampling_with_thinking_to_every_stage(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from types import SimpleNamespace
+
+    import matchminer_ai.trials.drug_catalog as drug_catalog
+
+    config = load_default_preset()
+    config.remote.update(enabled=True, server_urls=["http://gpu-host:8001/v1"])
+    apply_model_profile(config, "gemma4-31b", sections=catalog_llm_sections(config))
+    seen: list[dict] = []
+
+    class RecordingBackend:
+        def generate_llm_outputs(self, *, prompt_list, llm_config, **_):
+            seen.append(llm_config)
+            return SimpleNamespace(
+                final_outputs=["{}"], finish_reasons=["stop"], reasoning_outputs=[""]
+            )
+
+    monkeypatch.setattr(drug_catalog, "get_llm_backend", lambda _c: RecordingBackend())
+    for stage in ("screening", "synthesis", "class"):
+        drug_catalog._run_llm_messages(
+            [[{"role": "user", "content": "hi"}]], config=config, stage=stage
+        )
+
+    for runtime in seen:
+        remote = runtime["remote"]
+        assert remote["model_name"] == "gemma4-31b"
+        assert remote["request_params"]["temperature"] == 1.0
+        assert remote["request_params"]["top_p"] == 0.95
+        assert remote["extra_body"]["top_k"] == 64
+        assert remote["extra_body"]["min_p"] == 0.0
+        assert remote["extra_body"]["repetition_penalty"] == 1.0
+        assert remote["extra_body"]["chat_template_kwargs"] == {"enable_thinking": True}
+        assert runtime["reasoning_parser"] == "gemma4"
 
 
 def test_profile_replaces_sampling_but_keeps_output_budget():

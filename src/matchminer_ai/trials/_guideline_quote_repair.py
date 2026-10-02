@@ -175,7 +175,13 @@ def repair_quoted_response(
                     client, guideline, pages, assertion
                 )
             except EndpointError as exc:
-                if "No supporting literal passage selected:" not in str(exc):
+                if not any(
+                    marker in str(exc)
+                    for marker in (
+                        "No supporting literal passage selected:",
+                        "No literal source passages available for citation repair",
+                    )
+                ):
                     raise
                 # Copy-only repair cannot correct an assertion from the wrong
                 # population or treatment phase. Return this specific grounding

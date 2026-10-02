@@ -18,7 +18,7 @@ from test_guideline_extraction import TEXT, make_library
 
 
 @pytest.mark.parametrize("saved_failure", [False, True])
-@pytest.mark.parametrize("failure_kind", ["coverage", "blank", "nonexistent"])
+@pytest.mark.parametrize("failure_kind", ["coverage", "restriction", "histology", "grouping", "blank", "nonexistent"])
 def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
     tmp_path, monkeypatch, saved_failure, failure_kind,
 ):
@@ -26,6 +26,8 @@ def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
         make_library(tmp_path, TEXT + "\n\nAdditional synthetic source"), "fictional",
     )
     inputs = populations()
+    if failure_kind == "histology":
+        inputs[0]["space"]["histology_allowed"] = "Fictional carcinoma grade 1"
     third = copy.deepcopy(inputs[0])
     third.update(candidate_id="third-opaque-id", name="Fictional gamma")
     third["space"]["cancer_burden_allowed"] = "Fictional burden gamma"
@@ -44,6 +46,16 @@ def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
         assert "opaque" not in json.dumps(messages)
         if messages[0]["content"] == TASK:
             value = judge(messages)
+            if failure_kind in {"restriction", "histology"}:
+                payload = json.loads(messages[1]["content"])
+                proposed = {s["name"]: s for s in payload["proposed_catalog"]}
+                inputs_by_name = {s["name"]: s for s in payload["input_populations"]}
+                for review in value["reviews"]:
+                    name = review["input_name"]
+                    if name in proposed and proposed[name]["space"] != inputs_by_name[name]["space"]:
+                        review.update(status="missing", matched_population_names=[],
+                            reason=("Histologic grade restriction absent from proposed fields" if failure_kind == "histology"
+                                    else "Additional response-probability restriction narrows the original population"))
         elif messages[1]["content"].startswith(canonical.SELECT_TASK):
             text = messages[1]["content"].split("\n\nRequired JSON schema:\n", 1)[1]
             _, end = json.JSONDecoder().raw_decode(text)
@@ -56,10 +68,16 @@ def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
             # Larger requests lose a population or invent a citation; singleton
             # responses retain every original definition and valid citation.
             value = {"states": [
-                {key: s[key] for key in canonical.LEAN_STATE["properties"]}
+                {key: copy.deepcopy(s[key]) for key in canonical.LEAN_STATE["properties"]}
                 for s in (descriptions[:1] if failure_kind == "coverage" else descriptions)
             ], "context_only_topics": [], "uncertainties": []}
-            if len(descriptions) > 1 and failure_kind != "coverage":
+            if len(descriptions) > 1 and failure_kind == "restriction":
+                value["states"][0]["space"]["cancer_burden_allowed"] += "; additional response-probability restriction"
+            elif len(descriptions) > 1 and failure_kind == "histology":
+                value["states"][0]["space"]["histology_allowed"] = "Fictional carcinoma"
+            elif len(descriptions) > 1 and failure_kind == "grouping":
+                value["states"][0]["space"]["cancer_burden_allowed"] = "(Fictional burden A OR Fictional burden B AND Fictional burden C)"
+            elif len(descriptions) > 1 and failure_kind != "coverage":
                 value["states"][0]["evidence"] = [{
                     "page_id": "p0002", "line_ids": [2 if failure_kind == "blank" else 99],
                 }]
@@ -73,6 +91,9 @@ def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
             "batches": {}, "failures": {
                 "catalog-content-0001": "EndpointError: exhausted 6 attempts: " + {
                     "coverage": "Catalog omitted or broadened 1 of 2 input populations",
+                    "restriction": "Catalog omitted or broadened 1 of 2 input populations: added response-probability restriction",
+                    "histology": "Catalog omitted or broadened 1 of 2 input populations: histologic grade omitted from fields",
+                    "grouping": "cancer_burden_allowed mixes AND and OR at the same parenthesis level",
                     "blank": "p0002: evidence may not consist entirely of blank lines",
                     "nonexistent": "p0002: nonexistent source line IDs [99]; maximum is 3",
                 }[failure_kind],

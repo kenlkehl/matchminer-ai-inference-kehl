@@ -58,7 +58,29 @@ QWEN3_8_FLASH_NEXT_THINKING = ModelProfile(
     source="Qwen3.8-Flash-Next model card, Best Practices, thinking mode",
 )
 
-MODEL_PROFILES: tuple[ModelProfile, ...] = (QWEN3_8_FLASH_NEXT_THINKING,)
+# Matches Hub IDs (google/gemma-4-31B-it, RedHatAI/Gemma-4-31B-IT-FP8-Dynamic)
+# and short served names such as gemma4-31b.
+GEMMA_4_THINKING = ModelProfile(
+    name="gemma-4-thinking",
+    patterns=("gemma-4", "gemma4"),
+    reasoning_parser="gemma4",
+    request_params={"temperature": 1.0, "top_p": 0.95},
+    # The card names no min_p or repetition penalty, so both are set to their
+    # neutral values to replace the preset's greedy, penalized decoding.
+    extra_body={"top_k": 64, "min_p": 0.0, "repetition_penalty": 1.0},
+    chat_template_kwargs={"enable_thinking": True},
+    # No max_tokens floor: the card recommends none, and note search defaults
+    # Gemma to 8,192. Raise task budgets in config where thinking needs room.
+    source=(
+        "Gemma 4 31B-it model card, Best Practices (standardized sampling); "
+        "vLLM Gemma 4 recipe (gemma4 reasoning parser, enable_thinking)"
+    ),
+)
+
+MODEL_PROFILES: tuple[ModelProfile, ...] = (
+    QWEN3_8_FLASH_NEXT_THINKING,
+    GEMMA_4_THINKING,
+)
 
 
 def resolve_model_profile(model_name: str) -> ModelProfile | None:
@@ -223,6 +245,7 @@ def configure_served_model(
 
 
 __all__ = [
+    "GEMMA_4_THINKING",
     "MODEL_PROFILES",
     "ModelProfile",
     "QWEN3_8_FLASH_NEXT_THINKING",

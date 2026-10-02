@@ -50,8 +50,11 @@ def _words(text):
 def literal_choices(pages, assertion, limit=32):
     """Rank original text only; never repair words or choose clinical evidence."""
     rejected = assertion["rejected_evidence"]["source_text"]
-    needle = _words(rejected)
     query = _words(assertion["assertion"]["name"])
+    # An ambiguous fragment can contain only stop words (for example, "with
+    # an"). Search the fixed assertion name in that case; the model must still
+    # select a supporting, uniquely addressed literal passage from these choices.
+    needle = _words(rejected) or query
     candidates = {}
     for page in pages.values():
         lines = page.text.splitlines(keepends=True)

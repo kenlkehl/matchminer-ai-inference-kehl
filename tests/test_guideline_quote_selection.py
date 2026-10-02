@@ -74,6 +74,27 @@ def test_duplicate_table_cells_gain_literal_branch_context(setup):
         resolve_excerpt(page, choice["source_text"])
 
 
+@pytest.mark.parametrize("rejected", ["with an ", "and or", ""])
+def test_stopword_only_rejected_fragment_searches_fixed_assertion(setup, rejected):
+    guideline, _ = setup
+    page = replace(
+        guideline.pages["p0002"],
+        text="Branch alpha\nSynthetic test A\n\nBranch beta\nOther procedure B\n",
+    )
+    choices = literal_choices({page.id: page}, assertion(rejected))
+    assert choices
+    assert all("Synthetic test A" in item["source_text"] for item in choices)
+    for item in choices:
+        resolve_excerpt(page, item["source_text"])
+    # Candidate retrieval is not clinical approval: unsupported selections still fail.
+    with pytest.raises(ValueError, match="No supporting literal passage"):
+        selected_patch(
+            {"selected_passages": [], "unresolved": ["No supported assertion"]},
+            choices,
+            {page.id: page},
+        )
+
+
 def test_interleaved_columns_stay_separate_literal_fragments(setup):
     guideline, _ = setup
     page = replace(

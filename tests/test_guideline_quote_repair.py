@@ -345,6 +345,7 @@ def test_pipeline_resumes_old_failed_draft_and_audits_repair_provenance(
 
 @pytest.mark.parametrize("diagnostic,expected", [
     ("quote-select: exhausted 6 attempts: No supporting literal passage selected: synthetic wrong phase", ValueError),
+    ("No literal source passages available for citation repair", ValueError),
     ("quote-select: exhausted 6 attempts: HTTP 503", EndpointError),
 ])
 def test_unsupported_fixed_assertion_returns_to_generation_but_transport_does_not(
@@ -377,7 +378,7 @@ def test_unsupported_fixed_assertion_returns_to_generation_but_transport_does_no
         assert not list((tmp_path / "quote_repairs").glob("*.json"))
 
 
-@pytest.mark.parametrize("issue", ["components", "category"])
+@pytest.mark.parametrize("issue", ["components", "category", "no_candidates"])
 def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
     setup, tmp_path, monkeypatch, issue,
 ):
@@ -389,6 +390,8 @@ def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
     detail_calls = []
 
     def no_support(*args, **kwargs):
+        if issue == "no_candidates":
+            raise EndpointError("No literal source passages available for citation repair")
         raise EndpointError(
             "quote-select: exhausted 6 attempts: No supporting literal passage selected: "
             + ("synthetic wrong phase" if issue == "components" else "category annotation belongs to adjacent option")

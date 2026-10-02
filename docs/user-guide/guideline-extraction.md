@@ -290,6 +290,12 @@ An empty or unresolved selection still fails. Previously exhausted copy requests
 are recovered from checkpoints without spending another identical retry budget.
 The audit binds every selected passage and assertion to the recorded model request
 and raw selection response, as well as checking its exact source occurrence.
+When a rejected fragment contains only stop words, literal candidate retrieval
+uses the fixed assertion's name instead. The model must still select a supporting
+exact passage; candidate retrieval never establishes support. If no literal
+candidates exist, the bounded original detail-generation retry receives the
+grounding failure and fixed assertion. It cannot accept an empty citation, alter
+the canonical population, or omit an unresolved recommendation silently.
 
 Repairs retain the configured context, output-token reserve, reasoning, sampling,
 endpoint, concurrency cap, and bounded attempt count. They do not replay the
