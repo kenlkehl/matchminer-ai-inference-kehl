@@ -7,8 +7,7 @@ import pytest
 
 from matchminer_ai import load_default_preset
 from matchminer_ai.llm import structured
-from matchminer_ai.patients import review_patient_workup
-from matchminer_ai.patients import workup
+from matchminer_ai.patients import review_patient_workup, workup
 
 
 class Tokenizer:
@@ -18,13 +17,12 @@ class Tokenizer:
         return {"offset_mapping": [(i, i + 1) for i in range(len(text))]}
 
 
-def finding(name="Imaging", status="not_documented", evidence=None):
+def finding(name="Imaging", status="not_documented"):
     return dict(
         name=name,
         status=status,
         applicability="uncertain",
         bottom_line="Review documentation and indication.",
-        evidence=evidence or [],
     )
 
 
@@ -73,12 +71,6 @@ def test_serial_review_retains_evidence_dates_and_conditions(harness):
     responder[0] = lambda p: [
         finding(
             status="planned" if len(calls) == 1 else "completed",
-            evidence=[
-                dict(
-                    note_number=p["raw_note_fragments"][0]["note_number"],
-                    quote=p["raw_note_fragments"][0]["text"],
-                )
-            ],
         )
     ]
     notes = pd.DataFrame(
@@ -107,6 +99,7 @@ def test_serial_review_retains_evidence_dates_and_conditions(harness):
     )
     assert len(calls) == 2
     assert calls[1]["prior_assessments"][0]["status"] == "planned"
+    assert all("evidence" not in row for p in calls for row in p["prior_assessments"])
     row = result["assessments"][0]
     assert row["status"] == "completed"
     assert [e["quote"] for e in row["evidence"]] == ["Scan ordered.", "Scan performed."]
@@ -117,6 +110,8 @@ def test_serial_review_retains_evidence_dates_and_conditions(harness):
     assert calls[0]["guideline_population"] == "Fictional guideline population"
     assert result["metadata"]["reasoning_effort"] == "xhigh"
     assert len(result["metadata"]["prompt_sha256"]) == 64
+    assert result["metadata"]["evidence_selection"] == "automatic_reviewed_excerpts"
+    assert "not individually selected supporting citations" in result["notice"]
 
 
 def test_every_item_every_chunk_and_unknown_dates(harness):
@@ -136,47 +131,64 @@ def test_every_item_every_chunk_and_unknown_dates(harness):
 @pytest.mark.parametrize(
     "row",
     [
-        finding(status="completed"),
-        finding(evidence=[dict(note_number=1, quote="Invented result")]),
-        finding(evidence=[dict(note_number=2, quote="Scan ordered.")]),
+        {**finding(), "evidence": []},
+        {**finding(), "evidence": [dict(note_number=1, quote="Invented result")]},
+        {**finding(), "note_number": 2},
         {**finding(), "name": "Wrong recommendation"},
-        {**finding(), "applicability": "not_applicable"},
+        {**finding(), "applicability": "invalid"},
         {**finding(), "status": "eligible"},
+        {**finding(), "bottom_line": ""},
     ],
 )
-def test_rejects_ungrounded_or_misaligned_results(harness, row):
+def test_rejects_model_evidence_fields_and_misaligned_results(harness, row):
     config, _, responder, _ = harness
     responder[0] = lambda _: [row]
     with pytest.raises(ValueError):
         review_patient_workup("Scan ordered.", [{"name": "Imaging"}], config=config)
 
 
-def test_future_note_cannot_be_cited_before_review(harness):
-    config, _, responder, _ = harness
-    responder[0] = lambda _: [
-        finding(
-            status="completed", evidence=[dict(note_number=2, quote="Scan performed.")]
-        )
+def test_schema_and_prompt_require_findings_without_quotes_or_ids(harness):
+    config, calls, responder, _ = harness
+    responder[0] = lambda _: [finding(status="completed")]
+    original = "PHYSICAL EXAM\nGeneral: Well.\n\nResult: <5 & unchanged."
+    config.patient.update(chunk_size=200, chunk_overlap=0)
+    result = review_patient_workup(
+        pd.DataFrame(
+            [{"note_text": original, "note_date": "2026-01-01", "note_type": "Exam"}]
+        ),
+        [{"name": "Imaging"}],
+        config=config,
+    )
+    schema = workup._schema(1)["properties"]["assessments"]["items"]
+    assert set(schema["properties"]) == {
+        "name",
+        "status",
+        "applicability",
+        "bottom_line",
+    }
+    assert not schema["additionalProperties"]
+    prompt = (
+        workup.resources.files("matchminer_ai.prompts")
+        .joinpath("patient.workup_review.system.txt")
+        .read_text()
+    )
+    assert "Do not generate quotes, note numbers, citation IDs" in prompt
+    evidence = result["assessments"][0]["evidence"]
+    assert evidence == [
+        {
+            "note_number": 1,
+            "note_date": "2026-01-01T00:00:00+00:00",
+            "note_type": "Exam",
+            "quote": original,
+        }
     ]
-    with pytest.raises(ValueError, match="verbatim"):
-        review_patient_workup(
-            pd.DataFrame(
-                [
-                    dict(note_text="Scan ordered.", note_date="2026-01-01"),
-                    dict(note_text="Scan performed.", note_date="2026-02-01"),
-                ]
-            ),
-            [{"name": "Imaging"}],
-            config=config,
-        )
+    assert calls[0]["raw_note_fragments"][0]["text"] == original
 
 
 def test_later_silence_cannot_erase_documented_findings(harness):
     config, calls, responder, _ = harness
     responder[0] = lambda _: [
-        finding(status="planned", evidence=[dict(note_number=1, quote="Scan ordered.")])
-        if len(calls) == 1
-        else finding()
+        finding(status="planned") if len(calls) == 1 else finding()
     ]
     with pytest.raises(ValueError, match="silence"):
         review_patient_workup(
@@ -193,20 +205,26 @@ def test_later_silence_cannot_erase_documented_findings(harness):
 
 def test_context_overflow_splits_without_dropping_text(harness):
     config, calls, _, client = harness
-    client.fits = (
-        lambda _, messages: sum(
+    client.fits = lambda _, messages: (
+        sum(
             len(n["text"])
             for n in json.loads(messages[-1]["content"])["raw_note_fragments"]
         )
         <= 18
     )
     text = "abcdefghijklmnopqrstuvwxyz0123456789"
-    review_patient_workup(
+    result = review_patient_workup(
         text, [{"name": "Imaging"}], config=config, chunk_size=50, chunk_overlap=2
     )
     seen = "".join(n["text"] for p in calls for n in p["raw_note_fragments"])
     assert all(character in seen for character in text)
     assert len(calls) > 1
+    # Retained context comes only from supplied fragments, including all splits.
+    # Model findings need not reproduce any part of the original source text.
+    assert all(e["quote"] in text for e in result["assessments"][0]["evidence"])
+    assert set(
+        "".join(e["quote"] for e in result["assessments"][0]["evidence"])
+    ) == set(text)
 
 
 def test_rejects_multiple_patients_and_bad_dates(harness):

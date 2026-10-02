@@ -1,4 +1,4 @@
-"""Serial, quote-grounded review of workup documentation in one patient's notes."""
+"""Serial workup review with code-owned original-note context."""
 
 from __future__ import annotations
 
@@ -33,6 +33,9 @@ NOTICE = (
     "Documentation review of the supplied notes only, for human review. Not documented "
     "does not mean not done. This does not establish overall guideline concordance; "
     "clinical applicability, timing, and source completeness require review."
+    " Reviewed note fragments are retained automatically as review context, including "
+    "potentially irrelevant or conflicting passages; they are not individually selected "
+    "supporting citations. The model does not generate quotes or citation IDs."
 )
 
 
@@ -60,16 +63,6 @@ def _schema(size):
                         },
                         "status": {"type": "string", "enum": list(STATUSES)},
                         "bottom_line": {"type": "string"},
-                        "evidence": {
-                            "type": "array",
-                            "maxItems": 8,
-                            "items": obj(
-                                {
-                                    "note_number": {"type": "integer", "minimum": 1},
-                                    "quote": {"type": "string", "minLength": 1},
-                                }
-                            ),
-                        },
                     }
                 ),
             }
@@ -152,7 +145,7 @@ def _pack(fragments, size):
     return packets
 
 
-def _validate(value, recommendations, previous, packet):
+def _validate(value, recommendations, previous):
     if not isinstance(value, dict) or set(value) != {"assessments"}:
         raise ValueError("Expected assessments object.")
     rows = value["assessments"]
@@ -164,7 +157,6 @@ def _validate(value, recommendations, previous, packet):
             "applicability",
             "status",
             "bottom_line",
-            "evidence",
         }:
             raise ValueError("Invalid assessment fields.")
         if row["name"] != recommendation["name"]:
@@ -173,31 +165,6 @@ def _validate(value, recommendations, previous, packet):
             raise ValueError("Invalid assessment status.")
         if not isinstance(row["bottom_line"], str) or not row["bottom_line"].strip():
             raise ValueError("Provide a bottom line.")
-        if not isinstance(row["evidence"], list) or len(row["evidence"]) > 8:
-            raise ValueError("Invalid evidence list.")
-        allowed = [(n["note_number"], n["text"]) for n in packet]
-        allowed += [(e["note_number"], e["quote"]) for e in prior["evidence"]]
-        for evidence in row["evidence"]:
-            if not isinstance(evidence, dict) or set(evidence) != {
-                "note_number",
-                "quote",
-            }:
-                raise ValueError("Invalid evidence fields.")
-            if (
-                type(evidence["note_number"]) is not int
-                or not isinstance(evidence["quote"], str)
-                or not evidence["quote"].strip()
-                or not any(
-                    evidence["note_number"] == number and evidence["quote"] in text
-                    for number, text in allowed
-                )
-            ):
-                raise ValueError("Quote is not verbatim in the cited supplied note.")
-        if (
-            row["status"] != "not_documented"
-            or row["applicability"] == "not_applicable"
-        ) and not (row["evidence"] or prior["evidence"]):
-            raise ValueError("Documented status/applicability requires evidence.")
         if row["status"] == "not_documented" and prior["status"] != "not_documented":
             raise ValueError(
                 "Later silence cannot erase a previously documented finding."
@@ -217,12 +184,15 @@ def review_patient_workup(
     population_context: str | None = None,
     progress_callback: Callable[[str], None] | None = None,
 ) -> dict:
-    """Assess each workup item against every raw-note chunk, with exact quotes.
+    """Assess each workup item against every raw-note chunk.
 
     ``recommendations`` accepts the catalog's diagnostic_workup list (name,
     conditions, category, evidence). One JSON-compatible assessment is returned
     per input item, in order, retaining that entire original recommendation.
     Uses the patient LLM's remote endpoint, vendor sampling and reasoning settings.
+    The model returns findings only, without quotes or citation IDs. Code retains
+    each reviewed fragment verbatim, with its original date/type, as review context
+    in ``evidence``; these are not individually selected supporting citations.
     Context is discovered from the endpoint unless patient.context_window is set;
     the configured output reserve is never reduced to squeeze in notes.
     No patient prompts, responses or checkpoints are written to disk.
@@ -288,7 +258,9 @@ def review_patient_workup(
             "patient", backup_config.patient, config=backup_config
         )
         backup_runtime["max_retries"] = 3
-        return resolve_structured_config(backup_runtime, cache_dir=None)[0], backup_runtime
+        return resolve_structured_config(backup_runtime, cache_dir=None)[
+            0
+        ], backup_runtime
 
     from transformers import AutoTokenizer
 
@@ -312,11 +284,12 @@ def review_patient_workup(
                 applicability="uncertain",
                 status="not_documented",
                 bottom_line="No notes reviewed yet.",
-                evidence=[],
             )
             for r in batch
         ]
         pending = list(packets)
+        reviewed = []
+        reviewed_keys = set()
         processed = 0
         while pending:
             packet = pending.pop(0)
@@ -360,29 +333,42 @@ def review_patient_workup(
                     "patient-workup",
                     messages,
                     _schema(len(batch)),
-                    lambda v: _validate(v, batch, previous, packet),
+                    lambda v: _validate(v, batch, previous),
                 )
             except EndpointError:
                 if not backup.enabled or fallback_events:
                     raise
                 client_config, runtime = backup.get(resolve_backup)
                 failed_primary_requests = client.requests
-                fallback_events.append(backup_event(
-                    primary_config, client_config, "request_or_validation_failures",
-                    backup.threshold, recommendation_start=batch_start,
-                    completed_packets=processed,
-                ))
+                fallback_events.append(
+                    backup_event(
+                        primary_config,
+                        client_config,
+                        "request_or_validation_failures",
+                        backup.threshold,
+                        recommendation_start=batch_start,
+                        completed_packets=processed,
+                    )
+                )
                 client = ReviewClient(client_config)
-                progress("Primary full-note model failed repeatedly; trying the configured backup model")
+                progress(
+                    "Primary full-note model failed repeatedly; trying the configured backup model"
+                )
                 # Recheck packing against the backup's own input/output budget.
                 pending.insert(0, packet)
                 continue
-            for row, prior in zip(value["assessments"], previous, strict=True):
-                merged = list(prior["evidence"])
-                for evidence in row["evidence"]:
-                    if evidence not in merged:
-                        merged.append(evidence)
-                row["evidence"] = merged
+            for fragment in packet:
+                key = (fragment["note_number"], fragment["text"])
+                if key not in reviewed_keys:
+                    reviewed_keys.add(key)
+                    reviewed.append(
+                        {
+                            "note_number": fragment["note_number"],
+                            "note_date": fragment["note_date"],
+                            "note_type": fragment["note_type"],
+                            "quote": fragment["text"],
+                        }
+                    )
             previous = value["assessments"]
             calls += 1
             processed += 1
@@ -391,8 +377,7 @@ def review_patient_workup(
         ):
             row["recommendation_index"] = batch_start + offset
             row["recommendation"] = copy.deepcopy(recommendation)
-            for evidence in row["evidence"]:
-                evidence["note_date"] = source[evidence["note_number"] - 1]["note_date"]
+            row["evidence"] = copy.deepcopy(reviewed)
             assessments.append(row)
     progress("Workup documentation review complete")
     return {
@@ -415,6 +400,7 @@ def review_patient_workup(
             "chunk_overlap": overlap,
             "undated_notes": sum(n["note_date"] is None for n in source),
             "scope": "all_supplied_raw_notes",
+            "evidence_selection": "automatic_reviewed_excerpts",
             "patient_summary_used": False,
             "reasoning_effort": runtime.get("reasoning_effort", "xhigh"),
             "sampling_profile": runtime.get("sampling_profile", "auto"),

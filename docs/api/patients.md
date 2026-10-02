@@ -300,10 +300,15 @@ The result contains `assessments`, `notice`, and `metadata`. Each assessment ret
 the original recommendation and its zero-based input index, plus `status`
 (`completed`, `partially_completed`, `planned`, `not_done`, `not_documented`, `unclear`),
 `applicability` (`applies`, `not_applicable`, `uncertain`), `bottom_line`, and
-`evidence` (`note_number`, code-assigned `note_date`, verbatim `quote`). Note numbers
-are one-based chronological positions. Evidence is validated against the current
-fragments or previously accepted quotes; prior evidence survives later updates.
-Quotation validation verifies provenance, not clinical interpretation.
+`evidence` (`note_number`, code-assigned `note_date`/`note_type`, verbatim `quote`).
+The LLM returns only `name`, `status`, `applicability`, and `bottom_line`; it does not
+generate quotes, note numbers or citation IDs. Code retains every reviewed original
+note fragment in `evidence`, including across packets and backup switches. Note
+numbers are one-based chronological positions. These fragments are review context,
+including potentially irrelevant or conflicting passages, rather than individually
+selected supporting citations. `metadata.evidence_selection` is
+`automatic_reviewed_excerpts`; verbatim provenance does not validate the model's
+clinical interpretation. The same distinction applies to compressed-note inputs.
 
 Uses patient model, vendor sampling and reasoning settings (xhigh by default).
 Requires one OpenAI-compatible remote endpoint with `/tokenize` and advertised
@@ -318,7 +323,8 @@ The model returns ordered natural-language names, not catalog IDs.
 
 Requests and responses stay in memory; no patient checkpoints or reasoning traces
 are returned or written. Three bounded attempts reject incomplete, malformed or
-ungrounded output. Provider and validation errors are not echoed with patient text.
+misaligned findings. Later silence cannot erase a previously documented finding.
+Provider and validation errors are not echoed with patient text.
 The configured endpoint receives raw notes and must be authorized for the input.
 
 Both this function and `review_patient_workup_with_note_search` accept

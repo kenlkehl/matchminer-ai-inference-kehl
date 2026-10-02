@@ -36,10 +36,10 @@ later events. Distinguish a note's date from an event date mentioned inside that
 Describe contradictions, historical-only testing and documentation limits in bottom_line.
 Do not infer a test was performed solely because a treatment was given or a diagnosis exists.
 
-Evidence must contain short, exact, contiguous quotes copied from the supplied raw-note
-fragments or prior accepted quotes, with the corresponding note_number. Do not paraphrase,
-join disconnected passages, invent results, or quote recommendation text as patient evidence.
-Every documented status and every not_applicable finding requires evidence. A not_documented
-finding may have an empty evidence list. Prefer the most informative quotes (up to 8 per item
-in this update). Code retains prior accepted evidence, checks quotes and assigns note dates.
-Return one object per recommendation with name, applicability, status, bottom_line, evidence.
+Return findings only. Do not generate quotes, note numbers, citation IDs, or an evidence
+field. Code automatically retains the original note fragments and their dates as reviewed
+context, including potentially irrelevant or conflicting passages. They are not individually
+selected supporting citations and do not prove that a finding is correct. Base each finding
+on explicit documentation in the supplied notes, explain relevant facts in bottom_line, and
+retain uncertainty when those notes do not support a conclusion. Do not invent results.
+Return one object per recommendation with name, applicability, status, and bottom_line.

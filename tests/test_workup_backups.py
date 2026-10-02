@@ -241,9 +241,7 @@ def test_full_note_backup_preserves_validated_prior_packet(harness, monkeypatch)
             return "invalid JSON"
         if model == "backup":
             assert payload["prior_assessments"][0]["status"] == "planned"
-            assert (
-                payload["prior_assessments"][0]["evidence"][0]["quote"] == "CT ordered."
-            )
+            assert "evidence" not in payload["prior_assessments"][0]
         return {
             "assessments": [
                 {
@@ -251,9 +249,6 @@ def test_full_note_backup_preserves_validated_prior_packet(harness, monkeypatch)
                     "status": "planned" if note["note_number"] == 1 else "completed",
                     "applicability": "uncertain",
                     "bottom_line": "Fabricated finding.",
-                    "evidence": [
-                        {"note_number": note["note_number"], "quote": note["text"]}
-                    ],
                 }
             ]
         }
@@ -271,6 +266,9 @@ def test_full_note_backup_preserves_validated_prior_packet(harness, monkeypatch)
     assert result["metadata"]["requests"] == 4
     assert discoveries == ["primary", "backup"]
     assert result["assessments"][0]["status"] == "completed"
+    assert [e["quote"] for e in result["assessments"][0]["evidence"]] == [
+        "CT ordered.", "CT completed."
+    ]
     assert [e["note_date"] for e in result["assessments"][0]["evidence"]] == [
         n["note_date"] for n in workup._notes(notes)
     ]
@@ -358,7 +356,6 @@ def test_full_note_retry_repacks_for_backup_capacity_without_losing_text(
     def handler(model, payload):
         if model == "primary":
             return "invalid JSON"
-        note = payload["raw_note_fragments"][0]
         return {
             "assessments": [
                 {
@@ -366,9 +363,6 @@ def test_full_note_retry_repacks_for_backup_capacity_without_losing_text(
                     "status": "unclear",
                     "applicability": "uncertain",
                     "bottom_line": "Fabricated review.",
-                    "evidence": [
-                        {"note_number": note["note_number"], "quote": note["text"]}
-                    ],
                 }
             ]
         }

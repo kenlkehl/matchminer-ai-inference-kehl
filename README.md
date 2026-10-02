@@ -168,6 +168,13 @@ these follow-ups, including a separate twelve-call budget per item; set
 Full-note review and patient summarization remain available. See the
 [note-search REPL guide](docs/user-guide/note-search-qa.md).
 
+Full-note `review_patient_workup` also asks for findings without model-written
+quotes or citation IDs. It retains every reviewed original note fragment and its
+date/type in code, including across serial updates and backup switches. Both
+workup methods label these excerpts as automatically retained review context,
+not individually selected supporting citations. Full-note checks still visit all
+supplied chunks and validate item order, findings, and longitudinal continuity.
+
 Both workup APIs accept an optional explicit `backup_config` and
 `max_consecutive_failures=3` (1–10). Without a backup their normal behavior is
 unchanged. The backup is resolved lazily after repeated request/validation failures;
