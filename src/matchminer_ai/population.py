@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from matchminer_ai.cancellation import check_cancelled, InferenceCancelled
+from matchminer_ai.cancellation import check_cancelled
 from matchminer_ai.matching.guidelines import _patient_frame
 from matchminer_ai.patients.workup import STATUSES, APPLICABILITY, NOTICE
 
@@ -237,15 +237,16 @@ def review_population_workup_with_colbert(
     retrieval_config=None,
     backup_config=None,
     max_consecutive_failures=3,
+    max_concurrent_requests=8,
     progress_callback=None,
 ):
     """Review every selected patient × workup item, preserving isolated evidence.
 
-    Patients run serially to bound endpoint and memory load. All expected pairs
+    Patient–question requests share one bounded concurrent queue. All expected pairs
     remain in the result, including errors; cancellation propagates and never
     publishes a partial run as complete. No implicit compression or encoding.
     """
-    from matchminer_ai.patients import review_patient_workup_with_colbert
+    from matchminer_ai.patients import review_patients_workup_with_colbert
 
     if type(top_n) is not int or not 1 <= top_n <= 100:
         raise ValueError("top_n must be from 1 to 100.")
@@ -263,50 +264,21 @@ def review_population_workup_with_colbert(
             raise ValueError(
                 "A patient index is stale or incompatible; encode this cohort again."
             )
-    progress = progress_callback or (lambda _: None)
+    results = review_patients_workup_with_colbert(
+        {pid: cohort.indexes[pid] for pid in ids},
+        recommendations,
+        config=config,
+        top_n=top_n,
+        retrieval_config=retrieval_config,
+        backup_config=backup_config,
+        max_consecutive_failures=max_consecutive_failures,
+        max_concurrent_requests=max_concurrent_requests,
+        population_context=cohort.space.get("clinical_space_summary"),
+        progress_callback=progress_callback,
+    )
     reviews = []
-    for i, pid in enumerate(ids, 1):
-        check_cancelled()
-
-        def patient_progress(message):
-            progress(f"Patient {i}/{len(ids)} · {message}")
-
-        try:
-            result = review_patient_workup_with_colbert(
-                cohort.indexes[pid],
-                recommendations,
-                config=config,
-                top_n=top_n,
-                retrieval_config=retrieval_config,
-                backup_config=backup_config,
-                max_consecutive_failures=max_consecutive_failures,
-                population_context=cohort.space.get("clinical_space_summary"),
-                progress_callback=patient_progress,
-            )
-        except InferenceCancelled:
-            raise
-        except Exception:
-            # Never expose patient/provider exception text. One failure must not
-            # disappear from the population denominator or become not_documented.
-            result = {
-                "assessments": [
-                    dict(
-                        recommendation_index=n,
-                        recommendation=copy.deepcopy(r),
-                        name=r["name"],
-                        status="error",
-                        applicability="uncertain",
-                        evidence=[],
-                        bottom_line="No validated assessment is available.",
-                        limitations=[
-                            "Patient review failed; check the endpoint/index and retry."
-                        ],
-                    )
-                    for n, r in enumerate(recommendations)
-                ],
-                "metadata": {"method": "colbert", "scope": "retrieved_excerpts"},
-                "notice": POPULATION_NOTICE,
-            }
+    for pid in ids:
+        result = results[pid]
         result["metadata"].update(note_source=cohort.index_source)
         if cohort.index_source == "compressed":
             result["metadata"].update(
@@ -318,7 +290,6 @@ def review_population_workup_with_colbert(
                 " Compressed-note excerpts may differ from originals; losslessness is unverified."
             )
         reviews.append({"patient_id": pid, "review": result})
-        progress(f"Reviewed {i}/{len(ids)} patients")
     check_cancelled()
     return replace(
         cohort,
@@ -327,6 +298,7 @@ def review_population_workup_with_colbert(
             "method": "colbert",
             "note_source": cohort.index_source,
             "top_n": top_n,
+            "max_concurrent_requests": max_concurrent_requests,
             "patient_count": len(ids),
             "space": copy.deepcopy(cohort.space),
             "aggregate": aggregate_population_workup(reviews, recommendations),

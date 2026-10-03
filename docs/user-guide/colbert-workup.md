@@ -64,6 +64,21 @@ Retrieved fragments are presented chronologically to the LLM with their source
 dates. Prompts exceeding the LLM's input capacity produce an explicit item error;
 no chunks are silently dropped and the configured output reserve is preserved.
 
+## Concurrent workup review
+
+Workup answering dispatches independent questions concurrently by default, with
+`max_concurrent_requests=8` (1–32; use 1 for sequential dispatch). Each request has
+its own client and contains one question and one patient's retrieved text. The
+public `review_patients_workup_with_colbert(indexes, recommendations, ...)` API
+accepts an ordered patient-ID-to-index dictionary and uses one shared limit over
+the whole patient × question matrix. It returns a dictionary of per-patient
+reviews in input order. Local retrieval stays bounded to one patient's questions
+at a time while answers run. Endpoint pacing, retry and explicit backup settings
+still apply. After a backup switch, requests already in flight can finish on the
+primary; each finding retains its actual answering model and backup events.
+Reports include `max_concurrent_requests` and `models_used`. Cancellation reaches
+all workers, and partial results are not returned as complete.
+
 ## Optional explicit disk save/load
 
 The encoding/review functions write no patient files. The package separately

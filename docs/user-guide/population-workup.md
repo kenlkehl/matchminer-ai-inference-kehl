@@ -37,6 +37,7 @@ active = encode_patient_cohort(active, config=retrieval, note_source="original",
                                progress_callback=print)
 active = review_population_workup_with_colbert(
     active, config=config, retrieval_config=retrieval, top_n=20,
+    max_concurrent_requests=8,
     progress_callback=print,
 )
 print(active.report["aggregate"])
@@ -69,12 +70,20 @@ Changing note source, model settings or chunking requires re-encoding; changing
 top N or the answering endpoint does not. No stage implicitly starts compression
 or encoding. Compression preserves originals but does not certify losslessness.
 
-Patients are reviewed serially. All workup questions use the established ColBERT
-reviewer, including explicit backup configuration and code-owned dated excerpts.
-Patient-level failures produce `error` for every affected item, never
-`not_documented`. Cancellation propagates rather than publishing a partial matrix.
-Progress reports preparation, chunks encoded, each patient's workup questions and
-patients completed. Errors do not contain provider/patient exception text.
+Patient–question pairs share one bounded concurrent queue (default eight,
+`max_concurrent_requests` from 1 to 32). The same limit reaches the HTTP dispatcher;
+there are no nested per-patient pools. Local retrieval prepares each patient's
+questions while LLM requests run concurrently. Each request contains one question
+and only that patient's excerpts; results retain input patient/question order even
+when responses finish out of order. Set the limit to 1 for sequential dispatch.
+The configured endpoint, sampling, pacing and retries remain in effect. An explicit
+backup switches failed and pending requests for the run; primary requests already
+in flight may finish and retain their actual model provenance. Retrieval failures
+produce `error` for that patient's items; answering failures affect their own items,
+never becoming `not_documented`. Cancellation reaches all workers rather than
+publishing a partial matrix. Progress reports completed checks, completed patients,
+requests in flight, the concurrency limit and patients retrieved. Errors do not
+contain provider/patient exception text.
 
 `aggregate_population_workup` preserves seven documentation categories (including
 error), three applicability categories, and their cross-tabulation for each item.

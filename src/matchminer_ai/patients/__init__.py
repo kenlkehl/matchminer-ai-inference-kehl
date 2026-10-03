@@ -49,7 +49,10 @@ from .raw_note_qa import (
 from .structure import structure_patient_summaries, structure_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
-from .workup_colbert import review_patient_workup_with_colbert
+from .workup_colbert import (
+    review_patient_workup_with_colbert,
+    review_patients_workup_with_colbert,
+)
 from .workup_search import review_patient_workup_with_note_search
 from .workup_search_review import WorkupSearchReviewConfig
 
@@ -227,6 +230,7 @@ __all__ = [
     "retrieve_patient_chunks_colbert",
     "save_colbert_patient_index",
     "review_patient_workup_with_colbert",
+    "review_patients_workup_with_colbert",
     "FullPatientScreenError",
     "FullPatientScreenProgress",
     "NoteCompressionError",

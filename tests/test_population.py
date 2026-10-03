@@ -177,11 +177,18 @@ def test_review_isolation_failure_counts_and_csv(encoded, monkeypatch):
             if index.patient_id == "a"
             else len(index.notes) == 1
         )
-        if index.patient_id == "b":
-            raise RuntimeError("Never expose provider or patient text")
         return {
             "assessments": [
-                finding(r, n, applies="applies" if n == 0 else "not_applicable")
+                finding(
+                    r,
+                    n,
+                    status="error" if index.patient_id == "b" else "completed",
+                    applies="uncertain"
+                    if index.patient_id == "b"
+                    else "applies"
+                    if n == 0
+                    else "not_applicable",
+                )
                 for n, r in enumerate(recommendations)
             ],
             "metadata": {"method": "colbert"},
@@ -189,7 +196,10 @@ def test_review_isolation_failure_counts_and_csv(encoded, monkeypatch):
         }
 
     monkeypatch.setattr(
-        "matchminer_ai.patients.review_patient_workup_with_colbert", review
+        "matchminer_ai.patients.review_patients_workup_with_colbert",
+        lambda indexes, recommendations, **kw: {
+            pid: review(index, recommendations, **kw) for pid, index in indexes.items()
+        },
     )
     result = review_population_workup_with_colbert(
         encoded, config=load_default_preset(), top_n=7
@@ -235,7 +245,10 @@ def test_cancellation_does_not_publish_partial_report(encoded, monkeypatch):
         token.check()
 
     monkeypatch.setattr(
-        "matchminer_ai.patients.review_patient_workup_with_colbert", review
+        "matchminer_ai.patients.review_patients_workup_with_colbert",
+        lambda indexes, recommendations, **kw: {
+            pid: review(index, recommendations, **kw) for pid, index in indexes.items()
+        },
     )
     with cancellation_scope(token), pytest.raises(InferenceCancelled):
         review_population_workup_with_colbert(encoded, config=load_default_preset())
@@ -244,7 +257,7 @@ def test_cancellation_does_not_publish_partial_report(encoded, monkeypatch):
 
 def test_wrong_index_source_or_chunking_rejected_before_review(encoded, monkeypatch):
     monkeypatch.setattr(
-        "matchminer_ai.patients.review_patient_workup_with_colbert",
+        "matchminer_ai.patients.review_patients_workup_with_colbert",
         lambda *a, **kw: pytest.fail("Must not review"),
     )
     with pytest.raises(ValueError, match="stale"):
