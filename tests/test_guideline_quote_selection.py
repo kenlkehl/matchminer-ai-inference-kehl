@@ -188,10 +188,12 @@ def test_exhausted_strategy_reuses_valid_raw_response_before_refusing_new_calls(
     )
 
 
+@pytest.mark.parametrize("rejected", ["Synthetic test Z", "and", "with an"])
 def test_pipeline_resumes_exhausted_copy_jobs_selects_and_audits_literal_passages(
     setup,
     tmp_path,
     monkeypatch,
+    rejected,
 ):
     import matchminer_ai.trials._guideline_quote_repair as repair
 
@@ -237,7 +239,7 @@ def test_pipeline_resumes_exhausted_copy_jobs_selects_and_audits_literal_passage
         else:
             value = quoted_state()
             value["diagnostic_workup"][0]["evidence"][0]["source_text"] = (
-                "Synthetic test Z"
+                rejected
             )
         return response(value)
 
