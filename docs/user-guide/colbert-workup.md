@@ -92,7 +92,8 @@ vector checksums, and span validation detect stale or corrupted indexes.
 At retrieval, the loaded model/configuration fingerprint must match the index.
 Changing model weights, tokenizer, chunking, query capacity, or encoder version
 requires re-encoding. Batch size and device can change without invalidating it.
-The demo application does **not** invoke these persistence APIs.
+The demo patient view keeps its index in memory. The population view invokes
+these persistence APIs only for explicit cohort ZIP export/import.
 
 ## Model loading and compatibility
 

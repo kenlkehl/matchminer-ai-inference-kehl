@@ -351,7 +351,7 @@ def retrieve_patient_chunks_colbert(
 
 
 def save_colbert_patient_index(index: ColBERTPatientIndex, path) -> Path:
-    """Explicitly save sensitive text + vectors locally; never called by the demo.
+    """Explicitly save sensitive text + vectors locally, including cohort exports.
 
     Atomic, owner-readable NPZ storage, with JSON metadata and no pickle objects.
     The caller controls the destination and its retention policy.

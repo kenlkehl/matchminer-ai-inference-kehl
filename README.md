@@ -2,6 +2,16 @@
 
 ## Overview
 
+Population workup workflows are available through
+`matching.retrieve_guideline_patients` and `matchminer_ai.population`. Supply
+patient summaries and source notes, select a finalized guideline space, retrieve
+and TrialChecker-score candidates, then explicitly compress (optional), encode,
+and review the active cohort with ColBERT. Results preserve patient-level findings,
+applicability, failures, source evidence and aggregate denominators. Explicit ZIP
+save/load includes original notes, compression, indexes and completed assessments;
+no sample population or sampling policy is built into the package. See the
+[population guide](docs/user-guide/population-workup.md).
+
 LLM stages with `sampling_profile: auto` recognize Qwen 3.5 model names, including
 `Qwen/Qwen3.5-4B`, and apply Alibaba's
 [general-task sampling defaults](https://huggingface.co/Qwen/Qwen3.5-4B#best-practices).
