@@ -168,6 +168,15 @@ these follow-ups, including a separate twelve-call budget per item; set
 Full-note review and patient summarization remain available. See the
 [note-search REPL guide](docs/user-guide/note-search-qa.md).
 
+`patients.encode_patient_notes_colbert` batches token-level encoding across a
+cohort and returns separate patient indexes. `review_patient_workup_with_colbert`
+adds an opt-in third workup reviewer: GTE-ModernColBERT-v1 retrieves each question's
+top 20 patient chunks (64 tokens each by default), then the configured LLM answers
+from those excerpts. Indexes remain in memory unless callers explicitly use the
+package's save/load APIs. Source dates/spans, model compatibility, and explicit
+answer-model backups are retained. This reviews retrieved excerpts and may miss
+relevant documentation. See the [ColBERT workup guide](docs/user-guide/colbert-workup.md).
+
 Full-note `review_patient_workup` also asks for findings without model-written
 quotes or citation IDs. It retains every reviewed original note fragment and its
 date/type in code, including across serial updates and backup switches. Both

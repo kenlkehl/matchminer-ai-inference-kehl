@@ -24,6 +24,7 @@ nav:
       - Choosing an Inference Setup: user-guide/local-vs-remote.md
       - Guideline extraction: user-guide/guideline-extraction.md
       - Note-search question answering: user-guide/note-search-qa.md
+      - ColBERT workup review: user-guide/colbert-workup.md
   - Reference:
       - Configuration: reference/configuration.md
       - QC Metrics: reference/qc-metrics.md
