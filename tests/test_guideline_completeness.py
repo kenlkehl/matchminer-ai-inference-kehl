@@ -54,7 +54,7 @@ def test_drop_is_rejected_and_review_never_receives_internal_identifiers():
         def fits(self, messages):
             return True
 
-        def complete(self, job, messages, schema, validator):
+        def complete(self, job, messages, schema, validator, **kwargs):
             rendered = json.dumps(messages)
             assert "candidate_id" not in rendered
             assert "opaque" not in rendered
@@ -130,6 +130,103 @@ def test_review_must_account_for_every_input_and_reference_existing_populations(
         validate_reviews(value, inputs, inputs)
     value["reviews"][1]["status"] = "missing"
     validate_reviews(value, inputs, inputs)
+
+
+@pytest.mark.parametrize("failure", ["name", "count", "matched_name"])
+@pytest.mark.parametrize("missing", [False, True])
+def test_exhausted_review_bookkeeping_splits_without_losing_judgments(
+    tmp_path, monkeypatch, failure, missing,
+):
+    from matchminer_ai.trials._guideline_audit import audit_accepted_response
+
+    inputs = populations()
+    # Same clinical names can have different definitions; no name-keyed remapping.
+    inputs[1]["name"] = inputs[0]["name"]
+    proposed = copy.deepcopy(inputs)
+    for row in proposed:
+        row["name"] = "Proposed " + row["name"]
+    client = Client(StructuredConfig(
+        model="synthetic", tokenizer_mode="bytes", attempts=2,
+        max_concurrent_requests=2,
+    ), tmp_path / "cache")
+    calls = []
+
+    def respond(endpoint, body, **kwargs):
+        payload = json.loads(body["messages"][1]["content"])
+        original = payload["input_populations"]
+        calls.append(copy.deepcopy(original))
+        rows = [{"input_name": row["name"], "status": "represented",
+                 "matched_population_names": [proposed[0]["name"]],
+                 "reason": row["space"]["prior_treatment_required"]}
+                for row in original]
+        if len(original) > 1:
+            if failure == "name":
+                rows[0]["input_name"] = "Abbreviated fictional wording"
+            elif failure == "matched_name":
+                rows[0]["matched_population_names"] = ["Abbreviated proposed wording"]
+            else:
+                rows.pop()
+        elif missing:
+            rows[0].update(status="missing", matched_population_names=[])
+        return {"choices": [{"finish_reason": "stop", "message": {
+            "content": json.dumps({"reviews": rows}),
+        }}]}
+
+    monkeypatch.setattr(client, "_http", respond)
+    monkeypatch.setattr("matchminer_ai.llm.structured.time.sleep", lambda _: None)
+    report = review_coverage(client, inputs, proposed)
+    if missing:
+        with pytest.raises(CoverageError, match="2 of 2"):
+            require_coverage(report)
+    else:
+        require_coverage(report)
+    assert [r["reason"] for r in report["reviews"]] == [
+        row["space"]["prior_treatment_required"] for row in inputs
+    ]
+    assert [b["input_positions"] for b in report["review_batches"]] == [[0], [1]]
+    assert [len(c) for c in calls] == [2, 2, 1, 1]
+    accepted = set()
+    for path in (tmp_path / "cache").glob("*/accepted.json"):
+        value = read_json(path)
+        audit_accepted_response(path.parent, value)
+        accepted.add((value["job"], digest(value["result"])))
+    if missing:
+        with pytest.raises(CoverageError, match="2 of 2"):
+            validate_report(report, inputs, proposed, accepted)
+    else:
+        validate_report(report, inputs, proposed, accepted)
+    assert review_coverage(client, inputs, proposed) == report
+    assert len(calls) == 4  # Exhausted parent and accepted children are reused.
+    altered = copy.deepcopy(report)
+    altered["reviews"][1]["reason"] = "Invented clinical judgment"
+    with pytest.raises(ValueError, match="accepted review"):
+        validate_report(altered, inputs, proposed, accepted)
+
+
+@pytest.mark.parametrize("count,error", [
+    (2, "saved attempts exhausted: HTTP 503"),  # Never split a transport failure.
+    (1, "exhausted: Coverage reviews must retain input clinical names in input order"),
+    (2, "exhausted: Catalog omitted or broadened 1 of 2 input populations"),
+])
+def test_review_transport_or_singleton_failure_remains_terminal(count, error):
+    from matchminer_ai.llm.structured import EndpointError
+
+    inputs = populations()[:count]
+    proposed = copy.deepcopy(inputs)
+    for row in proposed:
+        row["name"] = "Other " + row["name"]
+
+    class Reviewer:
+        config = SimpleNamespace(max_concurrent_requests=1)
+
+        def fits(self, messages):
+            return True
+
+        def complete(self, *args, **kwargs):
+            raise EndpointError(error)
+
+    with pytest.raises(EndpointError, match="exhausted"):
+        review_coverage(Reviewer(), inputs, proposed)
 
 
 def test_cached_single_state_cannot_bypass_guard_and_full_catalog_is_retried(tmp_path, monkeypatch):

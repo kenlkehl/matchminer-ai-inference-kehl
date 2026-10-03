@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 
 from matchminer_ai._storage import digest
+from matchminer_ai.llm.structured import EndpointError
 
 from ._guideline_context import ContextBudgetError
 from ._guideline_schema import STRING, STRINGS, arr, format_space, obj, validate_shape
@@ -47,12 +48,23 @@ def validate_reviews(value, inputs, states):
     if len(value["reviews"]) != len(inputs):
         raise ValueError("Coverage review must include every input population exactly once")
     known = {state["name"] for state in states}
-    for item, source in zip(value["reviews"], inputs):
+    for position, (item, source) in enumerate(zip(value["reviews"], inputs), 1):
         if item["input_name"] != source["name"]:
-            raise ValueError("Coverage reviews must retain input clinical names in input order")
+            raise ValueError(
+                "Coverage reviews must retain input clinical names in input order. "
+                f"Review {position}: copy input_name exactly as "
+                f"{json.dumps(source['name'], ensure_ascii=False)}; received "
+                f"{json.dumps(item['input_name'], ensure_ascii=False)}. "
+                "Do not abbreviate, expand, or rewrite the input name."
+            )
         matched = item["matched_population_names"]
         if set(matched) - known:
-            raise ValueError("Coverage review names a population absent from the proposed catalog")
+            raise ValueError(
+                "Coverage review names a population absent from the proposed catalog: "
+                + json.dumps(sorted(set(matched) - known), ensure_ascii=False)
+                + ". Copy matched_population_names exactly from proposed_catalog names; "
+                "do not abbreviate, expand, or rewrite them."
+            )
         if item["status"] == "represented" and not matched:
             raise ValueError("A represented input must name its matching proposed population")
 
@@ -117,8 +129,6 @@ def review_coverage(client, candidates, states):
         else:
             pending.append((index, item))
 
-    jobs = []
-
     def pack(items):
         messages = [
             {"role": "system", "content": TASK},
@@ -132,33 +142,51 @@ def review_coverage(client, candidates, states):
             if len(items) == 1:
                 raise ContextBudgetError("Complete catalog exceeds population-coverage context budget")
             middle = len(items) // 2
-            pack(items[:middle])
-            pack(items[middle:])
-        else:
-            jobs.append((items, messages))
+            return pack(items[:middle]) + pack(items[middle:])
+        return [(items, messages)]
 
+    jobs = []
     for start in range(0, len(pending), MAX_INPUTS_PER_REVIEW):
-        pack(pending[start:start + MAX_INPUTS_PER_REVIEW])
+        jobs.extend(pack(pending[start:start + MAX_INPUTS_PER_REVIEW]))
 
     def review(packed):
         items, messages = packed
         job = "catalog-coverage-" + digest(messages)[:16]
-        value = client.complete(
-            job, messages, COVERAGE,
-            lambda v: validate_reviews(v, [item for _, item in items], proposed),
-        )
-        return items, value, {
+        try:
+            value = client.complete(
+                job, messages, COVERAGE,
+                lambda v: validate_reviews(v, [item for _, item in items], proposed),
+                reuse_exhausted=len(items) > 1,
+            )
+        except EndpointError as error:
+            # Retry bookkeeping failures with smaller complete clinical inputs.
+            # Never infer a missing judgment, rename model output, split a
+            # singleton, or turn a transport/clinical coverage failure into success.
+            message = str(error)
+            if len(items) <= 1 or "exhausted" not in message or not any(
+                marker in message for marker in (
+                    "Coverage reviews must retain input clinical names in input order",
+                    "Coverage review must include every input population exactly once",
+                    "Coverage review names a population absent from the proposed catalog",
+                )
+            ):
+                raise
+            middle = len(items) // 2
+            return [result for child in pack(items[:middle]) + pack(items[middle:])
+                    for result in review(child)]
+        return [(items, value, {
             "input_positions": [index for index, _ in items],
             "job": job, "result_sha256": digest(value),
-        }
+        })]
 
     review_batches = []
     if jobs:
         with ThreadPoolExecutor(max_workers=min(len(jobs), client.config.max_concurrent_requests)) as pool:
-            for items, result, receipt in pool.map(review, jobs):
-                review_batches.append(receipt)
-                for (index, _), row in zip(items, result["reviews"]):
-                    reviews[index] = row
+            for completed in pool.map(review, jobs):
+                for items, result, receipt in completed:
+                    review_batches.append(receipt)
+                    for (index, _), row in zip(items, result["reviews"]):
+                        reviews[index] = row
     report = {
         "version": VERSION,
         "input_sha256": digest(inputs),

@@ -1255,7 +1255,7 @@ class CanonicalBatchTests(LibraryFixture, unittest.TestCase):
                 raise ContextBudgetError("Synthetic source budget exceeded")
             return build_call(client, guideline, members, context_chars)
 
-        def complete(job, messages, schema, validator, repair_handler=None):
+        def complete(job, messages, schema, validator, repair_handler=None, **kwargs):
             rendered = json.dumps(messages)
             for forbidden in (
                 "opaque-secret",
