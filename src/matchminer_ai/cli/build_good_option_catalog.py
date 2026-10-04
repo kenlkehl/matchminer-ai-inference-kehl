@@ -88,7 +88,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", default="", help="Config YAML; default preset.")
     parser.add_argument("--max-concurrent-requests", type=int, default=64)
-    parser.add_argument("--llm-request-timeout", type=float, default=7200.0)
+    parser.add_argument(
+        "--llm-request-timeout",
+        type=float,
+        default=86400.0,
+        help=(
+            "Seconds per LLM request, including time queued on the server. "
+            "Multi-pass syntheses on one busy server exceeded 7,200 s and were "
+            "silently abandoned and resent, so the default is 24 hours."
+        ),
+    )
     parser.add_argument(
         "--llm-batch-size",
         type=int,

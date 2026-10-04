@@ -5,6 +5,7 @@ import pytest
 
 from matchminer_ai import load_default_preset
 from matchminer_ai.cli.build_good_option_catalog import (
+    build_parser,
     catalog_llm_sections,
     read_nct_ids,
 )
@@ -194,3 +195,10 @@ def test_discover_served_context_tokens_reads_vllm_max_model_len(
     monkeypatch.setattr(model_profiles.httpx, "get", fake_get)
     assert model_profiles.discover_served_context_tokens("vllm:8000") == 131072
     assert model_profiles.discover_served_context_tokens("other:8000") is None
+
+
+def test_catalog_cli_request_timeout_defaults_to_one_day():
+    # The timeout includes server queue time; 7,200 s abandoned and resent
+    # long multi-pass syntheses on a single busy server.
+    args = build_parser().parse_args(["--output", "catalog"])
+    assert args.llm_request_timeout == 86400.0

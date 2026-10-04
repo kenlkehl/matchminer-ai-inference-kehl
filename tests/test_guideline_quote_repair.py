@@ -378,7 +378,7 @@ def test_unsupported_fixed_assertion_returns_to_generation_but_transport_does_no
         assert not list((tmp_path / "quote_repairs").glob("*.json"))
 
 
-@pytest.mark.parametrize("issue", ["components", "category", "no_candidates"])
+@pytest.mark.parametrize("issue", ["components", "category", "biomarker", "no_candidates"])
 def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
     setup, tmp_path, monkeypatch, issue,
 ):
@@ -392,9 +392,14 @@ def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
     def no_support(*args, **kwargs):
         if issue == "no_candidates":
             raise EndpointError("No literal source passages available for citation repair")
+        diagnostic = {
+            "components": "synthetic wrong phase",
+            "category": "category annotation belongs to adjacent option",
+            "biomarker": "synthetic option requires marker beta; the draft falsely attributes marker alpha",
+        }[issue]
         raise EndpointError(
             "quote-select: exhausted 6 attempts: No supporting literal passage selected: "
-            + ("synthetic wrong phase" if issue == "components" else "category annotation belongs to adjacent option")
+            + diagnostic
         )
 
     def respond(self, endpoint, body, **kwargs):
@@ -414,10 +419,15 @@ def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
                 value["diagnostic_workup"][0]["evidence"][0]["source_text"] = "Synthetic unsupported components from another phase"
                 if issue == "category":
                     value["diagnostic_workup"][0]["category"] = "Category 2B"
+                elif issue == "biomarker":
+                    value["diagnostic_workup"][0]["conditions"] = "Synthetic marker alpha-positive"
             else:
                 assert "Citation-only repair found no supporting passage" in body["messages"][-1]["content"]
                 assert "exact unchanged canonical space" in body["messages"][-1]["content"]
                 assert "attached to an adjacent option" in body["messages"][-1]["content"]
+                if issue == "biomarker":
+                    assert "marker beta" in body["messages"][-1]["content"]
+                    assert "marker alpha" in body["messages"][-1]["content"]
                 assert body["max_tokens"] == 100000
         return response(value)
 
@@ -427,6 +437,7 @@ def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
     assert len(detail_calls) == 2
     assert read_json(output / "details.json")["records"]["detail-0001"]["space"] == quoted_state()["space"]
     assert read_json(output / "details.json")["records"]["detail-0001"]["diagnostic_workup"][0]["category"] == quoted_state()["diagnostic_workup"][0]["category"]
+    assert read_json(output / "details.json")["records"]["detail-0001"]["diagnostic_workup"][0]["conditions"] == quoted_state()["diagnostic_workup"][0]["conditions"]
     assert audit_catalog(guideline, output)["status"] == "passed"
     monkeypatch.setattr(Client, "_http", lambda *a, **k: pytest.fail("No regeneration on successful resume"))
     run_guideline(guideline, output, client.config, workers=1)

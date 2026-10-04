@@ -20,7 +20,8 @@ from test_guideline_extraction import TEXT, make_library
 @pytest.mark.parametrize("saved_failure", [False, True])
 @pytest.mark.parametrize("failure_kind", [
     "coverage", "restriction", "histology", "diagnostic_criterion",
-    "prior_exclusion", "biomarker_exclusion", "grouping", "blank", "nonexistent",
+    "prior_exclusion", "biomarker_exclusion", "grouping", "treatment_prose",
+    "blank", "nonexistent",
 ])
 def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
     tmp_path, monkeypatch, saved_failure, failure_kind,
@@ -102,6 +103,14 @@ def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
                 value["states"][0]["space"]["biomarkers_excluded"] = "NA"
             elif len(descriptions) > 1 and failure_kind == "grouping":
                 value["states"][0]["space"]["cancer_burden_allowed"] = "(Fictional burden A OR Fictional burden B AND Fictional burden C)"
+            elif len(descriptions) > 1 and failure_kind == "treatment_prose":
+                # Lowercase alternatives in explanatory treatment prose still
+                # require grouping; an exhausted rewrite must split without
+                # accepting the malformed restriction or repeating its parent.
+                value["states"][0]["space"]["cancer_burden_allowed"] = (
+                    "Localized fictional cancer AND considered for focal or "
+                    "whole-region fictional therapy"
+                )
             elif len(descriptions) > 1 and failure_kind != "coverage":
                 value["states"][0]["evidence"] = [{
                     "page_id": "p0002", "line_ids": [2 if failure_kind == "blank" else 99],
@@ -122,6 +131,7 @@ def test_failed_batch_splits_without_repeating_successful_or_exhausted_batches(
                     "prior_exclusion": "Catalog omitted or broadened 1 of 2 input populations: prior adjuvant treatment exclusion lost",
                     "biomarker_exclusion": "Catalog omitted or broadened 1 of 2 input populations: biomarker exclusion lost",
                     "grouping": "cancer_burden_allowed mixes AND and OR at the same parenthesis level",
+                    "treatment_prose": "cancer_burden_allowed mixes AND and OR at the same parenthesis level. Rejected field text: 'Localized fictional cancer AND considered for focal or whole-region fictional therapy'. Keep only population criteria in this field",
                     "blank": "p0002: evidence may not consist entirely of blank lines",
                     "nonexistent": "p0002: nonexistent source line IDs [99]; maximum is 3",
                 }[failure_kind],
