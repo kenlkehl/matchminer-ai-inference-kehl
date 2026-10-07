@@ -19,7 +19,11 @@ from .llm_checks import score_match_quality_with_llm
 from .match import generate_candidate_matches
 from .rerank import interpret_match_quality, score_match_quality
 from .guidelines import retrieve_guideline_considerations
-from .guideline_patients import retrieve_guideline_patients
+from .guideline_patients import (
+    PatientEmbeddings,
+    embed_guideline_patients,
+    retrieve_guideline_patients,
+)
 from .guideline_report import write_guideline_considerations_report
 
 __all__ = [
@@ -41,6 +45,8 @@ __all__ = [
     "score_match_quality_with_llm",
     "retrieve_guideline_considerations",
     "retrieve_guideline_patients",
+    "PatientEmbeddings",
+    "embed_guideline_patients",
     "write_guideline_considerations_report",
 ]
 

@@ -26,6 +26,28 @@ RETRY_ONLY_PROMPT_FILES = (
 )
 
 
+def compact_excerpt_diagnostic(error):
+    """Factor repeated quote errors without dropping names, positions or diagnostics."""
+    prefix = "Correct every invalid excerpt in the draft:\n"
+    if not error.startswith(prefix):
+        return error
+    grouped = {}
+    for line in error[len(prefix):].splitlines():
+        match = re.fullmatch(r"(.+) excerpt ([1-9]\d*): (.+)", line)
+        if match is None:
+            # Unrecognized diagnostics stay intact rather than being summarized.
+            return error
+        name, number, diagnostic = match.groups()
+        grouped.setdefault(diagnostic, {}).setdefault(name, []).append(int(number))
+    if not grouped:
+        return error
+    return prefix + (
+        "Identical diagnostics are grouped below by exact assertion name and excerpt "
+        "numbers. Every rejected excerpt remains listed.\n"
+        + json.dumps(grouped, ensure_ascii=False)
+    )
+
+
 def clinical_content(value):
     """Retain every field except those citation-only repair may replace."""
     if isinstance(value, dict):
@@ -150,6 +172,18 @@ def read_chat_stream(lines, *, unique_spaces=False, unique_options=False):
 
 
 class Client(StructuredClient):
+    def retry_messages(self, messages, schema, errors, draft):
+        result = super().retry_messages(messages, schema, errors, draft)
+        if schema != QUOTED_DETAIL or self.fits(result, use_safety_margin=True):
+            return result
+        # Near-capacity detail contexts can have dozens of identical quote
+        # diagnostics. Factor only that repetition, preserving every original
+        # source message, clinical assertion and other validation finding.
+        compacted = [compact_excerpt_diagnostic(error) for error in errors]
+        if compacted == list(errors):
+            return result
+        return super().retry_messages(messages, schema, compacted, draft)
+
     def normalize_result(self, value):
         return normalize_evidence_lists(value)
 

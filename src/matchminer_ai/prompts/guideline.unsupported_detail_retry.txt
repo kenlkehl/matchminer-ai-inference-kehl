@@ -2,4 +2,6 @@ The fixed draft assertion could not be grounded by citation-only repair. Recheck
 
 Review the recommendation category and option-specific conditions as part of the assertion. A category annotation or biomarker condition attached to an adjacent option is not evidence for this option. Use only the option's supported annotation or an explicitly applicable source default; otherwise retain the category uncertainty. Do not infer a new restriction or change the canonical population to make a citation fit.
 
+Check each condition against the branch for this exact population. A testing trigger in another histologic subtype's pathway does not establish that trigger here, even when both pathways mention the same test. A drug listed for metastatic therapy does not establish its use in a neoadjuvant branch. Shared words or page proximity cannot transfer conditions or options between branches; use explicit source support and retain unresolved applicability as uncertainty.
+
 Preserve other supported options. Do not silently drop an unresolved recommendation, invent evidence, remove required citations or change the canonical population. Explicitly record any unresolved source uncertainty. Return the complete revised JSON with exact quotations; all original source, field, immutable-population and provenance checks still apply.

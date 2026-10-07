@@ -73,7 +73,11 @@ def literal_choices(pages, assertion, limit=32):
                 if " ".join(rejected.split()) in " ".join(text.split()):
                     score += 10
                 options = [text, line.strip()]
-                for radius in (1, 2):
+                # Repeated table blocks can have several identical neighboring
+                # rows. Keep both occurrences selectable by adding bounded,
+                # contiguous original context until the excerpt is unique.
+                # The model still decides whether its branch supports the claim.
+                for radius in (1, 2, 4, 8, 10):
                     options.extend(
                         [
                             "".join(lines[max(0, i - radius) : i + 1]).strip(),

@@ -9,7 +9,9 @@ import pytest
 from matchminer_ai._storage import atomic_json, digest, read_json
 from matchminer_ai.llm.structured import EndpointError, StructuredConfig
 from matchminer_ai.trials._guideline_audit import audit_catalog
-from matchminer_ai.trials._guideline_generation import Client, clinical_content
+from matchminer_ai.trials._guideline_generation import (
+    Client, clinical_content, compact_excerpt_diagnostic,
+)
 from matchminer_ai.trials._guideline_pipeline import run_guideline
 from matchminer_ai.trials._guideline_quote_repair import (
     PROMPT_FILES,
@@ -44,6 +46,148 @@ def response(value):
             }
         ]
     }
+
+
+def test_quote_diagnostics_factor_losslessly_and_leave_unknown_formats_intact():
+    prefix = "Correct every invalid excerpt in the draft:\n"
+    diagnostic = "p0002: excerpt occurs twice; include surrounding words"
+    original = prefix + "\n".join([
+        f"Fictional option alpha excerpt 1: {diagnostic}",
+        f"Fictional option beta excerpt 2: {diagnostic}",
+        f"Fictional option alpha excerpt 3: {diagnostic}",
+        f"Fictional option alpha excerpt 3: {diagnostic}",
+        "Fictional option gamma excerpt 4: Unknown source page p9999",
+    ])
+    factored = compact_excerpt_diagnostic(original)
+    grouped = json.loads(factored.split("\n", 2)[2])
+    assert grouped == {
+        diagnostic: {"Fictional option alpha": [1, 3, 3], "Fictional option beta": [2]},
+        "Unknown source page p9999": {"Fictional option gamma": [4]},
+    }
+    for unknown in ("Different validation error", prefix, prefix + "Unrecognized line"):
+        assert compact_excerpt_diagnostic(unknown) == unknown
+
+
+@pytest.mark.parametrize("saved_failure", [False, True])
+def test_near_capacity_retry_preserves_all_sources_and_quote_findings(
+    setup, tmp_path, monkeypatch, saved_failure,
+):
+    from matchminer_ai.trials._guideline_quotes import QUOTED_DETAIL
+
+    guideline, base = setup
+    good = quoted_state()
+    bad = copy.deepcopy(good)
+    bad["diagnostic_workup"][0]["evidence"] += [
+        {"page_id": "p0002", "source_text": "Absent fictional quotation"}
+        for _ in range(60)
+    ]
+
+    def validate(value):
+        assert value["space"] == good["space"]
+        materialize_quoted_state(value, guideline.pages)
+
+    with pytest.raises(ValueError) as invalid:
+        validate(bad)
+    raw_error = str(invalid.value)
+    expected_groups = json.loads(compact_excerpt_diagnostic(raw_error).split("\n", 2)[2])
+    semantic_error = (
+        "Citation-only repair found no supporting passage for the fixed draft assertion. "
+        "Synthetic option conditions refer to another phase; keep the original population."
+    )
+    errors = [raw_error, semantic_error] if saved_failure else [raw_error]
+    compact_feedback = base.retry_feedback_history(
+        QUOTED_DETAIL, [compact_excerpt_diagnostic(e) for e in errors],
+    )
+    # Match the production context and completion reserve, using deterministic
+    # byte accounting for this entirely fictional near-capacity fixture.
+    content_size = min(
+        base.prompt_budget - 128,
+        base.config.context_window - base.config.max_tokens - len(compact_feedback.encode()) - 1024,
+    )
+    content = "Complete supplied fictional source. "
+    messages = [{"role": "user", "content": content + "x" * (content_size - len(content))}]
+    assert base.fits(messages)
+    assert not base.fits(messages + [{
+        "role": "user", "content": base.retry_feedback_history(QUOTED_DETAIL, errors),
+    }], use_safety_margin=True)
+
+    calls = []
+
+    def generate(endpoint, body, **kwargs):
+        calls.append(copy.deepcopy(body))
+        if len(calls) == 1:
+            return response(bad)
+        assert body["messages"][:-1] == messages
+        feedback = body["messages"][-1]["content"]
+        assert "Every rejected excerpt remains listed" in feedback
+        assert good["diagnostic_workup"][0]["name"] in feedback
+        groups, _ = json.JSONDecoder().raw_decode(
+            feedback.split("Every rejected excerpt remains listed.\n", 1)[1],
+        )
+        assert groups == expected_groups
+        assert list(groups.values())[0][good["diagnostic_workup"][0]["name"]] == list(range(2, 62))
+        if saved_failure:
+            assert semantic_error in feedback
+            assert "Do not silently drop" in feedback
+        assert body["max_tokens"] == 100000
+        assert base.fits(body["messages"], use_safety_margin=True)
+        return response(good)
+
+    monkeypatch.setattr(base, "_http", generate)
+    raw_attempt = None
+    if saved_failure:
+        base.config = replace(base.config, attempts=1)
+        with pytest.raises(EndpointError):
+            base.complete("near-capacity", messages, QUOTED_DETAIL, validate)
+        path = next(base.cache_dir.glob("*/attempt-1.json"))
+        raw_attempt = path.read_bytes()
+        base = Client(replace(base.config, attempts=2), base.cache_dir)
+        monkeypatch.setattr(base, "_http", generate)
+
+    def unsupported(value, error):
+        raise ValueError(semantic_error)
+
+    assert base.complete(
+        "near-capacity", messages, QUOTED_DETAIL, validate,
+        repair_handler=unsupported if saved_failure else None,
+    ) == good
+    assert len(calls) == 2
+    if raw_attempt is not None:
+        assert path.read_bytes() == raw_attempt
+    monkeypatch.setattr(base, "_http", lambda *a, **k: pytest.fail("Accepted resume must not generate"))
+    assert base.complete("near-capacity", messages, QUOTED_DETAIL, validate) == good
+
+
+@pytest.mark.parametrize("recognized", [False, True])
+def test_uncompressible_feedback_stays_failed_without_source_or_reserve_changes(
+    setup, monkeypatch, recognized,
+):
+    from matchminer_ai.trials._guideline_quotes import QUOTED_DETAIL
+
+    _, client = setup
+    detail = quoted_state()
+    messages = [{"role": "user", "content": "Complete fictional source and fixed population."}]
+    diagnostic = "Unique synthetic constraint remains unsupported. " * 6000
+    if recognized:
+        diagnostic = "Correct every invalid excerpt in the draft:\nFictional option excerpt 1: " + diagnostic
+    calls = []
+
+    def generate(endpoint, body, **kwargs):
+        calls.append(body)
+        assert body["messages"] == messages
+        assert body["max_tokens"] == 100000
+        return response(detail)
+
+    def reject(value):
+        raise ValueError(diagnostic)
+
+    monkeypatch.setattr(client, "_http", generate)
+    with pytest.raises(EndpointError, match="Retry prompt exceeds input budget"):
+        client.complete("uncompressible", messages, QUOTED_DETAIL, reject)
+    assert len(calls) == 1
+    assert not list(client.cache_dir.glob("*/accepted.json"))
+    failure = next(client.cache_dir.glob("*/failure-1.json"))
+    assert json.loads(failure.read_text())["error"] == diagnostic
 
 
 @pytest.fixture
@@ -378,9 +522,13 @@ def test_unsupported_fixed_assertion_returns_to_generation_but_transport_does_no
         assert not list((tmp_path / "quote_repairs").glob("*.json"))
 
 
-@pytest.mark.parametrize("issue", ["components", "category", "biomarker", "no_candidates"])
+@pytest.mark.parametrize("saved_failure", [False, True])
+@pytest.mark.parametrize("issue", [
+    "components", "category", "biomarker", "no_candidates",
+    "histology_trigger", "treatment_branch",
+])
 def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
-    setup, tmp_path, monkeypatch, issue,
+    setup, tmp_path, monkeypatch, issue, saved_failure,
 ):
     import matchminer_ai.trials._guideline_quote_repair as repair
     from matchminer_ai.trials._guideline_quotes import QUOTED_DETAIL
@@ -388,14 +536,20 @@ def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
     guideline, client = setup
     output = tmp_path / "catalog"
     detail_calls = []
+    interrupted_repair = saved_failure
 
     def no_support(*args, **kwargs):
+        if interrupted_repair:
+            # Reproduce a saved terminal copy-only repair from an older worker.
+            raise EndpointError("citation repair exhausted 6 attempts: HTTP 503")
         if issue == "no_candidates":
             raise EndpointError("No literal source passages available for citation repair")
         diagnostic = {
             "components": "synthetic wrong phase",
             "category": "category annotation belongs to adjacent option",
             "biomarker": "synthetic option requires marker beta; the draft falsely attributes marker alpha",
+            "histology_trigger": "synthetic test trigger appears only in subtype beta; the fixed population is subtype alpha",
+            "treatment_branch": "synthetic drug appears only in the metastatic branch, not the fixed neoadjuvant branch",
         }[issue]
         raise EndpointError(
             "quote-select: exhausted 6 attempts: No supporting literal passage selected: "
@@ -421,19 +575,37 @@ def test_pipeline_regenerates_unsupported_detail_and_audits_original_population(
                     value["diagnostic_workup"][0]["category"] = "Category 2B"
                 elif issue == "biomarker":
                     value["diagnostic_workup"][0]["conditions"] = "Synthetic marker alpha-positive"
+                elif issue in ("histology_trigger", "treatment_branch"):
+                    value["diagnostic_workup"][0]["conditions"] = "Synthetic condition from another branch"
             else:
                 assert "Citation-only repair found no supporting passage" in body["messages"][-1]["content"]
                 assert "exact unchanged canonical space" in body["messages"][-1]["content"]
                 assert "attached to an adjacent option" in body["messages"][-1]["content"]
+                assert "branch for this exact population" in body["messages"][-1]["content"]
                 if issue == "biomarker":
                     assert "marker beta" in body["messages"][-1]["content"]
                     assert "marker alpha" in body["messages"][-1]["content"]
+                elif issue == "histology_trigger":
+                    assert "subtype beta" in body["messages"][-1]["content"]
+                    assert "subtype alpha" in body["messages"][-1]["content"]
+                elif issue == "treatment_branch":
+                    assert "metastatic branch" in body["messages"][-1]["content"]
+                    assert "neoadjuvant branch" in body["messages"][-1]["content"]
+                assert body["messages"][:-2] == detail_calls[0]["messages"]
                 assert body["max_tokens"] == 100000
         return response(value)
 
     monkeypatch.setattr(Client, "_http", respond)
     monkeypatch.setattr(repair, "select_literal_passages", no_support)
+    original_raw = {}
+    if saved_failure:
+        with pytest.raises(RuntimeError, match="detail jobs failed"):
+            run_guideline(guideline, output, client.config, workers=1)
+        assert len(detail_calls) == 1
+        original_raw = {p: p.read_bytes() for p in (output / "checkpoints").glob("*/attempt-*.json")}
+        interrupted_repair = False
     run_guideline(guideline, output, client.config, workers=1)
+    assert all(p.read_bytes() == raw for p, raw in original_raw.items())
     assert len(detail_calls) == 2
     assert read_json(output / "details.json")["records"]["detail-0001"]["space"] == quoted_state()["space"]
     assert read_json(output / "details.json")["records"]["detail-0001"]["diagnostic_workup"][0]["category"] == quoted_state()["diagnostic_workup"][0]["category"]

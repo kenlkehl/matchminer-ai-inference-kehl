@@ -74,7 +74,35 @@ def test_duplicate_table_cells_gain_literal_branch_context(setup):
         resolve_excerpt(page, choice["source_text"])
 
 
-@pytest.mark.parametrize("rejected", ["with an ", "and or", ""])
+def test_repeated_table_blocks_retain_both_distant_branch_occurrences(setup):
+    guideline, _ = setup
+    block = "Marker alpha\nDrug alpha\nDrug beta\nSynthetic test A\nDrug gamma\nDrug delta\n"
+    page = replace(
+        guideline.pages["p0002"],
+        text="Neoadjuvant branch\n" + block + "\nMetastatic branch\n" + block,
+    )
+    pages = {page.id: page}
+    choices = literal_choices(pages, assertion("Synthetic test A"))
+    assert len(choices) == 2
+    assert any("Neoadjuvant branch" in c["source_text"] for c in choices)
+    assert any("Metastatic branch" in c["source_text"] for c in choices)
+    for choice in choices:
+        assert choice["source_text"] in page.text
+        resolve_excerpt(page, choice["source_text"])
+        selected = selected_patch(
+            {"selected_passages": [choice["choice"]], "unresolved": []}, choices, pages,
+        )
+        assert selected["evidence"] == [{
+            "page_id": page.id, "source_text": choice["source_text"],
+        }]
+    with pytest.raises(ValueError, match="No supporting literal passage"):
+        selected_patch(
+            {"selected_passages": [], "unresolved": ["Branch remains unsupported"]},
+            choices, pages,
+        )
+
+
+@pytest.mark.parametrize("rejected", ["or", "with an ", "and or", ""])
 def test_stopword_only_rejected_fragment_searches_fixed_assertion(setup, rejected):
     guideline, _ = setup
     page = replace(

@@ -7,7 +7,7 @@ MAX_RETRY_BATCH = 12
 
 
 def can_split(error, size):
-    """Split exhausted population or grounding checks, never transport failures."""
+    """Split exhausted validation or output-limit failures, never transport errors."""
     return size > 1 and "exhausted" in error and any(
         marker in error
         for marker in (
@@ -18,6 +18,7 @@ def can_split(error, size):
             "Unknown or unsupplied evidence page:",
             "Each state and option needs at least one source-line citation",
             "cite 1-12 distinct source line numbers per evidence item",
+            "Incomplete response: finish_reason='length'",
         )
     )
 

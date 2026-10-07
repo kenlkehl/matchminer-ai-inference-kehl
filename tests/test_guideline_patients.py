@@ -184,3 +184,69 @@ def test_multiple_embedding_and_checker_batches_cover_requested_candidates(
     assert metadata["population_count"] == 70 and metadata["scored_count"] == 40
     assert "Embedded 70/70 patient summaries" in updates
     assert "TrialChecked 40/40 candidate patients" in updates
+
+
+def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(
+    catalog_frame, stages, monkeypatch
+):
+    from dataclasses import replace
+
+    from matchminer_ai.matching import PatientEmbeddings, embed_guideline_patients
+
+    identity = {"encoder": "fabricated-revision"}
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.inference._embedding_cache_identity",
+        lambda config, model: identity,
+    )
+    cached = embed_guideline_patients(patients())
+    assert isinstance(cached, PatientEmbeddings)
+    assert cached.patient_ids == ("first", "second", "third")
+    assert cached.vectors.dtype == np.float32 and cached.vectors.shape == (3, 2)
+    assert cached.encoder_identity == identity
+    expected, _ = retrieve_guideline_patients(
+        patients(), catalog_frame, space_trial_id="a", candidate_k=2
+    )
+
+    embedded = []
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.embed_for_matching",
+        lambda frame, *, entity_type, **kw: (
+            embedded.append(entity_type),
+            (
+                frame[["space_trial_id"]].assign(embedding=[[1.0, 0.0]]),
+                {"model_metadata": {"embedding_model": {"model": "same"}}},
+            ),
+        )[1],
+    )
+    selected, meta = retrieve_guideline_patients(
+        patients(), catalog_frame, space_trial_id="a", candidate_k=2,
+        patient_embeddings=cached,
+    )
+    assert embedded == ["trial"]
+    assert meta["patient_embeddings"] == "precomputed"
+    pd.testing.assert_frame_equal(selected, expected)
+
+    # A subset of a cached population reuses its rows.
+    subset, _ = retrieve_guideline_patients(
+        patients().iloc[1:], catalog_frame, space_trial_id="a",
+        candidate_k=2, min_match_score=None, patient_embeddings=cached,
+    )
+    assert set(subset.patient_id) == {"second", "third"}
+
+    changed = patients()
+    changed.loc[1, "cancer_history_summary"] = "Edited after embedding"
+    missing = pd.concat([patients(), patients().iloc[:1].assign(patient_id="fourth")])
+    for frame, embeddings, message in [
+        (changed, cached, "changed after"),
+        (missing, cached, "lack 1 patients"),
+        (patients(), replace(cached, encoder_identity={"encoder": "other"}), "different"),
+        (patients(), replace(cached, encoder_identity=None), "unverifiable"),
+        (patients(), replace(cached, vectors=cached.vectors[:2]), "malformed"),
+        (patients(), cached.vectors, "embed_guideline_patients"),
+    ]:
+        with pytest.raises(ValueError, match=message):
+            retrieve_guideline_patients(
+                frame, catalog_frame, space_trial_id="a", patient_embeddings=embeddings
+            )
+    with pytest.raises(ValueError, match="batch_size"):
+        embed_guideline_patients(patients(), batch_size=0)

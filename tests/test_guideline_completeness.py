@@ -132,7 +132,7 @@ def test_review_must_account_for_every_input_and_reference_existing_populations(
     validate_reviews(value, inputs, inputs)
 
 
-@pytest.mark.parametrize("failure", ["name", "count", "matched_name"])
+@pytest.mark.parametrize("failure", ["name", "count", "matched_name", "conjunction"])
 @pytest.mark.parametrize("missing", [False, True])
 def test_exhausted_review_bookkeeping_splits_without_losing_judgments(
     tmp_path, monkeypatch, failure, missing,
@@ -140,6 +140,8 @@ def test_exhausted_review_bookkeeping_splits_without_losing_judgments(
     from matchminer_ai.trials._guideline_audit import audit_accepted_response
 
     inputs = populations()
+    if failure == "conjunction":
+        inputs[0]["name"] = "Fictional setting A, setting B, or setting C"
     # Same clinical names can have different definitions; no name-keyed remapping.
     inputs[1]["name"] = inputs[0]["name"]
     proposed = copy.deepcopy(inputs)
@@ -164,6 +166,8 @@ def test_exhausted_review_bookkeeping_splits_without_losing_judgments(
                 rows[0]["input_name"] = "Abbreviated fictional wording"
             elif failure == "matched_name":
                 rows[0]["matched_population_names"] = ["Abbreviated proposed wording"]
+            elif failure == "conjunction":
+                rows[0]["input_name"] = rows[0]["input_name"].replace(", or ", ", ")
             else:
                 rows.pop()
         elif missing:
