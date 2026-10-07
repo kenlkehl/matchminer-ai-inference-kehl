@@ -82,25 +82,33 @@ sources, one round.
 
 ### Step 4 — Synthesize the drug evidence
 
-A drug's passages go into one LLM call, numbered `P1`..`Pn`, under
-`synthesis_evidence_max_tokens` of passage text. Where the ledger exceeds the
-budget, passages are taken round-robin across `(query_scope, source)` so no
-retrieval axis is starved.
+A drug's ledger is ordered round-robin across `(query_scope, source)` so no
+retrieval axis is starved, then split into chunks of at most
+`synthesis_chunk_max_tokens` (100,000) of passage text. Nothing is discarded:
+the chunks run in order, one LLM call each, with the chunk's passages numbered
+`P1`..`Pn`.
 
-The model returns JSON with six arrays — mechanism and targets, efficacy by
-tumor, biomarker prevalence, biomarker-directed efficacy, safety, limitations.
-Every item must be one self-contained sentence carrying its numbers, plus
-`support_ids` citing passage numbers, plus labels for tumor type, histology,
-regimen, biomarker, and prevalence denominator where they apply.
+Each call sees the facts built so far, numbered `F1`..`Fn`, and returns JSON
+with six arrays — mechanism and targets, efficacy by tumor, biomarker
+prevalence, biomarker-directed efficacy, safety, limitations — holding only what
+this chunk adds. Every item must be one self-contained sentence carrying its
+numbers, plus `support_ids` citing passage numbers, plus labels for tumor type,
+histology, regimen, biomarker, and prevalence denominator where they apply. An
+item that corrects or supersedes an existing fact names it in `replaces`.
 
 Code then checks the work: citations resolve back to real evidence IDs, uncited
-items are dropped, and each surviving fact is stamped **`scope: agent`**.
-Failures retry with the exact validation error quoted back. A drug that never
-validates is left blocked rather than stored.
+items are dropped, and each surviving fact is stamped **`scope: agent`**. The
+new items are merged in code: every existing fact is kept unless a validated
+item replaces it, and an item repeating an existing fact's text is dropped.
+(Earlier versions asked the model to rewrite the whole list each chunk, which
+silently lost facts once a broad class had accumulated hundreds.) Failures retry
+with the exact validation error quoted back; a chunk that never validates leaves
+the facts so far unchanged.
 
 ### Step 5 — Synthesize the class evidence
 
-The same prompt, once per class, on its own `class_evidence_max_tokens` budget.
+The same chunked synthesis, once per class, with chunks bounded by its own
+`class_evidence_max_tokens` (100,000).
 Facts are stamped **`scope: class`**.
 
 The separation is the point rather than an implementation detail. A pooled

@@ -61,6 +61,19 @@ def outputs(c, s):
         "synthesis": c.build_synthesis_messages(
             drug, c._ncit_definition_evidence(drug, ncit_version="test")
         ),
+        "synthesis_delta": c.build_synthesis_delta_messages(
+            drug,
+            c._ncit_definition_evidence(drug, ncit_version="test"),
+            {
+                "efficacy_by_tumor": [
+                    {
+                        "text": "Synthetic {fact}: α.",
+                        "support_ids": ["ledger:E1"],
+                        "scope": "agent",
+                    }
+                ]
+            },
+        ),
         "scoring": messages,
         # Deprecated with the checker; its input is still pinned while it ships.
         "checker": s._checker_text(patient, summary),
@@ -87,6 +100,9 @@ def test_prompt_and_artifact_versions_match_pre_refactor_snapshot():
     # prompt version. Re-captured again for the screening-role fix, which
     # rewrote the screen prompt and bumped the role policy and prompt versions,
     # and for serial synthesis, which bumped the synthesis prompt version.
+    # Re-captured for delta synthesis, which bumped the synthesis prompt version
+    # again (rounds return only new or revised facts, merged in code) and added
+    # the synthesis_delta prompt.
     expected = {
         "screen": "c44cb04dbc13dbf47bab65710a86380c19a09f41158d5e448f69a4701801e807",
         "synthesis": "13f0476492ca2d769502d9ee91d3c96225635834075c5bb225c0de7cf8290e58",
@@ -94,7 +110,8 @@ def test_prompt_and_artifact_versions_match_pre_refactor_snapshot():
         "checker": "1123fd83802f67d38aa57b351b74516e8dfc14f8c7f1122ccb33e21f03281fc9",
         "retry": "be4026558080f5c0bf5b5ff7242ae91dea7c69a4b1e50f4ee74d04a7e534b8ab",
         "retry_without_finish": "327f5fa6a423706f85250730b0311da316cd7f6b9b9c0edf3908dde816b27988",
-        "compatibility_id": "c2ea8b6d776c3886c2df71e08f99de463997153f3c2dc9f8afd4c38e0c80fa5b",
+        "synthesis_delta": "dbd366d344f40af1eb0fef0c2ea624109d0eab43cc98e7a5760f97f8842390fa",
+        "compatibility_id": "ffab78b41eb3f53fc56486678fcc59b2d883fa5cb12b14c3b6afb41f36b850b7",
     }
     actual = {
         key: hashlib.sha256(
@@ -109,6 +126,7 @@ def test_catalog_retry_templates_match_pre_refactor_snapshot():
     expected = {
         "trial_drug_screen.retry.txt": "f4a6e1d0c3389fa8b0dcc21d330c200b23d87f20b936be2e57be5229d5cf55fa",
         "trial_drug_synthesis.retry.txt": "bd0cde2ac9b567c8066c78f581e91e8d3ae81ce25a26728cff6939f377c92f61",
+        "trial_drug_synthesis.delta_retry.txt": "76d931afd0ba71e25e4b6972acb01a0f6865dabf2b799017f2b316b924b712f9",
     }
     for filename, digest in expected.items():
         rendered = load_prompt_text(filename).format(

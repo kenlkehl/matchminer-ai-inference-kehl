@@ -84,7 +84,10 @@ CONTROL_ARM_TYPES = frozenset(
 )
 ACTIVE_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL"})
 ROLE_PROMPT_VERSION = "trial-cancer-treatment-agent-screen-v4"
-SYNTHESIS_PROMPT_VERSION = "drug-evidence-serial-synthesis-v4"
+SYNTHESIS_PROMPT_VERSION = "drug-evidence-delta-synthesis-v5"
+#: Earlier synthesis prompts whose catalogs still load. They store facts in the
+#: same SYNTHESIS_SCHEMA_VERSION; only how the facts were accumulated differs.
+LEGACY_SYNTHESIS_PROMPT_VERSIONS = frozenset({"drug-evidence-serial-synthesis-v4"})
 CLASS_PROMPT_VERSION = "drug-pharmacologic-class-v1"
 CATALOG_CHECKPOINT_SCHEMA_VERSION = "good-option-catalog-checkpoints-v1"
 CLASS_BASES = frozenset({"target", "mechanism", "modality"})
@@ -200,13 +203,15 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _compatibility_id(*, ncit_version: str) -> str:
+def _compatibility_id(
+    *, ncit_version: str, synthesis_prompt: str = SYNTHESIS_PROMPT_VERSION
+) -> str:
     payload = {
         "catalog_schema": CATALOG_SCHEMA_VERSION,
         "role_policy": ROLE_POLICY_VERSION,
         "role_prompt": ROLE_PROMPT_VERSION,
         "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
-        "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
+        "synthesis_prompt": synthesis_prompt,
         "class_prompt": CLASS_PROMPT_VERSION,
         "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
         "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
@@ -1657,12 +1662,28 @@ def chunk_evidence(
     return chunks
 
 
-def build_synthesis_update_messages(
+def _numbered_facts(
+    facts: Mapping[str, Any],
+) -> list[tuple[str, str, Mapping[str, Any]]]:
+    """Number facts F1..Fn across categories in order, as the prompt shows them."""
+
+    numbered: list[tuple[str, str, Mapping[str, Any]]] = []
+    for category in _SYNTHESIS_CATEGORIES:
+        for item in facts.get(category, []) or []:
+            numbered.append((f"F{len(numbered) + 1}", category, item))
+    return numbered
+
+
+def build_synthesis_delta_messages(
     drug: DrugIdentity,
     evidence: Sequence[EvidencePassage],
     prior_facts: Mapping[str, Any],
 ) -> list[dict[str, str]]:
-    """Build one round of a running synthesis over the next chunk of evidence."""
+    """Build one round of a running synthesis over the next chunk of evidence.
+
+    The model returns only new or revised items; :func:`_merge_synthesis_delta`
+    keeps every existing fact that no revised item replaces.
+    """
 
     records = [
         {
@@ -1674,13 +1695,18 @@ def build_synthesis_update_messages(
         }
         for index, item in enumerate(evidence, start=1)
     ]
+    existing: dict[str, list[dict[str, Any]]] = {
+        category: [] for category in _SYNTHESIS_CATEGORIES
+    }
+    for fact_id, category, item in _numbered_facts(prior_facts):
+        existing[category].append(
+            {"id": fact_id, **{k: v for k, v in item.items() if k != "scope"}}
+        )
     system = load_prompt_text("trial_drug_synthesis.system.txt")
-    user = load_prompt_text("trial_drug_synthesis.update.txt").format(
-        prior_facts=json.dumps(
-            {category: prior_facts.get(category, []) for category in _SYNTHESIS_CATEGORIES},
-            ensure_ascii=False,
-            indent=2,
-        ),
+    user = load_prompt_text("trial_drug_synthesis.delta.txt").format(
+        # Compact: on broad classes the existing facts reach tens of thousands
+        # of tokens, and they share the context window with a full chunk.
+        existing_facts=json.dumps(existing, ensure_ascii=False, indent=1),
         payload=json.dumps(
             {"drug": drug.preferred_name, "passages": records},
             ensure_ascii=False,
@@ -1688,6 +1714,61 @@ def build_synthesis_update_messages(
         ),
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def _fact_text_key(item: Mapping[str, Any]) -> str:
+    return re.sub(r"\s+", " ", str(item.get("text", ""))).strip().casefold()
+
+
+def _merge_synthesis_delta(
+    facts: Mapping[str, Sequence[Mapping[str, Any]]],
+    delta: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Add one round's validated new and revised items to the existing facts.
+
+    Rewriting the whole list each round let the model silently drop facts once
+    a broad class had accumulated hundreds of them, so existing facts are now
+    kept in code. One is removed only when a validated revised item names its
+    ``F#`` id in ``replaces``; unknown ids are ignored. A new item that repeats
+    an existing or earlier new item's text in the same category is dropped.
+    """
+
+    numbered = _numbered_facts(facts)
+    known_ids = {fact_id for fact_id, _category, _item in numbered}
+    replaced: set[str] = set()
+    additions: dict[str, list[dict[str, Any]]] = {}
+    for category in _SYNTHESIS_CATEGORIES:
+        items: list[dict[str, Any]] = []
+        for raw in delta.get(category, []) or []:
+            item = {k: v for k, v in raw.items() if k not in {"replaces", "id"}}
+            targets = raw.get("replaces") or []
+            if isinstance(targets, (str, bytes)):
+                targets = [targets]
+            hits = {
+                str(target).strip().upper()
+                for target in targets
+                if isinstance(target, (str, int))
+            } & known_ids
+            replaced.update(hits)
+            items.append({**item, "__replaces__": bool(hits)})
+        additions[category] = items
+    merged: dict[str, list[dict[str, Any]]] = {
+        category: [] for category in _SYNTHESIS_CATEGORIES
+    }
+    seen: dict[str, set[str]] = {category: set() for category in _SYNTHESIS_CATEGORIES}
+    for fact_id, category, item in numbered:
+        if fact_id not in replaced:
+            merged[category].append(dict(item))
+            seen[category].add(_fact_text_key(item))
+    for category, items in additions.items():
+        for item in items:
+            replaces = item.pop("__replaces__")
+            key = _fact_text_key(item)
+            if key in seen[category] and not replaces:
+                continue
+            merged[category].append(item)
+            seen[category].add(key)
+    return merged
 
 
 async def synthesize_serially(
@@ -1704,7 +1785,9 @@ async def synthesize_serially(
     """Synthesize each subject by iterating a running summary over its evidence.
 
     Each subject is its own chain: its chunks run in order, each seeing the
-    summary built from the subject's earlier chunks, but chains never wait on
+    facts built from the subject's earlier chunks. Each round returns only new
+    or revised items, which are merged in code, so a fact accumulated from an
+    earlier chunk is never lost unless a revised item replaces it. Chains never wait on
     one another. A subject with eleven chunks therefore cannot hold a batch of
     one-chunk subjects hostage, and ``on_subject_complete`` fires as soon as a
     chain ends so the caller can checkpoint it immediately. At most
@@ -1761,12 +1844,12 @@ async def synthesize_serially(
             token_limited = False
             succeeded = False
             for attempt in range(1, max_attempts + 1):
-                messages = build_synthesis_update_messages(drug, chunk, facts)
+                messages = build_synthesis_delta_messages(drug, chunk, facts)
                 if error:
                     messages[-1] = {
                         **messages[-1],
                         "content": load_prompt_text(
-                            "trial_drug_synthesis.retry.txt"
+                            "trial_drug_synthesis.delta_retry.txt"
                         ).format(
                             previous_content=messages[-1]["content"],
                             attempt=attempt,
@@ -1807,13 +1890,11 @@ async def synthesize_serially(
                     **{f"P{index}": item.evidence_id for index, item in enumerate(chunk, start=1)},
                     **{value: value for value in resolved},
                 }
-                updated = _validate_structured_facts(raw, evidence=chunk, scope=scope)
+                delta = _validate_structured_facts(raw, evidence=chunk, scope=scope)
+                updated = _merge_synthesis_delta(facts, delta)
                 if chunk and not any(updated.values()):
                     error = (
-                        "the update dropped every previously supported fact; carry "
-                        "existing items forward with their resolved support_ids"
-                        if any(facts.values())
-                        else "all arrays were empty despite supplied passages; "
+                        "all arrays were empty despite supplied passages; "
                         "include relevant supported facts or a limitations item "
                         "explaining the evidence gap"
                     )
@@ -3902,6 +3983,9 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
         "good_option_checker_input": GOOD_OPTION_INPUT_VERSION,
     }
     versions = manifest.get("versions") or {}
+    synthesis_prompt = str(versions.get("synthesis_prompt") or "")
+    if synthesis_prompt in LEGACY_SYNTHESIS_PROMPT_VERSIONS:
+        expected_versions["synthesis_prompt"] = synthesis_prompt
     mismatched_versions = {
         key: (versions.get(key), expected)
         for key, expected in expected_versions.items()
@@ -3913,7 +3997,9 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
             f"{mismatched_versions}"
         )
     ncit_version = str((manifest.get("ncit") or {}).get("version") or "unknown")
-    if manifest.get("compatibility_id") != _compatibility_id(ncit_version=ncit_version):
+    if manifest.get("compatibility_id") != _compatibility_id(
+        ncit_version=ncit_version, synthesis_prompt=synthesis_prompt
+    ):
         raise ValueError(
             "Catalog compatibility ID does not match its version manifest."
         )
@@ -4288,7 +4374,7 @@ __all__ = [
     "bound_evidence",
     "chunk_evidence",
     "build_drug_class_messages",
-    "build_synthesis_update_messages",
+    "build_synthesis_delta_messages",
     "build_good_option_catalog",
     "build_intervention_screening_messages",
     "build_role_resolution_messages",

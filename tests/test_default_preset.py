@@ -133,8 +133,8 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
         ]
         == 100000
     )
-    # A 60k-token chunk, carried facts, and this budget fit a 262,144 context.
-    assert config.good_option_catalog["synthesis_chunk_max_tokens"] == 60000
+    # A 100k-token chunk, existing facts, and this budget fit a 262,144 context.
+    assert config.good_option_catalog["synthesis_chunk_max_tokens"] == 100000
     assert config.raw["good_option_checker"] == {
         "model_name": "",
         "device": "cuda",

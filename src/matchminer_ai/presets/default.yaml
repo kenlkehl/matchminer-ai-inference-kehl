@@ -379,17 +379,19 @@ good_option_catalog:
   good_option_summary_max_tokens: 6000
   help_me_choose_summary_max_tokens: 9000
   class_option_summary_max_tokens: 4000
-  # Evidence is no longer truncated to fit one call. It is chunked, and a running
-  # synthesis is carried across the chunks, so nothing is discarded unread. This
-  # bounds one chunk; the whole ledger is covered however many chunks that takes.
-  # A chunk, the carried-forward facts (up to ~30k tokens), and the 100k
-  # synthesis completion budget must fit together in a 262,144-token context.
-  synthesis_chunk_max_tokens: 60000
+  # Evidence is no longer truncated to fit one call. It is chunked, and each
+  # chunk's new or revised facts are merged into the facts so far, so nothing is
+  # discarded unread or silently dropped. This bounds one chunk (passage text at
+  # ~4 characters per token); the whole ledger is covered however many chunks
+  # that takes. A chunk plus passage metadata (~110k tokens), the existing facts
+  # (up to ~25k tokens for the broadest classes), and the 100k synthesis
+  # completion budget must fit together in a 262,144-token context.
+  synthesis_chunk_max_tokens: 100000
   # Retained for tooling that still reports a whole-ledger budget.
   synthesis_evidence_max_tokens: 190000
   # Class synthesis is a separate call on its own budget, so a large shared
   # class corpus can never evict an agent's own passages.
-  class_evidence_max_tokens: 60000
+  class_evidence_max_tokens: 100000
   class_assignment_evidence_max_tokens: 40000
   class_max_per_drug: 3
   screening_max_attempts: 3

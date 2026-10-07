@@ -37,6 +37,7 @@ from matchminer_ai.trials import (
     build_good_option_catalog,
     load_good_option_catalog,
     research_drug,
+    validate_good_option_catalog,
 )
 from matchminer_ai.trials.drug_research import (
     GeneralWebEvidenceSource,
@@ -1211,11 +1212,11 @@ def test_structural_background_read_survives_the_screen_calling_it_investigation
 def test_serial_synthesis_carries_facts_across_chunks_with_resolved_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The running summary must survive renumbering between chunks.
+    """Existing facts survive renumbering between chunks and are kept in code.
 
-    Each chunk numbers its own passages from P1, so a fact carried forward cites
-    an evidence ID while a new fact cites a position. Resolving the carried one
-    against the new chunk's map would match nothing and delete it.
+    Each chunk numbers its own passages from P1, so an existing fact cites an
+    evidence ID while a new fact cites a position. The second round returns only
+    its new fact; the first is merged back rather than re-listed by the model.
     """
 
     def passage(index: int) -> EvidencePassage:
@@ -1238,16 +1239,8 @@ def test_serial_synthesis_carries_facts_across_chunks_with_resolved_ids(
         del config, stage
         body = messages_list[0][-1]["content"]
         seen.append(body)
-        if len(seen) == 1:
-            facts = {"efficacy_by_tumor": [{"text": "First.", "support_ids": ["P1"]}]}
-        else:
-            # Carry the earlier fact by its resolved ID; add one from this chunk.
-            facts = {
-                "efficacy_by_tumor": [
-                    {"text": "First.", "support_ids": ["ledger:E1"]},
-                    {"text": "Second.", "support_ids": ["P1"]},
-                ]
-            }
+        text = "First." if len(seen) == 1 else "Second."
+        facts = {"efficacy_by_tumor": [{"text": text, "support_ids": ["P1"]}]}
         return [
             json.dumps(
                 {
@@ -1273,11 +1266,200 @@ def test_serial_synthesis_carries_facts_across_chunks_with_resolved_ids(
     )
 
     assert len(seen) == 2
-    assert "THE SYNTHESIS SO FAR" in seen[1] and "ledger:E1" in seen[1]
+    assert "THE EXISTING FACTS" in seen[1]
+    assert '"id": "F1"' in seen[1] and "ledger:E1" in seen[1]
+    assert '"scope"' not in seen[1]
     items = result["D1"]["efficacy_by_tumor"]
     assert [item["text"] for item in items] == ["First.", "Second."]
     assert [item["support_ids"] for item in items] == [["ledger:E1"], ["ledger:E2"]]
     assert all(item["scope"] == "agent" for item in items)
+    assert all("replaces" not in item and "id" not in item for item in items)
+
+
+def _existing_facts() -> dict[str, list[dict[str, Any]]]:
+    facts: dict[str, list[dict[str, Any]]] = {
+        category: [] for category in catalog_module._SYNTHESIS_CATEGORIES
+    }
+    facts["mechanism_and_targets"] = [
+        {"text": "Inhibits KRAS G12C.", "support_ids": ["ledger:E1"], "scope": "agent"}
+    ]
+    facts["efficacy_by_tumor"] = [
+        {"text": "ORR 32% in NSCLC (phase 1).", "support_ids": ["ledger:E2"], "scope": "agent"},
+        {"text": "ORR 7% in CRC.", "support_ids": ["ledger:E3"], "scope": "agent"},
+    ]
+    return facts
+
+
+def _delta(**items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    return {
+        category: items.get(category, [])
+        for category in catalog_module._SYNTHESIS_CATEGORIES
+    }
+
+
+def test_synthesis_delta_merge_keeps_unreplaced_facts_and_applies_replacements() -> None:
+    merged = catalog_module._merge_synthesis_delta(
+        _existing_facts(),
+        _delta(
+            efficacy_by_tumor=[
+                {
+                    "text": "ORR 37% in NSCLC (phase 2).",
+                    "support_ids": ["ledger:E9"],
+                    "scope": "agent",
+                    "replaces": ["F2"],
+                },
+                {"text": "New tumor fact.", "support_ids": ["ledger:E8"], "scope": "agent"},
+            ]
+        ),
+    )
+
+    assert [item["text"] for item in merged["mechanism_and_targets"]] == [
+        "Inhibits KRAS G12C."
+    ]
+    assert [item["text"] for item in merged["efficacy_by_tumor"]] == [
+        "ORR 7% in CRC.",
+        "ORR 37% in NSCLC (phase 2).",
+        "New tumor fact.",
+    ]
+    assert all("replaces" not in item for item in merged["efficacy_by_tumor"])
+
+
+def test_synthesis_delta_merge_ignores_unknown_ids_and_drops_duplicates() -> None:
+    merged = catalog_module._merge_synthesis_delta(
+        _existing_facts(),
+        _delta(
+            efficacy_by_tumor=[
+                {"text": "orr 7%  in CRC.", "support_ids": ["ledger:E4"], "scope": "agent"},
+                {
+                    "text": "A revision naming a fact that does not exist.",
+                    "support_ids": ["ledger:E5"],
+                    "scope": "agent",
+                    "replaces": ["F99", "not-an-id"],
+                },
+            ]
+        ),
+    )
+
+    assert [item["text"] for item in merged["efficacy_by_tumor"]] == [
+        "ORR 32% in NSCLC (phase 1).",
+        "ORR 7% in CRC.",
+        "A revision naming a fact that does not exist.",
+    ]
+    assert len(merged["mechanism_and_targets"]) == 1
+
+
+def test_serial_synthesis_accepts_empty_delta_and_rejected_revisions_keep_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty second round keeps everything; an unsupported revision is void.
+
+    The third round's revision cites nothing valid, so validation discards it and
+    the fact it named must not be removed.
+    """
+
+    responses = iter(
+        [
+            {"efficacy_by_tumor": [{"text": "First.", "support_ids": ["P1"]}]},
+            {},
+            {
+                "efficacy_by_tumor": [
+                    {"text": "Bad revision.", "support_ids": ["P99"], "replaces": ["F1"]}
+                ]
+            },
+        ]
+    )
+    calls: list[str] = []
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        del config, stage, reasoning_off
+        calls.append(messages_list[0][-1]["content"])
+        facts = next(responses)
+        return [
+            json.dumps(
+                {
+                    **{category: [] for category in catalog_module._SYNTHESIS_CATEGORIES},
+                    **facts,
+                }
+            )
+        ]
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+
+    result = asyncio.run(
+        catalog_module.synthesize_serially(
+            [
+                (
+                    DrugIdentity(drug_id="D1", preferred_name="Novel Agent"),
+                    [_synthesis_passage("D1", index) for index in range(1, 4)],
+                )
+            ],
+            config=load_default_preset(),
+            chunk_token_limit=1000,
+        )
+    )
+
+    assert len(calls) == 3  # No retries: an empty delta is a valid answer.
+    assert [item["text"] for item in result["D1"]["efficacy_by_tumor"]] == ["First."]
+    assert result["D1"]["efficacy_by_tumor"][0]["support_ids"] == ["ledger:D1-1"]
+
+
+def test_catalogs_from_the_previous_synthesis_prompt_still_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Delta synthesis changed how facts accumulate, not how they are stored."""
+
+    async def fake_fetch(_nct_id: str, *, client):
+        del client
+        return json.loads(json.dumps(STUDY))
+
+    def synthesize(_drug, evidence):
+        return {
+            **{category: [] for category in catalog_module._SYNTHESIS_CATEGORIES},
+            "mechanism_and_targets": [
+                {"text": "Targets TARGET_MARKER.", "support_ids": ["P1"] if evidence else []}
+            ],
+        }
+
+    monkeypatch.setattr(
+        "matchminer_ai.trials.drug_catalog.fetch_trial_study", fake_fetch
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.trials.drug_catalog.load_ncit_drug_index",
+        lambda _resource: _NoNCIt(),
+    )
+    output = tmp_path / "catalog"
+    asyncio.run(
+        build_good_option_catalog(
+            ["NCT12345678"],
+            output,
+            config=load_default_preset(),
+            sources=[_EvidenceSource()],
+            settings=ResearchSettings(max_attempts=1),
+            role_resolver=lambda _trial_id, _interventions: _screening_result(),
+            synthesizer=synthesize,
+            class_resolver=no_classes,
+        )
+    )
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    legacy = "drug-evidence-serial-synthesis-v4"
+    assert legacy in catalog_module.LEGACY_SYNTHESIS_PROMPT_VERSIONS
+    ncit_version = str(manifest["ncit"]["version"])
+    manifest["versions"]["synthesis_prompt"] = legacy
+    manifest["compatibility_id"] = catalog_module._compatibility_id(
+        ncit_version=ncit_version, synthesis_prompt=legacy
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert validate_good_option_catalog(output)["versions"]["synthesis_prompt"] == legacy
+
+    # A legacy version must still carry its own compatibility id.
+    manifest["compatibility_id"] = catalog_module._compatibility_id(
+        ncit_version=ncit_version
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError):
+        validate_good_option_catalog(output)
 
 
 def _synthesis_passage(drug_id: str, index: int) -> EvidencePassage:
