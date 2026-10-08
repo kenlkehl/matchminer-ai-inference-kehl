@@ -230,6 +230,7 @@ def summarize_pdq(
     return_metadata: bool = False,
     return_qc: bool = False,
     progress_callback: Callable[[str], None] | None = None,
+    allow_endpoint_change: bool = False,
 ) -> pd.DataFrame | tuple:
     """Extract a PDQ catalog with the shared guideline pipeline and return conventions.
 
@@ -258,4 +259,5 @@ def summarize_pdq(
         return_metadata=return_metadata,
         return_qc=return_qc,
         progress_callback=progress_callback,
+        allow_endpoint_change=allow_endpoint_change,
     )

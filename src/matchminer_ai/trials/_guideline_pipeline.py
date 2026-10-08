@@ -11,6 +11,7 @@ from importlib import resources
 from pathlib import Path
 
 from matchminer_ai import __version__
+from matchminer_ai.cancellation import InferenceCancelled, submit_cancellable
 from matchminer_ai._storage import (
     atomic_json,
     atomic_text,
@@ -67,7 +68,7 @@ def parallel_jobs(jobs, workers, function, *, notify=log):
     """Save successes independently, but never publish a complete catalog after any job fails."""
     values, errors = {}, {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        pending = {pool.submit(function, key, data): key for key, data in jobs}
+        pending = {submit_cancellable(pool, function, key, data): key for key, data in jobs}
         for future in as_completed(pending):
             key = pending[future]
             try:
@@ -107,9 +108,9 @@ def run_guideline(
         if finalize is not None:
             try:
                 finalize()
-            except (Exception, KeyboardInterrupt) as exc:
+            except (Exception, KeyboardInterrupt, InferenceCancelled) as exc:
                 status.update(
-                    status="interrupted" if isinstance(exc, KeyboardInterrupt) else "failed",
+                    status="interrupted" if isinstance(exc, (KeyboardInterrupt, InferenceCancelled)) else "failed",
                     stage="audit",
                     updated_utc=now(),
                     error=f"{type(exc).__name__}: {exc}",
@@ -185,6 +186,7 @@ def _run(
     identity_config = json.loads(json.dumps(config))
     for key in ("timeout", "attempts", "api_key_env", "stream", "max_concurrent_requests"):
         identity_config["llm"].pop(key)
+    identity_config["llm"].pop("transport_base_url", None)
     config_id = digest(identity_config)
     config_path = output / "run_config.json"
     if config_path.exists():
@@ -197,6 +199,7 @@ def _run(
             old_identity = json.loads(json.dumps(old_identity))
             for key in ("timeout", "attempts", "api_key_env", "stream", "max_concurrent_requests"):
                 old_identity["llm"].pop(key)
+            old_identity["llm"].pop("transport_base_url", None)
             valid_old_digest = digest(old_identity) == previous_config["config_sha256"]
             old_identity["prompt_resources_sha256"].pop("structured.memory_retry.txt", None)
             compatible_identity = json.loads(json.dumps(identity_config))
@@ -219,6 +222,18 @@ def _run(
                 raise ValueError(
                     "Source, model, prompt or extraction settings changed; choose a new output_dir"
                 )
+        if llm.transport_base_url is not None:
+            from ._guideline_endpoints import endpoint_history
+
+            history_path = output / "endpoint_history.json"
+            history = read_json(history_path) if history_path.exists() else []
+            history = endpoint_history(
+                {**previous_config, "endpoint_history": history}, llm, now()
+            )
+            atomic_json(history_path, history)
+            # Preserve immutable identity but expose the current transport even
+            # when a fully audited catalog is reused without generation.
+            atomic_json(config_path, {**previous_config, "llm": llm.public_dict()})
         # A collection summary can lag behind a successful independent recovery.
         # Preserve that disease's audited result instead of rebuilding its
         # intermediate files and resending coverage reviews. Only an identical
@@ -562,9 +577,9 @@ def _run(
         atomic_json(output / "status.json", status)
         notify(f"{guideline.disease}: exported {len(rows)} canonical spaces")
         return status
-    except (Exception, KeyboardInterrupt) as exc:
+    except (Exception, KeyboardInterrupt, InferenceCancelled) as exc:
         status.update(
-            status="interrupted" if isinstance(exc, KeyboardInterrupt) else "failed",
+            status="interrupted" if isinstance(exc, (KeyboardInterrupt, InferenceCancelled)) else "failed",
             updated_utc=now(),
             error=f"{type(exc).__name__}: {exc}",
         )

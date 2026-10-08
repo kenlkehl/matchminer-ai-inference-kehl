@@ -1,6 +1,7 @@
 """Bounded clinical-content coverage review; internal identifiers never reach the LLM."""
 
 from concurrent.futures import ThreadPoolExecutor
+from matchminer_ai.cancellation import submit_cancellable
 import json
 
 from matchminer_ai._storage import digest
@@ -182,7 +183,8 @@ def review_coverage(client, candidates, states):
     review_batches = []
     if jobs:
         with ThreadPoolExecutor(max_workers=min(len(jobs), client.config.max_concurrent_requests)) as pool:
-            for completed in pool.map(review, jobs):
+            for future in [submit_cancellable(pool, review, job) for job in jobs]:
+                completed = future.result()
                 for items, result, receipt in completed:
                     review_batches.append(receipt)
                     for (index, _), row in zip(items, result["reviews"]):

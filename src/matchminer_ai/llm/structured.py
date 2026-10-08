@@ -51,6 +51,8 @@ class StructuredConfig:
     request_start_interval_seconds: float = 0.0
     capacity_retry_initial_seconds: float = 0.0
     capacity_retry_max_seconds: float = 60.0
+    # Explicit guideline migration keeps base_url as the original cache identity.
+    transport_base_url: str | None = None
 
     def __post_init__(self):
         for name in (
@@ -68,6 +70,8 @@ class StructuredConfig:
 
     def public_dict(self):
         result = asdict(self)  # Contains only the key's environment-variable NAME.
+        if self.transport_base_url is None:
+            result.pop("transport_base_url")
         # Keep existing checkpoint identities when pacing is not configured.
         for name, default in (
             ("request_start_interval_seconds", 0.0),
@@ -266,6 +270,10 @@ class StructuredClient:
         self.config = config
         self.cache_dir = cache_dir
         self._token_counts: dict[str, int] = {}
+        if config.transport_base_url is not None:
+            # Validate the actual destination with the same credential/URL rules.
+            StructuredClient(replace(config, base_url=config.transport_base_url,
+                                     transport_base_url=None), None)
         parsed = urlsplit(config.base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ValueError("base_url must be an HTTP(S) OpenAI-compatible /v1 URL")
@@ -314,10 +322,11 @@ class StructuredClient:
 
     def _http_request(self, endpoint, body=None, *, server_root=False, output_schema=None):
         check_cancelled()
+        base_url = self.config.transport_base_url or self.config.base_url
         headers = {"Content-Type": "application/json"}
         key = os.environ.get(self.config.api_key_env)
         if self.config.provider == GOOGLE_AGENT_PLATFORM_PROVIDER:
-            parsed = urlsplit(self.config.base_url)
+            parsed = urlsplit(base_url)
             if (
                 parsed.scheme != "https"
                 or not re.fullmatch(
@@ -332,7 +341,7 @@ class StructuredClient:
             })
         if key:
             headers["Authorization"] = "Bearer " + key
-        base = self.config.base_url.rstrip("/")
+        base = base_url.rstrip("/")
         if server_root and base.endswith("/v1"):
             base = base[:-3]
         request = Request(
@@ -352,7 +361,7 @@ class StructuredClient:
         dispatch_wait = 0.0
         try:
             with endpoint_slot(
-                self.config.base_url,
+                base_url,
                 limit,
                 pool="preparation" if preparation else "generation",
             ):
@@ -363,7 +372,7 @@ class StructuredClient:
                     from .request_pacing import endpoint_pacer
 
                     dispatch_wait = endpoint_pacer(
-                        self.config.base_url, self.config.model
+                        base_url, self.config.model
                     ).wait(self.config.request_start_interval_seconds)
                 check_cancelled()
                 with urlopen(request, timeout=self.config.timeout) as response:
@@ -412,7 +421,7 @@ class StructuredClient:
             {
                 "messages": messages,
                 "model": self.config.model,
-                "base_url": self.config.base_url,
+                "base_url": self.config.transport_base_url or self.config.base_url,
                 "thinking": self.config.thinking,
                 "template": self.config.extra_body.get("chat_template_kwargs"),
                 "tokenizer_mode": self.config.tokenizer_mode,
@@ -519,7 +528,9 @@ class StructuredClient:
         )
         # Share cooldown even after the last attempt: other question workers
         # must not immediately replace a rejected request with another burst.
-        endpoint_pacer(self.config.base_url, self.config.model).defer(delay)
+        endpoint_pacer(
+            self.config.transport_base_url or self.config.base_url, self.config.model
+        ).defer(delay)
         return True
 
     def fits(self, messages, *, use_safety_margin=False):
@@ -655,6 +666,8 @@ class StructuredClient:
             {
                 "job": job,
                 "base_url": self.config.base_url,
+                **({"transport_base_url": self.config.transport_base_url}
+                   if self.config.transport_base_url else {}),
                 "body": body,
                 "prompt_tokens": self.count_tokens(messages),
                 "context_window": self.config.context_window,
@@ -785,6 +798,8 @@ class StructuredClient:
                     folder / f"request-attempt-{offset + attempt}.json",
                     {
                         "body": attempt_body,
+                        **({"transport_base_url": self.config.transport_base_url}
+                           if self.config.transport_base_url else {}),
                         "prompt_tokens": self.count_tokens(attempt_body["messages"]),
                         "context_window": self.config.context_window,
                         "reserved_output_tokens": self.config.max_tokens,
@@ -884,7 +899,7 @@ def resolve_structured_config(
     configured_model = runtime.get("model_name")
     configured_context = runtime.get("context_window")
     saved = (previous or {}).get("llm", {})
-    same_endpoint = saved.get("base_url") == urls[0]
+    same_endpoint = (saved.get("transport_base_url") or saved.get("base_url")) == urls[0]
     model = configured_model or (saved.get("model") if same_endpoint else "") or ""
     context = configured_context or (
         saved.get("context_window")

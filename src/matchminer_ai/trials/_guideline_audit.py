@@ -91,6 +91,11 @@ def audit_catalog(guideline, output):
         "Source fingerprint changed",
     )
     settings = config["llm"]
+    from ._guideline_endpoints import validate_transport_record
+
+    history_path = output / "endpoint_history.json"
+    endpoint_history = read_json(history_path) if history_path.exists() else []
+    validate_transport_record(settings, settings, endpoint_history)
     quoted_details = config.get("stage_versions", {}).get("detail_citations") == QUOTE_VERSION
     current_json = (
         config.get("stage_versions", {}).get("json_normalization")
@@ -341,6 +346,7 @@ def audit_catalog(guideline, output):
     }
     for path in requests:
         request = read_json(path)
+        validate_transport_record(request, settings, endpoint_history)
         body = request["body"]
         for key in ("model", "temperature", "top_p", "max_tokens"):
             require(
@@ -424,6 +430,7 @@ def audit_catalog(guideline, output):
                     json_counts[key] += counts[key]
         for attempt_path in path.parent.glob("request-attempt-*.json"):
             attempt = read_json(attempt_path)
+            validate_transport_record(attempt, settings, endpoint_history)
             actual = attempt["body"]
             for key in {
                 "model",

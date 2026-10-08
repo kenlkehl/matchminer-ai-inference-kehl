@@ -61,7 +61,7 @@ config.remote.update(
     max_concurrent_requests=8,
     request_timeout=7200,
 )
-config.guideline["remote"]["model"] = None  # discover the served model
+config.guideline["remote"]["model_name"] = None  # discover the served model
 
 spaces, metadata, qc = summarize_pdq(
     sources,
@@ -138,6 +138,43 @@ PYTHONPATH=src python examples/extract_pdq.py \
 Use `--download-only` without endpoint/output arguments to prepare sources without
 LLM calls. The existing `extract_guideline_collection.py` runner can process the
 prepared library with multiple disease workers sharing its endpoint cap.
+
+## Interrupt, resume, or move to another endpoint
+
+The PDQ runner processes up to `--disease-workers` diseases (default 2) in parallel,
+sharing `--concurrency` across all their prompts. It writes `collection.json` with
+its PID, endpoint, stage messages, failures and per-disease completion/audit counts.
+Each disease retains the pipeline's independently saved request/response checkpoints.
+A directory lock prevents two batch owners from writing to the same output.
+
+Send SIGTERM or Ctrl-C to the runner, or create an empty `STOP` file in its output
+directory. These stop local dispatch and mark the batch interrupted. A request
+already accepted by the remote server may briefly continue there. Only fully
+saved, validated responses are reusable; an interrupted stream is retried.
+Remove `STOP` and repeat the original command to resume. Do not start a replacement
+worker until the original process has exited.
+
+To move unfinished work to another instance of the **same model**, repeat the
+command with the new explicit `--endpoint` and `--allow-endpoint-change`. The
+new server must advertise the same model ID and full context limit. Sampling,
+reasoning, source and clinical prompt settings must still match. No fallback
+server is selected automatically. Cached token counts are scoped to the actual
+destination so the new server's tokenizer performs new packing checks.
+
+For the public API, pass `allow_endpoint_change=True` to `summarize_pdq` or
+`summarize_guidelines`. Both PDQ and NCCN catalogs support this opt-in migration.
+Original checkpoint identities and raw responses stay intact; `run_config.json`
+retains the original `base_url` and current `transport_base_url`, and
+`endpoint_history.json` records destinations. Each new request attempt records
+its actual transport, which the final audit checks against that history.
+The existing general collection runner retains its stricter endpoint ownership;
+use the public API for migrating an existing NCCN disease run.
+
+Switching model IDs, context sizes, or generation settings requires a separate
+output directory. Keep completed audited catalogs and the previous run's files;
+do not relabel old responses as having come from the new model. The endpoint's
+advertised ID is a compatibility check, not a verification of model weights.
+Resume/retry failed runs only after diagnosing their recorded errors.
 
 ## Source meaning and reuse
 

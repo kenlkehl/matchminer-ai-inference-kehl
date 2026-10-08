@@ -67,6 +67,7 @@ def summarize_guidelines(
     return_metadata: bool = False,
     return_qc: bool = False,
     progress_callback: Callable[[str], None] | None = None,
+    allow_endpoint_change: bool = False,
 ) -> (
     pd.DataFrame
     | tuple[pd.DataFrame, dict]
@@ -106,6 +107,12 @@ def summarize_guidelines(
     progress_callback : callable, optional
         Receives progress strings from the orchestration thread. Exceptions in
         the callback are logged and do not invalidate completed model work.
+    allow_endpoint_change : bool, optional
+        Explicitly resume on another endpoint after stopping the original worker.
+        The new endpoint must advertise the same model and full context, with
+        unchanged generation settings. Accepted checkpoints retain their original
+        provenance; subsequent requests record the new transport. Different
+        models or context windows require a separate output directory.
 
     Returns
     -------
@@ -170,6 +177,9 @@ def summarize_guidelines(
     llm, model_metadata = resolve_structured_config(
         runtime, cache_dir=output / "checkpoints", previous=previous, client_type=Client
     )
+    from ._guideline_endpoints import resume_transport
+
+    llm = resume_transport(llm, previous, allow_endpoint_change=allow_endpoint_change)
     status = run_guideline(
         guideline,
         output,

@@ -3,6 +3,7 @@
 import copy
 import json
 from concurrent.futures import ThreadPoolExecutor
+from matchminer_ai.cancellation import submit_cancellable
 from dataclasses import replace
 
 from matchminer_ai._storage import atomic_json, digest
@@ -216,7 +217,8 @@ def repair_quoted_response(
     with ThreadPoolExecutor(
         max_workers=min(len(unique), client.config.max_concurrent_requests)
     ) as pool:
-        patches = list(pool.map(repair, [group[0] for group in unique.values()]))
+        futures = [submit_cancellable(pool, repair, group[0]) for group in unique.values()]
+        patches = [future.result() for future in futures]
     replacements = [
         {**patch, "owner_index": i, "evidence_index": j}
         for patch, group in zip(patches, unique.values())
