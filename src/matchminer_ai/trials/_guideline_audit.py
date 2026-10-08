@@ -207,6 +207,15 @@ def audit_catalog(guideline, output):
             row["source"]["source_fingerprint"] == guideline.fingerprint,
             "Row source differs",
         )
+        if guideline.metadata.get("source_kind") == "nci_pdq":
+            require(
+                all(row["source"].get(k) == guideline.metadata[k] for k in (
+                    "source_kind", "source_format", "title", "version", "source_sha256",
+                    "documents", "notice", "is_clinical_practice_guideline",
+                )) and "source_pdf" not in row["source"]
+                and row.get("notice") == guideline.metadata["notice"],
+                "PDQ catalog source provenance differs",
+            )
         require(row["review_required"] is True, "Missing review requirement")
         require(row["space_trial_id"] == row["paradigm_id"], "TrialSpace ID differs")
         included, omitted = (
@@ -256,7 +265,14 @@ def audit_catalog(guideline, output):
                         item["quote"] == "\n".join(line["text"] for line in expected),
                         "Evidence quotation differs from original",
                     )
-                require(item["pdf_page"] == page.number, "Evidence PDF page differs")
+                if guideline.metadata.get("source_kind") == "nci_pdq":
+                    require("pdf_page" not in item, "HTML section mislabeled as PDF page")
+                    require(
+                        all(item.get(k) == v for k, v in page.citation_metadata().items()),
+                        "PDQ evidence section provenance differs",
+                    )
+                else:
+                    require(item["pdf_page"] == page.number, "Evidence PDF page differs")
                 for key in set(item) - {"page_id", "line_ids"}:
                     del item[key]
                 evidence_count += 1
@@ -446,7 +462,9 @@ def audit_catalog(guideline, output):
         "verified_evidence_items": evidence_count,
         "detail_citation_format": QUOTE_VERSION if quoted_details else "legacy-line-ids",
         "covered_content_pages": len(covered),
-        "source_pdf_pages": len(guideline.pages),
+        **({"source_kind": "nci_pdq", "source_sections": len(guideline.pages)}
+           if guideline.metadata.get("source_kind") == "nci_pdq"
+           else {"source_pdf_pages": len(guideline.pages)}),
         "coverage_dispositions": dict(
             Counter(p["disposition"] for p in coverage["page_coverage"])
         ),

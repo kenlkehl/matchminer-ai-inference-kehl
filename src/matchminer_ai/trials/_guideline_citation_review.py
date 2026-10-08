@@ -173,6 +173,10 @@ def run_review(guideline, original_path, output, client, *, workers, notify=None
             )
         },
     }
+    if guideline.metadata.get("source_kind") == "nci_pdq":
+        identity["prompt_resources_sha256"]["pdq.system.txt"] = digest(
+            load_prompt_text("pdq.system.txt")
+        )
     # Operational concurrency, timeout and retry count may change on resume.
     for key in ("timeout", "attempts", "max_concurrent_requests"):
         identity["llm"].pop(key, None)

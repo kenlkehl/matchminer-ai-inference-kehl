@@ -120,6 +120,11 @@ supplied guideline library using a configured remote LLM. See the
 The package contains conversion/extraction code and synthetic tests only; it
 does not include NCCN PDFs, guideline text, or generated catalogs. Source-derived
 outputs and checkpoints must be written outside the code repository.
+`trials.prepare_pdq_library` snapshots complete NCI PDQ health-professional HTML
+summaries, and `trials.summarize_pdq` uses the same catalog pipeline with PDQ-specific
+source interpretation, evidence grades and section citations. The resulting
+catalogs work with the existing retrieval and raw-note workup-review APIs. See the
+[PDQ catalog guide](docs/user-guide/pdq-catalogs.md).
 Existing catalogs can also be queried by exact space using
 `trials.get_guideline_considerations`, or ranked for patient summaries using
 `matching.retrieve_guideline_considerations` (TrialSpace retrieval followed by

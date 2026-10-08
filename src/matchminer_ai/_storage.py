@@ -33,6 +33,21 @@ def atomic_json(path: Path, data):
     atomic_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
+def atomic_bytes(path: Path, data: bytes):
+    """Save an original binary source without decoding or re-encoding it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".writing-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 

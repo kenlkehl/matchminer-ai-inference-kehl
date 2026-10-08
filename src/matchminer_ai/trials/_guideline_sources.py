@@ -20,6 +20,18 @@ class Page:
     text: str
     sha256: str
     links: tuple[int, ...]
+    source_url: str | None = None
+    section_path: tuple[str, ...] = ()
+
+    def citation_metadata(self):
+        if self.source_url is not None:
+            return {
+                "source_url": self.source_url,
+                "section_number": self.number,
+                "section_path": list(self.section_path),
+                "printed_label": self.label,
+            }
+        return {"pdf_page": self.number, "printed_label": self.label}
 
 
 @dataclass
@@ -37,6 +49,9 @@ class Guideline:
     def primary(self):
         # Front matter contains change logs with *removed* recommendations.
         # Retain and hash it, but don't mine old/deleted recommendations from it.
+        if self.metadata.get("source_kind") == "nci_pdq":
+            paths = {p["path"] for p in self.metadata["pages"] if p["primary"]}
+            return [p for p in self.pages.values() if p.path in paths]
         return [
             p for p in self.pages.values() if not p.path.startswith("00-front-matter/")
         ]
@@ -111,8 +126,12 @@ def load_guideline(root, disease):
         import json
 
         metadata = json.loads(manifest_bytes)
+        if metadata.get("generator") == "nci-pdq-html-to-markdown":
+            from ._pdq_sources import load_pdq_guideline
+
+            return load_pdq_guideline(directory, metadata, manifest_bytes)
         if metadata.get("generator") != "nccn-pdf-to-markdown":
-            raise InputNotReady("Expected the nccn-pdf-to-markdown manifest format")
+            raise InputNotReady("Expected an NCCN PDF or NCI PDQ snapshot manifest")
         records = metadata["pages"]
         if sorted(p["pdf_page"] for p in records) != list(
             range(1, metadata["page_count"] + 1)

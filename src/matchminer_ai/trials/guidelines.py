@@ -22,7 +22,8 @@ def list_guidelines(source_directory: str | Path) -> pd.DataFrame:
     ----------
     source_directory : str or Path
         Collection directory, its ``markdown`` directory, or a parent containing
-        exactly one collection. The format is produced by ``convert_guidelines.py``.
+        exactly one collection. Produced by ``convert_guidelines.py`` or
+        :func:`prepare_pdq_library`.
 
     Returns
     -------
@@ -78,7 +79,9 @@ def summarize_guidelines(
     ----------
     source_directory : str or Path
         A locally supplied page-preserving Markdown library with converter
-        manifests and the corresponding original PDFs. No sources are downloaded.
+        manifests and original PDFs, or a complete NCI PDQ HTML snapshot library
+        created by :func:`prepare_pdq_library`. Source format selects the prompt
+        and provenance profile. No sources are downloaded by this function.
     disease : str
         One disease folder name returned by :func:`list_guidelines`.
     output_dir : str or Path

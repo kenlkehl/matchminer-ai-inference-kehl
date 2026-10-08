@@ -6,6 +6,7 @@ from ._guideline_schema import FIELDS
 from .prompt_builder import load_prompt_text
 
 PROMPT_VERSION = "nccn-trialspace-v13-source-excerpts"
+PDQ_PROMPT_VERSION = "pdq-trialspace-v1-source-excerpts"
 
 FIELD_PLACEMENT_RULES = load_prompt_text("guideline.field_placement_rules.txt").rstrip(
     "\n"
@@ -26,6 +27,29 @@ def population_rules(guideline_title):
 
 
 SYSTEM = load_prompt_text("guideline.system.txt").rstrip("\n")
+PDQ_SYSTEM = load_prompt_text("pdq.system.txt").rstrip("\n")
+
+
+def source_system(guideline):
+    if guideline.metadata.get("source_kind") == "nci_pdq":
+        return PDQ_SYSTEM
+    return SYSTEM
+
+
+def source_messages(messages, guideline):
+    """Adapt source semantics without altering any NCCN prompt or checkpoint."""
+    if guideline.metadata.get("source_kind") != "nci_pdq":
+        return messages
+    result = [dict(m) for m in messages]
+    if result[0]["role"] == "system":
+        result[0]["content"] = (
+            source_system(guideline)
+            if result[0]["content"] == SYSTEM
+            else result[0]["content"] + "\n\n" + source_system(guideline)
+        )
+    else:
+        result.insert(0, {"role": "system", "content": source_system(guideline)})
+    return result
 
 
 def messages(task, payload, schema):

@@ -237,6 +237,7 @@ def build_selection_call(client, guideline, states):
         + SELECT_TASK,
         SELECTION,
     )
+    messages = prompts.source_messages(messages, guideline)
     if not client.fits(messages):
         raise ContextBudgetError(
             "The complete selection catalog exceeds available input capacity; "

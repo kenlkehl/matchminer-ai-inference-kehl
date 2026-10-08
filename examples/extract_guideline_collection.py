@@ -166,7 +166,7 @@ def main():
         if unknown:
             parser.error(f"Unknown diseases: {sorted(unknown)}")
         records = [row for row in records if row["disease"] in args.disease]
-    # The immutable collection manifest identifies the current PDF edition.
+    # The immutable collection manifest identifies the current source edition.
     from matchminer_ai.trials._guideline_sources import library_root, safe_child
 
     manifest = json.loads((library_root(args.source) / "manifest.json").read_text())
@@ -179,10 +179,10 @@ def main():
         alternate_manifest = json.loads((alternate / "manifest.json").read_text())
         entries = {row["folder"]: row for row in alternate_manifest["guidelines"]}
         if disease not in entries or entries[disease].get("source_sha256") != hashes[disease]:
-            parser.error(f"Source override for {disease} must have the identical PDF edition/hash")
+            parser.error(f"Source override for {disease} must have the identical source edition/hash")
         alternate_disease = json.loads((safe_child(alternate, disease) / "manifest.json").read_text())
         if alternate_disease.get("source_sha256") != hashes[disease]:
-            parser.error(f"Source override manifest for {disease} has a different PDF hash")
+            parser.error(f"Source override manifest for {disease} has a different source hash")
         _output_directory(alternate, args.output_dir)
         source_overrides[disease] = str(alternate)
     skipped = {

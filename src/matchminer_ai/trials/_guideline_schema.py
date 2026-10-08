@@ -272,8 +272,7 @@ def materialize_evidence(state, pages):
                 {"line": i, "text": lines[i - 1]} for i in item["line_ids"]
             ]
             item["quote"] = "\n".join(lines[i - 1] for i in item["line_ids"])
-            item["pdf_page"] = page.number
-            item["printed_label"] = page.label
+            item.update(page.citation_metadata())
     return result
 
 

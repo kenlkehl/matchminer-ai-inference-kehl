@@ -40,6 +40,9 @@ def pack_messages(
         present = {p.id for p in selected}
         omitted = [p.id for p in guideline.primary if p.id not in present]
         data = {**payload, "omitted_source_page_ids": omitted}
+        if guideline.metadata.get("source_kind") == "nci_pdq":
+            data["source_kind"] = "nci_pdq"
+            data["source_limitations"] = guideline.metadata.get("warnings", [])
         rules = (
             "\n\nFINAL POPULATION RULES:\n"
             + prompts.population_rules(guideline.metadata["title"])
@@ -57,6 +60,7 @@ def pack_messages(
         )
         if system_message is not None:
             messages[0]["content"] = system_message
+        messages = prompts.source_messages(messages, guideline)
         return selected, omitted, messages
 
     # Usually the entire small/medium guideline fits. Do not impose arbitrary character caps.

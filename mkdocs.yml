@@ -23,6 +23,7 @@ nav:
       - How the Good Options pipeline works: user-guide/good-options-pipeline.md
       - Choosing an Inference Setup: user-guide/local-vs-remote.md
       - Guideline extraction: user-guide/guideline-extraction.md
+      - NCI PDQ catalogs: user-guide/pdq-catalogs.md
       - Note-search question answering: user-guide/note-search-qa.md
       - ColBERT workup review: user-guide/colbert-workup.md
   - Reference:

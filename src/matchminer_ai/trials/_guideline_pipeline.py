@@ -145,25 +145,29 @@ def _run(
                 )
 
     run_jobs = partial(parallel_jobs, notify=notify)
+    is_pdq = guideline.metadata.get("source_kind") == "nci_pdq"
+    notice = guideline.metadata["notice"] if is_pdq else NOTICE
+    prompt_version = prompts.PDQ_PROMPT_VERSION if is_pdq else prompts.PROMPT_VERSION
     prompt_files = resources.files("matchminer_ai.prompts")
     prompt_resources = {
         p.name: digest(p.read_bytes())
         for p in prompt_files.iterdir()
         if (p.name.startswith("guideline.") and p.name.endswith(".txt"))
         or p.name == "structured.retry.txt"
+        or (is_pdq and p.name == "pdq.system.txt")
     }
     config = {
         "schema_version": 2,
         "package_version": __version__,
         "implementation": "matchminer_ai.trials.summarize_guidelines-v1",
         "prompt_resources_sha256": prompt_resources,
-        "prompt_version": prompts.PROMPT_VERSION,
+        "prompt_version": prompt_version,
         "catalog_version": CATALOG_VERSION,
         "decision_fields_version": SPECIFICITY_VERSION,
         "ownership_version": OWNERSHIP_VERSION,
         "prompt_rules_sha256": digest(
             {
-                "system": prompts.SYSTEM,
+                "system": prompts.source_system(guideline),
                 "extract": prompts.EXTRACT_TASK,
                 "detail": prompts.DETAIL_TASK,
                 "population": prompts.population_rules(guideline.metadata["title"]),
@@ -247,7 +251,7 @@ def _run(
             "config_sha256": config_id,
             "runtime": {"workers": workers},
             "stage_versions": {
-                "extraction": prompts.PROMPT_VERSION,
+                "extraction": prompt_version,
                 "catalog": CATALOG_VERSION,
                 "catalog_coverage": COVERAGE_VERSION,
                 "decision_fields": SPECIFICITY_VERSION,
@@ -263,12 +267,20 @@ def _run(
         "disease": guideline.disease,
         "title": metadata["title"],
         "version": metadata["version"],
-        "source_pdf": metadata["source_pdf"],
+        **({} if is_pdq else {"source_pdf": metadata["source_pdf"]}),
         "source_sha256": metadata["source_sha256"],
         "source_fingerprint": guideline.fingerprint,
         "input_directory": str(guideline.directory),
         "conversion_warnings": metadata.get("warnings", []),
     }
+    if is_pdq:
+        source_info.update(
+            source_kind="nci_pdq",
+            source_format=metadata["source_format"],
+            is_clinical_practice_guideline=False,
+            documents=metadata["documents"],
+            notice=notice,
+        )
     atomic_json(
         output / "sources.json",
         {
@@ -276,7 +288,11 @@ def _run(
             "pages": [
                 {
                     "page_id": p.id,
-                    "pdf_page": p.number,
+                    **(
+                        {"section_number": p.number, "source_url": p.source_url,
+                         "section_path": list(p.section_path)}
+                        if is_pdq else {"pdf_page": p.number}
+                    ),
                     "label": p.label,
                     "markdown_path": p.path,
                     "markdown_sha256": p.sha256,
@@ -290,7 +306,7 @@ def _run(
         "status": "running",
         "stage": "extract",
         "updated_utc": now(),
-        "notice": NOTICE,
+        "notice": notice,
     }
     atomic_json(output / "status.json", status)
     try:
@@ -479,11 +495,13 @@ def _run(
                 ),
             )
             # Stable within a source edition and canonical definition, independent of completion order.
-            pid = f"nccn-{guideline.disease}-{digest({'pdf': metadata['source_sha256'], 'space': group['space']})[:16]}"
+            source_key = "html" if is_pdq else "pdf"
+            namespace = "pdq" if is_pdq else "nccn"
+            pid = f"{namespace}-{guideline.disease}-{digest({source_key: metadata['source_sha256'], 'space': group['space']})[:16]}"
             return {
                 "paradigm_id": pid,
                 "space_trial_id": pid,
-                "trial_id": f"guideline:{guideline.disease}:{metadata['version']}",
+                "trial_id": f"{'pdq' if is_pdq else 'guideline'}:{guideline.disease}:{metadata['version']}",
                 "clinical_space_summary": format_space(group["space"]),
                 **materialize_quoted_state(value, supplied),
                 "source_batch_numbers": group["source_batch_numbers"],
@@ -498,7 +516,7 @@ def _run(
                     "tokenizer_mode": llm.tokenizer_mode,
                 },
                 "review_required": True,
-                "notice": NOTICE,
+                "notice": notice,
             }
 
         notify(
@@ -572,7 +590,10 @@ def export(output, rows):
     writer.writeheader()
     writer.writerows(rows)
     atomic_text(output / "trial_spaces.csv", stream.getvalue())
-    lines = ["# Extracted disease-state paradigms", "", NOTICE, ""]
+    lines = [
+        "# Extracted disease-state paradigms", "",
+        rows[0].get("notice", NOTICE) if rows else NOTICE, "",
+    ]
     for row in rows:
         lines.extend(
             [
@@ -624,6 +645,14 @@ def export(output, rows):
         source = row["source"]
         manifest = read_json(Path(source["input_directory"]) / "manifest.json")
         for p in manifest["pages"]:
+            if source.get("source_kind") == "nci_pdq":
+                if f"p{p['section_number']:04d}" in citations:
+                    path = Path(source["input_directory"]) / p["path"]
+                    link = os.path.relpath(path, output).replace(" ", "%20")
+                    lines.append(
+                        f"- [{p['label']}]({p['source_url']}) · [saved section]({link})"
+                    )
+                continue
             if f"p{p['pdf_page']:04d}" in citations:
                 path = Path(source["input_directory"]) / p["path"]
                 link = os.path.relpath(path, output).replace(" ", "%20")

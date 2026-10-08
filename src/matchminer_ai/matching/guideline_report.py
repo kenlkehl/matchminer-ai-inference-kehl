@@ -167,6 +167,20 @@ def write_guideline_considerations_report(
                 for key, label in FIELDS.items()
             ]
             lines.append("")
+            if source.get("source_kind") == "nci_pdq":
+                lines += [
+                    "**Source type:** NCI PDQ health-professional evidence summary. "
+                    "PDQ evidence grades are not NCCN recommendation categories; "
+                    "listed alternatives do not establish universally required care.",
+                    "",
+                ]
+                for document in source.get("documents", []):
+                    lines += [
+                        f"{_text(document['attribution'])}. "
+                        f"Source updated: {_text(document.get('updated_at') or 'not stated')}. "
+                        f"[Original summary]({document['url']}).",
+                        "",
+                    ]
             pdf = None
             if source.get("input_directory") and source.get("source_pdf"):
                 candidate = (
@@ -185,7 +199,9 @@ def write_guideline_considerations_report(
                         f"{item['page_id']} ({item.get('printed_label', 'unlabeled')}); lines "
                         + ", ".join(map(str, item["line_ids"]))
                     )
-                    if pdf is not None and item.get("pdf_page"):
+                    if source.get("source_kind") == "nci_pdq" and item.get("source_url"):
+                        labels.append(f"[{_text(address)}]({item['source_url']})")
+                    elif pdf is not None and item.get("pdf_page"):
                         link = quote(os.path.relpath(pdf, output.parent), safe="/.-_")
                         labels.append(
                             f"[{_text(address)}]({link}#page={item['pdf_page']})"

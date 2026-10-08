@@ -7,6 +7,8 @@
         - summarize_trials
         - list_guidelines
         - summarize_guidelines
+        - prepare_pdq_library
+        - summarize_pdq
         - audit_guideline_catalog
         - load_guideline_catalog
         - get_guideline_considerations
