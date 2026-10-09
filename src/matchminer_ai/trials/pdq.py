@@ -268,6 +268,7 @@ def summarize_pdq_collection(
     config: MMAIConfig | None = None, source_workers: int = 2,
     disease_workers: int | None = None, allow_endpoint_change: bool = False,
     progress_callback: Callable[[dict], None] | None = None,
+    parent_collection: str | Path | None = None,
 ) -> dict:
     """Run independent PDQ catalogs under one process-wide endpoint request cap.
 
@@ -286,6 +287,9 @@ def summarize_pdq_collection(
     The returned state includes ``completed_catalogs`` for loading with
     ``load_guideline_catalog``. Per-catalog compatibility and final audits remain
     the same as ``summarize_pdq``; no content is synthesized by the scheduler.
+    For a failed subset, ``parent_collection`` names the original collection.json;
+    a directory lock prevents a competing dispatcher, validates job ownership,
+    and keeps its disease statuses synchronized without rerunning other catalogs.
     """
     from matchminer_ai.config import MMAIConfig, load_default_preset
     from ._pdq_collection import run_collection
@@ -297,4 +301,5 @@ def summarize_pdq_collection(
         jobs, output_dir=output_dir, config=resolved, source_workers=source_workers,
         disease_workers=disease_workers, allow_endpoint_change=allow_endpoint_change,
         progress_callback=progress_callback,
+        parent_collection=parent_collection,
     )

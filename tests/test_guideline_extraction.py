@@ -1727,7 +1727,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
         validate_canonical(value, ["extract-0001-c001", "c2", "c3"])
 
     def fake_complete(
-        self, client, job, messages, schema, validator, repair_handler=None
+        self, client, job, messages, schema, validator, repair_handler=None, **kwargs
     ):
         rendered = json.dumps(messages)
         for forbidden in (

@@ -3,6 +3,7 @@
 import threading
 import re
 import logging
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from ._pdq_sources import pdq_url
 
 def run_collection(jobs, *, output_dir, config, source_workers=2,
                    disease_workers=None, allow_endpoint_change=False,
-                   progress_callback=None):
+                   progress_callback=None, parent_collection=None):
     """Run a caller-owned plan; downloading one source does not block ready catalogs."""
     from .pdq import _sources, prepare_pdq_library, summarize_pdq
 
@@ -64,9 +65,23 @@ def run_collection(jobs, *, output_dir, config, source_workers=2,
     assignments = {d: endpoints[0] for d in plan}
     counts = catalog_worker_counts(assignments, cap, disease_workers)
     work.mkdir(parents=True, exist_ok=True)
-    with directory_lock(work):
+    with ExitStack() as locks:
+        locks.enter_context(directory_lock(work))
         path = work / "collection.json"
         previous = read_json(path) if path.exists() else {}
+        parent_path = external(parent_collection) if parent_collection else None
+        parent = None
+        if parent_path:
+            if parent_path.parent == work:
+                raise ValueError("Recovery metadata needs a separate output directory")
+            locks.enter_context(directory_lock(parent_path.parent))
+            parent = read_json(parent_path)
+            if any(parent["identity"]["jobs"].get(d) != j for d, j in plan.items()):
+                raise ValueError("Recovery jobs must retain their parent source/output paths")
+            if any(parent["diseases"][d]["status"] == "complete"
+                   and previous.get("identity", {}).get("jobs", {}).get(d) != plan[d]
+                   for d in plan):
+                raise ValueError("Recovery plan must not rerun completed parent catalogs")
         identity = {"jobs": plan, "plan_sha256": digest(plan)}
         if previous and previous["identity"] != identity:
             raise ValueError("PDQ collection plan changed; use a new collection output directory")
@@ -90,6 +105,22 @@ def run_collection(jobs, *, output_dir, config, source_workers=2,
                 state["completed_catalogs"] = [j["output_directory"] for j in state["diseases"].values()
                                                if j["status"] == "complete"]
                 atomic_json(path, state)
+                if parent is not None:
+                    # The parent lock excludes a second dispatcher. Preserve all
+                    # other disease rows; the stable report reflects recovery as
+                    # it happens instead of retaining stale failed labels.
+                    parent["diseases"].update(state["diseases"])
+                    parent["updated_utc"] = state["updated_utc"]
+                    parent["active_recovery_collection"] = str(path)
+                    parent["recovery_pid"] = state["pid"]
+                    parent.setdefault("initial_pid", parent.get("pid"))
+                    parent["pid"] = state["pid"]
+                    parent["status"] = ("complete" if all(
+                        row["status"] == "complete" for row in parent["diseases"].values()
+                    ) else (state["status"] if state["status"] != "complete" else "failed"))
+                    parent["completed_catalogs"] = [row["output_directory"]
+                        for row in parent["diseases"].values() if row["status"] == "complete"]
+                    atomic_json(parent_path, parent)
             if progress_callback:
                 try:
                     progress_callback({"disease": disease, **values})

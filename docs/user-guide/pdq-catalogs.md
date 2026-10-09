@@ -230,6 +230,41 @@ do not relabel old responses as having come from the new model. The endpoint's
 advertised ID is a compatibility check, not a verification of model weights.
 Resume/retry failed runs only after diagnosing their recorded errors.
 
+## Recover a failed subset
+
+Create a new job plan containing only failed diseases, preserving each job's exact
+source/output paths and URLs from the original collection's `identity.jobs`.
+Use a separate directory for recovery metadata and point `--parent-collection` at
+the original report:
+
+```bash
+PYTHONPATH=src python examples/extract_pdq_collection.py \
+  --plan /local/data/pdq/failed-jobs.json \
+  --output-dir /local/data/pdq/recovery \
+  --parent-collection /local/data/pdq/treatment-catalogs/collection.json \
+  --endpoint http://your-selected-server:8000/v1 --concurrency 32
+```
+
+The recovery worker locks both collection directories, updates the original
+report as each disease progresses, and leaves completed catalogs outside its plan
+untouched. Stop the original worker first. The Python API accepts the same option
+as `parent_collection=...`. Interrupt/resume and explicit endpoint migration work
+the same way as for a full collection.
+
+Recovery is part of the shared PDQ/NCCN pipeline. Exhausted extraction tasks can
+split into smaller, uniquely owned page groups; final population-coverage failures
+can narrow affected consolidation batches. Both keep durable split records and
+reuse compatible accepted checkpoints. When optional cross-batch deduplication
+repeatedly omits or rewrites populations, the pipeline retains all validated
+definitions, records that semantic duplicates may remain, and still requires the
+full population-coverage check to pass.
+
+Targeted retries can constrain immutable population fields and coverage names to
+their exact supplied values. Citation repair chooses literal supporting source
+text, treating the rejected draft as fallible. These retries do not relax exact
+quotation, population coverage, source ownership, or final audit requirements.
+Clinical output remains model-generated and retains its raw-response provenance.
+
 ## Source meaning and reuse
 
 [NCI describes PDQ](https://www.cancer.gov/publications/pdq/information-summaries)

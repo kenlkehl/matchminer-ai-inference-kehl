@@ -172,3 +172,27 @@ def test_invalid_collection_paths_fail_before_any_dispatch(tmp_path):
     plan["b"]["output_directory"] = plan["a"]["output_directory"]
     with pytest.raises(ValueError, match="distinct"):
         summarize_pdq_collection(plan, output_dir=tmp_path / "collection", config=config())
+
+
+def test_subset_recovery_updates_parent_preserves_completed_and_can_resume(tmp_path, monkeypatch):
+    from matchminer_ai._storage import atomic_json, digest
+    plan = jobs(tmp_path, ["done", "failed", "another-failure"])
+    completed = {"status": "complete", "output_directory": plan["done"]["output_directory"], "spaces": 7, "audit": "passed"}
+    parent = tmp_path / "parent/collection.json"
+    atomic_json(parent, {"identity": {"jobs": plan, "plan_sha256": digest(plan)}, "status": "failed",
+        "diseases": {"done": completed, **{d: {"status": "failed", "output_directory": plan[d]["output_directory"]}
+                                           for d in ["failed", "another-failure"]}}})
+    monkeypatch.setattr("matchminer_ai.trials.pdq.summarize_pdq",
+                        lambda *a, **kw: ([1], {"validation": {"status": "passed"}}))
+    for _ in range(2):
+        result = summarize_pdq_collection({"failed": plan["failed"]}, output_dir=tmp_path / "recovery",
+                                         config=config(), parent_collection=parent)
+        assert result["status"] == "complete"
+        updated = read_json(parent)
+        assert updated["status"] == "failed"  # Other failure remains visible.
+        assert updated["diseases"]["done"] == completed
+        assert updated["diseases"]["failed"]["status"] == "complete"
+        assert updated["diseases"]["another-failure"]["status"] == "failed"
+    with pytest.raises(ValueError, match="completed parent"):
+        summarize_pdq_collection({"done": plan["done"]}, output_dir=tmp_path / "unrelated-recovery",
+                                 config=config(), parent_collection=parent)

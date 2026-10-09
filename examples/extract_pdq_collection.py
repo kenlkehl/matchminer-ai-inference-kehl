@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--disease-workers", type=int)
     parser.add_argument("--request-timeout", type=float, default=7200)
     parser.add_argument("--allow-endpoint-change", action="store_true")
+    parser.add_argument("--parent-collection", type=Path,
+                        help="Failed parent collection.json to keep synchronized during subset recovery")
     args = parser.parse_args()
     if min(args.concurrency, args.source_workers, args.request_timeout) <= 0 or (
         args.disease_workers is not None and args.disease_workers <= 0
@@ -61,6 +63,7 @@ def main():
                 disease_workers=args.disease_workers,
                 allow_endpoint_change=args.allow_endpoint_change,
                 progress_callback=lambda item: print(json.dumps(item), flush=True),
+                parent_collection=args.parent_collection,
             )
         return 0 if state["status"] == "complete" else 1
     except InferenceCancelled:
