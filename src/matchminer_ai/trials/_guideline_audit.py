@@ -12,6 +12,8 @@ from ._guideline_canonical import (
     LEAN_STATE,
     selected_states,
     validate_catalog,
+    combine_identical,
+    selection_retention_allowed,
 )
 from ._guideline_batching import validate_ledger
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, parse_model_json
@@ -152,8 +154,15 @@ def audit_catalog(guideline, output):
     if canonical.get("version") in CONTENT_VERSIONS:
         batches = read_json(output / "canonical_batches.json")
         require(not batches["failures"], "Canonical batches contain failures")
+        accepted_catalogs = {
+            accepted["result_sha256"]
+            for path in (output / "checkpoints").glob("*/accepted.json")
+            if (accepted := read_json(path))["job"].startswith("catalog-content-")
+        }
         processed = []
         for batch in batches["batches"].values():
+            require(digest(batch["result"]) in accepted_catalogs,
+                    "Canonical batch has no accepted model response")
             processed.extend(batch["input_candidate_ids"])
             validate_catalog(
                 batch["result"],
@@ -175,9 +184,21 @@ def audit_catalog(guideline, output):
             )
         if (output / "canonical_selection.json").exists():
             selection = read_json(output / "canonical_selection.json")
+            all_states = combine_identical([
+                {**s, "source_batch_numbers": [number]}
+                for number, (_, batch) in enumerate(sorted(batches["batches"].items()), 1)
+                for s in batch["result"]["states"]
+            ])
+            require(selection["available_states"] == all_states,
+                    "Selection inputs differ from validated source batches")
+            if selection.get("mode") == "retain-validated-definitions":
+                require(selection_retention_allowed(selection["reason"]),
+                        "Invalid reason for retaining validated definitions")
+                chosen = all_states
+            else:
+                chosen = selected_states(selection["result"], selection["available_states"])
             require(
-                selected_states(selection["result"], selection["available_states"])
-                == canonical["groups"],
+                chosen == canonical["groups"],
                 "Selected clinical definitions differ from canonical catalog",
             )
     else:
@@ -304,6 +325,10 @@ def audit_catalog(guideline, output):
         "Coverage does not account for every content page exactly once",
     )
     extraction = read_json(output / "extraction.json")
+    extraction_splits = output / "extraction_packet_splits.json"
+    if extraction_splits.exists():
+        from ._guideline_extraction_batches import validate_ledger as validate_extraction_ledger
+        validate_extraction_ledger(read_json(extraction_splits), guideline)
     require(not extraction["failures"], "Extraction contains failures")
     owns_branches = (
         config.get("stage_versions", {}).get("ownership") == OWNERSHIP_VERSION

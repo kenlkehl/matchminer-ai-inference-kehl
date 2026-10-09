@@ -122,8 +122,10 @@ does not include NCCN PDFs, guideline text, or generated catalogs. Source-derive
 outputs and checkpoints must be written outside the code repository.
 `trials.prepare_pdq_library` snapshots complete NCI PDQ health-professional HTML
 summaries, and `trials.summarize_pdq` uses the same catalog pipeline with PDQ-specific
-source interpretation, evidence grades and section citations. The resulting
-catalogs work with the existing retrieval and raw-note workup-review APIs. See the
+source interpretation, evidence grades and section citations.
+`trials.summarize_pdq_collection` overlaps independent catalogs and bounded source
+downloads under one shared endpoint request cap, reusing existing checkpoints.
+The resulting catalogs work with the existing retrieval and raw-note workup-review APIs. See the
 [PDQ catalog guide](docs/user-guide/pdq-catalogs.md).
 Existing catalogs can also be queried by exact space using
 `trials.get_guideline_considerations`, or ranked for patient summaries using

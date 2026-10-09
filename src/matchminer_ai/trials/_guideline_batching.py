@@ -44,7 +44,8 @@ def validate_ledger(ledger, guideline, candidates):
             raise ValueError("Canonical split receipt differs from its input batch")
 
 
-def run_batches(planned, guideline, candidates, output, workers, run_jobs, local, build, log):
+def run_batches(planned, guideline, candidates, output, workers, run_jobs, local, build, log,
+                *, coverage_repairs=()):
     """Retain successes; bound each failed group's retry to smaller source tasks."""
     path = output / "canonical_batch_splits.json"
     identity = {
@@ -58,6 +59,12 @@ def run_batches(planned, guideline, candidates, output, workers, run_jobs, local
     # Older versions saved terminal failures without a split plan. Use them only
     # when both the source and exact extracted candidates still match this run.
     previous = {}
+    missing = {
+        candidate["candidate_id"]
+        for report in coverage_repairs
+        for candidate, row in zip(candidates, report["reviews"])
+        if row["status"] != "represented"
+    }
     saved = output / "canonical_batches.json"
     config_path, candidates_path = output / "run_config.json", output / "candidates.json"
     if saved.exists() and config_path.exists() and candidates_path.exists():
@@ -81,6 +88,13 @@ def run_batches(planned, guideline, candidates, output, workers, run_jobs, local
         members, packed = data
         record = ledger["splits"].get(key)
         error = previous.get(key, "")
+        if record is None and len(members) > 1 and missing.intersection(
+            c["candidate_id"] for c in members
+        ):
+            # A global review can expose a miss that the local judge overlooked.
+            # Regenerating the same large batch can erase earlier repairs. Narrow
+            # only affected leaves, retaining all pages and every candidate.
+            error = "exhausted final coverage: Catalog omitted or broadened an input population"
         if record is None and can_split(error, len(members)):
             mark(key, members, error)
             record = ledger["splits"][key]

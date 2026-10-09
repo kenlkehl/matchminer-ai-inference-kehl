@@ -4,13 +4,14 @@ import copy
 import difflib
 import json
 
-from matchminer_ai._storage import atomic_json, digest
+from matchminer_ai._storage import atomic_json, digest, read_json
+from matchminer_ai.llm.structured import EndpointError
 
 from . import _guideline_prompts as prompts
 from ._guideline_batching import run_batches
 from ._guideline_context import ContextBudgetError, pack_messages
 from ._guideline_completeness import (
-    CoverageError, RETRY_TASK, require_coverage, review_coverage,
+    CoverageError, RETRY_TASK, require_coverage, review_coverage, population,
 )
 from ._guideline_schema import (
     EVIDENCE,
@@ -250,6 +251,15 @@ def consolidate(
     client, guideline, candidates, output, workers, run_jobs, log, context_chars=None,
     *, coverage_repairs=(),
 ):
+    # Persisted final findings are retry guidance only; the same source-backed
+    # generation, local coverage and full final coverage guards still run.
+    saved_coverage = output / "canonical_coverage.json"
+    if not coverage_repairs and saved_coverage.exists():
+        previous = read_json(saved_coverage)
+        if (previous.get("input_sha256") == digest([population(c) for c in candidates])
+            and any(r["status"] != "represented" for r in previous["reviews"])):
+            coverage_repairs = (previous,)
+
     def covered_complete(key, messages, schema, validate, inputs, states_from):
         def guarded(value):
             validate(value)
@@ -259,7 +269,7 @@ def consolidate(
             require_coverage(report)
 
         try:
-            return client.complete(key, messages, schema, guarded)
+            return client.complete(key, messages, schema, guarded, reuse_exhausted=True)
         except CoverageError as error:
             # An older accepted checkpoint is revalidated before the client's
             # retry loop. Preserve it as evidence and request a corrected full
@@ -322,6 +332,7 @@ def consolidate(
     values, failures = run_batches(
         planned, guideline, candidates, output, workers, run_jobs, local,
         lambda members: build_call(client, guideline, members, context_chars), log,
+        coverage_repairs=coverage_repairs,
     )
     atomic_json(
         output / "canonical_batches.json",
@@ -348,21 +359,31 @@ def consolidate(
     }
     if len(values) > 1:
         packed = build_selection_call(client, guideline, states)
-        selected = covered_complete(
-            "catalog-select-content",
-            packed[2],
-            SELECTION,
-            lambda v: selected_states(v, states),
-            states,
-            lambda v: selected_states(v, states),
-        )
-        atomic_json(
-            output / "canonical_selection.json",
-            {"available_states": states, "result": selected},
-        )
-        states = selected_states(selected, states)
-        topics.extend(selected["context_only_topics"])
-        uncertainties.extend(selected["uncertainties"])
+        try:
+            selected = covered_complete(
+                "catalog-select-content", packed[2], SELECTION,
+                lambda v: selected_states(v, states), states,
+                lambda v: selected_states(v, states),
+            )
+        except EndpointError as error:
+            if not selection_retention_allowed(str(error)):
+                raise
+            # Selection is optional deduplication of already validated content.
+            # If it repeatedly rewrites/drops populations, retain ALL definitions
+            # rather than accepting a bad selection. Full final coverage below
+            # is mandatory. This is not presented as an accepted LLM response.
+            warning = "Cross-batch deduplication could not preserve every validated definition; retained all exact-distinct definitions. Semantic duplicates may remain."
+            uncertainties.append(warning)
+            atomic_json(output / "canonical_selection.json", {
+                "mode": "retain-validated-definitions", "available_states": states,
+                "reason": str(error), "warning": warning,
+            })
+            log(f"{guideline.disease}: retaining all validated definitions after selection failure")
+        else:
+            atomic_json(output / "canonical_selection.json", {"available_states": states, "result": selected})
+            states = selected_states(selected, states)
+            topics.extend(selected["context_only_topics"])
+            uncertainties.extend(selected["uncertainties"])
         context_metadata["selection"] = metadata(packed)
     # Check the final catalog, too: cross-batch selection must not undo local
     # coverage. Identical review requests reuse the client's validated cache.
@@ -392,3 +413,11 @@ def consolidate(
         "context_only_topics": topics,
         "uncertainties": uncertainties,
     }
+
+
+def selection_retention_allowed(error):
+    """Only a failed deduplication contract permits retention, not a failed source stage."""
+    return "exhausted" in error and any(marker in error for marker in (
+        "Copy complete supplied clinical definitions without rewriting fields",
+        "Catalog omitted or broadened",
+    ))

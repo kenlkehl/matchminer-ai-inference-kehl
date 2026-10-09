@@ -3,6 +3,8 @@
 All sources, checkpoints, model responses and catalogs stay in external directories.
 Completed catalogs can be supplied to skip already processed, identical editions.
 Repeat the same invocation to resume checkpoints and retry failed diseases.
+Disease dispatch automatically scales to the endpoint cap; no fixed per-disease
+request reservations remain when other catalogs finish.
 """
 
 import argparse
@@ -10,8 +12,6 @@ import copy
 import json
 import threading
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,6 +24,10 @@ from matchminer_ai.trials import (
     summarize_guidelines,
 )
 from matchminer_ai.trials.guidelines import _output_directory
+from matchminer_ai.trials._catalog_scheduling import (
+    catalog_worker_counts,
+    run_catalog_jobs,
+)
 
 
 def validate_endpoints(endpoints, model):
@@ -103,7 +107,8 @@ def main():
         "--concurrency", type=int, default=32, help="Prompt cap per endpoint"
     )
     parser.add_argument(
-        "--disease-workers", type=int, default=8, help="Disease workers per endpoint"
+        "--disease-workers", type=int,
+        help="Optional disease-worker cap per endpoint; default: auto, up to --concurrency",
     )
     parser.add_argument("--completed-catalog", type=Path, action="append", default=[])
     parser.add_argument("--disease", action="append", help="Optional explicit subset")
@@ -117,7 +122,9 @@ def main():
         help="Resume only failed diseases from collection.json; write recovery.json",
     )
     args = parser.parse_args()
-    if args.concurrency < 1 or args.disease_workers < 1:
+    if args.concurrency < 1 or (
+        args.disease_workers is not None and args.disease_workers < 1
+    ):
         parser.error("Concurrency and disease workers must be positive")
     endpoints = list(
         dict.fromkeys(
@@ -231,6 +238,11 @@ def main():
         "status": "running",
         "concurrency": args.concurrency,
         "disease_workers": args.disease_workers,
+        "allocation_policy": "shared-endpoint-capacity-v1",
+        "effective_disease_workers": catalog_worker_counts(
+            {d: assignments[d] for d in diseases if d not in deferred},
+            args.concurrency, args.disease_workers,
+        ),
         "endpoints": endpoints,
         "endpoint_models": endpoint_models,
         "new_disease_endpoint": new_endpoint,
@@ -273,25 +285,17 @@ def main():
         except Exception as exc:
             update(disease, status="failed", error=f"{type(exc).__name__}: {exc}")
 
-    # Separate pools let a new server start immediately even while the original
-    # pool is resuming long-running diseases. Request limits remain shared across
-    # all disease clients targeting the same endpoint within this process.
-    with ExitStack() as stack:
-        executors = {
-            e: stack.enter_context(ThreadPoolExecutor(max_workers=args.disease_workers))
-            for e in endpoints
-        }
-        # A resume should repair known failures promptly instead of leaving them
-        # behind every already-running disease's potentially long consolidation.
-        priority = {"failed": 0, "running": 1, "pending": 2, "complete": 3}
-        ordered = sorted(
-            (d for d in diseases if d not in deferred),
-            key=lambda d: priority.get(state["diseases"][d]["status"], 2),
-        )
-        for future in as_completed(
-            [executors[assignments[d]].submit(run, d) for d in ordered]
-        ):
-            future.result()
+    # Retry failures first, then keep ready catalogs competing for the same
+    # full endpoint cap. Never reserve a fixed fraction for an individual disease.
+    priority = {"failed": 0, "running": 1, "pending": 2, "complete": 3}
+    ordered = sorted(
+        (d for d in diseases if d not in deferred),
+        key=lambda d: priority.get(state["diseases"][d]["status"], 2),
+    )
+    run_catalog_jobs(
+        {d: assignments[d] for d in ordered}, run,
+        concurrency=args.concurrency, disease_workers=args.disease_workers,
+    )
     failed = [
         d for d, status in state["diseases"].items()
         if d not in deferred and status["status"] != "complete"

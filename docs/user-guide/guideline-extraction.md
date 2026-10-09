@@ -89,7 +89,7 @@ python examples/extract_guideline_collection.py \
   --endpoint http://original-server:8001/v1 \
   --additional-endpoint http://additional-server:8060/v1 \
   --new-disease-endpoint http://additional-server:8060/v1 \
-  --model served-model-id --concurrency 32 --disease-workers 8
+  --model served-model-id --concurrency 32
 ```
 
 Retain the original invocation's source, output, primary endpoint, model and
@@ -98,8 +98,12 @@ for the same model ID and advertised context window. Each disease with an existi
 `run_config.json` keeps its recorded endpoint and checkpoints. With
 `--new-disease-endpoint`, every unstarted catalog goes to that server; otherwise
 unstarted work is balanced between configured endpoints. Separate disease-worker
-pools allow the additional server to start immediately. The concurrency and
-disease-worker caps apply **per endpoint**. `collection.json` records the endpoint
+pools allow the additional server to start immediately. `--concurrency` applies
+**per endpoint**. By default disease dispatch is automatic: up to that many
+available catalogs can run on each endpoint, helping fill request slots even
+during serial catalog stages. Use `--disease-workers` only to explicitly limit
+concurrent disease preparation. `collection.json` records the effective disease
+worker counts, allocation policy and endpoint
 assigned to each disease and the preflight model information. Stop the original
 collection process before resuming; do not run two collection writers together.
 Each disease still uses the standard single-endpoint API and provenance checks.
@@ -111,6 +115,22 @@ four requests per endpoint (or the configured concurrency if smaller). This
 keeps prompt preparation from waiting behind long generations without increasing
 the generation cap. Context packing, output reserves and checkpoint identities
 are unchanged. Separate processes still have separate limits.
+
+NCCN and PDQ collection runners use the same shared-capacity dispatcher. Every
+active catalog receives the full configured endpoint request cap; it is never
+divided into fixed per-disease reservations. Finishing catalogs release request
+slots immediately, and the last catalog can use the entire cap for its independent
+detail jobs without a worker restart. Ready queued diseases start as soon as a
+disease worker becomes free. Dependencies, exact context packing, server limits,
+and the number of unfinished jobs can still keep actual traffic below the cap.
+
+For a long-tail resume, stop the original batch and repeat the same invocation
+with the desired `--concurrency`, omitting `--disease-workers` for automatic
+allocation. This preserves accepted checkpoints and clinical settings. Keep one
+batch process per endpoint budget where possible; separate recovery processes do
+not automatically borrow capacity across processes, and their combined limits
+must stay within the caller's allowance. No server or allowed cap is selected
+automatically.
 
 If one disease needs an existing verified source snapshot, supply
 `--source-override DISEASE /path/to/snapshot/markdown`. Its collection manifest

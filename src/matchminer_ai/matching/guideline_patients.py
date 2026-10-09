@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,13 @@ class PatientEmbeddings:
     vectors: np.ndarray
     model_metadata: dict
     encoder_identity: dict | None
+
+
+def _same(a, b):
+    # Saved metadata round-trips through JSON (tuples become lists).
+    return json.dumps(a, sort_keys=True, default=str) == json.dumps(
+        b, sort_keys=True, default=str
+    )
 
 
 def _summary_digests(patients):
@@ -187,9 +195,8 @@ def retrieve_guideline_patients(
         config=config,
         return_metadata=True,
     )
-    if (
-        pm["model_metadata"]["embedding_model"]
-        != sm["model_metadata"]["embedding_model"]
+    if not _same(
+        pm["model_metadata"]["embedding_model"], sm["model_metadata"]["embedding_model"]
     ):
         raise ValueError("Patient and guideline embedding models differ.")
     if patient_embeddings is not None:
@@ -198,7 +205,7 @@ def retrieve_guideline_patients(
         current = _embedding_cache_identity(
             config.embedding, sm["model_metadata"]["embedding_model"]
         )
-        if current is None or patient_embeddings.encoder_identity != current:
+        if current is None or not _same(patient_embeddings.encoder_identity, current):
             raise ValueError(
                 "Precomputed patient embeddings came from a different or unverifiable "
                 "TrialSpace encoder; rebuild them."

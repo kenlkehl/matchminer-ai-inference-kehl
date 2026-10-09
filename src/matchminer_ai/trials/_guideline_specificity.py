@@ -5,7 +5,7 @@ import re
 VERSION = "trialspace-field-semantics-v3"
 # A backward-compatible checker fix does not change generation prompts or the
 # representation contract. Offline audits record the implementation revision.
-REVISION = "trialspace-field-semantics-v3.7-named-anatomic-region"
+REVISION = "trialspace-field-semantics-v3.8-named-imaging-region"
 
 _ORDINALS = {
     word: str(i)
@@ -75,6 +75,12 @@ _COUNT_QUANTIFIER = re.compile(
 # This conventional anatomic region is one named concept. Only its internal
 # conjunction is masked; surrounding population operators are still checked.
 _NAMED_ANATOMIC_REGION = re.compile(r"\bhead\s+(?P<operator>and)\s+neck\b")
+# A combined imaging examination is one option in a list of imaging methods.
+# Require MRI context; bare anatomical conjunctions remain population logic.
+_NAMED_IMAGING_REGION = re.compile(
+    r"\b(?:mri\s+of\s+(?:the\s+)?)?spine\s+(?P<operator>and)\s+pelvis\s+mri\b"
+    r"|\bmri\s+of\s+(?:the\s+)?spine\s+(?P<operator_after>and)\s+pelvis\b"
+)
 
 
 def explicit_lines(text):
@@ -93,10 +99,12 @@ def has_ungrouped_mixed_logic(text):
     # stored field or turn an ungrouped population alternative into conjunction.
     for comparison in (
         _NUMERIC_THRESHOLD, _INCLUSIVE_COMPARISON, _TEMPORAL_COMPARISON,
-        _COUNT_QUANTIFIER, _NAMED_ANATOMIC_REGION,
+        _COUNT_QUANTIFIER, _NAMED_ANATOMIC_REGION, _NAMED_IMAGING_REGION,
     ):
         for match in reversed(list(comparison.finditer(text))):
             start, end = match.span("operator")
+            if start < 0:
+                start, end = match.span("operator_after")
             text = text[:start] + " " * (end - start) + text[end:]
     levels = [set()]
     for token in re.findall(r"[()]|\band\s*/\s*or\b|\b(?:and|or)\b", text):

@@ -55,6 +55,27 @@ lookup validates completion, source hashes and exact space identity. The result
 retains candidate ranks, scores, selection counts and source provenance. Scores
 are ranking signals, not probabilities or eligibility determinations.
 
+To search one large population repeatedly, embed it once and reuse the vectors:
+
+```python
+from matchminer_ai.matching import embed_guideline_patients
+
+vectors = embed_guideline_patients(population.summaries, config=config, batch_size=1024)
+selected, metadata = retrieve_guideline_patients(
+    population.summaries, completed_catalog_path, space_trial_id=selected_space_id,
+    config=config, patient_embeddings=vectors,
+)
+```
+
+`PatientEmbeddings` holds float32 vectors in `patient_ids` order, each summary's
+SHA-256 and the verified TrialSpace encoder identity (loaded revision, tokenizer,
+prompt, sequence length and library versions). Retrieval embeds only the guideline
+space and rejects the vectors if any requested patient is missing, any summary text
+changed, or the current encoder identity differs or cannot be verified; rebuild them
+in those cases. A subset of the embedded population may be searched. Nothing is
+written to disk: callers that persist vectors must store them as privately as the
+summaries they derive from.
+
 `PatientCohort` stages return new cohort objects, leaving the prior completed
 stage available on failure or cancellation. IDs are normalized to strings and
 must be unique at the summary level. Notes are stably sorted by patient/date;

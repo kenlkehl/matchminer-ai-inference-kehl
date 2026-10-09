@@ -23,6 +23,7 @@ from ._guideline_quotes import QUOTED_DETAIL
 RETRY_ONLY_PROMPT_FILES = (
     "guideline.boolean_retry.txt",
     "guideline.unsupported_detail_retry.txt",
+    "guideline.quote_select.txt",
 )
 
 
@@ -202,7 +203,10 @@ class Client(StructuredClient):
                     "Repeated 24 complete clinical definitions without any new definition",
                 )
             )
-        if schema in (DETAIL, QUOTED_DETAIL):
+        if schema in (DETAIL, QUOTED_DETAIL) or (
+            schema and {"space", "diagnostic_workup", "treatment_options"}
+            <= schema.get("properties", {}).keys()
+        ):
             guards.append(
                 (
                     OptionRepetitionGuard(),

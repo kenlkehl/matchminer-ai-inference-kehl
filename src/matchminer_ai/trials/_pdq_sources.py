@@ -31,12 +31,21 @@ def pdq_url(value):
     if not isinstance(value, str):
         raise ValueError("PDQ source URL must be a string")
     p = urlsplit(value)
+    path = p.path.rstrip("/")
+    hp_path = path.startswith("/types/") and (
+        "/hp/" in path or "/hp-" in path or path.endswith("-hp-pdq")
+    )
+    treatment_topic = path.startswith("/about-cancer/treatment/types/") and path.endswith("-hp-pdq")
+    # Two official treatment summaries currently omit the -pdq suffix. Their
+    # HTML must still pass the same PDQ metadata/title/body checks below.
+    legacy_treatment = path in {
+        "/types/lymphoma/hp/mantle-cell-lymphoma-treatment",
+        "/types/myeloproliferative/hp/myeloproliferative-neoplasms-treatment",
+    }
     if (
         p.scheme != "https"
         or p.netloc not in {"www.cancer.gov", "cancer.gov"}
-        or not p.path.startswith("/types/")
-        or "/hp/" not in p.path
-        or not p.path.rstrip("/").endswith("-pdq")
+        or not ((hp_path and path.endswith("-pdq")) or treatment_topic or legacy_treatment)
         or p.query
         or p.fragment
     ):

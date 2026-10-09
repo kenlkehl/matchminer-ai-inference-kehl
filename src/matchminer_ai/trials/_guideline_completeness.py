@@ -1,6 +1,7 @@
 """Bounded clinical-content coverage review; internal identifiers never reach the LLM."""
 
 from concurrent.futures import ThreadPoolExecutor
+import copy
 from matchminer_ai.cancellation import submit_cancellable
 import json
 
@@ -164,7 +165,7 @@ def review_coverage(client, candidates, states):
             # Never infer a missing judgment, rename model output, split a
             # singleton, or turn a transport/clinical coverage failure into success.
             message = str(error)
-            if len(items) <= 1 or "exhausted" not in message or not any(
+            if "exhausted" not in message or not any(
                 marker in message for marker in (
                     "Coverage reviews must retain input clinical names in input order",
                     "Coverage review must include every input population exactly once",
@@ -172,6 +173,30 @@ def review_coverage(client, candidates, states):
                 )
             ):
                 raise
+            if len(items) == 1:
+                # Constrain only bookkeeping, never the clinical judgment. The
+                # input name and possible matched names are meaningful clinical
+                # text, not opaque IDs. Missing remains a permitted answer.
+                schema = copy.deepcopy(COVERAGE)
+                reviews = schema["properties"]["reviews"]
+                reviews.update(minItems=1, maxItems=1)
+                fields = reviews["items"]["properties"]
+                fields["input_name"] = {"type": "string", "enum": [items[0][1]["name"]]}
+                fields["matched_population_names"]["items"] = {
+                    "type": "string", "enum": list(dict.fromkeys(s["name"] for s in proposed)),
+                }
+                constrained = [messages[0], {"role": "user", "content": json.dumps({
+                    "input_populations": [items[0][1]], "proposed_catalog": proposed,
+                    "required_json_schema": schema,
+                }, ensure_ascii=False)}]
+                if not client.fits(constrained):
+                    raise ContextBudgetError("Constrained coverage review exceeds input budget")
+                job = "catalog-coverage-" + digest(constrained)[:16]
+                value = client.complete(job, constrained, schema,
+                    lambda v: validate_reviews(v, [items[0][1]], proposed),
+                    reuse_exhausted=True)
+                return [(items, value, {"input_positions": [items[0][0]],
+                        "job": job, "result_sha256": digest(value)})]
             middle = len(items) // 2
             return [result for child in pack(items[:middle]) + pack(items[middle:])
                     for result in review(child)]

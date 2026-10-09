@@ -1,6 +1,7 @@
 """A finite three-stage pipeline: extract packets, canonicalize, populate each state."""
 
 import csv
+import copy
 import io
 import json
 import logging
@@ -28,6 +29,8 @@ from ._guideline_completeness import PROMPT_FILES as COVERAGE_PROMPT_FILES
 from ._guideline_completeness import VERSION as COVERAGE_VERSION
 from ._guideline_context import pack_messages
 from ._guideline_details import build_detail_call
+from ._guideline_extraction_batches import run_extractions
+from matchminer_ai.llm.structured import EndpointError
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, StructuredConfig
 from ._guideline_generation import Client, RETRY_ONLY_PROMPT_FILES
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
@@ -429,7 +432,9 @@ def _run(
         notify(
             f"{guideline.disease}: extracting {len(chunks)} packets from {len(guideline.primary)} pages"
         )
-        extracted, failures = run_jobs(jobs, workers, extract)
+        extracted, failures = run_extractions(
+            jobs, guideline, output, workers, run_jobs, extract, notify,
+        )
         atomic_json(
             output / "extraction.json", {"packets": extracted, "failures": failures}
         )
@@ -499,16 +504,24 @@ def _run(
                     )
                 materialize_quoted_state(v, supplied)
 
-            value = client.complete(
-                key,
-                messages,
-                QUOTED_DETAIL,
-                validate,
-                repair_handler=lambda v, error: repair_quoted_response(
+            repair = lambda v, error: repair_quoted_response(
                     client, guideline, supplied, key, v, error, validate,
                     output=output, notify=notify,
-                ),
-            )
+                )
+            try:
+                value = client.complete(key, messages, QUOTED_DETAIL, validate,
+                                        repair_handler=repair, reuse_exhausted=True)
+            except EndpointError as error:
+                if "exhausted" not in str(error) or "Final detail space must exactly equal" not in str(error):
+                    raise
+                constrained = copy.deepcopy(QUOTED_DETAIL)
+                for field, text in group["space"].items():
+                    constrained["properties"]["space"]["properties"][field] = {
+                        "type": "string", "enum": [text],
+                    }
+                notify(f"{key}: constraining immutable population fields after copying failures")
+                value = client.complete(key + "-immutable-space", messages, constrained,
+                                        validate, repair_handler=repair, reuse_exhausted=True)
             # Stable within a source edition and canonical definition, independent of completion order.
             source_key = "html" if is_pdq else "pdf"
             namespace = "pdq" if is_pdq else "nccn"

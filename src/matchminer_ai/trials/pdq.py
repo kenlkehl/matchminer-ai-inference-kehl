@@ -261,3 +261,40 @@ def summarize_pdq(
         progress_callback=progress_callback,
         allow_endpoint_change=allow_endpoint_change,
     )
+
+
+def summarize_pdq_collection(
+    jobs: Mapping[str, Mapping], *, output_dir: str | Path,
+    config: MMAIConfig | None = None, source_workers: int = 2,
+    disease_workers: int | None = None, allow_endpoint_change: bool = False,
+    progress_callback: Callable[[dict], None] | None = None,
+) -> dict:
+    """Run independent PDQ catalogs under one process-wide endpoint request cap.
+
+    Each disease job supplies ``source_directory`` and ``output_directory``.
+    Optional ``urls`` downloads an immutable snapshot before that job starts;
+    existing-source jobs can immediately resume while other sources download.
+    Sources, per-disease outputs and collection metadata must remain outside the
+    code repository. A changed plan requires a new collection metadata directory,
+    but compatible per-disease source/output paths can be reused unchanged.
+
+    Requires one explicit remote endpoint. ``source_workers`` bounds downloads;
+    ``disease_workers`` defaults to the request cap. Every disease shares the
+    full ``config.remote.max_concurrent_requests`` capacity, so ready requests
+    can use slots released by other diseases. Cancellation scopes propagate to
+    all jobs. Failed diseases are recorded without stopping healthy siblings.
+    The returned state includes ``completed_catalogs`` for loading with
+    ``load_guideline_catalog``. Per-catalog compatibility and final audits remain
+    the same as ``summarize_pdq``; no content is synthesized by the scheduler.
+    """
+    from matchminer_ai.config import MMAIConfig, load_default_preset
+    from ._pdq_collection import run_collection
+
+    resolved = config or load_default_preset()
+    if not isinstance(resolved, MMAIConfig):
+        raise TypeError("config must be an MMAIConfig instance or None")
+    return run_collection(
+        jobs, output_dir=output_dir, config=resolved, source_workers=source_workers,
+        disease_workers=disease_workers, allow_endpoint_change=allow_endpoint_change,
+        progress_callback=progress_callback,
+    )

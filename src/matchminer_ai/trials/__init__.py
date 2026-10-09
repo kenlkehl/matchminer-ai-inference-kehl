@@ -16,7 +16,7 @@ from .eligibility import (
 from .structure import structure_trial_space
 from .guidelines import audit_guideline_catalog, list_guidelines, summarize_guidelines, review_guideline_citations
 from .guideline_catalog import load_guideline_catalog, get_guideline_considerations
-from .pdq import prepare_pdq_library, summarize_pdq
+from .pdq import prepare_pdq_library, summarize_pdq, summarize_pdq_collection
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -178,6 +178,7 @@ __all__ = [
     "load_guideline_catalog",
     "prepare_pdq_library",
     "summarize_pdq",
+    "summarize_pdq_collection",
     "get_guideline_considerations",
 ]
 

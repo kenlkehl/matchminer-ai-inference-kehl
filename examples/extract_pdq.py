@@ -4,6 +4,7 @@ All sources and outputs belong outside the code repository. Ctrl-C, SIGTERM or
 an output-directory STOP file interrupt the batch, preserving atomic checkpoints.
 Remove STOP before resuming. Endpoint changes require --allow-endpoint-change and
 an identical advertised model/context/settings; different models need a new run.
+Disease dispatch defaults to automatic allocation of the shared request cap.
 """
 
 import argparse
@@ -11,24 +12,30 @@ import json
 import os
 import signal
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
 from matchminer_ai import load_default_preset
 from matchminer_ai._storage import atomic_json, digest, directory_lock, read_json
 from matchminer_ai.cancellation import (
-    CancellationToken, InferenceCancelled, cancellation_scope, submit_cancellable,
+    CancellationToken, InferenceCancelled, cancellation_scope,
 )
 from matchminer_ai.trials import prepare_pdq_library, summarize_pdq
 from matchminer_ai.trials.guidelines import _output_directory
+from matchminer_ai.trials._catalog_scheduling import (
+    catalog_worker_counts,
+    run_catalog_jobs,
+)
 
 
-def run_batch(inventory, source, output, config, *, disease_workers=2,
+def run_batch(inventory, source, output, config, *, disease_workers=None,
               allow_endpoint_change=False, token=None):
     """A single batch owner with a shared endpoint prompt cap and durable status."""
     output = _output_directory(source, output)
     output.mkdir(parents=True, exist_ok=True)
+    assignments = {d: config.remote["server_urls"][0] for d in inventory.disease}
+    concurrency = config.remote["max_concurrent_requests"]
+    worker_counts = catalog_worker_counts(assignments, concurrency, disease_workers)
     token = token or CancellationToken()
     with directory_lock(output), cancellation_scope(token):
         path = output / "collection.json"
@@ -45,6 +52,8 @@ def run_batch(inventory, source, output, config, *, disease_workers=2,
             "endpoint": config.remote["server_urls"][0],
             "concurrency": config.remote["max_concurrent_requests"],
             "disease_workers": disease_workers,
+            "allocation_policy": "shared-endpoint-capacity-v1",
+            "effective_disease_workers": worker_counts,
             "diseases": {d: previous.get("diseases", {}).get(d, {"status": "pending"})
                          for d in inventory.disease},
         }
@@ -76,10 +85,10 @@ def run_batch(inventory, source, output, config, *, disease_workers=2,
 
         update()
         try:
-            with ThreadPoolExecutor(max_workers=disease_workers) as pool:
-                futures = [submit_cancellable(pool, run, d) for d in inventory.disease]
-                for future in as_completed(futures):
-                    future.result()
+            run_catalog_jobs(
+                assignments, run, concurrency=concurrency,
+                disease_workers=disease_workers,
+            )
         except InferenceCancelled:
             update(status="interrupted")
             return 130
@@ -97,11 +106,16 @@ def main():
     parser.add_argument("--endpoint")
     parser.add_argument("--model", help="Exact served ID; omit for endpoint discovery")
     parser.add_argument("--concurrency", type=int, default=8)
-    parser.add_argument("--disease-workers", type=int, default=2)
+    parser.add_argument(
+        "--disease-workers", type=int,
+        help="Optional disease-worker cap; default: auto, up to --concurrency",
+    )
     parser.add_argument("--request-timeout", type=float, default=7200)
     parser.add_argument("--allow-endpoint-change", action="store_true")
     args = parser.parse_args()
-    if min(args.concurrency, args.disease_workers, args.request_timeout) <= 0:
+    if min(args.concurrency, args.request_timeout) <= 0 or (
+        args.disease_workers is not None and args.disease_workers <= 0
+    ):
         parser.error("Concurrency, disease workers and timeout must be positive")
     if not args.download_only and (not args.endpoint or not args.output_dir):
         parser.error("Extraction requires an explicit --endpoint and --output-dir")

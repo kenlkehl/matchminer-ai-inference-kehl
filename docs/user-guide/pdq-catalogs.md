@@ -139,10 +139,58 @@ Use `--download-only` without endpoint/output arguments to prepare sources witho
 LLM calls. The existing `extract_guideline_collection.py` runner can process the
 prepared library with multiple disease workers sharing its endpoint cap.
 
+## Expand a treatment collection without waiting for catalog tails
+
+`examples/plan_pdq_treatment_collection.py` snapshots NCI's adult and pediatric
+treatment indexes and writes an external `inventory.json` and `jobs.json`.
+Repeated index aliases become one job; distinct adult/child sources remain
+separate. Overview indexes, financial toxicity, survivorship, genomics and the
+general transplant overview are explicitly recorded as excluded supporting
+topics. Unrecognized links fail for review instead of silently disappearing.
+
+```bash
+PYTHONPATH=src python examples/plan_pdq_treatment_collection.py \
+  --inventory-dir /local/data/pdq/treatment-index-snapshot \
+  --source-dir /local/data/pdq/treatment-sources \
+  --catalog-dir /local/data/pdq/treatment-catalogs
+
+PYTHONPATH=src python examples/extract_pdq_collection.py \
+  --plan /local/data/pdq/treatment-index-snapshot/jobs.json \
+  --output-dir /local/data/pdq/treatment-catalogs \
+  --endpoint http://your-selected-server:8000/v1 --concurrency 32
+```
+
+To expand an existing `extract_pdq.py` run, also give the planner
+`--existing-summaries`, `--existing-source` and `--existing-output`. It preserves
+those disease names and source/output paths, including all accepted checkpoints.
+Stop the old worker before starting the expanded collection: the shared cap is
+process-wide, not shared between independent processes. Changing the plan requires
+a new collection metadata directory, but compatible disease output directories
+can stay unchanged. Changing an endpoint requires `--allow-endpoint-change` and
+the normal per-catalog compatibility checks.
+
+The public API is `summarize_pdq_collection(jobs, output_dir=..., config=...)`.
+Each job supplies `source_directory`, `output_directory`, and optionally `urls`.
+Existing-source jobs resume immediately; newly downloaded sources enter generation
+as soon as ready. Downloads default to two concurrent workers independently of
+the shared generation cap. A slow source or a serial consolidation stage does not
+hold up other catalogs. Source failures remain visible in `collection.json` while
+healthy jobs continue; rerunning reuses verified sources and compatible results.
+The returned state's `completed_catalogs` list can be passed directly to
+`load_guideline_catalog`, including catalogs in their original directories.
+
 ## Interrupt, resume, or move to another endpoint
 
-The PDQ runner processes up to `--disease-workers` diseases (default 2) in parallel,
-sharing `--concurrency` across all their prompts. It writes `collection.json` with
+The PDQ and NCCN collection runners share the same capacity-allocation policy.
+By default, up to `--concurrency` available diseases run in parallel. Each disease
+can use the full shared endpoint request cap, so finishing catalogs immediately
+free slots for remaining work, including the last catalog. `--disease-workers`
+is an optional explicit limit on disease preparation, rather than a default
+two-disease restriction. Dependencies, source packing and the remaining number
+of independent jobs can keep actual traffic below the cap.
+
+The runner writes `collection.json` with the effective disease-worker count,
+allocation policy,
 its PID, endpoint, stage messages, failures and per-disease completion/audit counts.
 Each disease retains the pipeline's independently saved request/response checkpoints.
 A directory lock prevents two batch owners from writing to the same output.
@@ -153,6 +201,12 @@ already accepted by the remote server may briefly continue there. Only fully
 saved, validated responses are reusable; an interrupted stream is retried.
 Remove `STOP` and repeat the original command to resume. Do not start a replacement
 worker until the original process has exited.
+
+Concurrency and the explicit disease-worker override may change on resume without
+changing clinical checkpoint identities. Omit `--disease-workers` to restore
+automatic allocation. Run the collection in one process where possible: separate
+processes have independent request caps and need an explicitly managed combined
+budget. Automatic allocation does not raise `--concurrency` or choose a server.
 
 To move unfinished work to another instance of the **same model**, repeat the
 command with the new explicit `--endpoint` and `--allow-endpoint-change`. The

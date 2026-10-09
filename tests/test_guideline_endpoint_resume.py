@@ -143,8 +143,14 @@ def test_pdq_batch_interruption_status_and_resume(tmp_path, downloads, monkeypat
     monkeypatch.setattr(module, "summarize_pdq", interrupted)
     assert module.run_batch(inventory, source, output, config, token=token) == 130
     assert read_json(output / "collection.json")["status"] == "interrupted"
+    identity = read_json(output / "collection.json")["identity"]
+    resumed = copy.deepcopy(config)
+    resumed.remote["max_concurrent_requests"] = 96
     monkeypatch.setattr(module, "summarize_pdq", lambda *a, **k: (
         inventory, {"validation": {"status": "passed"}}
     ))
-    assert module.run_batch(inventory, source, output, copy.deepcopy(config)) == 0
-    assert read_json(output / "collection.json")["status"] == "complete"
+    assert module.run_batch(inventory, source, output, resumed) == 0
+    state = read_json(output / "collection.json")
+    assert state["status"] == "complete" and state["identity"] == identity
+    assert state["concurrency"] == 96
+    assert state["effective_disease_workers"] == {"http://chosen.invalid/v1": 1}
