@@ -83,13 +83,13 @@ def outputs(c, s):
         "retry_without_finish": s._append_good_option_retry_feedback(
             messages, response="", parse_error="", finish_reason=""
         ),
-        "compatibility_id": c._compatibility_id(ncit_version="26.07d"),
     }
 
 
-def test_prompt_and_artifact_versions_match_pre_refactor_snapshot():
-    # Fabricated data, including literal braces and Unicode. A text change
-    # requires deliberate review of catalog compatibility.
+def test_prompts_match_snapshot():
+    # Fabricated data, including literal braces and Unicode. A catalog prompt
+    # change also changes catalog_prompts_sha256, so interrupted catalog runs
+    # cannot resume across it.
     expected = {
         "screen": "c44cb04dbc13dbf47bab65710a86380c19a09f41158d5e448f69a4701801e807",
         "scoring": "21d1254fff62df863ebb413b15afbf97b82e09b2705f47abfc8a2c2539aa36ae",
@@ -97,7 +97,6 @@ def test_prompt_and_artifact_versions_match_pre_refactor_snapshot():
         "retry": "be4026558080f5c0bf5b5ff7242ae91dea7c69a4b1e50f4ee74d04a7e534b8ab",
         "retry_without_finish": "327f5fa6a423706f85250730b0311da316cd7f6b9b9c0edf3908dde816b27988",
         "synthesis_delta": "dbd366d344f40af1eb0fef0c2ea624109d0eab43cc98e7a5760f97f8842390fa",
-        "compatibility_id": "ffab78b41eb3f53fc56486678fcc59b2d883fa5cb12b14c3b6afb41f36b850b7",
     }
     actual = {
         key: hashlib.sha256(

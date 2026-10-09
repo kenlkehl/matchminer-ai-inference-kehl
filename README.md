@@ -99,11 +99,9 @@ components: import `build_good_option_catalog`, `load_good_option_catalog`, and
 `score_good_options_with_llm`, or `evaluate_good_options` from
 `matchminer_ai.matching` (the classifier `score_good_options` is deprecated). Screening, synthesis, scoring, retry, and checker
 input templates live in `src/matchminer_ai/prompts/`. The former
-`matchminer_ai.good_options` imports remain compatibility aliases. This source
-refactor preserves prompt text, score semantics, and existing artifact and
-checkpoint compatibility. Scoring prompts now re-render drug and class
-evidence from stored facts at a trial-sized budget (`good_option_prompt`);
-the template, rubric, and catalog compatibility are unchanged.
+`matchminer_ai.good_options` imports remain compatibility aliases. Scoring
+prompts re-render drug and class evidence from stored facts at a trial-sized
+budget (`good_option_prompt`).
 
 The optional space-paradigm roll-up does not bundle a canonical paradigm
 catalog. It consumes caller-supplied trial spaces, exact membership edges, and

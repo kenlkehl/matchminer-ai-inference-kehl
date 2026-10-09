@@ -62,10 +62,6 @@ _GOOD_OPTION_EXPORTS = {
     "parse_good_option_response": "matching.good_options",
     "score_good_options": "matching.good_options",
     "score_good_options_with_llm": "matching.good_options",
-    "GOOD_OPTION_EVIDENCE_PACKING_VERSION": "matching.good_options",
-    "GOOD_OPTION_INPUT_VERSION": "trials.drug_evidence",
-    "GOOD_OPTION_LABEL_SCHEMA_VERSION": "trials.drug_evidence",
-    "GOOD_OPTION_PROMPT_VERSION": "trials.drug_evidence",
     "RUBRIC_CRITERIA": "trials.drug_evidence",
     "ParsedGoodOptionResult": "trials.drug_evidence",
 }

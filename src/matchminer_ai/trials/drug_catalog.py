@@ -39,18 +39,10 @@ from matchminer_ai.patients.ontology import (
 )
 
 from .drug_evidence import (
-    CATALOG_SCHEMA_VERSION,
     DRUG_ROLES,
     EVIDENCE_SCOPES,
-    GOOD_OPTION_INPUT_VERSION,
-    GOOD_OPTION_LABEL_SCHEMA_VERSION,
-    GOOD_OPTION_PROJECTION_VERSION,
-    GOOD_OPTION_PROMPT_VERSION,
-    HELP_ME_CHOOSE_PROJECTION_VERSION,
     QUERY_SCOPES,
-    ROLE_POLICY_VERSION,
     SCOREABLE_ROLES,
-    SYNTHESIS_SCHEMA_VERSION,
     ClassSummary,
     DrugClass,
     DrugIdentity,
@@ -83,10 +75,19 @@ CONTROL_ARM_TYPES = frozenset(
     {"ACTIVE_COMPARATOR", "PLACEBO_COMPARATOR", "SHAM_COMPARATOR", "NO_INTERVENTION"}
 )
 ACTIVE_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL"})
-ROLE_PROMPT_VERSION = "trial-cancer-treatment-agent-screen-v4"
-SYNTHESIS_PROMPT_VERSION = "drug-evidence-delta-synthesis-v5"
-CLASS_PROMPT_VERSION = "drug-pharmacologic-class-v1"
-CATALOG_CHECKPOINT_SCHEMA_VERSION = "good-option-catalog-checkpoints-v1"
+#: Prompt templates that shape catalog content. Their text, not a hand-kept
+#: label, decides whether an interrupted run's checkpoints can be reused.
+CATALOG_PROMPTS = (
+    "trial_drug_screen.system.txt",
+    "trial_drug_screen.user.txt",
+    "trial_drug_screen.retry.txt",
+    "trial_drug_class.system.txt",
+    "trial_drug_class.user.txt",
+    "trial_drug_class.retry.txt",
+    "trial_drug_synthesis.system.txt",
+    "trial_drug_synthesis.delta.txt",
+    "trial_drug_synthesis.delta_retry.txt",
+)
 CLASS_BASES = frozenset({"target", "mechanism", "modality"})
 CONFIDENCE_LEVELS = frozenset({"high", "medium", "low"})
 INTERVENTION_SCREENING_DISPOSITIONS = frozenset({"include", "exclude", "uncertain"})
@@ -200,26 +201,6 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _compatibility_id(*, ncit_version: str) -> str:
-    payload = {
-        "catalog_schema": CATALOG_SCHEMA_VERSION,
-        "role_policy": ROLE_POLICY_VERSION,
-        "role_prompt": ROLE_PROMPT_VERSION,
-        "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
-        "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
-        "class_prompt": CLASS_PROMPT_VERSION,
-        "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
-        "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
-        "patient_prompt": GOOD_OPTION_PROMPT_VERSION,
-        "label_schema": GOOD_OPTION_LABEL_SCHEMA_VERSION,
-        "checker_input": GOOD_OPTION_INPUT_VERSION,
-        "ncit_version": ncit_version,
-    }
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-
-
 def _stable_sha256(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(
@@ -230,6 +211,20 @@ def _stable_sha256(value: Any) -> str:
             default=str,
         ).encode("utf-8")
     ).hexdigest()
+
+
+def catalog_prompts_sha256() -> str:
+    """Fingerprint the text of every prompt template in ``CATALOG_PROMPTS``."""
+
+    return _stable_sha256({name: load_prompt_text(name) for name in CATALOG_PROMPTS})
+
+
+def catalog_content_id(files: Mapping[str, Mapping[str, Any]]) -> str:
+    """Identify a catalog by the SHA-256 of each of its declared files."""
+
+    return _stable_sha256(
+        {name: str(metadata.get("sha256") or "") for name, metadata in files.items()}
+    )
 
 
 def _callable_identity(value: Any, *, default: str) -> str:
@@ -266,7 +261,7 @@ def _checkpoint_run_spec(
         }
     )
     return {
-        "catalog_compatibility_id": _compatibility_id(ncit_version=ncit_version),
+        "prompts_sha256": catalog_prompts_sha256(),
         "nct_ids": list(nct_ids),
         "ncit_resource": ncit_resource,
         "ncit_version": ncit_version,
@@ -290,15 +285,6 @@ def _checkpoint_run_spec(
             class_resolver, default="matchminer_ai.default_class_resolver"
         ),
         "teacher_fingerprint_sha256": teacher_fingerprint,
-        "versions": {
-            "checkpoint_schema": CATALOG_CHECKPOINT_SCHEMA_VERSION,
-            "catalog_schema": CATALOG_SCHEMA_VERSION,
-            "role_policy": ROLE_POLICY_VERSION,
-            "role_prompt": ROLE_PROMPT_VERSION,
-            "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
-            "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
-            "class_prompt": CLASS_PROMPT_VERSION,
-        },
     }
 
 
@@ -354,10 +340,10 @@ class _CatalogCheckpointStore:
                     f"manifest.json: {root}"
                 )
             existing = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if existing.get("schema_version") != CATALOG_CHECKPOINT_SCHEMA_VERSION:
+            if not isinstance(existing.get("run_spec"), Mapping):
                 raise ValueError(
-                    "Refusing to reset a checkpoint directory with an unsupported "
-                    f"schema: {root}"
+                    "Refusing to reset a directory whose manifest.json is not a "
+                    f"catalog checkpoint manifest: {root}"
                 )
             shutil.rmtree(root)
         if root.exists() and not root.is_dir():
@@ -366,12 +352,6 @@ class _CatalogCheckpointStore:
         expected_fingerprint = _stable_sha256(run_spec)
         if manifest_path.is_file():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("schema_version") != CATALOG_CHECKPOINT_SCHEMA_VERSION:
-                raise ValueError(
-                    "Unsupported GoodOption catalog checkpoint schema "
-                    f"{manifest.get('schema_version')!r}; expected "
-                    f"{CATALOG_CHECKPOINT_SCHEMA_VERSION!r}."
-                )
             actual_fingerprint = str(manifest.get("run_fingerprint_sha256") or "")
             stored_spec = manifest.get("run_spec")
             if (
@@ -409,7 +389,6 @@ class _CatalogCheckpointStore:
                 )
         root.mkdir(parents=True, exist_ok=True)
         manifest = {
-            "schema_version": CATALOG_CHECKPOINT_SCHEMA_VERSION,
             "run_fingerprint_sha256": expected_fingerprint,
             "created_at_utc": utc_now(),
             "updated_at_utc": utc_now(),
@@ -438,7 +417,6 @@ class _CatalogCheckpointStore:
         value = json.loads(path.read_text(encoding="utf-8"))
         expected_input = _stable_sha256(input_value)
         expected = {
-            "schema_version": CATALOG_CHECKPOINT_SCHEMA_VERSION,
             "run_fingerprint_sha256": self.run_fingerprint,
             "stage": stage,
             "key": str(key),
@@ -469,7 +447,6 @@ class _CatalogCheckpointStore:
         _write_json_atomic(
             self._item_path(stage, key),
             {
-                "schema_version": CATALOG_CHECKPOINT_SCHEMA_VERSION,
                 "run_fingerprint_sha256": self.run_fingerprint,
                 "stage": stage,
                 "key": str(key),
@@ -3831,26 +3808,17 @@ def _write_catalog_bundle(
             path.relative_to(temporary).as_posix()
             for path in temporary.rglob("*.parquet")
         )
+        files = {
+            name: {"sha256": _sha256_file(temporary / name)} for name in relative_files
+        }
         manifest = {
-            "schema_version": CATALOG_SCHEMA_VERSION,
             "build_id": hashlib.sha256(
                 f"{utc_now()}\0{len(trial_registry)}\0{len(drug_summaries)}".encode()
             ).hexdigest()[:24],
             "created_at_utc": utc_now(),
-            "compatibility_id": _compatibility_id(ncit_version=ncit_version),
+            "compatibility_id": catalog_content_id(files),
             "trial_ids": list(nct_ids),
-            "versions": {
-                "role_policy": ROLE_POLICY_VERSION,
-                "role_prompt": ROLE_PROMPT_VERSION,
-                "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
-                "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
-                "class_prompt": CLASS_PROMPT_VERSION,
-                "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
-                "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
-                "good_option_prompt": GOOD_OPTION_PROMPT_VERSION,
-                "good_option_label_schema": GOOD_OPTION_LABEL_SCHEMA_VERSION,
-                "good_option_checker_input": GOOD_OPTION_INPUT_VERSION,
-            },
+            "prompts_sha256": catalog_prompts_sha256(),
             "ncit": {"version": ncit_version, "resource": ncit_resource},
             "counts": {
                 "trials": len(trial_registry),
@@ -3893,13 +3861,9 @@ def _write_catalog_bundle(
             "research_settings": asdict(settings),
             "teacher_config": config_snapshot(config).get("llm_good_option", {}),
             "catalog_checkpoint": {
-                "schema_version": CATALOG_CHECKPOINT_SCHEMA_VERSION,
                 "run_fingerprint_sha256": checkpoint_run_fingerprint,
             },
-            "files": {
-                name: {"sha256": _sha256_file(temporary / name)}
-                for name in relative_files
-            },
+            "files": files,
         }
         (temporary / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -3922,49 +3886,19 @@ def _read_evidence(path: Path, *, directory: str = "drug_evidence") -> pd.DataFr
 
 
 def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
-    """Validate schema, hashes, identities, roles, and terminal research states."""
+    """Validate file hashes, identities, roles, and terminal research states."""
 
     root = Path(path).expanduser().resolve()
     manifest_path = root / "manifest.json"
     if not manifest_path.is_file():
         raise ValueError(f"Catalog is missing manifest.json: {root}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") != CATALOG_SCHEMA_VERSION:
-        raise ValueError(
-            f"Unsupported GoodOption catalog schema {manifest.get('schema_version')!r}; "
-            f"expected {CATALOG_SCHEMA_VERSION!r}."
-        )
-    expected_versions = {
-        "role_policy": ROLE_POLICY_VERSION,
-        "role_prompt": ROLE_PROMPT_VERSION,
-        "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
-        "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
-        "class_prompt": CLASS_PROMPT_VERSION,
-        "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
-        "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
-        "good_option_prompt": GOOD_OPTION_PROMPT_VERSION,
-        "good_option_label_schema": GOOD_OPTION_LABEL_SCHEMA_VERSION,
-        "good_option_checker_input": GOOD_OPTION_INPUT_VERSION,
-    }
-    versions = manifest.get("versions") or {}
-    mismatched_versions = {
-        key: (versions.get(key), expected)
-        for key, expected in expected_versions.items()
-        if versions.get(key) != expected
-    }
-    if mismatched_versions:
-        raise ValueError(
-            "Catalog component versions are incompatible with this package: "
-            f"{mismatched_versions}"
-        )
-    ncit_version = str((manifest.get("ncit") or {}).get("version") or "unknown")
-    if manifest.get("compatibility_id") != _compatibility_id(
-        ncit_version=ncit_version
-    ):
-        raise ValueError(
-            "Catalog compatibility ID does not match its version manifest."
-        )
-    for relative, metadata in manifest.get("files", {}).items():
+    files = manifest.get("files")
+    if not isinstance(files, Mapping) or not files:
+        raise ValueError("Catalog manifest declares no files.")
+    if manifest.get("compatibility_id") != catalog_content_id(files):
+        raise ValueError("Catalog compatibility ID does not match its file hashes.")
+    for relative, metadata in files.items():
         target = root / relative
         if not target.is_file():
             raise ValueError(f"Catalog is missing declared file: {relative}")
@@ -4322,12 +4256,9 @@ def _read_good_option_catalog(root: Path, *, validate: bool) -> GoodOptionCatalo
 
 
 __all__ = [
-    "CATALOG_CHECKPOINT_SCHEMA_VERSION",
-    "CLASS_PROMPT_VERSION",
+    "CATALOG_PROMPTS",
     "INTERVENTION_EXCLUSION_CATEGORIES",
     "INTERVENTION_SCREENING_DISPOSITIONS",
-    "ROLE_PROMPT_VERSION",
-    "SYNTHESIS_PROMPT_VERSION",
     "EVIDENCE_GRANULARITIES",
     "ClassResolver",
     "RoleResolver",
@@ -4336,6 +4267,8 @@ __all__ = [
     "chunk_evidence",
     "build_drug_class_messages",
     "build_synthesis_delta_messages",
+    "catalog_content_id",
+    "catalog_prompts_sha256",
     "build_good_option_catalog",
     "build_intervention_screening_messages",
     "build_role_resolution_messages",

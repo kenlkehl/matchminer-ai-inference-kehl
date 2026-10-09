@@ -37,14 +37,13 @@ All templates below are bundled under `src/matchminer_ai/prompts/`:
 | Files | Purpose |
 | --- | --- |
 | `trial_drug_screen.system.txt`, `.user.txt`, `.retry.txt` | Identify anticancer agents and classify their roles in each trial. |
-| `trial_drug_synthesis.system.txt`, `.user.txt`, `.retry.txt` | Synthesize passage-grounded drug evidence. |
+| `trial_drug_class.system.txt`, `.user.txt`, `.retry.txt` | Assign each drug to pharmacologic classes. |
+| `trial_drug_synthesis.system.txt`, `.delta.txt`, `.delta_retry.txt` | Synthesize passage-grounded drug and class evidence one chunk at a time, returning only new or revised facts. |
 | `llm_good_option.system.txt`, `.user.txt`, `.rubric.txt`, `.retry.txt` | Apply the four-criterion patient-drug rubric and correct invalid responses. |
 | `good_option_checker_template.txt` | Deprecated. Patient-drug input for the retired GoodOptionChecker classifier. |
 
-This relocation preserves the rendered prompts, rubric versions, catalog
-compatibility IDs, and checkpoint source fingerprints. Existing compatible
-catalogs, label shards, and classifier inputs do not require regeneration.
-Future prompt changes still require the usual prompt/artifact-version review.
+The catalog-build templates are listed in `CATALOG_PROMPTS`;
+`catalog_prompts_sha256()` fingerprints their text for checkpoint reuse.
 
 ## Build the patient-free catalog
 
@@ -127,13 +126,13 @@ default, checkpoints are stored beside the requested catalog in
 `<catalog>_checkpoints`. Completed registry fetches, intervention screens, drug
 research, and drug syntheses are reused when the same build is restarted.
 Technically blocked fetches are retried. The checkpoint manifest fingerprints
-the NCT list, source/research settings, ontology version, prompt/schema versions,
-and teacher configuration; incompatible checkpoints fail explicitly instead of
-silently mixing evidence generations. Pass `checkpoint_path` to select another
+the NCT list, source/research settings, ontology version, the text of the
+catalog prompts, and teacher configuration; incompatible checkpoints fail
+explicitly instead of silently mixing evidence generations. Pass `checkpoint_path` to select another
 directory or `reset_checkpoint=True` to discard a recognized checkpoint bundle.
 
-`validate_good_option_catalog` verifies hashes, component versions, NCIt
-compatibility, intervention-screen decisions, trial-drug references, terminal
+`validate_good_option_catalog` verifies file hashes, the catalog's
+`compatibility_id` (a fingerprint of those hashes), intervention-screen decisions, trial-drug references, terminal
 research states, and structured-fact evidence support.
 `load_good_option_catalog` validates by default.
 
@@ -196,9 +195,8 @@ trial has in total:
    count; the survivors keep `condensed` detail so their numbers survive.
 
 Subjects without stored facts, such as hand-built summaries, fall back to their
-stored projection, truncated if needed. Scoring metadata records
-`evidence_packing_version` and a summary of granularities and truncations, and
-debug mode adds per-row `good_option_evidence_packing`.
+stored projection, truncated if needed. Scoring metadata records a summary of
+granularities and truncations, and debug mode adds per-row `good_option_evidence_packing`.
 
 The rubric awards each scoreable drug up to four binary points:
 

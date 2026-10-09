@@ -185,21 +185,16 @@ __all__ = [
 
 # Resolve optional drug research/scoring APIs without eager cross-stage imports.
 _GOOD_OPTION_EXPORTS = {
-    "CATALOG_CHECKPOINT_SCHEMA_VERSION": "trials.drug_catalog",
     "INTERVENTION_EXCLUSION_CATEGORIES": "trials.drug_catalog",
     "INTERVENTION_SCREENING_DISPOSITIONS": "trials.drug_catalog",
-    "ROLE_PROMPT_VERSION": "trials.drug_catalog",
-    "SYNTHESIS_PROMPT_VERSION": "trials.drug_catalog",
     "build_good_option_catalog": "trials.drug_catalog",
     "build_intervention_screening_messages": "trials.drug_catalog",
     "build_role_resolution_messages": "trials.drug_catalog",
     "load_good_option_catalog": "trials.drug_catalog",
     "validate_good_option_catalog": "trials.drug_catalog",
-    "CLASS_PROMPT_VERSION": "trials.drug_catalog",
     "build_drug_class_messages": "trials.drug_catalog",
     "class_id_for": "trials.drug_catalog",
     "normalize_class_name": "trials.drug_catalog",
-    "CATALOG_SCHEMA_VERSION": "trials.drug_evidence",
     "ClassSummary": "trials.drug_evidence",
     "DrugClass": "trials.drug_evidence",
     "DrugIdentity": "trials.drug_evidence",

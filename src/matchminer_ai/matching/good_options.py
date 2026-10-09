@@ -40,8 +40,6 @@ from matchminer_ai.trials.drug_catalog import (
     render_fact_summary,
 )
 from matchminer_ai.trials.drug_evidence import (
-    GOOD_OPTION_INPUT_VERSION,
-    GOOD_OPTION_PROMPT_VERSION,
     RUBRIC_CRITERIA,
     DrugSummary,
     GoodOptionCatalog,
@@ -91,10 +89,6 @@ def _require_catalog(
         raise TypeError("catalog must be a loaded, validated GoodOptionCatalog.")
     return catalog
 
-
-#: Versions patient-time evidence packing separately from the prompt text, whose
-#: version is part of the catalog compatibility id. Recorded in scoring metadata.
-GOOD_OPTION_EVIDENCE_PACKING_VERSION = "good-option-evidence-packing-v1"
 
 #: Relative claim on the evidence budget when every subject overflows. Drug
 #: sections carry the agent-specific evidence the rubric prefers; a class block is
@@ -364,7 +358,6 @@ def good_option_evidence_budget(
         int(prompt_tokens * chars_per_token) - fixed_prompt_chars - _RETRY_RESERVE_CHARS
     )
     return {
-        "packing_version": GOOD_OPTION_EVIDENCE_PACKING_VERSION,
         "context_tokens": context_tokens,
         "output_tokens": output_tokens,
         "safety_tokens": safety_tokens,
@@ -912,8 +905,6 @@ def score_good_options_with_llm(
         "config_snapshot": config_snapshot(resolved_config),
         "method": "llm",
         "catalog_compatibility_id": resolved_catalog.compatibility_id,
-        "prompt_version": GOOD_OPTION_PROMPT_VERSION,
-        "evidence_packing_version": GOOD_OPTION_EVIDENCE_PACKING_VERSION,
         "evidence_packing": _packing_summary(packing_by_index.values()),
         "rubric_criteria": list(RUBRIC_CRITERIA),
         "max_parse_attempts": parse_attempts,
@@ -1055,7 +1046,6 @@ def score_good_options(
         "config_snapshot": config_snapshot(resolved_config),
         "method": "classifier",
         "catalog_compatibility_id": resolved_catalog.compatibility_id,
-        "checker_input_version": GOOD_OPTION_INPUT_VERSION,
         "model_metadata": {"good_option_checker": model_metadata},
     }
     return (output, metadata) if return_metadata else output
@@ -1226,7 +1216,6 @@ def check_good_options(
 
 
 __all__ = [
-    "GOOD_OPTION_EVIDENCE_PACKING_VERSION",
     "build_good_option_checker_text",
     "build_good_option_messages",
     "check_good_options",

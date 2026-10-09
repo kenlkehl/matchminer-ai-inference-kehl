@@ -600,7 +600,6 @@ def test_classifier_aggregates_every_drug_by_criterion(
     assert output.loc[0, "good_option_score"] == pytest.approx(0.75)
     assert len(captured) == 2
     assert all("Control Agent" not in prompt for prompt in captured)
-    assert metadata["checker_input_version"].endswith("four-logit")
     with pytest.deprecated_call(match="score_good_options is deprecated"):
         evaluate_good_options(
             pairs, catalog=_catalog(), config=config, method="classifier"
@@ -1403,10 +1402,10 @@ def test_serial_synthesis_accepts_empty_delta_and_rejected_revisions_keep_facts(
     assert result["D1"]["efficacy_by_tumor"][0]["support_ids"] == ["ledger:D1-1"]
 
 
-def test_catalogs_from_another_synthesis_prompt_are_rejected(
+def test_catalog_identity_comes_from_file_hashes_not_version_labels(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Only catalogs built with the current synthesis prompt load."""
+    """The manifest carries content fingerprints and no hand-kept versions."""
 
     async def fake_fetch(_nct_id: str, *, client):
         del client
@@ -1442,14 +1441,32 @@ def test_catalogs_from_another_synthesis_prompt_are_rejected(
     )
     manifest_path = output / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert validate_good_option_catalog(output)["versions"]["synthesis_prompt"] == (
-        catalog_module.SYNTHESIS_PROMPT_VERSION
+    assert "versions" not in manifest and "schema_version" not in manifest
+    assert "schema_version" not in manifest["catalog_checkpoint"]
+    assert manifest["prompts_sha256"] == catalog_module.catalog_prompts_sha256()
+    assert manifest["compatibility_id"] == catalog_module.catalog_content_id(
+        manifest["files"]
     )
+    assert validate_good_option_catalog(output) == manifest
 
-    manifest["versions"]["synthesis_prompt"] = "drug-evidence-serial-synthesis-v4"
+    manifest["compatibility_id"] = "0" * 64
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(ValueError, match="synthesis_prompt"):
+    with pytest.raises(ValueError, match="file hashes"):
         validate_good_option_catalog(output)
+
+
+def test_catalog_prompt_fingerprint_tracks_prompt_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before = catalog_module.catalog_prompts_sha256()
+    original = catalog_module.load_prompt_text
+    monkeypatch.setattr(
+        catalog_module,
+        "load_prompt_text",
+        lambda name: original(name)
+        + ("\nEdited." if name == "trial_drug_synthesis.delta.txt" else ""),
+    )
+    assert catalog_module.catalog_prompts_sha256() != before
 
 
 def _synthesis_passage(drug_id: str, index: int) -> EvidencePassage:
@@ -1936,7 +1953,6 @@ def test_llm_scoring_packs_class_facts_and_records_the_packing(
     prompt = captured[0][1]["content"]
     assert "Class K result 2." in prompt
     assert "STALE STORED PROJECTION" not in prompt
-    assert metadata["evidence_packing_version"] == "good-option-evidence-packing-v1"
     assert metadata["evidence_packing"]["subjects"] == 3
     assert metadata["evidence_packing"]["truncated_subjects"] == 0
     packing = output.loc[0, "good_option_evidence_packing"]

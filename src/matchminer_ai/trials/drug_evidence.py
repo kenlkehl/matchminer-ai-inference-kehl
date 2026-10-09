@@ -1,4 +1,4 @@
-"""Versioned data models for patient-free GoodOption drug catalogs."""
+"""Data models for patient-free GoodOption drug catalogs."""
 
 from __future__ import annotations
 
@@ -10,15 +10,6 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-
-CATALOG_SCHEMA_VERSION = "good-option-catalog-v4"
-ROLE_POLICY_VERSION = "ctgov-cancer-treatment-agent-screen-v4"
-SYNTHESIS_SCHEMA_VERSION = "drug-evidence-summary-v4"
-GOOD_OPTION_PROJECTION_VERSION = "good-option-drug-summary-v4"
-HELP_ME_CHOOSE_PROJECTION_VERSION = "help-me-choose-drug-summary-v4"
-GOOD_OPTION_PROMPT_VERSION = "good-option-patient-drug-summaries-v10"
-GOOD_OPTION_INPUT_VERSION = "patient-plus-drug-summary-v2-four-logit"
-GOOD_OPTION_LABEL_SCHEMA_VERSION = "good-option-four-binary-per-drug-v9"
 
 #: Where a synthesized fact came from. ``agent`` facts were synthesized from
 #: passages retrieved for the drug itself; ``class`` facts were synthesized from
@@ -461,7 +452,6 @@ class GoodOptionCatalog:
 
 
 __all__ = [
-    "CATALOG_SCHEMA_VERSION",
     "DRUG_ROLES",
     "EVIDENCE_SCOPES",
     "QUERY_SCOPES",
@@ -471,18 +461,11 @@ __all__ = [
     "DrugSummary",
     "EvidencePassage",
     "TrialClassEvidence",
-    "GOOD_OPTION_INPUT_VERSION",
-    "GOOD_OPTION_LABEL_SCHEMA_VERSION",
-    "GOOD_OPTION_PROJECTION_VERSION",
-    "GOOD_OPTION_PROMPT_VERSION",
     "GoodOptionCatalog",
-    "HELP_ME_CHOOSE_PROJECTION_VERSION",
     "ParsedGoodOptionResult",
-    "ROLE_POLICY_VERSION",
     "RUBRIC_CRITERIA",
     "ResearchAttempt",
     "SCOREABLE_ROLES",
-    "SYNTHESIS_SCHEMA_VERSION",
     "TERMINAL_RESEARCH_STATUSES",
     "TrialDrugAssignment",
 ]

@@ -165,11 +165,11 @@ source names, queries, and registry metadata stay in the internal tables.
 Everything is written to Parquet: trial records, screening decisions, the
 trial-drug index, drug summaries, drug passages, class assignments, class
 passages, class summaries, and a full audit log of every search attempt. A
-manifest records schema and prompt versions, a compatibility fingerprint, file
-hashes, and counts.
+manifest records file hashes, a `compatibility_id` fingerprinting those hashes,
+a fingerprint of the catalog prompt text, and counts.
 
-Validation re-checks the bundle: hashes match, versions match the running code,
-every citation points at a passage that exists for that drug or class, drug
+Validation re-checks the bundle: hashes match the files and the
+`compatibility_id`, every citation points at a passage that exists for that drug or class, drug
 facts carry `scope: agent` and class facts `scope: class`, no duplicate keys,
 roles are legal. `load_good_option_catalog` runs this by default.
 

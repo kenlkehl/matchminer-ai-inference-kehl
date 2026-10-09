@@ -3,11 +3,8 @@
 """
 
 from .catalog import (
-    CATALOG_CHECKPOINT_SCHEMA_VERSION,
     INTERVENTION_EXCLUSION_CATEGORIES,
     INTERVENTION_SCREENING_DISPOSITIONS,
-    ROLE_PROMPT_VERSION,
-    SYNTHESIS_PROMPT_VERSION,
     build_good_option_catalog,
     build_intervention_screening_messages,
     build_role_resolution_messages,
@@ -15,10 +12,6 @@ from .catalog import (
     validate_good_option_catalog,
 )
 from .models import (
-    CATALOG_SCHEMA_VERSION,
-    GOOD_OPTION_INPUT_VERSION,
-    GOOD_OPTION_LABEL_SCHEMA_VERSION,
-    GOOD_OPTION_PROMPT_VERSION,
     RUBRIC_CRITERIA,
     DrugIdentity,
     DrugSummary,
@@ -47,26 +40,19 @@ from .scoring import (
 )
 
 __all__ = [
-    "CATALOG_CHECKPOINT_SCHEMA_VERSION",
-    "CATALOG_SCHEMA_VERSION",
     "DDGSWebProvider",
     "DrugEvidenceSource",
     "DrugIdentity",
     "DrugSummary",
     "EvidencePassage",
-    "GOOD_OPTION_INPUT_VERSION",
-    "GOOD_OPTION_LABEL_SCHEMA_VERSION",
-    "GOOD_OPTION_PROMPT_VERSION",
     "GeneralWebProvider",
     "GoodOptionCatalog",
     "INTERVENTION_EXCLUSION_CATEGORIES",
     "INTERVENTION_SCREENING_DISPOSITIONS",
     "ParsedGoodOptionResult",
-    "ROLE_PROMPT_VERSION",
     "RUBRIC_CRITERIA",
     "ResearchAttempt",
     "ResearchSettings",
-    "SYNTHESIS_PROMPT_VERSION",
     "TrialDrugAssignment",
     "build_facet_query",
     "build_good_option_catalog",
