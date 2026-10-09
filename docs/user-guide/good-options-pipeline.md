@@ -84,9 +84,11 @@ sources, one round.
 
 A drug's ledger is ordered round-robin across `(query_scope, source)` so no
 retrieval axis is starved, then split into chunks of at most
-`synthesis_chunk_max_tokens` (100,000) of passage text. Nothing is discarded:
+`synthesis_chunk_max_tokens` (60,000) of passage text. Nothing is discarded:
 the chunks run in order, one LLM call each, with the chunk's passages numbered
-`P1`..`Pn`.
+`P1`..`Pn`. Bigger chunks mean fewer calls but fewer facts: the model condenses
+more of a large chunk, and 100,000-token chunks gave about 25% fewer facts than
+60,000 in a Gemma 4 comparison.
 
 Each call sees the facts built so far, numbered `F1`..`Fn`, and returns JSON
 with six arrays — mechanism and targets, efficacy by tumor, biomarker
@@ -108,7 +110,7 @@ the facts so far unchanged.
 ### Step 5 — Synthesize the class evidence
 
 The same chunked synthesis, once per class, with chunks bounded by its own
-`class_evidence_max_tokens` (100,000).
+`class_evidence_max_tokens` (60,000).
 Facts are stamped **`scope: class`**.
 
 The separation is the point rather than an implementation detail. A pooled

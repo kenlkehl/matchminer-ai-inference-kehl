@@ -637,17 +637,19 @@ for a reasoning trace and the final JSON. Evidence beyond the budget is
 discarded round-robin across sources before the model sees it, so a lower value
 silently drops passages rather than failing; when serving a smaller context,
 reduce it to about `(context - completion budget) / 1.08`. Synthesis reads the ledger in
-`synthesis_chunk_max_tokens` chunks (default 100,000; classes use
+`synthesis_chunk_max_tokens` chunks (default 60,000; classes use
 `class_evidence_max_tokens`). Each chunk's call sees the facts so far and returns
 only new or revised items, which code merges in: an existing fact is removed
 only when a validated item names it in `replaces`. The stage-specific
 `synthesis_llm` override defaults to a 100,000-token completion budget so
 reasoning-enabled models can think over a chunk and still finish the final JSON.
-A chunk (about 110,000 tokens with passage metadata), the existing facts (up to
-about 25,000 tokens for the broadest classes), and this budget must fit together
-in the served context; lower both chunk limits when serving less than 262,144
-tokens, since the endpoint rejects a request whose prompt plus `max_tokens`
-exceeds its context. A model that exhausts
+Larger chunks are not better: on 40 multi-chunk drugs with Gemma 4 31B,
+100,000-token chunks gave about 25% fewer facts and cited passages than 60,000,
+because the model condenses more of each chunk. A chunk plus passage metadata,
+the existing facts (up to about 25,000 tokens for the broadest classes), and this
+budget must fit together in the served context; lower both chunk limits when
+serving less than 262,144 tokens, since the endpoint rejects a request whose
+prompt plus `max_tokens` exceeds its context. A model that exhausts
 the budget mid-trace returns an empty answer with `finish_reason=length`, which
 is retried rather than silently accepted, and if every ordinary attempt ends
 that way the final attempt disables thinking.
@@ -667,7 +669,7 @@ its own budget so that neither can evict the other.
 since atezolizumab is both a PD-L1 inhibitor and an immune checkpoint inhibitor.
 `class_assignment_evidence_max_tokens` (40,000) bounds the mechanism passages
 that stage reads, and `class_llm` gives it its own completion budget.
-`class_evidence_max_tokens` (100,000) bounds each chunk of the corpus that class
+`class_evidence_max_tokens` (60,000) bounds each chunk of the corpus that class
 *synthesis* reads. Class synthesis is a separate call from agent synthesis rather than a
 larger pooled one: 165 drugs already use more than half the agent budget and the
 largest uses 91% of it, so pooling would let a flood of same-class passages evict
