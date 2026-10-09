@@ -894,9 +894,9 @@ def test_ncit_definition_is_citable_ledger_evidence() -> None:
 
     assert len(evidence) == 1
     assert evidence[0].evidence_id == "ncit_definition:C123"
-    prompt = catalog_module.build_synthesis_messages(drug, evidence)
+    prompt = catalog_module.build_synthesis_delta_messages(drug, evidence, {})
     assert "ontology_definition" in prompt[1]["content"]
-    assert "no supplied passage supports a relevant fact" in prompt[1]["content"]
+    assert "nothing in this segment supports a relevant fact" in prompt[1]["content"]
     assert "minimum evidence-grade threshold" in prompt[1]["content"]
     assert "qualifying evidence" not in prompt[1]["content"]
 
@@ -1403,10 +1403,10 @@ def test_serial_synthesis_accepts_empty_delta_and_rejected_revisions_keep_facts(
     assert result["D1"]["efficacy_by_tumor"][0]["support_ids"] == ["ledger:D1-1"]
 
 
-def test_catalogs_from_the_previous_synthesis_prompt_still_load(
+def test_catalogs_from_another_synthesis_prompt_are_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Delta synthesis changed how facts accumulate, not how they are stored."""
+    """Only catalogs built with the current synthesis prompt load."""
 
     async def fake_fetch(_nct_id: str, *, client):
         del client
@@ -1442,23 +1442,13 @@ def test_catalogs_from_the_previous_synthesis_prompt_still_load(
     )
     manifest_path = output / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    legacy = "drug-evidence-serial-synthesis-v4"
-    assert legacy in catalog_module.LEGACY_SYNTHESIS_PROMPT_VERSIONS
-    ncit_version = str(manifest["ncit"]["version"])
-    manifest["versions"]["synthesis_prompt"] = legacy
-    manifest["compatibility_id"] = catalog_module._compatibility_id(
-        ncit_version=ncit_version, synthesis_prompt=legacy
+    assert validate_good_option_catalog(output)["versions"]["synthesis_prompt"] == (
+        catalog_module.SYNTHESIS_PROMPT_VERSION
     )
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    assert validate_good_option_catalog(output)["versions"]["synthesis_prompt"] == legacy
-
-    # A legacy version must still carry its own compatibility id.
-    manifest["compatibility_id"] = catalog_module._compatibility_id(
-        ncit_version=ncit_version
-    )
+    manifest["versions"]["synthesis_prompt"] = "drug-evidence-serial-synthesis-v4"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="synthesis_prompt"):
         validate_good_option_catalog(output)
 
 

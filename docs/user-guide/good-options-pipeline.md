@@ -102,8 +102,8 @@ Code then checks the work: citations resolve back to real evidence IDs, uncited
 items are dropped, and each surviving fact is stamped **`scope: agent`**. The
 new items are merged in code: every existing fact is kept unless a validated
 item replaces it, and an item repeating an existing fact's text is dropped.
-(Earlier versions asked the model to rewrite the whole list each chunk, which
-silently lost facts once a broad class had accumulated hundreds.) Failures retry
+Because existing facts never pass back through the model's output, a broad class
+that has accumulated hundreds of them cannot silently lose any. Failures retry
 with the exact validation error quoted back; a chunk that never validates leaves
 the facts so far unchanged.
 

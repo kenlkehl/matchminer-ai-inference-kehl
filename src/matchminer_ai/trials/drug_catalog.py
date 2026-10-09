@@ -85,9 +85,6 @@ CONTROL_ARM_TYPES = frozenset(
 ACTIVE_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL"})
 ROLE_PROMPT_VERSION = "trial-cancer-treatment-agent-screen-v4"
 SYNTHESIS_PROMPT_VERSION = "drug-evidence-delta-synthesis-v5"
-#: Earlier synthesis prompts whose catalogs still load. They store facts in the
-#: same SYNTHESIS_SCHEMA_VERSION; only how the facts were accumulated differs.
-LEGACY_SYNTHESIS_PROMPT_VERSIONS = frozenset({"drug-evidence-serial-synthesis-v4"})
 CLASS_PROMPT_VERSION = "drug-pharmacologic-class-v1"
 CATALOG_CHECKPOINT_SCHEMA_VERSION = "good-option-catalog-checkpoints-v1"
 CLASS_BASES = frozenset({"target", "mechanism", "modality"})
@@ -203,15 +200,13 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _compatibility_id(
-    *, ncit_version: str, synthesis_prompt: str = SYNTHESIS_PROMPT_VERSION
-) -> str:
+def _compatibility_id(*, ncit_version: str) -> str:
     payload = {
         "catalog_schema": CATALOG_SCHEMA_VERSION,
         "role_policy": ROLE_POLICY_VERSION,
         "role_prompt": ROLE_PROMPT_VERSION,
         "synthesis_schema": SYNTHESIS_SCHEMA_VERSION,
-        "synthesis_prompt": synthesis_prompt,
+        "synthesis_prompt": SYNTHESIS_PROMPT_VERSION,
         "class_prompt": CLASS_PROMPT_VERSION,
         "good_option_projection": GOOD_OPTION_PROJECTION_VERSION,
         "help_me_choose_projection": HELP_ME_CHOOSE_PROJECTION_VERSION,
@@ -1060,36 +1055,6 @@ def _ncit_definition_evidence(
     )
 
 
-def build_synthesis_messages(
-    drug: DrugIdentity, evidence: Sequence[EvidencePassage]
-) -> list[dict[str, str]]:
-    """Build a compact synthesis prompt without URLs or retrieval metadata."""
-
-    records = []
-    for index, item in enumerate(evidence, start=1):
-        records.append(
-            {
-                "passage_id": f"P{index}",
-                "facet": item.facet,
-                "source_kind": item.source_type,
-                "publication_year": str(item.published_at or "")[:4],
-                "text": item.passage,
-            }
-        )
-    system = load_prompt_text("trial_drug_synthesis.system.txt")
-    user = load_prompt_text("trial_drug_synthesis.user.txt").format(
-        payload=json.dumps(
-            {
-                "drug": drug.preferred_name,
-                "passages": records,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
-
-
 def _supported_passage_ids(
     support: Any, *, passage_id_map: Mapping[str, str]
 ) -> list[str]:
@@ -1726,9 +1691,8 @@ def _merge_synthesis_delta(
 ) -> dict[str, list[dict[str, Any]]]:
     """Add one round's validated new and revised items to the existing facts.
 
-    Rewriting the whole list each round let the model silently drop facts once
-    a broad class had accumulated hundreds of them, so existing facts are now
-    kept in code. One is removed only when a validated revised item names its
+    Existing facts are kept in code, so a broad class that has accumulated
+    hundreds of them cannot silently lose any. One is removed only when a validated revised item names its
     ``F#`` id in ``replaces``; unknown ids are ignored. A new item that repeats
     an existing or earlier new item's text in the same category is dropped.
     """
@@ -3983,9 +3947,6 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
         "good_option_checker_input": GOOD_OPTION_INPUT_VERSION,
     }
     versions = manifest.get("versions") or {}
-    synthesis_prompt = str(versions.get("synthesis_prompt") or "")
-    if synthesis_prompt in LEGACY_SYNTHESIS_PROMPT_VERSIONS:
-        expected_versions["synthesis_prompt"] = synthesis_prompt
     mismatched_versions = {
         key: (versions.get(key), expected)
         for key, expected in expected_versions.items()
@@ -3998,7 +3959,7 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
         )
     ncit_version = str((manifest.get("ncit") or {}).get("version") or "unknown")
     if manifest.get("compatibility_id") != _compatibility_id(
-        ncit_version=ncit_version, synthesis_prompt=synthesis_prompt
+        ncit_version=ncit_version
     ):
         raise ValueError(
             "Catalog compatibility ID does not match its version manifest."
@@ -4378,7 +4339,6 @@ __all__ = [
     "build_good_option_catalog",
     "build_intervention_screening_messages",
     "build_role_resolution_messages",
-    "build_synthesis_messages",
     "class_id_for",
     "load_good_option_catalog",
     "normalize_class_name",

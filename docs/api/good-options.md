@@ -198,10 +198,9 @@ trial has in total:
 Subjects without stored facts, such as hand-built summaries, fall back to their
 stored projection, truncated if needed. Scoring metadata records
 `evidence_packing_version` and a summary of granularities and truncations, and
-debug mode adds per-row `good_option_evidence_packing`. The prompt template and
-`GOOD_OPTION_PROMPT_VERSION` are unchanged, so catalogs remain compatible.
+debug mode adds per-row `good_option_evidence_packing`.
 
-The unchanged rubric awards each scoreable drug up to four binary points:
+The rubric awards each scoreable drug up to four binary points:
 
 1. evidence of benefit in the patient's disease type;
 2. the targeted biomarker is commonly expressed in that disease type;
@@ -255,7 +254,6 @@ teacher prompt carries, and no checker artifact is published. `score_good_option
         - load_good_option_catalog
         - build_intervention_screening_messages
         - build_role_resolution_messages
-        - build_synthesis_messages
 
 ::: matchminer_ai.matching
     options:

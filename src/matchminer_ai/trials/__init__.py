@@ -193,7 +193,6 @@ _GOOD_OPTION_EXPORTS = {
     "build_good_option_catalog": "trials.drug_catalog",
     "build_intervention_screening_messages": "trials.drug_catalog",
     "build_role_resolution_messages": "trials.drug_catalog",
-    "build_synthesis_messages": "trials.drug_catalog",
     "load_good_option_catalog": "trials.drug_catalog",
     "validate_good_option_catalog": "trials.drug_catalog",
     "CLASS_PROMPT_VERSION": "trials.drug_catalog",

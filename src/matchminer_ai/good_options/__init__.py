@@ -11,7 +11,6 @@ from .catalog import (
     build_good_option_catalog,
     build_intervention_screening_messages,
     build_role_resolution_messages,
-    build_synthesis_messages,
     load_good_option_catalog,
     validate_good_option_catalog,
 )
@@ -75,7 +74,6 @@ __all__ = [
     "build_good_option_messages",
     "build_intervention_screening_messages",
     "build_role_resolution_messages",
-    "build_synthesis_messages",
     "default_sources",
     "evaluate_good_options",
     "load_good_option_catalog",
