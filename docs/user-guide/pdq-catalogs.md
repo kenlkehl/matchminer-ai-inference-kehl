@@ -6,6 +6,11 @@ ownership, source-backed consolidation, population coverage, exact excerpt repai
 checkpoint resume, export and final audit. It does not use the contextualization
 adapter's ranked, partial PDQ excerpts as a complete catalog source.
 
+Every generation prompt opens with the library's purpose, the meaning of a clinical
+space, and how its nine population fields support later patient-summary matching.
+The opening also distinguishes this source-extraction task from patient advice and
+explains that organizing PDQ evidence does not make it a clinical practice guideline.
+
 ## Snapshot sources
 
 Choose complete NCI PDQ **health-professional** summary URLs. A disease can use one
@@ -86,7 +91,11 @@ caller when sharing a server with other catalog jobs.
 All clinical extraction is performed by the configured endpoint. PDQ prompting
 distinguishes explicit care options from trial enrollment criteria, historical
 comparators, protocol-mandated tests and exploratory research. It preserves
-treatment lines in prior-treatment fields and population-defining biomarkers.
+source-supported prior drugs/classes, disease setting and response in prior-treatment
+fields, plus population-defining biomarkers. Space names and fields use explicit
+history rather than ordinal treatment-line shorthand. An undefined line heading
+does not authorize inventing regimen counts or progression requirements; its
+remaining ambiguity is retained with source evidence.
 The `category` field retains PDQ evidence-grade wording when supplied; it is not
 converted to an NCCN recommendation category. Applicability, timing, alternative
 methods and investigational status remain explicit conditions or uncertainties.

@@ -576,7 +576,29 @@ class SpecificityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "only in the name") as raised:
             validate_decision_fields(value, "Fictional guideline")
         self.assertIn(value["name"], str(raised.exception))
+        self.assertIn("actual drugs/classes, setting and response", str(raised.exception))
+        self.assertIn("do not infer a regimen count solely", str(raised.exception))
         self.assertEqual(value, original)
+
+    def test_explicit_treatment_history_retains_setting_response_and_count_unit(self):
+        for required, excluded in (
+            ("Progression after platinum-containing chemotherapy for metastatic disease", "NA"),
+            ("NA", "Cytotoxic chemotherapy for metastatic disease"),
+            ("(One OR two prior systemic regimens for metastatic disease) AND prior drug A", "NA"),
+        ):
+            with self.subTest(required=required, excluded=excluded):
+                value = state()
+                value["name"] = "Fictional disease with source-defined treatment history"
+                value["space"].update(
+                    cancer_burden_allowed="Metastatic",
+                    prior_treatment_required=required,
+                    prior_treatment_excluded=excluded,
+                )
+                original = copy.deepcopy(value)
+                validate_decision_fields(value, "Fictional guideline")
+                self.assertEqual(value, original)
+                self.assertIn(required, format_space(value["space"]))
+                self.assertIn(excluded, format_space(value["space"]))
 
     def test_shared_source_line_bin_and_ordinal_spellings_are_preserved(self):
         value = state()
@@ -1844,18 +1866,26 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                     text.index("FINAL POPULATION RULES:"),
                 )
                 for rule in (
-                    "First-line, second-line and third-line-and-beyond",
+                    "EXPLICIT TREATMENT HISTORY, NOT LINE SHORTHAND",
                     "prior_treatment_required",
-                    "FOR THAT ADVANCED SETTING",
+                    "A line is not a standardized exposure unit",
                     "future progression",
                     "ER-negative AND PR-negative",
                     "(ER-positive OR PR-positive)",
                     "must NOT become",
-                    "exactly one prior line",
-                    "one OR two prior lines",
-                    "Keep ordinal labels out of",
-                    "cancer_burden_allowed. Do not infer",
+                    "Do not derive an exact prior-regimen count solely from an ordinal line heading",
+                    'Do not silently replace "line" with "regimen" or "course"',
+                    "maintenance, a drug substitution, rechallenge, toxicity-related changes",
+                    "Verbatim source evidence and uncertainty explanations may retain original labels",
+                    "retain the upper bound too",
                     "TRIALSPACE FIELD MEANINGS",
+                    "A clinical space is a unique combination of patient age",
+                    "For EVERY clause",
+                    '"Ineligible for drug A" is NOT equivalent to "must not have received drug A"',
+                    'Express "untreated" or "treatment-naive" here',
+                    '"metastatic cancer with age <40 OR marker X-positive"',
+                    "CRITICAL FINAL CHECK WHEN CREATING OR CONSOLIDATING DEFINITIONS",
+                    "does NOT make a known-wrong definition acceptable",
                     "visceral crisis OR endocrine refractory",
                     "These spaces\nmay overlap",
                     "Requirements in DIFFERENT fields apply together (AND)",

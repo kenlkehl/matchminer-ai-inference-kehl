@@ -1,11 +1,24 @@
 TRIALSPACE FIELD MEANINGS AND BOOLEAN LOGIC
-Use the nine fields as typed clinical concepts, following the MatchMiner-AI trial primer:
+A clinical space is a unique combination of patient age, sex, primary cancer type,
+histology, disease burden, prior treatments required/excluded, and biomarkers required/excluded,
+as in extraction of clinical trial eligibility. Here the supplied source defines the population
+for a care decision, not eligibility for a trial. Extract patient criteria, not a section summary,
+regimen description, study arm, or list of reasons a therapy might be chosen.
+CRITICAL: Each space must contain ALL information needed to define that population on its own.
+Only the nine fields become TrialSpace embedding text. A criterion in the name, source quotation,
+option menu or uncertainty does not substitute for its appropriate field. Never use "same as above".
+NA means no source-supported restriction for that field, not "see the name or another field".
+
+Use the nine fields as typed clinical concepts, following the MatchMiner-AI trial primer.
+For EVERY clause, ask what fact about the patient it asserts and put it only in the matching field:
 - age_range_allowed: age criteria only; do not infer an adult cutoff from silence.
 - sex_allowed: sex criteria only; breast cancer does not imply a female-only population.
 - cancer_type_allowed: spelled-out primary cancer type/site.
 - histology_allowed: histologic/morphologic subtype. Receptor status belongs in biomarkers.
 - cancer_burden_allowed: extent, stage, disease sites, resectability, residual disease,
   disease-specific prognostic risk and disease-severity states such as visceral crisis.
+  This is NOT a catch-all for the entire population definition. "Untreated", "first-line",
+  prior surgery, previous systemic therapy and response/resistance are not disease burden.
   Visceral crisis is a current disease state, NOT a prior treatment or treatment response.
   Do not infer visceral crisis merely from visceral metastases. Exclude performance status,
   measurable-disease requirements, life expectancy and general organ-function/fitness criteria;
@@ -13,13 +26,26 @@ Use the nine fields as typed clinical concepts, following the MatchMiner-AI tria
 - prior_treatment_required: treatment/exposure that must have occurred and the source-defined
   response/resistance to that treatment/class. Endocrine refractoriness belongs here as a
   treatment-response condition, not in burden or biomarkers. Preserve the source wording without
-  inventing named failed drugs, prior-line counts, or timing. De novo/intrinsic resistance must
+  inventing named failed drugs, prior-regimen counts, or timing. De novo/intrinsic resistance must
   not be expanded into an invented history of treatment. Do not treat every reason to choose a
   therapy as prior treatment: visceral crisis, symptomatic disease and unresectability are not
   treatment histories. Planned/recommended treatment belongs in the menu, not either prior field.
+  Ask "What treatment has this patient already received, and what response is required?"
+  Treatment ineligibility, intolerance anticipated before exposure, contraindications and poor
+  performance status do not establish a history of receiving or failing that treatment.
+  Describe the actual prior drug/class, disease setting and source-required response; "second-line"
+  or "one prior line" is not an adequate history. Counts require a source-defined counting unit.
 - prior_treatment_excluded: the treatment/exposure that must NOT have occurred, with its
   source-defined setting/sequence. Excluding prior cytotoxic therapy does not exclude endocrine
   therapy. Response-based exclusions must identify the source-supported treatment/class.
+  Ask "What prior treatment would disqualify this patient from this source-defined population?"
+  Express "untreated" or "treatment-naive" here using the treatment and setting actually stated
+  by the source. For example, "no previous systemic treatment for advanced disease" excludes
+  systemic treatment FOR THAT SETTING, not all surgery, radiotherapy or adjuvant therapy ever.
+  Do not label a space first-line/untreated while leaving its only history restriction in the name.
+  "Ineligible for drug A" is NOT equivalent to "must not have received drug A". Keep suitability
+  in option conditions; when the source does not resolve a history restriction, report that gap
+  without inventing a line label, exposure, drug class, count or treatment setting.
 - biomarkers_required / biomarkers_excluded: required/disqualifying molecular, germline or
   protein/receptor findings, including source-supported assay, score and threshold. A drug's
   target is not automatically a required biomarker. Treatment resistance is not receptor status.
@@ -30,6 +56,11 @@ Use the nine fields as typed clinical concepts, following the MatchMiner-AI tria
   restrictions in histology_allowed. Preserve any separately stated histologic/morphologic restriction;
   use NA for histology_allowed when the source states none. The population name is display metadata,
   not part of the TrialSpace embedding text, and cannot substitute for any of the nine fields.
+
+General treatment suitability (for example, ineligibility for immunotherapy or targeted therapy)
+belongs in the applicable option's conditions, not in prior treatment or biomarkers. Do not create
+an otherwise identical space solely to encode such suitability. Histology is morphology, not a
+receptor shorthand; disease burden is extent/risk, not all the criteria written under a heading.
 
 Requirements in DIFFERENT fields apply together (AND). Do not move the two sides of an OR into
 separate fields of one space: that changes the represented population. Within a field, explicitly
@@ -44,6 +75,13 @@ visceral-crisis alternative must not acquire a requirement for endocrine refract
 endocrine-refractory alternative must not acquire a requirement for visceral crisis. These spaces
 may overlap; do not invent absence of the other condition to make them mutually exclusive.
 Splitting a mixed-field alternative does not authorize expanding the task's clinical scope.
+For example, a fictional source population "metastatic cancer with age <40 OR marker X-positive"
+requires two spaces: metastatic cancer with age_range_allowed <40, and metastatic cancer with
+biomarkers_required marker X-positive. Repeat the shared disease criteria in both. Do not put
+age and marker status into cancer_burden_allowed, require both in one space, or invent marker
+negativity/age >=40 to make the alternatives disjoint. Preserve the source's OR; never silently
+replace it with AND to make a definition narrower. Separately supported cancer types, histologies
+or treatment-defining biomarker alternatives also need self-contained spaces, not a mixed list.
 During consolidation, preserve the input population's shared prior-treatment and biomarker
 restrictions in EVERY resulting alternative. For a first-line input excluding a biomarker, do not
 add later-line states or states requiring that biomarker from a neighboring table row. If a source
@@ -52,5 +90,16 @@ Do not discard either alternative or weaken both into an unrestricted state. If 
 resolve a boundary, state the uncertainty. Selection copies existing definitions; detail generation
 and citation-only repair keep fixed fields unchanged and must report gaps instead of repairing them.
 
-Before returning a definition, check each clause's concept against its field and verify that its
-AND/OR population logic is preserved. A valid JSON shape or a plausible state name is insufficient.
+CRITICAL FINAL CHECK WHEN CREATING OR CONSOLIDATING DEFINITIONS:
+1. Read the nine fields without the name or options. Do they define the full source-supported
+   population, including negative biomarkers and the stated treatment setting/history?
+2. Check EVERY clause against its field's meaning. Move misplaced criteria to their proper fields;
+   split mixed-field OR alternatives when necessary, repeating shared criteria in every space.
+3. Compare the resulting AND/OR population with the source. Do not broaden, narrow, omit an
+   alternative or invent a restriction just to fit the schema. Keep suitability with options.
+4. Correct an identified field-placement or logic error now. Writing the error in uncertainties
+   does NOT make a known-wrong definition acceptable. Uncertainties are for unresolved source
+   evidence, not permission to keep a correctable representation error.
+These corrections belong in extraction/consolidation. Tasks that hold an existing definition
+fixed (selection, detail generation, citation-only repair) must still obey their no-rewrite
+contract and report conflicts. A valid JSON shape or a plausible state name is insufficient.

@@ -20,6 +20,7 @@ from matchminer_ai.trials import (
     summarize_pdq,
 )
 from matchminer_ai.trials._guideline_sources import InputNotReady, load_guideline
+from matchminer_ai.trials import _guideline_prompts as prompts
 from matchminer_ai.trials._pdq_sources import parse_pdq_html
 from test_guideline_extraction import TEXT, catalog, extraction, quoted_state
 from test_guideline_api import fake_endpoint, guideline_run  # noqa: F401
@@ -434,6 +435,36 @@ def test_public_pdq_catalog_roundtrip_audit_lookup_and_offline_resume(
     assert selected.iloc[0].treatment_options == row.treatment_options
     assert list_guidelines(source).disease.tolist() == ["fictional"]
     assert len([u for u, _ in pdq_endpoint if u.endswith("completions")]) == 3
+    definitions = []
+    for url, body in pdq_endpoint:
+        if not url.endswith("completions"):
+            continue
+        # Source adaptation must retain the opening orientation in every generation stage.
+        system = body["messages"][0]
+        assert system["role"] == "system"
+        assert system["content"] == prompts.PDQ_SYSTEM
+        assert system["content"].startswith("TASK CONTEXT AND PURPOSE\n")
+        assert (
+            "searchable research library from NCI PDQ health-professional cancer"
+            in system["content"]
+        )
+        assert (
+            "downstream matching software converts ONLY the nine named population fields"
+            in system["content"]
+        )
+        assert (
+            "do not attempt the entire workflow or rewrite fields "
+            "that the active task declares fixed" in system["content"]
+        )
+        schema = body["response_format"]["json_schema"]["schema"]
+        if key := next((k for k in ("candidates", "states") if k in schema["properties"]), None):
+            definitions.append(key)
+            assert prompts.FIELD_PLACEMENT_RULES in body["messages"][-1]["content"]
+            assert prompts.SPECIFICITY_RULES in body["messages"][-1]["content"]
+            fields = schema["properties"][key]["items"]["properties"]["space"]["properties"]
+            assert "Not a catch-all" in fields["cancer_burden_allowed"]["description"]
+            assert "Treatment ineligibility is NOT absence of prior exposure" in fields["prior_treatment_excluded"]["description"]
+    assert definitions == ["candidates", "states"]
     monkeypatch.setattr(
         "matchminer_ai.llm.structured.urlopen",
         lambda *a, **k: pytest.fail("Completed resume is offline"),
@@ -541,7 +572,7 @@ def test_pdq_prompt_changes_do_not_invalidate_nccn_identity(
     summarize_guidelines(root, disease="fictional", output_dir=output, config=config)
     run = read_json(output / "run_config.json")
     assert "pdq.system.txt" not in run["prompt_resources_sha256"]
-    assert run["prompt_version"] == "nccn-trialspace-v13-source-excerpts"
+    assert run["prompt_version"] == "nccn-trialspace-v14-field-contract"
     for _, body, _ in fake_endpoint:
         if body and "messages" in body:
             assert "PDQ is an evidence summary" not in body["messages"][0]["content"]

@@ -7,6 +7,12 @@ considerations, treatment/management options, source quotations, and uncertainti
 All clinical content is extracted by the configured LLM. Python manages source
 ownership, record identity, validation, persistence, and export.
 
+Generation prompts begin by explaining the library's purpose: later patient-summary
+matching and retrieval of source-supported workup and treatment considerations.
+They define a clinical space and explain that only its nine population fields enter
+the matching text; names and menus cannot supply missing criteria. Each call then
+receives its stage-specific task and schema, including any fixed-field restrictions.
+
 This is an optional source-grounded extraction workflow, separate from trial
 matching. A guideline population is not a clinical trial, a treatment recommendation,
 or an eligibility determination. Structural checks do not establish clinical
@@ -194,6 +200,27 @@ contains extent, stage, resectability, and disease-severity states. Visceral cri
 is burden and endocrine refractoriness is treatment response. Alternatives across
 fields are split without changing OR to AND. Generic breast HR-negative expands
 to ER-negative AND PR-negative; HR-positive expands to ER-positive OR PR-positive.
+Both NCCN and PDQ definition prompts use the trial-extraction framing of one
+self-contained combination of patient criteria. They require a clause-by-clause
+field check before returning extraction or consolidation results. Untreated status
+belongs in scoped prior-treatment exclusions; treatment ineligibility belongs in
+option conditions. Mixed alternatives across age, history, burden and biomarkers
+must be split while retaining shared criteria and the source's OR logic. The prompt
+requires correcting known representation errors during definition creation rather
+than merely recording them in uncertainties. Later fixed-definition stages still
+cannot rewrite populations. This is a prompt contract, not a new semantic validator;
+its clinical effect needs evaluation on model outputs. The revised core prompts
+require a new output directory and do not upgrade existing catalogs or checkpoints.
+
+Treatment-history wording describes the actual previous drugs/classes, disease
+setting, response and any explicitly defined counts. Ordinal headings such as
+"second-line" do not by themselves establish one previous regimen, progression,
+or how maintenance, substitutions or earlier-setting therapy are counted. Names
+and space fields use concrete source-supported history rather than line shorthand.
+Undefined source terminology remains a cited uncertainty; the prompt must not
+invent specificity, erase the boundary or merge it into an unrestricted population.
+Exact source quotations retain their original wording.
+
 Consolidation and cross-batch selection now have an independent population-coverage
 gate before detail generation. Identical clinical names and nine-field definitions
 pass deterministically; other inputs undergo bounded LLM comparisons against the

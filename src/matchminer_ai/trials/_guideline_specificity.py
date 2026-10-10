@@ -181,8 +181,9 @@ def validate_decision_fields(state, guideline_title):
         raise ValueError(
             f"{state['name'][:300]!r}: cancer_burden_allowed contains treatment-line "
             "criteria. Burden describes extent, stage, resectability and prognostic risk. "
-            "Encode the source-defined sequence/setting and bounded prior-line counts "
+            "Encode the actual source-supported prior drugs/classes, setting and response "
             "in prior_treatment_required / prior_treatment_excluded instead. "
+            "Do not substitute an ordinal line label or invent a regimen-count definition. "
             "Do not change the represented clinical population."
         )
     # First-line OR any subsequent line imposes no history restriction. Mask
@@ -196,7 +197,9 @@ def validate_decision_fields(state, guideline_title):
         raise ValueError(
             f"{state['name'][:300]!r}: the treatment-line boundary is only in the name. "
             "Encode its source-defined history in prior_treatment_required / "
-            "prior_treatment_excluded, with both bounds for a bounded line/bin; "
+            "prior_treatment_excluded using actual drugs/classes, setting and response, "
+            "with counts only when the source defines their unit and bounds; "
+            "do not infer a regimen count solely from an ordinal line heading; "
             "do not put treatment history in cancer_burden_allowed."
         )
     if re.match(

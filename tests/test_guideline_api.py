@@ -22,7 +22,7 @@ from matchminer_ai.trials import (
 from matchminer_ai.trials._guideline_canonical import TASK as CATALOG_TASK
 
 
-@pytest.mark.parametrize("change", ["unused_only", "clinical_prompt", "corrupt_digest"])
+@pytest.mark.parametrize("change", ["unused_only", "clinical_prompt", "field_contract", "corrupt_digest"])
 def test_resume_ignores_only_legacy_unused_patient_prompt(
     guideline_run, fake_endpoint, change
 ):
@@ -35,6 +35,8 @@ def test_resume_ignores_only_legacy_unused_patient_prompt(
     saved["prompt_resources_sha256"]["structured.memory_retry.txt"] = "unused-patient-prompt"
     if change == "clinical_prompt":
         saved["prompt_resources_sha256"]["guideline.system.txt"] = "changed-clinical-prompt"
+    if change == "field_contract":
+        saved["prompt_resources_sha256"]["guideline.field_placement_rules.txt"] = "old-field-contract"
     identity = {k: v for k, v in saved.items() if k not in {"config_sha256", "runtime", "stage_versions"}}
     identity = json.loads(json.dumps(identity))
     for key in ("timeout", "attempts", "api_key_env", "stream", "max_concurrent_requests"):
@@ -173,6 +175,37 @@ def test_public_roundtrip_wire_settings_exports_provenance_and_offline_resume(
     assert any("canonicalizing" in line for line in progress)
     assert any("populating" in line for line in progress)
     assert sum(url.endswith("/chat/completions") for url, _, _ in fake_endpoint) == 3
+    definitions = []
+    for url, body, _ in fake_endpoint:
+        if not url.endswith("/chat/completions"):
+            continue
+        # Every generation stage must orient a fresh model before its task/source payload.
+        system = body["messages"][0]
+        assert system["role"] == "system"
+        assert system["content"] == prompts.SYSTEM
+        assert system["content"].startswith("TASK CONTEXT AND PURPOSE\n")
+        assert (
+            "searchable research library from cancer guideline documents"
+            in system["content"]
+        )
+        assert (
+            "downstream matching software converts ONLY the nine named population fields"
+            in system["content"]
+        )
+        assert (
+            "do not attempt the entire workflow or rewrite fields "
+            "that the active task declares fixed" in system["content"]
+        )
+        schema = body["response_format"]["json_schema"]["schema"]
+        if key := next((k for k in ("candidates", "states") if k in schema["properties"]), None):
+            definitions.append(key)
+            text = body["messages"][-1]["content"]
+            assert prompts.FIELD_PLACEMENT_RULES in text
+            assert prompts.SPECIFICITY_RULES in text
+            fields = schema["properties"][key]["items"]["properties"]["space"]["properties"]
+            assert "Not a catch-all" in fields["cancer_burden_allowed"]["description"]
+            assert "Treatment ineligibility is NOT absence of prior exposure" in fields["prior_treatment_excluded"]["description"]
+    assert definitions == ["candidates", "states"]
     assert all(
         body["chat_template_kwargs"] == {"enable_thinking": True}
         for url, body, _ in fake_endpoint

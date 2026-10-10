@@ -11,6 +11,10 @@ matching proposed populations using their clinical names and explain the corresp
 Equivalent wording and corrected field placement are allowed. Exact duplicates can share one
 state. An umbrella can be represented by its explicit component states, provided their union
 covers its source-described branches. Do not demand a separate umbrella when its components exist.
+Concrete prior drug/class, disease-setting and response criteria may replace a source line label
+when the supplied input defines that label with those criteria. Do not demand ordinal wording or
+infer a prior-regimen count from an undefined ordinal. Missing or uncertain exposure boundaries
+must still be reported as missing; broad previous-treatment wording is not automatically equivalent.
 Conversely, a broader state is NOT a substitute for a specific subtype, biomarker, prior-treatment,
 response/MRD, treatment-phase, or recurrence population. Restrictions mentioned only in a name,
 uncertainty, or hypothetical treatment condition are not preserved in the nine-field definition.
