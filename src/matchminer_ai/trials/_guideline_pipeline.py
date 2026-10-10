@@ -30,6 +30,8 @@ from ._guideline_completeness import VERSION as COVERAGE_VERSION
 from ._guideline_context import pack_messages
 from ._guideline_details import build_detail_call
 from ._guideline_extraction_batches import run_extractions
+from ._guideline_source_refresh import prepare_refresh, load_refreshes, review_job, archive_changed_candidates
+from .prompt_builder import load_prompt_text
 from matchminer_ai.llm.structured import EndpointError
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, StructuredConfig
 from ._guideline_generation import Client, RETRY_ONLY_PROMPT_FILES
@@ -97,17 +99,21 @@ def run_guideline(
 ):
     output.mkdir(parents=True, exist_ok=True)
     with directory_lock(output):
-        status = _run(
-            guideline,
-            output,
-            llm,
-            workers,
-            packet_chars,
-            packet_pages,
-            context_chars,
-            progress_callback,
-            audit_pending=finalize is not None,
-        )
+        while True:
+            try:
+                status = _run(
+                    guideline, output, llm, workers, packet_chars, packet_pages,
+                    context_chars, progress_callback, audit_pending=finalize is not None,
+                )
+                break
+            except RuntimeError as error:
+                if 'catalog batches failed' not in str(error) or not prepare_refresh(output, guideline):
+                    raise
+                if progress_callback:
+                    try:
+                        progress_callback(f'{guideline.disease}: rechecking original source after irreconcilable singleton coverage')
+                    except Exception:
+                        logging.getLogger(__name__).exception('Guideline progress callback failed')
         if finalize is not None:
             try:
                 finalize()
@@ -320,6 +326,8 @@ def _run(
         },
     )
     client = Client(llm, output / "checkpoints")
+    prepare_refresh(output, guideline)
+    source_reviews = load_refreshes(output, guideline)["packets"]
     status = {
         "status": "running",
         "stage": "extract",
@@ -356,6 +364,8 @@ def _run(
             previous = previous_packets.get(key)
             accepted = accepted_extractions.get(key)
             if (
+                key not in source_reviews
+                and
                 previous is not None
                 and accepted is not None
                 and accepted.get("json_normalization_version")
@@ -385,6 +395,15 @@ def _run(
                 "version": metadata["version"],
                 "primary_page_ids": ids,
             }
+            review = source_reviews.get(key)
+            review_tail = ""
+            if review is not None:
+                if ids != review["original_packet"]["primary_page_ids"]:
+                    raise ValueError("Source review changed primary page ownership")
+                review_tail = load_prompt_text("guideline.extraction_source_review.txt") + json.dumps({
+                    "original_population": review["candidate"],
+                    "coverage_finding": review["coverage"]["reviews"],
+                }, ensure_ascii=False)
             context, omitted, messages = pack_messages(
                 client,
                 guideline,
@@ -395,6 +414,7 @@ def _run(
                 EXTRACTION,
                 context_chars,
                 ids,
+                tail=review_tail,
             )
             supplied = {p.id: p for p in context}
 
@@ -403,12 +423,8 @@ def _run(
                 validate_decision_field_batch(v["candidates"], metadata["title"])
                 validate_extraction(v, supplied, ids)
 
-            value = client.complete(
-                key,
-                messages,
-                EXTRACTION,
-                validate,
-                repair_handler=lambda v, error: repair_response(
+            def repair(v, error):
+                return repair_response(
                     client,
                     guideline,
                     supplied,
@@ -418,8 +434,29 @@ def _run(
                     error,
                     validate,
                     context_chars,
-                ),
-            )
+                )
+
+            try:
+                value = client.complete(review_job(key, review) if review is not None else key,
+                                        messages, EXTRACTION, validate,
+                                        repair_handler=repair, reuse_exhausted=True)
+            except EndpointError as error:
+                if "exhausted" not in str(error) or "Retry prompt exceeds input budget" not in str(error):
+                    raise
+                # Preserve every owned primary page and the full output reserve.
+                # Repack optional supporting pages, whole, to leave room for
+                # validation feedback; omission is explicit in packet metadata.
+                context, omitted, messages = pack_messages(
+                    client, guideline, ids, " ".join(p.label for p in primary),
+                    prompts.EXTRACT_TASK, payload, EXTRACTION, context_chars, ids,
+                    retry_headroom_tokens=8192,
+                    tail=review_tail,
+                )
+                supplied = {p.id: p for p in context}
+                notify(f"{key}: reserving retry-feedback room while preserving owned source pages and output capacity")
+                call_key = (review_job(key, review) if review is not None else key) + "-retry-headroom"
+                value = client.complete(call_key, messages, EXTRACTION, validate,
+                                        repair_handler=repair, reuse_exhausted=True)
             return {
                 "result": value,
                 "primary_page_ids": ids,
@@ -453,6 +490,8 @@ def _run(
             uncertainties.extend(result["uncertainties"])
             for i, candidate in enumerate(result["candidates"], 1):
                 candidates.append({"candidate_id": f"{key}-c{i:03d}", **candidate})
+        if source_reviews:
+            archive_changed_candidates(output, candidates)
         atomic_json(output / "candidates.json", candidates)
         atomic_json(
             output / "coverage.json",
@@ -533,6 +572,7 @@ def _run(
                 "clinical_space_summary": format_space(group["space"]),
                 **materialize_quoted_state(value, supplied),
                 "source_batch_numbers": group["source_batch_numbers"],
+                **({"population_names": group["population_names"]} if "population_names" in group else {}),
                 "source": source_info,
                 "context_page_ids": list(supplied),
                 "omitted_source_page_ids": omitted,

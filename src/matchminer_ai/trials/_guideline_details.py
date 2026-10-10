@@ -37,6 +37,8 @@ def build_detail_call(client, guideline, group, candidates, context_chars=None):
         "canonical_group": {k: group[k] for k in LEAN_STATE["properties"]},
         "tentative_candidates": candidate_menus(group, candidates),
     }
+    if "population_names" in group:
+        clinical["canonical_group"]["population_names"] = group["population_names"]
     tail = (
         "FINAL FIXED POPULATION AND CANDIDATE MENUS TO REVIEW:\n"
         + json.dumps(clinical, ensure_ascii=False)

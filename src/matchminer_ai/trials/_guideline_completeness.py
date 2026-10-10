@@ -35,7 +35,8 @@ class CoverageError(ValueError):
 
 
 def population(value):
-    return {"name": value["name"], "space": value["space"]}
+    return {"name": value["name"], "space": value["space"],
+            **({"population_names": value["population_names"]} if "population_names" in value else {})}
 
 
 def identical_population_key(value):
@@ -43,6 +44,15 @@ def identical_population_key(value):
     # No thresholds, clinical words, Boolean grouping, or input records change.
     text = format_space(value["space"]).replace("≥", ">=").replace("≤", "<=")
     return value["name"], text
+
+
+def exact_match_names(candidate, states):
+    """Aliases come only from unioning source-validated identical definitions."""
+    key = identical_population_key(candidate)
+    return [s["name"] for s in states if identical_population_key(s) == key or (
+        candidate["name"] in s.get("population_names", [])
+        and identical_population_key(s)[1].casefold() == key[1].casefold()
+    )]
 
 
 def validate_reviews(value, inputs, states):
@@ -104,11 +114,11 @@ def validate_report(report, candidates, states, accepted_reviews=None):
         ):
             raise ValueError("Population coverage differs from its accepted review response")
         covered.update(positions)
-    exact = {identical_population_key(s) for s in states}
     for i, candidate in enumerate(candidates):
+        matches = exact_match_names(candidate, states)
         if i not in covered and (
-            identical_population_key(candidate) not in exact
-            or report["reviews"][i]["matched_population_names"] != [candidate["name"]]
+            not matches
+            or report["reviews"][i]["matched_population_names"] != matches[:1]
         ):
             raise ValueError("Nonidentical population has no accepted coverage review")
     require_coverage(report)
@@ -118,14 +128,14 @@ def review_coverage(client, candidates, states):
     """Keep full output headroom; split review inputs rather than truncate definitions."""
     inputs = [population(c) for c in candidates]
     proposed = [population(s) for s in states]
-    exact = {identical_population_key(s) for s in states}
     reviews = [None] * len(inputs)
     pending = []
     for index, item in enumerate(inputs):
-        if identical_population_key(item) in exact:
+        matches = exact_match_names(item, states)
+        if matches:
             reviews[index] = {
                 "input_name": item["name"], "status": "represented",
-                "matched_population_names": [item["name"]],
+                "matched_population_names": matches[:1],
                 "reason": "The same clinical name and nine-field definition are present (equivalent comparison-operator notation allowed).",
             }
         else:
@@ -170,6 +180,7 @@ def review_coverage(client, candidates, states):
                     "Coverage reviews must retain input clinical names in input order",
                     "Coverage review must include every input population exactly once",
                     "Coverage review names a population absent from the proposed catalog",
+                    "Incomplete response: finish_reason='length'",
                 )
             ):
                 raise
@@ -182,9 +193,11 @@ def review_coverage(client, candidates, states):
                 reviews.update(minItems=1, maxItems=1)
                 fields = reviews["items"]["properties"]
                 fields["input_name"] = {"type": "string", "enum": [items[0][1]["name"]]}
-                fields["matched_population_names"]["items"] = {
-                    "type": "string", "enum": list(dict.fromkeys(s["name"] for s in proposed)),
-                }
+                names = list(dict.fromkeys(s["name"] for s in proposed))
+                if names:
+                    fields["matched_population_names"]["items"] = {"type": "string", "enum": names}
+                else:
+                    fields["matched_population_names"]["maxItems"] = 0
                 constrained = [messages[0], {"role": "user", "content": json.dumps({
                     "input_populations": [items[0][1]], "proposed_catalog": proposed,
                     "required_json_schema": schema,

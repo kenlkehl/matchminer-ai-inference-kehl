@@ -5,7 +5,7 @@ import re
 VERSION = "trialspace-field-semantics-v3"
 # A backward-compatible checker fix does not change generation prompts or the
 # representation contract. Offline audits record the implementation revision.
-REVISION = "trialspace-field-semantics-v3.8-named-imaging-region"
+REVISION = "trialspace-field-semantics-v3.9-focused-grouping-diagnostics"
 
 _ORDINALS = {
     word: str(i)
@@ -92,8 +92,9 @@ def explicit_lines(text):
     return values
 
 
-def has_ungrouped_mixed_logic(text):
-    """Check each parenthesis level for mixed operators, without interpreting concepts."""
+def mixed_logic_segments(text):
+    """Locate the full offending groups so feedback does not cut off the actual error."""
+    original = text
     text = text.casefold()
     # Mask only an atomic phrase's operator while tokenizing. Never rewrite the
     # stored field or turn an ungrouped population alternative into conjunction.
@@ -106,22 +107,30 @@ def has_ungrouped_mixed_logic(text):
             if start < 0:
                 start, end = match.span("operator_after")
             text = text[:start] + " " * (end - start) + text[end:]
-    levels = [set()]
-    for token in re.findall(r"[()]|\band\s*/\s*or\b|\b(?:and|or)\b", text):
+    levels = [(0, set())]
+    segments = []
+    for match in re.finditer(r"[()]|\band\s*/\s*or\b|\b(?:and|or)\b", text):
+        token = match.group()
         if token == "(":
-            levels.append(set())
+            levels.append((match.end(), set()))
         elif token == ")":
             if len(levels) > 1:
-                levels.pop()
+                start, operators = levels.pop()
+                if len(operators) > 1:
+                    segments.append(original[start:match.start()])
         else:
             # 'and/or' is one inclusive disjunction, not two competing operators.
             # This only tokenizes the check; the original field stays unchanged.
             if "/" in token:
                 token = "or"
-            levels[-1].add(token)
-            if len(levels[-1]) > 1:
-                return True
-    return False
+            levels[-1][1].add(token)
+    segments.extend(original[start:] for start, operators in levels if len(operators) > 1)
+    return segments
+
+
+def has_ungrouped_mixed_logic(text):
+    """Check each parenthesis level without changing or interpreting criteria."""
+    return bool(mixed_logic_segments(text))
 
 
 def validate_decision_fields(state, guideline_title):
@@ -143,10 +152,11 @@ def validate_decision_fields(state, guideline_title):
                 "Never rewrite a fixed definition in a detail or citation-only task."
             )
     for field, value in space.items():
-        if has_ungrouped_mixed_logic(value):
+        if segments := mixed_logic_segments(value):
             raise ValueError(
                 f"{state['name'][:300]!r}: {field} mixes AND and OR at the same "
                 f"parenthesis level. Rejected field text: {value[:500]!r}. "
+                f"Complete ambiguous parenthesis groups: {segments!r}. "
                 "Keep only population criteria in this field; place explanatory "
                 "workup/treatment prose in the corresponding considerations. "
                 "Lowercase conjunctions in prose also count; semicolons do not group logic. "

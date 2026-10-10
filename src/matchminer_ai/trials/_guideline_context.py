@@ -25,7 +25,10 @@ def pack_messages(
     population_guidance=True,
     source_ids=None,
     system_message=None,
+    retry_headroom_tokens=0,
 ):
+    if retry_headroom_tokens < 0:
+        raise ValueError("Retry headroom must be nonnegative")
     required_ids = set(required_ids)
     if source_ids is not None and not required_ids <= set(source_ids):
         raise ValueError("Source scope must contain every required evidence page")
@@ -63,13 +66,17 @@ def pack_messages(
         messages = prompts.source_messages(messages, guideline)
         return selected, omitted, messages
 
+    def fits(messages):
+        return client.fits(messages) and (not retry_headroom_tokens or
+            client.count_tokens(messages) <= client.prompt_budget - retry_headroom_tokens)
+
     # Usually the entire small/medium guideline fits. Do not impose arbitrary character caps.
     all_pages, omitted, full = build(len(ordered))
-    if client.fits(full):
+    if fits(full):
         return all_pages, omitted, full
     low, high = len(required_ids), len(ordered)
     _, _, minimum = build(low)
-    if not client.fits(minimum):
+    if not fits(minimum):
         raise ContextBudgetError(
             "Required evidence and instructions exceed input budget with the configured "
             "output reserve; reduce guideline.packet_pages or use a larger-context endpoint"
@@ -78,7 +85,7 @@ def pack_messages(
     while low + 1 < high:
         middle = (low + high) // 2
         _, _, candidate = build(middle)
-        if client.fits(candidate):
+        if fits(candidate):
             low = middle
         else:
             high = middle

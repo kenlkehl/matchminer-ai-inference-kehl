@@ -265,6 +265,28 @@ text, treating the rejected draft as fallible. These retries do not relax exact
 quotation, population coverage, source ownership, or final audit requirements.
 Clinical output remains model-generated and retains its raw-response provenance.
 
+When exact-definition deduplication combines records, their original clinical names
+are retained in `population_names`, together with the union of source evidence and
+batch provenance. Detail generation receives those names and associated candidate
+menus. Coverage can recognize an exact original population through that audited name
+history; a matching name with different clinical restrictions still requires review.
+
+Output-limited coverage reviews split into smaller input groups while retaining the
+complete proposed catalog. Exhausted extraction prompts can repack whole optional
+supporting pages to reserve 8,192 input tokens for retry feedback; every owned primary
+page and the configured output-token reserve remain intact. Boolean diagnostics
+identify the complete offending parenthesis group, including errors late in a field.
+
+If a singleton consolidation exhausts its coverage retries, the pipeline can send its
+original extraction owner back to the endpoint for source review. Both the original
+extraction and the conflicting review are presented as fallible. The model re-extracts
+the entire owned packet with the original validation rules. This is bounded to one
+review per packet and two packets per catalog. `extraction_source_reviews.json` keeps
+the original extraction and trigger; changed candidates cause downstream artifacts
+to move to `superseded_candidate_artifacts/` before rebuilding. Raw provider responses
+remain intact, and final audit verifies both original and replacement provenance.
+An unresolved disagreement still fails; no clinical field is patched by Python.
+
 ## Source meaning and reuse
 
 [NCI describes PDQ](https://www.cancer.gov/publications/pdq/information-summaries)

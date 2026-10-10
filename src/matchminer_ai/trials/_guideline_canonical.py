@@ -155,7 +155,7 @@ def partition_calls(client, guideline, candidates, context_chars=None):
     return planned
 
 
-def combine_identical(states):
+def combine_identical(states, *, preserve_names=False):
     """Union exact-definition evidence in code; no model bookkeeping is needed."""
     result, positions = [], {}
     for state in states:
@@ -163,8 +163,16 @@ def combine_identical(states):
         if key not in positions:
             positions[key] = len(result)
             result.append(copy.deepcopy(state))
+            if preserve_names:
+                result[-1]["population_names"] = list(dict.fromkeys(
+                    [state["name"], *state.get("population_names", [])]
+                ))
         else:
             target = result[positions[key]]
+            if preserve_names:
+                for name in [state["name"], *state.get("population_names", [])]:
+                    if name not in target["population_names"]:
+                        target["population_names"].append(name)
             for field in ("evidence", "uncertainties", "source_batch_numbers"):
                 for item in state[field]:
                     if item not in target[field]:
@@ -227,7 +235,9 @@ def build_selection_call(client, guideline, states):
         "guideline": guideline.metadata["title"],
         "catalog_version": VERSION,
         "source_backed_definitions": [
-            {k: s[k] for k in LEAN_STATE["properties"]} for s in states
+            {**{k: s[k] for k in LEAN_STATE["properties"]},
+             **({"population_names": s["population_names"]} if "population_names" in s else {})}
+            for s in states
         ],
         "omitted_source_page_ids": omitted,
     }
@@ -315,14 +325,25 @@ def consolidate(
                 )
             key += "-final-coverage-" + digest(messages)[:16]
             packed = (packed[0], packed[1], messages)
-        value = covered_complete(
-            key,
-            packed[2],
-            CATALOG,
-            lambda v: validate_catalog(v, pages, guideline.metadata["title"]),
-            members,
-            lambda v: v["states"],
-        )
+        def generate(job, call):
+            return covered_complete(
+                job, call, CATALOG,
+                lambda v: validate_catalog(v, pages, guideline.metadata["title"]),
+                members, lambda v: v["states"],
+            )
+        try:
+            value = generate(key, packed[2])
+        except EndpointError as error:
+            if len(members) != 1 or "exhausted" not in str(error) or "mixes AND and OR" not in str(error):
+                raise
+            # A singleton cannot split further. New focused feedback identifies
+            # the entire offending group even beyond the old 500-character hint.
+            focused = [*packed[2], {"role": "user", "content":
+                load_prompt_text("guideline.boolean_retry.txt") + "\n\n" + str(error)}]
+            if not client.fits(focused):
+                raise ContextBudgetError("Focused Boolean repair exceeds source input budget")
+            value = generate(key + "-focused-grouping-" + digest(focused)[:16], focused)
+            packed = (packed[0], packed[1], focused)
         return {
             "result": value,
             "context": metadata(packed),
@@ -349,7 +370,7 @@ def consolidate(
         )
         topics.extend(value["result"]["context_only_topics"])
         uncertainties.extend(value["result"]["uncertainties"])
-    states = combine_identical(states)
+    states = combine_identical(states, preserve_names=True)
     if not states:
         raise ValueError("No source-backed disease-state definitions extracted")
     context_metadata = {
@@ -376,11 +397,14 @@ def consolidate(
             uncertainties.append(warning)
             atomic_json(output / "canonical_selection.json", {
                 "mode": "retain-validated-definitions", "available_states": states,
+                "preserve_population_names": True,
                 "reason": str(error), "warning": warning,
             })
             log(f"{guideline.disease}: retaining all validated definitions after selection failure")
         else:
-            atomic_json(output / "canonical_selection.json", {"available_states": states, "result": selected})
+            atomic_json(output / "canonical_selection.json", {
+                "available_states": states, "result": selected, "preserve_population_names": True,
+            })
             states = selected_states(selected, states)
             topics.extend(selected["context_only_topics"])
             uncertainties.extend(selected["uncertainties"])
@@ -409,6 +433,7 @@ def consolidate(
     atomic_json(output / "canonical_context.json", context_metadata)
     return {
         "version": VERSION,
+        "preserve_population_names": True,
         "groups": states,
         "context_only_topics": topics,
         "uncertainties": uncertainties,

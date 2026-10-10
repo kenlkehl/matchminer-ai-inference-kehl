@@ -206,3 +206,182 @@ def test_literal_selection_uses_original_typography_and_keeps_quote_validation(t
     assert patch["evidence"] == [{"page_id": "p0002", "source_text": text}]
     with pytest.raises(ValueError, match="verbatim"):
         resolve_excerpt(guideline.pages["p0002"], assertion["rejected_evidence"]["source_text"])
+
+
+def test_exact_definition_union_preserves_all_clinical_names_without_extra_spaces():
+    from matchminer_ai.trials._guideline_completeness import validate_report, exact_match_names
+    first = populations()[0]
+    second = copy.deepcopy(first)
+    second['name'] = 'Fictional disease; prognostic workup'
+    original = copy.deepcopy([first, second])
+    merged = canonical.combine_identical([
+        {**first, 'source_batch_numbers': [1]}, {**second, 'source_batch_numbers': [2]},
+    ], preserve_names=True)
+    assert len(merged) == 1
+    assert merged[0]['population_names'] == [first['name'], second['name']]
+    assert merged[0]['source_batch_numbers'] == [1, 2]
+    assert [first, second] == original
+
+    class NoModel:
+        config = SimpleNamespace(max_concurrent_requests=1)
+        def complete(self, *args, **kwargs):
+            pytest.fail('No model bookkeeping needed for retained exact clinical definitions')
+
+    report = review_coverage(NoModel(), original, merged)
+    validate_report(report, original, merged, set())
+    altered = copy.deepcopy(second)
+    altered['space']['prior_treatment_required'] = 'Required prior synthetic therapy'
+    assert not exact_match_names(altered, merged)
+    unknown = {**second, 'name': 'Unretained clinical population'}
+    assert not exact_match_names(unknown, merged)
+    # Selection chooses definitions; code must carry their full name provenance.
+    chosen = canonical.selected_states({'spaces': [merged[0]['space']],
+        'context_only_topics': [], 'uncertainties': []}, merged)
+    assert chosen == merged
+
+
+def test_boolean_feedback_identifies_late_offending_group_without_changing_logic():
+    from matchminer_ai.trials._guideline_specificity import mixed_logic_segments, validate_decision_fields
+    value = populations()[0]
+    value['space']['biomarkers_required'] = '(' + 'Long synthetic criterion; ' * 40 + ') OR (A AND B OR C)'
+    original = copy.deepcopy(value)
+    assert mixed_logic_segments(value['space']['biomarkers_required']) == ['A AND B OR C']
+    with pytest.raises(ValueError, match="Complete ambiguous parenthesis groups:.*A AND B OR C"):
+        validate_decision_fields(value, 'Fictional')
+    assert value == original
+    assert not mixed_logic_segments('(A AND B) OR C')
+
+
+def test_output_limited_coverage_splits_complete_inputs(tmp_path, monkeypatch):
+    client = Client(StructuredConfig(model='synthetic', tokenizer_mode='bytes', attempts=1), tmp_path/'cache')
+    inputs = populations()
+    proposed = copy.deepcopy(inputs)
+    for p in proposed:
+        p['space']['age_range_allowed'] = 'Any age'
+    sizes = []
+    def complete(job, messages, schema, validator, **kwargs):
+        size = len(json.loads(messages[1]['content'])['input_populations']);sizes.append(size)
+        if size > 1:
+            raise EndpointError("exhausted: Incomplete response: finish_reason='length'")
+        result = judge(messages);validator(result);return result
+    monkeypatch.setattr(client, 'complete', complete)
+    report = review_coverage(client, inputs, proposed)
+    require_coverage(report)
+    assert sizes == [2, 1, 1]
+    assert [r['input_name'] for r in report['reviews']] == [p['name'] for p in inputs]
+
+
+def test_retry_headroom_removes_only_whole_optional_source_pages(tmp_path):
+    from matchminer_ai.trials._guideline_context import pack_messages
+    g = load_guideline(make_library(tmp_path), 'fictional')
+    primary = g.pages['p0002']
+    extra = replace(primary, id='p0003', number=3, text=primary.text + ' Supplementary text.' * 100)
+    # Copy immutable source objects; this is synthetic packing, not source alteration.
+    g = replace(g, pages={primary.id: primary, extra.id: extra})
+    client = Client(StructuredConfig(model='synthetic', tokenizer_mode='bytes'), tmp_path/'cache')
+    initial = pack_messages(client, g, {'p0002'}, '', 'Synthetic task', {}, canonical.CATALOG)
+    assert {p.id for p in initial[0]} == {'p0002', 'p0003'}
+    full_size = client.count_tokens(initial[2])
+    reserve = client.prompt_budget - full_size + 1
+    packed = pack_messages(client, g, {'p0002'}, '', 'Synthetic task', {}, canonical.CATALOG,
+                           retry_headroom_tokens=reserve)
+    assert [p.id for p in packed[0]] == ['p0002']
+    assert packed[1] == ['p0003']
+    assert client.config.max_tokens == 100000
+
+
+def test_source_owner_refresh_is_bounded_provenance_checked_and_resumable(tmp_path):
+    from matchminer_ai._storage import digest
+    from matchminer_ai.trials._guideline_completeness import population
+    from matchminer_ai.trials._guideline_source_refresh import (
+        prepare_refresh, load_refreshes, review_job, archive_changed_candidates, audit_refreshes,
+    )
+    g = load_guideline(make_library(tmp_path), 'fictional')
+    output = tmp_path/'results'
+    original = extraction()
+    c = {'candidate_id':'extract-0001-c001', **original['candidates'][0]}
+    packet = {'result':original, 'primary_page_ids':['p0002']}
+    report = {'input_sha256':digest([population(c)]), 'reviews':[{
+        'input_name':c['name'], 'status':'missing', 'matched_population_names':[],
+        'reason':'Synthetic dispute about restriction scope',
+    }]}
+    atomic_json(output/'status.json', {'status':'failed'})
+    atomic_json(output/'candidates.json', [c])
+    atomic_json(output/'extraction.json', {'packets':{'extract-0001':packet}, 'failures':{}})
+    atomic_json(output/'canonical_batches.json', {'failures':{
+        'catalog-content-0001':'exhausted: Catalog omitted or broadened 1 of 1 input populations',
+    }})
+    atomic_json(output/'population_coverage/catalog-content-0001.json',report)
+    assert prepare_refresh(output,g)
+    assert not prepare_refresh(output,g)  # Never repeat the same source review unchanged.
+    record = load_refreshes(output,g)['packets']['extract-0001']
+    assert record['original_packet'] == packet
+    replacement = copy.deepcopy(original)
+    replacement['candidates'][0]['space']['biomarkers_excluded'] = 'Fictional A OR Fictional B'
+    new = [{'candidate_id':c['candidate_id'], **replacement['candidates'][0]}]
+    original_checkpoint = output/'checkpoints/original/accepted.json'
+    atomic_json(original_checkpoint, {'job':'extract-0001','result_sha256':digest(original)})
+    atomic_json(output/'checkpoints/review/accepted.json',
+        {'job':review_job('extract-0001',record),'result_sha256':digest(replacement)})
+    audit_refreshes(output,g,{'extract-0001':{**packet,'result':replacement}})
+    with pytest.raises(ValueError,match='replacement extraction'):
+        audit_refreshes(output,g,{'extract-0001':packet})
+    # Simulate interruption after moving the first derived artifact.
+    archive = output/'superseded_candidate_artifacts'/digest([c]);archive.mkdir(parents=True)
+    (output/'candidates.json').rename(archive/'candidates.json')
+    atomic_json(output/'candidate_archive_pending.json',{'old_sha256':digest([c]),'new_sha256':digest(new)})
+    archive_changed_candidates(output,new)
+    assert read_json(archive/'candidates.json') == [c]
+    assert (archive/'canonical_batches.json').exists()
+    assert original_checkpoint.exists()
+    assert not (output/'candidate_archive_pending.json').exists()
+
+
+def test_irreconcilable_population_is_reextracted_by_model_with_original_preserved(tmp_path, monkeypatch):
+    source = 'Fictional disease excludes either marker A or marker B. Consider synthetic test A when finding B is present.'
+    g = load_guideline(make_library(tmp_path, source), 'fictional')
+    output = tmp_path/'results'
+    original = extraction()
+    original['candidates'][0]['space']['biomarkers_excluded'] = 'Marker A AND Marker B'
+    corrected = copy.deepcopy(original)
+    corrected['candidates'][0]['space']['biomarkers_excluded'] = 'Marker A OR Marker B'
+    source_reviews = []
+
+    def respond(self, endpoint, body, **kwargs):
+        prompt = body['messages'][1]['content']
+        if body['messages'][0]['content'] == TASK:
+            payload = json.loads(prompt)
+            reviews = []
+            for item in payload['input_populations']:
+                matches = [s['name'] for s in payload['proposed_catalog'] if s['space'] == item['space']]
+                reviews.append({'input_name':item['name'], 'status':'represented' if matches else 'missing',
+                    'matched_population_names':matches, 'reason':'Synthetic difference in exclusion scope'})
+            value = {'reviews':reviews}
+        elif prompt.startswith(prompts.EXTRACT_TASK):
+            review = 'DISPUTED EXTRACTION AND COVERAGE FINDING' in prompt
+            source_reviews.append(review)
+            value = corrected if review else original
+        elif prompt.startswith(CATALOG_TASK):
+            value = catalog()
+            value['states'] = [{k:corrected['candidates'][0][k] for k in canonical.LEAN_STATE['properties']}]
+        else:
+            value = quoted_state()
+            value['space'] = corrected['candidates'][0]['space']
+            for owner in [value, *value['diagnostic_workup'], *value['treatment_options']]:
+                owner['evidence'] = [{'page_id':'p0002', 'source_text':source}]
+        return {'choices':[{'finish_reason':'stop', 'message':{'content':json.dumps(value)}}]}
+
+    monkeypatch.setattr(Client,'_http',respond)
+    config = StructuredConfig(model='synthetic', tokenizer_mode='bytes', attempts=1)
+    run_guideline(g,output,config,workers=1)
+    assert source_reviews == [False, True]
+    responses = [json.loads(p.read_text()) for p in (output/'checkpoints').glob('*/attempt-*.json')]
+    assert any(json.loads(r['choices'][0]['message']['content']) == original for r in responses)
+    assert read_json(output/'candidates.json')[0]['space']['biomarkers_excluded'] == 'Marker A OR Marker B'
+    assert list((output/'superseded_candidate_artifacts').glob('*/candidates.json'))
+    assert audit_catalog(g,output)['status'] == 'passed'
+    canonical_groups = read_json(output/'canonical_groups.json')
+    canonical_groups.pop('preserve_population_names')
+    atomic_json(output/'canonical_groups.json',canonical_groups)
+    with pytest.raises(ValueError,match='population name provenance contract'):
+        audit_catalog(g,output)

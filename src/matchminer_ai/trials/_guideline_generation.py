@@ -24,6 +24,7 @@ RETRY_ONLY_PROMPT_FILES = (
     "guideline.boolean_retry.txt",
     "guideline.unsupported_detail_retry.txt",
     "guideline.quote_select.txt",
+    "guideline.extraction_source_review.txt",
 )
 
 

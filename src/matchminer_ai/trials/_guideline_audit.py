@@ -39,6 +39,7 @@ from ._guideline_specificity import REVISION as SPECIFICITY_REVISION
 from ._guideline_specificity import VERSION as SPECIFICITY_VERSION
 from ._guideline_specificity import validate_decision_fields
 from ._guideline_sources import render_pages
+from ._guideline_source_refresh import audit_refreshes
 
 
 def require(condition, message):
@@ -141,6 +142,8 @@ def audit_catalog(guideline, output):
     if split_path.exists():
         validate_ledger(read_json(split_path), guideline, candidates)
     canonical = read_json(output / "canonical_groups.json")
+    require(all(("population_names" in group) == bool(canonical.get("preserve_population_names"))
+                for group in canonical["groups"]), "Missing population name provenance contract")
     if config.get("stage_versions", {}).get("catalog_coverage") == COVERAGE_VERSION:
         accepted_reviews = set()
         for path in (output / "checkpoints").glob("*/accepted.json"):
@@ -184,11 +187,13 @@ def audit_catalog(guideline, output):
             )
         if (output / "canonical_selection.json").exists():
             selection = read_json(output / "canonical_selection.json")
+            require(bool(selection.get("preserve_population_names")) == bool(canonical.get("preserve_population_names")),
+                    "Selection population name provenance contract differs")
             all_states = combine_identical([
                 {**s, "source_batch_numbers": [number]}
                 for number, (_, batch) in enumerate(sorted(batches["batches"].items()), 1)
                 for s in batch["result"]["states"]
-            ])
+            ], preserve_names=selection.get("preserve_population_names", False))
             require(selection["available_states"] == all_states,
                     "Selection inputs differ from validated source batches")
             if selection.get("mode") == "retain-validated-definitions":
@@ -201,6 +206,13 @@ def audit_catalog(guideline, output):
                 chosen == canonical["groups"],
                 "Selected clinical definitions differ from canonical catalog",
             )
+        elif canonical.get("preserve_population_names"):
+            expected = combine_identical([
+                {**s, "source_batch_numbers": [number]}
+                for number, (_, batch) in enumerate(sorted(batches["batches"].items()), 1)
+                for s in batch["result"]["states"]
+            ], preserve_names=True)
+            require(canonical["groups"] == expected, "Canonical names differ from validated source batches")
     else:
         validate_canonical(canonical, [c["candidate_id"] for c in candidates])
     require(
@@ -210,6 +222,8 @@ def audit_catalog(guideline, output):
     content_ids = {page.id for page in guideline.primary}
     evidence_count = workup_count = treatment_count = 0
     for row, group in zip(rows, canonical["groups"]):
+        require(row.get("population_names") == group.get("population_names"),
+                "Exported population names differ from canonical source names")
         if (
             config.get("stage_versions", {}).get("decision_fields")
             == SPECIFICITY_VERSION
@@ -325,6 +339,7 @@ def audit_catalog(guideline, output):
         "Coverage does not account for every content page exactly once",
     )
     extraction = read_json(output / "extraction.json")
+    audit_refreshes(output, guideline, extraction["packets"])
     extraction_splits = output / "extraction_packet_splits.json"
     if extraction_splits.exists():
         from ._guideline_extraction_batches import validate_ledger as validate_extraction_ledger
