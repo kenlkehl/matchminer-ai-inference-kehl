@@ -5,7 +5,7 @@ import re
 VERSION = "trialspace-field-semantics-v3"
 # A backward-compatible checker fix does not change generation prompts or the
 # representation contract. Offline audits record the implementation revision.
-REVISION = "trialspace-field-semantics-v3.9-focused-grouping-diagnostics"
+REVISION = "trialspace-field-semantics-v3.10-chromosome-lists"
 
 _ORDINALS = {
     word: str(i)
@@ -81,6 +81,16 @@ _NAMED_IMAGING_REGION = re.compile(
     r"\b(?:mri\s+of\s+(?:the\s+)?)?spine\s+(?P<operator>and)\s+pelvis\s+mri\b"
     r"|\bmri\s+of\s+(?:the\s+)?spine\s+(?P<operator_after>and)\s+pelvis\b"
 )
+# The conjunction inside an explicit chromosome-number list belongs to that
+# cytogenetic finding. Mask only this internal AND, not surrounding criteria.
+# Require chromosome identifiers so "chromosomes 4 and marker A" is not hidden.
+_CHROMOSOME_ID = r"(?:1[0-9]|2[0-2]|[1-9]|x|y)"
+_CHROMOSOME_LIST = re.compile(
+    r"\bchromosomes\s+" + _CHROMOSOME_ID
+    + r"(?:\s*,\s*" + _CHROMOSOME_ID + r")*"
+    + r"\s*,?\s+(?P<operator>and)\s+" + _CHROMOSOME_ID
+    + r"(?!\w|\.\d)"
+)
 
 
 def explicit_lines(text):
@@ -101,6 +111,7 @@ def mixed_logic_segments(text):
     for comparison in (
         _NUMERIC_THRESHOLD, _INCLUSIVE_COMPARISON, _TEMPORAL_COMPARISON,
         _COUNT_QUANTIFIER, _NAMED_ANATOMIC_REGION, _NAMED_IMAGING_REGION,
+        _CHROMOSOME_LIST,
     ):
         for match in reversed(list(comparison.finditer(text))):
             start, end = match.span("operator")

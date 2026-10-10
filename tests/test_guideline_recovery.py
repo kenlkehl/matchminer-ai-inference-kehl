@@ -28,6 +28,36 @@ def test_imaging_region_is_atomic_but_surrounding_logic_is_checked(phrase):
     assert has_ungrouped_mixed_logic("spine AND pelvis involvement OR brain involvement")
 
 
+@pytest.mark.parametrize("phrase", [
+    "double trisomies of chromosomes 4 and 10",
+    "trisomies of chromosomes 8 and 21",
+    "triple trisomies of chromosomes 4, 10, and 17",
+    "loss of chromosomes X and Y",
+])
+def test_chromosome_list_is_atomic_without_rewriting_or_hiding_other_logic(phrase):
+    from matchminer_ai.trials._guideline_specificity import validate_decision_fields
+
+    candidate = quoted_state()
+    candidate["space"]["biomarkers_required"] = f"(marker A OR {phrase}) AND marker B"
+    original = copy.deepcopy(candidate)
+    validate_decision_fields(candidate, "Synthetic leukemia guideline")
+    assert candidate == original
+    assert not has_ungrouped_mixed_logic(f"marker A OR {phrase}.")
+    assert has_ungrouped_mixed_logic(f"marker A OR {phrase} AND marker B")
+    assert has_ungrouped_mixed_logic(f"marker A AND {phrase} OR marker B")
+
+
+@pytest.mark.parametrize("value", [
+    "marker A OR chromosomes 4 and marker B",
+    "marker A OR chromosome 4 and chromosome 10",
+    "marker A OR chromosomes 4 and 10q abnormality",
+    "marker A OR chromosomes 4 and 10.5",
+    "marker A OR chromosomes 4 and 100",
+])
+def test_chromosome_list_mask_requires_complete_identifiers(value):
+    assert has_ungrouped_mixed_logic(value)
+
+
 def test_extraction_splits_only_failed_packets_and_preserves_exact_ownership(tmp_path):
     g = load_guideline(make_library(tmp_path), "fictional")
     pages = [replace(g.pages["p0002"], id=f"p{i:04d}", number=i) for i in range(2, 8)]
