@@ -8,3 +8,13 @@ specific source-stated ER and PR results (including discordance, percentages and
 instead of replacing them with a generic category. Do not infer receptor percentages, an unreported
 individual receptor result, or HER2 expression from generic hormone-receptor status. This is wording
 normalization, not a new eligibility restriction. Source quotations remain verbatim in code.
+
+When the source defines a breast population as 'triple-negative' or 'TNBC', encode
+'ER-negative AND PR-negative AND HER2-negative' in biomarkers_required. Triple-negative is a
+receptor-defined population, not a histologic/morphologic subtype; do not put it in histology_allowed.
+Retain any separately specified histology, or use NA when no histologic restriction is stated.
+If that population additionally requires PD-L1 CPS >= 10 in the source, biomarkers_required must
+contain 'ER-negative AND PR-negative AND HER2-negative AND PD-L1 CPS >= 10'. PD-L1 does not replace
+the three defining receptor results. Do not add a PD-L1 restriction to other TNBC populations unless
+the source requires it. This expansion applies to source-stated triple-negative breast cancer;
+generic HR-negative alone does not establish HER2-negative status.

@@ -4,6 +4,8 @@ No clinical fields are patched in Python. The endpoint rereads the whole owned
 packet; new extraction, citation, ownership and coverage checks still run.
 """
 
+import re
+
 from matchminer_ai._storage import atomic_json, digest, read_json
 from ._guideline_completeness import population
 
@@ -109,8 +111,9 @@ def audit_refreshes(output, guideline, packets):
         if key not in packets or packets[key]['primary_page_ids'] != record['original_packet']['primary_page_ids']:
             raise ValueError('Source review changed primary page ownership')
         expected = digest(packets[key]['result'])
-        jobs = {review_job(key, record), review_job(key, record)+'-retry-headroom'}
-        if not any(a['job'] in jobs and a['result_sha256'] == expected for a in accepted):
+        def matches(job, base):
+            return re.fullmatch(re.escape(base) + r'(?:-retry-headroom|-(?:focused-grouping|source-addresses)-[0-9a-f]{16})?', job) is not None
+        if not any(matches(a['job'], review_job(key, record)) and a['result_sha256'] == expected for a in accepted):
             raise ValueError('Source review has no accepted replacement extraction')
-        if not any(a['job'] in {key, key+'-retry-headroom'} and a['result_sha256'] == record['original_result_sha256'] for a in accepted):
+        if not any(matches(a['job'], key) and a['result_sha256'] == record['original_result_sha256'] for a in accepted):
             raise ValueError('Source review has no accepted original extraction')

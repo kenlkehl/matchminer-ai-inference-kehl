@@ -25,7 +25,16 @@ RETRY_ONLY_PROMPT_FILES = (
     "guideline.unsupported_detail_retry.txt",
     "guideline.quote_select.txt",
     "guideline.extraction_source_review.txt",
+    "guideline.extraction_addresses.txt",
 )
+
+
+def exhausted_diagnostic(error):
+    """Keep retry fingerprints stable for fresh and saved exhausted attempts."""
+    return re.sub(
+        r"^.*?: (?:saved attempts exhausted|exhausted \d+ attempts): ",
+        "", str(error), count=1,
+    )
 
 
 def compact_excerpt_diagnostic(error):

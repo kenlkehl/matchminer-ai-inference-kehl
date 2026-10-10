@@ -123,7 +123,8 @@ def test_immutable_detail_schema_preserves_raw_model_provenance(tmp_path, monkey
     run_guideline(guideline, output, llm, workers=1)
 
 
-def test_failed_selection_retains_all_validated_definitions_and_audits(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure", ["local-loss", "repetition", "final-loss"])
+def test_failed_selection_retains_all_validated_definitions_and_audits(tmp_path, monkeypatch, failure):
     guideline = load_guideline(make_library(tmp_path), "fictional")
     output = tmp_path / "results"
     inputs = populations()
@@ -134,17 +135,34 @@ def test_failed_selection_retains_all_validated_definitions_and_audits(tmp_path,
         prompt = messages[1]["content"]
         if messages[0]["content"] == TASK:
             value = judge(messages)
+            if failure == "final-loss":
+                payload = json.loads(messages[1]["content"])
+                known = {s['name'] for s in payload['proposed_catalog']}
+                for row in value['reviews']:
+                    match = None
+                    if row['input_name'] == inputs[1]['name'] and 'Validated beta' in known:
+                        match = 'Validated beta'
+                    elif row['input_name'] == 'Validated beta':
+                        # Simulate a locally accepted broad substitute. The
+                        # final review of original populations must still catch it.
+                        match = inputs[0]['name']
+                    if match:
+                        row.update(status='represented', matched_population_names=[match])
         elif prompt.startswith(prompts.EXTRACT_TASK):
             value = extraction()
             value["candidates"] = [{**c, "defining_branch": value["candidates"][0]["defining_branch"]} for c in inputs]
             for c in value["candidates"]:
                 c.pop("candidate_id")
         elif prompt.startswith(canonical.SELECT_TASK):
-            value = {"spaces": [inputs[0]["space"]], "context_only_topics": [], "uncertainties": []}
+            if failure == "repetition":
+                raise EndpointError("exhausted: Repeated 24 complete clinical definitions without any new definition.")
+            value = {"spaces": [inputs[0]["space"]], "context_only_topics": ["Discarded beta"] if failure == "final-loss" else [], "uncertainties": []}
         elif prompt.startswith(CATALOG_TASK):
             selected = inputs[1] if inputs[1]["name"] in prompt else inputs[0]
             value = catalog()
             value["states"] = [{k: selected[k] for k in canonical.LEAN_STATE["properties"]}]
+            if failure == "final-loss" and selected == inputs[1]:
+                value['states'][0]['name'] = 'Validated beta'
         else:
             text = prompt.split("FINAL FIXED POPULATION AND CANDIDATE MENUS TO REVIEW:\n")[1]
             group = json.JSONDecoder().raw_decode(text)[0]["canonical_group"]
@@ -154,14 +172,127 @@ def test_failed_selection_retains_all_validated_definitions_and_audits(tmp_path,
 
     monkeypatch.setattr(Client, "_http", respond)
     run_guideline(guideline, output, StructuredConfig(model="synthetic", tokenizer_mode="bytes", attempts=1), workers=2)
-    assert read_json(output / "canonical_selection.json")["mode"] == "retain-validated-definitions"
+    mode = "retain-after-final-coverage" if failure == "final-loss" else "retain-validated-definitions"
+    assert read_json(output / "canonical_selection.json")["mode"] == mode
     assert len(read_json(output / "canonical_groups.json")["groups"]) == 2
+    assert "Discarded beta" not in read_json(output / "canonical_groups.json")["context_only_topics"]
     assert audit_catalog(guideline, output)["status"] == "passed"
     selection = read_json(output / "canonical_selection.json")
+    if failure == "final-loss":
+        assert selection['rejected_coverage']['reviews'][1]['status'] == 'missing'
+        corrupt = copy.deepcopy(selection)
+        corrupt['rejected_coverage']['catalog_sha256'] = 'corrupted'
+        atomic_json(output / "canonical_selection.json", corrupt)
+        with pytest.raises(ValueError, match='Population coverage report differs'):
+            audit_catalog(guideline, output)
+        atomic_json(output / "canonical_selection.json", selection)
     selection["available_states"].pop()
     atomic_json(output / "canonical_selection.json", selection)
     with pytest.raises(ValueError, match="Selection inputs"):
         audit_catalog(guideline, output)
+
+
+@pytest.mark.parametrize("address_failure", [None, "invalid-lines", "other-owner", "unresolved-lines"])
+def test_extraction_grouping_retry_keeps_source_ownership_and_audits(tmp_path, monkeypatch, address_failure):
+    g = load_guideline(make_library(tmp_path), 'fictional')
+    output = tmp_path/'results'
+    good = extraction()
+    good['candidates'][0]['space']['biomarkers_required'] = 'Marker A OR (combined marker B AND marker C)'
+    bad = copy.deepcopy(good)
+    bad['candidates'][0]['space']['biomarkers_required'] = 'Marker A OR combined marker B AND marker C'
+    calls = []
+
+    def respond(self, endpoint, body, **kwargs):
+        prompt = body['messages'][1]['content']
+        if prompt.startswith(prompts.EXTRACT_TASK):
+            focused = 'Complete ambiguous parenthesis groups:' in prompt
+            addressing = 'SOURCE-ADDRESS RETRY' in prompt
+            calls.append((focused, addressing))
+            assert 'PRIMARY' in prompt and 'p0002' in prompt
+            value = copy.deepcopy(good if focused else bad)
+            if addressing:
+                assert 'OWNED SOURCE WITH ORIGINAL LINE LABELS:' in prompt
+                assert '"enum": [1]' in prompt
+            if focused and address_failure and (not addressing or address_failure == 'unresolved-lines'):
+                if address_failure == 'other-owner':
+                    value['candidates'][0]['defining_branch']['page_id'] = 'p9999'
+                else:
+                    value['candidates'][0]['defining_branch']['line_ids'] = [20]
+                    value['candidates'][0]['evidence'][0]['line_ids'] = [20]
+        elif prompt.startswith(CATALOG_TASK):
+            value = catalog()
+            value['states'][0]['space'] = good['candidates'][0]['space']
+        else:
+            value = quoted_state()
+            value['space'] = good['candidates'][0]['space']
+        return {'choices':[{'finish_reason':'stop', 'message':{'content':json.dumps(value)}}]}
+
+    monkeypatch.setattr(Client, '_http', respond)
+    config = StructuredConfig(model='synthetic', tokenizer_mode='bytes', attempts=1)
+    if address_failure in ('other-owner', 'unresolved-lines'):
+        with pytest.raises(RuntimeError, match='extraction packets failed'):
+            run_guideline(g, output, config, workers=1)
+        assert calls == ([(False, False), (True, False)] if address_failure == 'other-owner'
+                         else [(False, False), (True, False), (True, True)])
+        assert not (output/'paradigms.jsonl').exists()
+        return
+    run_guideline(g, output, config, workers=1)
+    assert calls == ([(False, False), (True, False), (True, True)] if address_failure
+                     else [(False, False), (True, False)])
+    packet = read_json(output/'extraction.json')['packets']['extract-0001']
+    assert packet['primary_page_ids'] == ['p0002']
+    assert packet['result'] == good
+    assert packet['reserved_output_tokens'] == 100000
+    assert audit_catalog(g, output)['status'] == 'passed'
+    monkeypatch.setattr(Client, '_http', lambda *a, **k: pytest.fail('Reuse accepted grouping repair'))
+    run_guideline(g, output, config, workers=1)
+
+
+def test_owned_address_schema_does_not_constrain_clinical_text_or_supporting_evidence():
+    from matchminer_ai.trials._guideline_extraction_retry import owned_address_schema
+    from matchminer_ai.trials._guideline_schema import EXTRACTION
+    before = copy.deepcopy(EXTRACTION)
+    schema = owned_address_schema([SimpleNamespace(id='p0002', text='Heading\n\nSynthetic table on one line.')])
+    fields = schema['properties']['candidates']['items']['properties']
+    original = EXTRACTION['properties']['candidates']['items']['properties']
+    for key in original:
+        if key != 'defining_branch':
+            assert fields[key] == original[key]
+    assert schema['properties']['uncertainties'] == EXTRACTION['properties']['uncertainties']
+    branch = fields['defining_branch']['properties']
+    assert branch['page_id']['enum'] == ['p0002']
+    assert branch['line_ids']['items']['enum'] == [1, 3]
+    assert schema['properties']['page_coverage']['items']['properties']['reason'] == {'type': 'string', 'minLength': 1}
+    assert EXTRACTION == before
+
+
+def test_restoring_selection_does_not_override_failed_full_union_coverage(tmp_path, monkeypatch):
+    g = load_guideline(make_library(tmp_path), 'fictional')
+    inputs = populations()
+    client = Client(StructuredConfig(model='synthetic', tokenizer_mode='bytes', attempts=1), tmp_path/'cache')
+    batches = {f'batch-{i}': {'result': {'states': [{k: c[k] for k in canonical.LEAN_STATE['properties']}],
+                'context_only_topics': [], 'uncertainties': []}, 'context': {}}
+               for i, c in enumerate(inputs)}
+    monkeypatch.setattr(canonical, 'partition_calls', lambda *a: [])
+    monkeypatch.setattr(canonical, 'run_batches', lambda *a, **k: (batches, {}))
+    monkeypatch.setattr(canonical, 'build_selection_call', lambda *a: ([], [], []))
+    def complete(job, messages, schema, validator, **kwargs):
+        result = {'spaces': [inputs[0]['space']], 'context_only_topics': [], 'uncertainties': []}
+        validator(result)
+        return result
+    monkeypatch.setattr(client, 'complete', complete)
+    final_sizes = []
+    def review(client, candidates, states):
+        final = candidates is inputs
+        if final:
+            final_sizes.append(len(states))
+        return {'reviews': [{'status': 'missing' if final else 'represented'} for c in candidates]}
+    monkeypatch.setattr(canonical, 'review_coverage', review)
+    with pytest.raises(CoverageError, match='omitted or broadened'):
+        canonical.consolidate(client, g, inputs, tmp_path/'results', 1, parallel_jobs,
+                              lambda _: None, coverage_repairs=({'reviews': []},))
+    assert final_sizes == [1, 2]
+    assert not (tmp_path/'results/canonical_groups.json').exists()
 
 
 def test_final_coverage_narrows_affected_leaf_without_rewriting_other_batches(tmp_path):

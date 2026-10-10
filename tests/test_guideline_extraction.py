@@ -1861,7 +1861,13 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                     "Requirements in DIFFERENT fields apply together (AND)",
                     "'(A OR B) AND C'",
                     "restrictions in EVERY resulting alternative",
-                    "name\n  is not part of the TrialSpace embedding text",
+                    "Required negative results belong in biomarkers_required",
+                    "Do not encode molecular or receptor\n  restrictions in histology_allowed",
+                    "cannot substitute for any of the nine fields",
+                    "'triple-negative' or 'TNBC'",
+                    "ER-negative AND PR-negative AND HER2-negative AND PD-L1 CPS >= 10",
+                    "PD-L1 does not replace",
+                    "generic HR-negative alone does not establish HER2-negative status",
                 ):
                     self.assertIn(rule, text)
                 self.assertLessEqual(

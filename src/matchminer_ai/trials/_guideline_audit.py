@@ -200,6 +200,24 @@ def audit_catalog(guideline, output):
                 require(selection_retention_allowed(selection["reason"]),
                         "Invalid reason for retaining validated definitions")
                 chosen = all_states
+            elif selection.get("mode") == "retain-after-final-coverage":
+                require(config.get("stage_versions", {}).get("catalog_coverage") == COVERAGE_VERSION,
+                        "Final selection recovery requires verified population coverage")
+                rejected = selection["rejected_selection"]
+                accepted_selections = {
+                    a["result_sha256"]
+                    for p in (output / "checkpoints").glob("*/accepted.json")
+                    if (a := read_json(p))["job"].startswith("catalog-select-content")
+                }
+                require(digest(rejected) in accepted_selections,
+                        "Rejected selection has no accepted model response")
+                rejected_states = selected_states(rejected, all_states)
+                report = selection["rejected_coverage"]
+                validate_coverage_report(report, candidates, rejected_states,
+                                         accepted_reviews, require_complete=False)
+                require(any(r["status"] != "represented" for r in report["reviews"]),
+                        "Retained definitions without a failed final selection review")
+                chosen = all_states
             else:
                 chosen = selected_states(selection["result"], selection["available_states"])
             require(

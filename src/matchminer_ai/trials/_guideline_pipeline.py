@@ -30,11 +30,12 @@ from ._guideline_completeness import VERSION as COVERAGE_VERSION
 from ._guideline_context import pack_messages
 from ._guideline_details import build_detail_call
 from ._guideline_extraction_batches import run_extractions
+from ._guideline_extraction_retry import owned_address_schema, source_address_retry_allowed
 from ._guideline_source_refresh import prepare_refresh, load_refreshes, review_job, archive_changed_candidates
 from .prompt_builder import load_prompt_text
 from matchminer_ai.llm.structured import EndpointError
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, StructuredConfig
-from ._guideline_generation import Client, RETRY_ONLY_PROMPT_FILES
+from ._guideline_generation import Client, RETRY_ONLY_PROMPT_FILES, exhausted_diagnostic
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
 from ._guideline_ownership import branch_ledger, page_owners
 from ._guideline_repairs import repair_response
@@ -50,7 +51,7 @@ from ._guideline_schema import (
     validate_extraction,
     validate_shape,
 )
-from ._guideline_sources import Guideline, packets
+from ._guideline_sources import Guideline, packets, render_pages
 from ._guideline_specificity import VERSION as SPECIFICITY_VERSION
 from ._guideline_specificity import validate_decision_fields
 
@@ -436,26 +437,55 @@ def _run(
                     context_chars,
                 )
 
+            retry_tail = review_tail
             try:
-                value = client.complete(review_job(key, review) if review is not None else key,
-                                        messages, EXTRACTION, validate,
-                                        repair_handler=repair, reuse_exhausted=True)
+                try:
+                    value = client.complete(review_job(key, review) if review is not None else key,
+                                            messages, EXTRACTION, validate,
+                                            repair_handler=repair, reuse_exhausted=True)
+                except EndpointError as error:
+                    grouping = "mixes AND and OR" in str(error)
+                    if "exhausted" not in str(error) or not (
+                        grouping or "Retry prompt exceeds input budget" in str(error)
+                    ):
+                        raise
+                    # Preserve every owned primary page and the full output reserve.
+                    # Repack optional supporting pages, whole, to leave room for
+                    # validation feedback; omission is explicit in packet metadata.
+                    retry_tail = review_tail
+                    if grouping:
+                        retry_tail += "\n\n" + load_prompt_text("guideline.boolean_retry.txt") + "\n\n" + exhausted_diagnostic(error)
+                    context, omitted, messages = pack_messages(
+                        client, guideline, ids, " ".join(p.label for p in primary),
+                        prompts.EXTRACT_TASK, payload, EXTRACTION, context_chars, ids,
+                        retry_headroom_tokens=8192,
+                        tail=retry_tail,
+                    )
+                    supplied = {p.id: p for p in context}
+                    notify(f"{key}: reserving retry-feedback room while preserving owned source pages and output capacity")
+                    suffix = "-focused-grouping-" + digest(messages)[:16] if grouping else "-retry-headroom"
+                    call_key = (review_job(key, review) if review is not None else key) + suffix
+                    value = client.complete(call_key, messages, EXTRACTION, validate,
+                                            repair_handler=repair, reuse_exhausted=True)
             except EndpointError as error:
-                if "exhausted" not in str(error) or "Retry prompt exceeds input budget" not in str(error):
+                if not source_address_retry_allowed(str(error)):
                     raise
-                # Preserve every owned primary page and the full output reserve.
-                # Repack optional supporting pages, whole, to leave room for
-                # validation feedback; omission is explicit in packet metadata.
+                schema = owned_address_schema(primary)
+                tail = (retry_tail + "\n\n"
+                        + load_prompt_text("guideline.extraction_addresses.txt")
+                        + "\n" + exhausted_diagnostic(error)
+                        + "\n\nOWNED SOURCE WITH ORIGINAL LINE LABELS:\n"
+                        + render_pages(primary, ids))
                 context, omitted, messages = pack_messages(
                     client, guideline, ids, " ".join(p.label for p in primary),
-                    prompts.EXTRACT_TASK, payload, EXTRACTION, context_chars, ids,
-                    retry_headroom_tokens=8192,
-                    tail=review_tail,
+                    prompts.EXTRACT_TASK, payload, schema, context_chars, ids,
+                    retry_headroom_tokens=8192, tail=tail,
                 )
                 supplied = {p.id: p for p in context}
-                notify(f"{key}: reserving retry-feedback room while preserving owned source pages and output capacity")
-                call_key = (review_job(key, review) if review is not None else key) + "-retry-headroom"
-                value = client.complete(call_key, messages, EXTRACTION, validate,
+                base = review_job(key, review) if review is not None else key
+                call_key = base + "-source-addresses-" + digest(messages)[:16]
+                notify(f"{key}: retrying with explicit owned source addresses; all citation checks remain required")
+                value = client.complete(call_key, messages, schema, validate,
                                         repair_handler=repair, reuse_exhausted=True)
             return {
                 "result": value,

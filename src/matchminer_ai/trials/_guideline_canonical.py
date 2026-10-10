@@ -25,6 +25,7 @@ from ._guideline_schema import (
     validate_shape,
 )
 from ._guideline_specificity import validate_decision_field_batch
+from ._guideline_generation import exhausted_diagnostic
 from .prompt_builder import load_prompt_text
 
 LEAN_STATE = obj(
@@ -339,7 +340,7 @@ def consolidate(
             # A singleton cannot split further. New focused feedback identifies
             # the entire offending group even beyond the old 500-character hint.
             focused = [*packed[2], {"role": "user", "content":
-                load_prompt_text("guideline.boolean_retry.txt") + "\n\n" + str(error)}]
+                load_prompt_text("guideline.boolean_retry.txt") + "\n\n" + exhausted_diagnostic(error)}]
             if not client.fits(focused):
                 raise ContextBudgetError("Focused Boolean repair exceeds source input budget")
             value = generate(key + "-focused-grouping-" + digest(focused)[:16], focused)
@@ -378,6 +379,8 @@ def consolidate(
         "batch_count": len(values),
         "batches": {key: v["context"] for key, v in values.items()},
     }
+    available_states = states
+    selected = None
     if len(values) > 1:
         packed = build_selection_call(client, guideline, states)
         try:
@@ -406,8 +409,6 @@ def consolidate(
                 "available_states": states, "result": selected, "preserve_population_names": True,
             })
             states = selected_states(selected, states)
-            topics.extend(selected["context_only_topics"])
-            uncertainties.extend(selected["uncertainties"])
         context_metadata["selection"] = metadata(packed)
     # Check the final catalog, too: cross-batch selection must not undo local
     # coverage. Identical review requests reuse the client's validated cache.
@@ -417,19 +418,42 @@ def consolidate(
         require_coverage(coverage)
     except CoverageError:
         # Final reviews can catch distinctions that intermediate reviews missed.
-        # A retry must revisit the originating source batches, not repeat the
-        # unchanged final review or ask closed selection to invent definitions.
+        # Restore existing validated definitions first. If those also fail,
+        # revisit source batches; closed selection cannot invent definitions.
         atomic_json(output / "population_coverage" / ("final-" + digest(coverage) + ".json"), coverage)
-        if (
-            len(coverage_repairs) >= client.config.attempts
-            or any(digest(previous) == digest(coverage) for previous in coverage_repairs)
-        ):
-            raise
-        log(f"{guideline.disease}: restoring source batches after final population-coverage failure")
-        return consolidate(
-            client, guideline, candidates, output, workers, run_jobs, log, context_chars,
-            coverage_repairs=(*coverage_repairs, coverage),
-        )
+        if selected is not None and states != available_states:
+            # The local selection judge can miss a distinction caught by the
+            # original-population review. Restore only source-validated content;
+            # do not regenerate healthy batches or accept the lossy selection.
+            rejected_coverage = coverage
+            states = available_states
+            coverage = review_coverage(client, candidates, states)
+            atomic_json(output / "canonical_coverage.json", coverage)
+            warning = "Final population review rejected cross-batch deduplication; retained all exact-distinct validated definitions. Semantic duplicates may remain."
+            uncertainties.append(warning)
+            atomic_json(output / "canonical_selection.json", {
+                "mode": "retain-after-final-coverage", "available_states": states,
+                "preserve_population_names": True, "rejected_selection": selected,
+                "rejected_coverage": rejected_coverage, "warning": warning,
+            })
+            selected = None
+            log(f"{guideline.disease}: restored validated definitions after final selection coverage failure")
+        try:
+            require_coverage(coverage)
+        except CoverageError:
+            if (
+                len(coverage_repairs) >= client.config.attempts
+                or any(digest(previous) == digest(coverage) for previous in coverage_repairs)
+            ):
+                raise
+            log(f"{guideline.disease}: restoring source batches after final population-coverage failure")
+            return consolidate(
+                client, guideline, candidates, output, workers, run_jobs, log, context_chars,
+                coverage_repairs=(*coverage_repairs, coverage),
+            )
+    if selected is not None:
+        topics.extend(selected["context_only_topics"])
+        uncertainties.extend(selected["uncertainties"])
     atomic_json(output / "canonical_context.json", context_metadata)
     return {
         "version": VERSION,
@@ -445,4 +469,5 @@ def selection_retention_allowed(error):
     return "exhausted" in error and any(marker in error for marker in (
         "Copy complete supplied clinical definitions without rewriting fields",
         "Catalog omitted or broadened",
+        "Repeated 24 complete clinical definitions without any new definition.",
     ))

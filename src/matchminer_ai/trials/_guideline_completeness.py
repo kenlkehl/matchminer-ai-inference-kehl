@@ -92,7 +92,8 @@ def require_coverage(report):
         )
 
 
-def validate_report(report, candidates, states, accepted_reviews=None):
+def validate_report(report, candidates, states, accepted_reviews=None, *, require_complete=True):
+    """Verify review provenance; only rejected-selection receipts allow missing populations."""
     if (
         report.get("version") != VERSION
         or report.get("input_sha256") != digest([population(c) for c in candidates])
@@ -118,10 +119,12 @@ def validate_report(report, candidates, states, accepted_reviews=None):
         matches = exact_match_names(candidate, states)
         if i not in covered and (
             not matches
+            or report["reviews"][i]["status"] != "represented"
             or report["reviews"][i]["matched_population_names"] != matches[:1]
         ):
             raise ValueError("Nonidentical population has no accepted coverage review")
-    require_coverage(report)
+    if require_complete:
+        require_coverage(report)
 
 
 def review_coverage(client, candidates, states):

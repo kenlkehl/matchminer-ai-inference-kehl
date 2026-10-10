@@ -1,0 +1,21 @@
+SOURCE-ADDRESS RETRY
+
+Regenerate the complete extraction from the supplied source, preserving every supported
+population and consideration and all previously stated Boolean-grouping requirements.
+The prior attempts confused visible table rows, wrapped text, or list items with source
+line addresses. Only the literal L-number labels printed by the source renderer are
+valid line IDs. A single long labeled source line may contain several tables or list
+items. All of those passages share that line ID; do not invent a new line number for
+each row, cell, sentence, or display-wrapped line. Do not renumber the source.
+
+Use the owned primary section(s) repeated below to identify defining branches. Return
+page_coverage for exactly those PRIMARY pages, never for supporting CONTEXT pages.
+The schema restricts branch pages and lists actual nonblank source line numbers;
+the ordinary validators still check each page/line pair, ownership, all clinical
+fields, and supporting evidence. Supporting evidence may cite other supplied pages
+using their own literal labels. Do not replace a missing clinical passage with a
+heading merely to pass validation, or move a context-only branch into this owner's
+page. If the source does not support an extraction, report the source uncertainty
+through the normal extraction contract. Do not silently drop a supported population
+or option to avoid a citation error.
+
