@@ -26,6 +26,9 @@ def test_current_gate_preserves_treatment_response_and_biomarker_exceptions():
     template = _load_prompt_template('llm_match_quality.user.txt')
     gate = template.split('1) REASONABLENESS', 1)[1].split('2) CANCER TYPE SPECIFICITY', 1)[0]
     assert 'required response or progression on that prior therapy' in gate
+    assert 'but not during the specified line, the trial is not reasonable' in gate
+    specificity = template.split('4) PRIOR TREATMENT SPECIFICITY', 1)[1].split('5) BIOMARKER SPECIFICITY', 1)[0]
+    assert 'did not receive it during that line of therapy' in specificity
     assert 'standard of care' in gate and 'novel biomarkers' in gate
     assert 'ignore washout details' in gate
     assert 'your final score is 0, and you must skip the following specificity components' in gate
