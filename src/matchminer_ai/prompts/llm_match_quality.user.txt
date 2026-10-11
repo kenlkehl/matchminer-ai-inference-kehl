@@ -1,44 +1,61 @@
 You are a brilliant oncologist with encyclopedic knowledge about cancer and its treatment. Your job is to evaluate whether a given clinical trial is a reasonable consideration for a patient, given a clinical trial summary and a patient summary, and then score how targeted the trial is for this specific patient.
 
-Here is a summary of the clinical trial:
-{trial_summary}
-Here is a summary of the patient:
-{patient_summary}
-Base your judgment on whether the patient generally fits the age requirements if any, sex requirements if any, cancer type(s), cancer burden and current disease status, prior treatment(s) and responses to those treatments, and biomarker criteria specified for the trial.
-You do not have to determine if the patient is actually eligible; instead please just evaluate whether it is reasonable for the trial to be considered further by the patient's oncologist.
+Base your judgment on whether the patient fits the age requirements if any, sex requirements if any, cancer type(s), cancer burden and current disease status, prior treatment(s) and responses to those treatments, and biomarker criteria specified for the trial.
+
+Your primary task is to evaluate whether it is reasonable for the trial to be considered further by the patient's oncologist; you do not have to fully screen the patient to confirm eligibility. Your secondary task is to score the number of dimensions along which the trial is specific to the patient's case. You will then integrate these tasks into a single numeric score.
+
 Biomarker criteria have to be considered carefully. If a required biomarker is known to be absent, or can be assumed to be absent based on other information, the trial is not a reasonable consideration. For example, if a trial for lung cancer requires an EGFR mutation, documentation that there is no EGFR mutation indicates the trial is not a reasonable consideration. Similarly, documentation of a KRAS mutation in the patient indicates the trial is not a reasonable consideration, since, as you know, KRAS and EGFR driver mutations in lung cancer are mutually exclusive.
-Many trials describe required washout periods for prior treatments for eligibility. For example, the eligibility criteria might state that patients may not have received radiation or chemotherapy in the last 14 days or 30 days. It is CRITICAL that you IGNORE these eligibility criteria when considering prior treatment requirements. Assume that patients could wait for the washout period to enroll. Also CRITICAL: Ignore your knowledge of today's current date. Pretend that you are evaluating the patient's eligibility based on the most recent information available in their summary, at the time of that most recently available information. Do not provide ethical judgments or comment on resource constraints with respect whether the trial is a reasonable clinical consideration; just evaluate whether it is, given the available information.
 
-RESPONSE TO PRIOR THERAPY AND CURRENT DISEASE STATUS
 
-When the trial specifies a required or excluded response to treatment, assess that requirement explicitly. Examples include complete or partial response, stable disease, non-progressive disease, progression, relapse, refractory disease, and treatment intolerance.
+Do not provide ethical judgments or comment on resource constraints with respect whether the trial is a reasonable clinical consideration; just evaluate whether it is, given the available information.
 
-1. Receiving a treatment does not establish the patient's response to it. Changing or stopping treatment does not, by itself, establish progression, resistance, intolerance, or failure of that treatment.
-2. Match each response requirement to the treatment and time period specified by the trial. Distinguish a historical response to a named treatment from the patient's current disease status or response to the most recent therapy.
-3. For requirements concerning current disease status, use the latest relevant information in the patient summary. Earlier stable disease or response does not override subsequently documented progression. Conversely, older progression does not establish current progression if a subsequent response or stable disease is documented.
-4. Treat an explicit contradiction as a mismatch. For example, if the trial requires currently non-progressive disease and the latest patient information documents progression, the requirement is not met. Do not reinterpret the requirement as optional or assume the patient will stabilize, respond to another treatment, or otherwise become suitable later.
-5. Preserve all stated alternatives and exceptions. Progression and intolerance are not interchangeable unless the trial explicitly accepts either. Apply response-duration and relapse/progression timing requirements as written. These are not treatment washout periods.
-6. Missing response information is not proof of either response or progression.
 
-Apply these rules wherever the requirement appears in the trial summary, including cancer burden, disease status, and prior treatment. Continue to ignore treatment washout periods and evaluate the patient at the latest documented clinical time, not today's date.
+SCORING INSTRUCTIONS
 
-SCORING INSTRUCTIONS:
-After reasoning step by step, compute a score from 0 to 5 using the following rubric:
-
-SPECIFICITY EVIDENCE REQUIREMENTS
-
-Passing reasonableness despite uncertainty does not provide evidence for a specificity match. For every specificity point, the supplied patient summary must clearly document that all applicable criteria for that point are satisfied. A possible, probable, assumed, or unknown match earns 0 for that specificity point.
-For requirements joined by AND, every required part must be supported. For alternatives joined by OR, at least one complete allowed alternative must be supported; preserve the trial's exceptions. Do not award a category's point for matching only part of a compound requirement. Evidence must establish any required treatment, setting, response, duration, timing, disease status, and biomarker threshold relevant to that category.
-For example, if prior treatment requires anti-CD20 chemotherapy AND failed autologous stem-cell transplant, documented chemotherapy with an undocumented transplant history earns 0 for prior-treatment specificity, even though the uncertainty alone need not fail reasonableness. Likewise, one documented biomarker does not earn biomarker specificity when another required biomarker in the same AND condition is unknown.
-Use clinical knowledge to interpret documented facts, such as a drug's class or a cancer subtype, but do not invent missing treatments, test results, response assessments, or timing. For each specificity point awarded, identify the supporting documented facts for all required parts; if that support is incomplete, award 0 for that point.
+After reasoning step by step, compute a score from 0 to 5 using the following rubric.
 
 Start with 0 points.
-1) REASONABLENESS (0 or 1 point): Award 1 point only if there is no clear mismatch with the trial's age, sex, cancer type/histology, burden, biomarker, or treatment requirements. This includes required or excluded prior therapies, responses to those therapies, and current disease status. If the trial is NOT reasonable because of ANY clear mismatch, the final score is 0 — skip the remaining categories. This zero-score gate applies to every requirement listed above, including age, sex, cancer type/histology, burden, biomarkers, required or excluded prior treatments, treatment response, and current disease status. Do not add any specificity points after a failed reasonableness gate. Unknown information alone does not establish a contradiction and may still permit the reasonableness point. This tolerance of uncertainty applies only to reasonableness, not to awarding specificity points.
-2) CANCER TYPE SPECIFICITY (+1 point): If the trial specifies a cancer type clearly documented for the patient (e.g., 'breast cancer', 'non-small cell lung cancer') rather than being open to any/all cancer types (e.g., 'solid tumors', 'advanced cancers'), award +1 point.
-3) CANCER BURDEN/STAGE SPECIFICITY (+1 point): Award +1 when the trial specifies a stage or disease-burden requirement that matches the patient. When that requirement also includes a current disease-status condition, such as non-progressive disease, that condition must be supported too. Do not award this point for an unknown or contradictory match, or when there is no specific stage/burden requirement.
+
+1) REASONABLENESS (0 or 1 point): Award 1 point only if there is no clear mismatch with the trial's age, sex, cancer type/histology, burden, biomarker, or treatment requirements. Consider each of those dimensions, as follows.
+a) Age - if trial is for adults only and patient is a child, or vice versa, trial is not reasonable. If trial does not specify an age range, this is not relevant.
+b) Sex - if trial is for males only or females only and patient has a different biological sex, trial is not reasonable. If trial does not specify a sex restriction, this is not relevant.
+c) Required prior therapies - if trial requires that a specific regimen or regimens has been received already, but patient has not received that regimen or regimens, trial is not reasonable. Some trials require that patients have achieved a certain degree of response to a specific prior therapy or progression of disease on a specific prior therapy. If patient has not received the prior therapy and/or has not experienced the required response or progression on that prior therapy, trial is not reasonable. Many trials describe required washout periods for prior treatments for eligibility. For example, the eligibility criteria might state that patients may not have received radiation or chemotherapy in the last 14 days or 30 days. It is CRITICAL that you IGNORE these eligibility criteria when considering prior treatment requirements. Assume that patients could wait for the washout period to enroll. Also CRITICAL: Ignore your knowledge of today's current date. Pretend that you are evaluating the patient's eligibility based on the most recent information available in their summary, at the time of that most recently available information. 
+d) Excluded prior therapies - if a trial does not allow patients who have received a specific prior therapy, trial is not reasonable. If trial excludes patients who have received a prior therapy with a specific response to or progression on that therapy, trial is not reasonable. As per (c), ignore washout details referring to treatment in the last, eg, 14 or 30 days.
+(e) Required biomarkers - this is complex. If a trial requires the presence of a biomarker (eg antigen expression, genomic alteration) and the patient's tumor is not known to have it, and if the biomarker has been tested, can be assumed to have been tested because that is standard of care, or can be inferred to be absent based on the presence of some other biomarker (eg KRAS mutations and EGFR mutations are generally mutually exclusive in lung cancer), the trial is not reasonable. The exception is for novel biomarkers that may only be tested during clinical trial screening once consent is signed. A trial can still be reasonable if such a novel biomarker is not known to be present, as long as it cannot be inferred absent based on above criteria.
+(f) Excluded biomarkers - If a patient's tumor is known positive fr a biomarker that a clinical trial excludes, the trial is not reasonable.
+(g) Disease status/burden - If a trial is for early stage/curative intent disease but the patient has advanced/metastatic/palliative-intent disease, the trial is not reasonable.
+
+If, by any of the above criteria, the trial is not reasonable, then your final score is 0, and you must skip the following specificity components. 
+
+For trials that are reasonable, give 1 point for reasonableness, then proceed to the following specificity criteria. 
+
+2) CANCER TYPE SPECIFICITY (+1 point): If the trial specifies a cancer type that the patient clearly has (e.g., 'breast cancer', 'non-small cell lung cancer') rather than being open to any/all cancer types (e.g., 'solid tumors', 'advanced cancers'), award +1 point.
+
+3) CANCER BURDEN/STAGE SPECIFICITY (+1 point): Award +1 when the trial specifies a stage or disease-burden requirement that matches the patient's history. When that requirement also includes a current disease-status condition, such as non-progressive disease, that condition must be supported too. Do not award this point for an unknown or contradictory match, or when there is no specific stage/burden requirement.
+
 4) PRIOR TREATMENT SPECIFICITY (+1 point): Award +1 only when the full specific prior-treatment requirement is clearly documented as satisfied in the patient's history, including every required therapy and any required response, resistance, relapse, intolerance, duration, or timing condition. Exposure to the required treatment alone is insufficient when its outcome is also a specified requirement for the trial. No specific requirement or insufficient evidence of a match earns 0 points.
+
 5) BIOMARKER SPECIFICITY (+1 point): If the trial requires a specific biomarker (e.g., 'EGFR mutation', 'PD-L1 ≥ 50%', 'HER2-positive') AND the patient is clearly documented to satisfy the full required biomarker condition, including any threshold and AND/OR combinations, award +1 point. If the trial has no biomarker requirements, or the patient's biomarker status is unknown, do not award a point.
+
+GENERAL GUIDANCE
+
+For requirements joined by AND, every required part must be supported. For alternatives joined by OR, at least one complete allowed alternative must be supported; preserve the trial's exceptions. Do not award a category's point for matching only part of a compound requirement. Evidence must establish any required treatment, setting, response, duration, timing, disease status, and biomarker threshold relevant to that category.
+
+Use clinical knowledge to interpret documented facts, such as a drug's class or a cancer subtype, but do not invent missing treatments, test results, response assessments, or timing. For each specificity point awarded, identify the supporting documented facts for all required parts; if that support is incomplete, award 0 for that point.
+
+
+OUTPUT FORMAT
 
 Your response MUST end with the following line and nothing else after it:
 Final score: X
 where X is the total score (an integer from 0 to 5).
+
+YOUR PATIENT SUMMARY:
+
+{patient_summary}
+
+YOUR TRIAL SUMMARY:
+
+{trial_summary}
+
+Evaluate this patient–trial match using the instructions above.
