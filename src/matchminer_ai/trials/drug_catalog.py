@@ -752,6 +752,8 @@ def _run_llm_messages(
             llm_config, {"local": disabled, "remote": {"extra_body": disabled}}
         )
     runtime = build_llm_runtime_config("llm_good_option", llm_config, config=config)
+    if remote_enabled(config):
+        runtime["use_endpoint_pool"] = True
     prompts = build_prompt_list(
         [list(messages) for messages in messages_list], llm_config=runtime
     )
@@ -1732,7 +1734,8 @@ async def synthesize_serially(
     one another. A subject with eleven chunks therefore cannot hold a batch of
     one-chunk subjects hostage, and ``on_subject_complete`` fires as soon as a
     chain ends so the caller can checkpoint it immediately. At most
-    ``remote.max_concurrent_requests`` chains call the endpoint at once; a local
+    ``remote.pool_max_workers`` (falling back to ``max_concurrent_requests``)
+    chains run at once, with each endpoint enforcing its own request cap; a local
     engine is not thread-safe, so local runs are one chain at a time.
 
     When the model exhausts its output budget on every ordinary attempt, the
@@ -1755,7 +1758,7 @@ async def synthesize_serially(
     character_limit = max(4_000, token_limit * 4)
     max_attempts = max(1, int(catalog_config.get("synthesis_max_attempts", 3)))
     concurrency = (
-        max(1, int(config.remote.get("max_concurrent_requests", 32)))
+        max(1, int(config.remote.get("pool_max_workers", config.remote.get("max_concurrent_requests", 32))))
         if remote_enabled(config)
         else 1
     )

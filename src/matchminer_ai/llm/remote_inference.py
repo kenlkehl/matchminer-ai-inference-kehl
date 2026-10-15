@@ -45,7 +45,7 @@ def normalize_remote_server_urls(llm_config: Dict[str, Any]) -> list[str]:
         server_urls = [str(url).strip() for url in raw_server_urls]
 
     server_urls = [normalize_openai_base_url(url) for url in server_urls if url]
-    if not server_urls:
+    if not server_urls and not llm_config.get("server_urls_file"):
         raise ValueError("Remote backend requires at least one server URL.")
     return server_urls
 
@@ -472,6 +472,9 @@ def generate_remote_llm_outputs(
     api_key: AsyncAPIKey,
 ) -> tuple[list[str], list[str], list[str]]:
     """Synchronous wrapper around ``generate_remote_llm_outputs_async``."""
+    if (llm_config.get("use_endpoint_pool") or llm_config.get("server_urls_file")) and isinstance(api_key, str):
+        from .endpoint_pool import generate_pooled_outputs
+        return generate_pooled_outputs(prompts, llm_config, server_urls, api_key)
     return _run_sync(
         lambda: generate_remote_llm_outputs_async(
             prompts=prompts,
