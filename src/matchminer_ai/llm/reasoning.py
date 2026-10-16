@@ -19,6 +19,7 @@ MODEL_TO_REASONING_PARSER: dict[str, str] = {
 }
 
 _SUBSTRING_FALLBACKS: tuple[tuple[str, str], ...] = (
+    ("nemotron-3.5-super-vl", "nemotron_v3"),
     ("gemma", "gemma4"),
     ("qwen", "qwen3"),
     ("gpt-oss", "openai_gptoss"),
@@ -57,6 +58,19 @@ def resolve_reasoning_parser(
     )
 
 
+def resolve_tool_call_parser(model_name: str, explicit: str | None = "auto") -> str | None:
+    """Resolve an optional vLLM tool parser, preserving overrides and opt-out."""
+    requested = (explicit or "auto").strip()
+    if requested.lower() in _DISABLED:
+        return None
+    if requested.lower() != "auto":
+        return requested
+    from .model_profiles import resolve_model_profile
+
+    profile = resolve_model_profile(model_name)
+    return profile.tool_call_parser if profile else None
+
+
 def parse_reasoning_output(
     text: str,
     *,
@@ -91,4 +105,5 @@ __all__ = [
     "MODEL_TO_REASONING_PARSER",
     "parse_reasoning_output",
     "resolve_reasoning_parser",
+    "resolve_tool_call_parser",
 ]

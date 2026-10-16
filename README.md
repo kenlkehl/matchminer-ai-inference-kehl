@@ -332,3 +332,28 @@ Existing local guideline catalogs can be reviewed with
 support; code locates exact excerpts and preserves clinical fields. Unsupported
 or partially supported items retain explicit per-item issues for display and
 human review. See [citation review and collection repair](docs/user-guide/guideline-extraction.md#reviewing-existing-catalog-citations).
+
+### NVIDIA Nemotron 3.5 Super VL
+
+Text LLM stages recognize `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`,
+the BF16 variant, and the served alias `nemotron-3.5-super-vl` with
+`sampling_profile: auto`. Opaque aliases can select
+`sampling_profile: nemotron-3.5-super-vl`. NVIDIA's
+[model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4)
+and generation config (checked 2026-10-15) recommend temperature **1.0** and
+**top_p 0.95** for text. The profile neutralizes inherited filters/penalties
+(`top_k=-1`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`); NVIDIA does
+not prescribe these extra sampling knobs. Explicit request parameters override
+`sampling_profile` defaults. `apply_model_profile` deliberately replaces a
+previous model's sampling settings, as it does for the existing profiles.
+
+vLLM uses `--reasoning-parser nemotron_v3 --enable-auto-tool-choice
+--tool-call-parser qwen3_coder`; the server command builder selects these for
+this model. `reasoning_parser` and `tool_call_parser` allow explicit overrides
+(or `none` to disable). The card recommends vLLM 0.32.0 or its documented
+nightly; this package's older minimum version alone does not guarantee support.
+Reasoning is controlled by `chat_template_kwargs.enable_thinking`; medium effort
+uses `enable_thinking=true, medium_effort=true`. Reasoning and the final answer
+share the output-token budget. No output-budget floor or model/endpoint change
+is imposed. These are **text** defaults; the card's summary recommends 0.6
+instead of 1.0 for vision. This profile does not introduce image/video inputs.

@@ -338,6 +338,7 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
         "num_speculative_tokens": 4,
     }
     default_config.trial["reasoning_parser"] = "gemma4"
+    default_config.trial["tool_call_parser"] = "qwen3_coder"
     default_config.trial["prompt_file"] = "llm_match_quality.user.txt"
     default_config.trial.setdefault("local", {}).setdefault("generation", {})[
         "seed"
@@ -365,6 +366,7 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
         "num_speculative_tokens": 4,
     }
     assert "prompt_file" not in mock_vllm.LLM.call_args.kwargs
+    assert "tool_call_parser" not in mock_vllm.LLM.call_args.kwargs
     assert mock_vllm.SamplingParams.call_args.kwargs["seed"] == 123
 
 

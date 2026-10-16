@@ -25,8 +25,8 @@ def vendor_defaults(
     template = dict(template or {})
     if profile in (None, "none"):
         return {}, template
-    if profile not in {"auto", "gemma4", "qwen3.5", "qwen3.8"}:
-        raise ValueError("sampling_profile must be auto, gemma4, qwen3.5, qwen3.8, or none")
+    if profile not in {"auto", "gemma4", "qwen3.5", "qwen3.8", "nemotron-3.5-super-vl"}:
+        raise ValueError("sampling_profile must be auto, gemma4, qwen3.5, qwen3.8, nemotron-3.5-super-vl, or none")
     model = str(model_name or "").lower()
     family = profile
     if profile == "auto":
@@ -38,11 +38,22 @@ def vendor_defaults(
                 else "qwen3.8" if re.search(r"qwen[-_ ]?3[._]8", model) else None
             )
         )
+        if "nemotron-3.5-super-vl" in model:
+            family = "nemotron-3.5-super-vl"
     if family is None:
         return {}, template
     template.setdefault("enable_thinking", True)
     if type(template["enable_thinking"]) is not bool:
         raise ValueError("enable_thinking must be boolean")
+    if family == "nemotron-3.5-super-vl":
+        from .model_profiles import NEMOTRON_3_5_SUPER_VL
+
+        # Text workflow. Explicit enable_thinking/medium_effort remain intact;
+        # do not translate Qwen's graded effort into Nemotron template kwargs.
+        return {
+            **NEMOTRON_3_5_SUPER_VL.request_params,
+            **NEMOTRON_3_5_SUPER_VL.extra_body,
+        }, template
     if family == "gemma4":
         return {"temperature": 1.0, "top_p": 0.95, "top_k": 64}, template
     thinking = template["enable_thinking"]

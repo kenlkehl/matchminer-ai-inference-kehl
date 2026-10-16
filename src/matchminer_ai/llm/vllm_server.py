@@ -18,7 +18,7 @@ from matchminer_ai.llm.remote_auth import (
     remote_provider_name,
 )
 from matchminer_ai.llm.remote_inference import normalize_openai_base_url
-from matchminer_ai.llm.reasoning import resolve_reasoning_parser
+from matchminer_ai.llm.reasoning import resolve_reasoning_parser, resolve_tool_call_parser
 
 _VLLM_SERVER_TASKS = {
     "trial",
@@ -155,6 +155,17 @@ def build_vllm_server_command(
     )
     if reasoning_parser:
         command.extend(["--reasoning-parser", reasoning_parser])
+    tool_parser = resolve_tool_call_parser(
+        model_name, llm_config.get("tool_call_parser", "auto")
+    )
+    supplied = list(extra_args or ())
+    if tool_parser and not any(
+        arg == "--tool-call-parser" or arg.startswith("--tool-call-parser=")
+        for arg in supplied
+    ):
+        command.extend(["--tool-call-parser", tool_parser])
+    if tool_parser and "--enable-auto-tool-choice" not in supplied:
+        command.append("--enable-auto-tool-choice")
     chat_template_kwargs = task_local_config.get(
         "chat_template_kwargs",
         llm_config.get("chat_template_kwargs"),

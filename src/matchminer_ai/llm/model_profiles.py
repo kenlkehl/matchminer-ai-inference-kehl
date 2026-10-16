@@ -37,6 +37,7 @@ class ModelProfile:
     chat_template_kwargs: Mapping[str, Any] = field(default_factory=dict)
     min_max_tokens: int | None = None
     source: str = ""
+    tool_call_parser: str | None = None
 
     def matches(self, model_name: str) -> bool:
         normalized = model_name.strip().lower()
@@ -77,7 +78,24 @@ GEMMA_4_THINKING = ModelProfile(
     ),
 )
 
+NEMOTRON_3_5_SUPER_VL = ModelProfile(
+    name="nemotron-3.5-super-vl",
+    patterns=("nemotron-3.5-super-vl",),
+    reasoning_parser="nemotron_v3",
+    tool_call_parser="qwen3_coder",
+    request_params={"temperature": 1.0, "top_p": 0.95, "presence_penalty": 0.0},
+    # NVIDIA specifies temperature/top_p. Neutralize inherited Qwen/Gemma
+    # filters and penalties; these neutral values are not vendor recommendations.
+    extra_body={"top_k": -1, "min_p": 0.0, "repetition_penalty": 1.0},
+    chat_template_kwargs={"enable_thinking": True},
+    source=(
+        "https://huggingface.co/nvidia/"
+        "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4 (verified 2026-10-15; text)"
+    ),
+)
+
 MODEL_PROFILES: tuple[ModelProfile, ...] = (
+    NEMOTRON_3_5_SUPER_VL,
     QWEN3_8_FLASH_NEXT_THINKING,
     GEMMA_4_THINKING,
 )
@@ -210,6 +228,7 @@ def apply_model_profile(
         remote["extra_body"] = extra_body
         if "." not in section_name:
             section["reasoning_parser"] = profile.reasoning_parser or "none"
+            section["tool_call_parser"] = profile.tool_call_parser or "none"
     return profile
 
 
@@ -247,8 +266,9 @@ def configure_served_model(
 __all__ = [
     "GEMMA_4_THINKING",
     "MODEL_PROFILES",
-    "ModelProfile",
+    "NEMOTRON_3_5_SUPER_VL",
     "QWEN3_8_FLASH_NEXT_THINKING",
+    "ModelProfile",
     "apply_model_profile",
     "configure_served_model",
     "discover_served_context_tokens",

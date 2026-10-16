@@ -186,6 +186,7 @@ class LocalBackend:
                 "prompt_file",
                 "prompt_files",
                 "reasoning_parser",
+                "tool_call_parser",
                 "chat_template_kwargs",
                 "boilerplate_marker",
                 "backend_mode",
