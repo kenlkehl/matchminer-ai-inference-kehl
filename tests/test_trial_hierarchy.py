@@ -500,9 +500,13 @@ def test_context_budget_is_recounted_without_truncating(monkeypatch):
         lambda name: tokenizer,
     )
     config = {**runtime(), "max_model_len": 300}
+    config["sampling_params"]["max_tokens"] = 50000
     messages = [[{"role": "user", "content": "source text"}]]
     prompts, _ = _bounded_prompts(messages, config)
     assert prompts[0].max_tokens == 42
     assert prompts[0].messages == messages[0]
+    large_context, _ = _bounded_prompts(messages, {**config, "max_model_len": 100000})
+    assert large_context[0].max_tokens == 50000
+    assert large_context[0].messages == messages[0]
     with pytest.raises(ValueError, match="not truncated"):
         _bounded_prompts(messages, {**config, "max_model_len": 256})

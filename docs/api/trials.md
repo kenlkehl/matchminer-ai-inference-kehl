@@ -96,6 +96,9 @@ generation retains batched field waves with one resident model.
 
 Node checkpoints fingerprint source, parent, scope, prompts, algorithm version,
 and runtime configuration. Changed inputs/configuration never reuse old nodes.
+Trial extraction defaults to a 50,000-token output ceiling (reasoning plus final
+answer) and a 100,000-token local context. Each request still reduces its output
+allowance when necessary to fit the configured context without truncating source.
 Debug `trial_reasoning_text` contains a JSON audit of the node responses,
 reasoning and validation attempts. Configured context limits reserve output
 space without truncating the source. Model sampling and parser selection still
