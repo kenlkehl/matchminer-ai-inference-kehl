@@ -18,6 +18,7 @@ trial:
     max_nodes: 4096
     max_calls: 20000
     batch_size: 256
+    active_trials: 32
   sampling_profile: auto
   reasoning_effort: xhigh
   reasoning_parser: auto

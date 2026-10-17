@@ -269,7 +269,7 @@ class FakeBackend:
             messages = prompt.messages
             text = messages[1]["content"]
             self.calls.append((messages, llm_config))
-            if self.invalid:
+            if self.invalid and "CURRENT FIELD: age\n" in text:
                 self.invalid -= 1
                 answers.append("not JSON")
                 finishes.append("stop")
@@ -315,10 +315,15 @@ def test_adapter_retries_with_error_then_switches_thinking_and_reuses_cache(tmp_
     )
     assert result.finish_reasons == ["stop"]
     assert len(backend.calls) == 12
-    assert "failed validation" in backend.calls[1][0][-1]["content"]
-    assert backend.calls[1][0][-2]["content"] == "not JSON"
+    age_calls = [
+        call
+        for call in backend.calls
+        if "CURRENT FIELD: age\n" in call[0][1]["content"]
+    ]
+    assert "failed validation" in age_calls[1][0][-1]["content"]
+    assert age_calls[1][0][-2]["content"] == "not JSON"
     assert (
-        backend.calls[2][1]["remote"]["extra_body"]["chat_template_kwargs"][
+        age_calls[2][1]["remote"]["extra_body"]["chat_template_kwargs"][
             "enable_thinking"
         ]
         is False
@@ -339,7 +344,7 @@ def test_failed_trial_does_not_export_partial_spaces_or_break_other_trials():
     result = summarize_hierarchically(["GOOD", "BAD"], backend, trial_config=runtime())
     assert result.finish_reasons == ["stop", "error"]
     assert result.final_outputs[1] == ""
-    assert len(backend.calls) == 11
+    assert len(backend.calls) == 12  # Failed trial's age and independent boilerplate.
 
 
 def test_public_default_uses_hierarchy_and_preserves_output_schema(monkeypatch):

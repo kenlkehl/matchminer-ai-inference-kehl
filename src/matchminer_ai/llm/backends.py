@@ -302,6 +302,19 @@ class LocalBackend:
 class RemoteBackend:
     """OpenAI-compatible remote vLLM HTTP backend."""
 
+    def open_request_session(self, llm_config, model_metadata_cache_dir=None):
+        """Share clients/concurrency across a dynamically expanding request graph."""
+        from .remote_inference import RemoteRequestSession
+
+        return RemoteRequestSession(
+            llm_config,
+            remote_api_key(llm_config),
+            get_endpoint_model_metadata(
+                remote_request_model_name(llm_config),
+                cache_dir=model_metadata_cache_dir,
+            ),
+        )
+
     def generate_llm_outputs(
         self,
         *,

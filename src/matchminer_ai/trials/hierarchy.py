@@ -7,8 +7,10 @@ identically. The inference package owns the contract.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
@@ -343,6 +345,203 @@ class Hierarchy:
             + "\nBoilerplate exclusions:\n"
             + ("\n".join(self.exclusions) or "None.")
         )
+
+
+class ReadyHierarchy:
+    """A dependency graph: accept each parent without a field-wide barrier.
+
+    The wave-based Hierarchy remains available for synchronous local engines.
+    Request contents/cache keys are identical in both schedulers.
+    """
+
+    def __init__(
+        self, trial_index, trial_text, prompts, max_nodes=4096, max_calls=20000
+    ):
+        self.trial_index = trial_index
+        self.trial_text = trial_text
+        self.prompts = prompts
+        self.max_nodes, self.max_calls = max_nodes, max_calls
+        self.calls = 0
+        self.trace, self.nodes, self.exclusions = [], [], []
+        self.error = ""
+        self._ready = []
+        self._pending = set()
+        self._seen = set()
+        self._counts = [0] * (len(FIELDS) + 1)
+        self._leaves = {}
+        self._enqueue(0, {}, "All eligible populations in the trial.")
+        self._enqueue(len(FIELDS), {}, "All trial populations")
+
+    def _enqueue(self, level, parent, scope):
+        name = FIELDS[level][0] if level < len(FIELDS) else "boilerplate"
+        request = build_request(
+            self.trial_index,
+            len(self._seen),
+            self.trial_text,
+            name,
+            parent,
+            scope,
+            self.prompts,
+        )
+        key = request.key
+        if key in self._seen or self.error:
+            return
+        if len(self._seen) >= self.max_calls:
+            self.error = f"Hierarchy exceeded max_calls={self.max_calls}; no partial spaces exported"
+            return
+        if self._counts[level] >= self.max_nodes:
+            self.error = f"Hierarchy exceeded max_nodes={self.max_nodes}; no partial spaces exported"
+            return
+        self._counts[level] += 1
+        self._seen.add(key)
+        self._pending.add(key)
+        self._ready.append(request)
+
+    def requests(self):
+        ready, self._ready = self._ready, []
+        return [] if self.error else ready
+
+    @property
+    def done(self):
+        return bool(self.error) or not self._pending
+
+    def accept(self, requests, completions):
+        for request, completion in zip(requests, completions, strict=True):
+            key = request.key
+            if key not in self._pending:
+                raise ValueError(
+                    "Hierarchy received an unknown or duplicate completion"
+                )
+            self._pending.remove(key)
+            self.calls += 1
+            self.trace.append(
+                {
+                    "field": request.field_name,
+                    "parent": request.parent,
+                    "scope": request.scope,
+                    "request_key": key,
+                    **vars(completion),
+                }
+            )
+            if self.error:
+                continue
+            try:
+                parsed = parse_response(
+                    completion.final, request.field_name, completion.finish_reason
+                )
+                if request.field_name == "boilerplate":
+                    self.exclusions = list(dict.fromkeys(parsed["exclusions"]))
+                else:
+                    level = len(request.parent) + 1
+                    for branch in parsed["branches"]:
+                        values = {
+                            **request.parent,
+                            request.field_name: branch["value"].strip(),
+                        }
+                        scope = branch["scope"].strip()
+                        if level == len(FIELDS):
+                            node = {"fields": values, "scope": scope}
+                            self._leaves[digest(node)] = node
+                            if len(self._leaves) > self.max_nodes:
+                                raise ValueError(
+                                    f"Hierarchy exceeded max_nodes={self.max_nodes}; no partial spaces exported"
+                                )
+                        else:
+                            self._enqueue(level, values, scope)
+                if not self._pending and not self._leaves:
+                    raise ValueError(
+                        "All branches were pruned; no partial spaces exported"
+                    )
+            except ValueError as exc:
+                self.error = str(exc)
+
+    def output(self):
+        if self.error or not self.done:
+            raise ValueError(self.error or "Hierarchy is incomplete")
+        # Completion timing must not change numbering or deduplication.
+        self.nodes = sorted(
+            self._leaves.values(),
+            key=lambda n: tuple(n["fields"][key] for key, _ in FIELDS) + (n["scope"],),
+        )
+        assembled = Hierarchy(self.trial_index, self.trial_text, self.prompts)
+        assembled.stage = len(FIELDS) + 1
+        assembled.nodes, assembled.exclusions = self.nodes, self.exclusions
+        return assembled.output()
+
+
+async def run_ready_hierarchies(
+    states,
+    complete,
+    *,
+    concurrency,
+    active_trials,
+    on_complete=None,
+):
+    """Bounded rolling trial window and a single queue of dependency-ready calls.
+
+    `complete` includes transport/validation retries and checkpoint persistence.
+    A completed trial admits its replacement immediately, even while another
+    trial or field has a slow response. All state mutations occur on this loop.
+    """
+
+    def limit(value):
+        result = int(value() if callable(value) else value)
+        if result < 1:
+            raise ValueError("Hierarchy scheduling limits must be positive")
+        return result
+
+    limit(concurrency)
+    limit(active_trials)
+    remaining = iter(states)
+    active, pending, ready = {}, {}, deque()
+    exhausted = False
+
+    def admit():
+        nonlocal exhausted
+        while not exhausted and len(active) < limit(active_trials):
+            state = next(remaining, None)
+            if state is None:
+                exhausted = True
+                break
+            active[state.trial_index] = state
+            ready.extend((state, request) for request in state.requests())
+
+    try:
+        admit()
+        while active:
+            while ready and len(pending) < limit(concurrency):
+                state, request = ready.popleft()
+                if state.error:
+                    continue
+                task = asyncio.create_task(complete(request))
+                pending[task] = (state, request)
+            if pending:
+                finished, _ = await asyncio.wait(
+                    pending,
+                    return_when=asyncio.FIRST_COMPLETED,
+                    timeout=1.0 if callable(concurrency) else None,
+                )
+                for task in finished:
+                    state, request = pending.pop(task)
+                    completion = task.result()
+                    state.accept([request], [completion])
+                    ready.extend((state, child) for child in state.requests())
+            busy = {state.trial_index for state, _ in pending.values()}
+            for index, state in list(active.items()):
+                if state.done and index not in busy:
+                    if on_complete is not None:
+                        on_complete(state)
+                    del active[index]
+            admit()
+            if active and not pending and not ready:
+                raise RuntimeError(
+                    "Hierarchy scheduler has unfinished trials but no ready work"
+                )
+    finally:
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
 
 class ResponseCache:

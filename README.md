@@ -52,6 +52,9 @@ Each field call introduces the hierarchy, supplies the full trial, includes the
 complete field definitions and examples from `trial.user.primer.txt`, shows the
 current candidate, then requests children for the next field. The primer remains
 the source of the clinical rules; only its one-shot output commands are omitted.
+Remote extraction schedules ready branches across trials and field levels,
+with independent boilerplate calls and shared per-endpoint concurrency limits.
+It does not wait for a complete field wave or trial batch before advancing.
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered

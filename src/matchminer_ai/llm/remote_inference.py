@@ -371,6 +371,55 @@ async def run_inference_batch(
     return all_results
 
 
+class RemoteRequestSession:
+    """Persistent clients and shared endpoint slots for dependency-ready calls."""
+
+    def __init__(self, llm_config, api_key, model_metadata):
+        self.config, self.api_key = llm_config, api_key
+        self.model_metadata = model_metadata
+        self.server_urls = normalize_remote_server_urls(llm_config)
+        self.per_server = max(1, int(llm_config["max_concurrent_requests"]))
+        self.capacity = len(self.server_urls) * self.per_server
+
+    async def __aenter__(self):
+        self.clients = connect_to_remote_servers(
+            server_urls=self.server_urls,
+            request_timeout=float(self.config["request_timeout"]),
+            api_key=self.api_key,
+        )
+        self.slots = asyncio.Queue()
+        for _ in range(self.per_server):
+            for client, _port in self.clients:
+                self.slots.put_nowait(client)
+        return self
+
+    async def generate(self, prompt, llm_config):
+        params, extra = build_remote_request_config(llm_config)
+        messages = prepare_messages_for_provider(
+            prompt.messages or [{"role": "user", "content": prompt.prompt_text}],
+            llm_config,
+        )
+        client = await self.slots.get()
+        try:
+            return await single_inference_request(
+                client=client, row_idx=prompt.row_idx, messages=messages,
+                model=remote_request_model_name(llm_config),
+                request_params=request_params_for_prompt(params, prompt),
+                extra_body_params=extra, chat_template_kwargs=None,
+                max_retries=max(1, int(llm_config["max_retries"])),
+                base_timeout=float(llm_config["request_timeout"]),
+                retry_backoff_base=float(llm_config.get("retry_backoff_base", 1.0)),
+            )
+        finally:
+            self.slots.put_nowait(client)
+
+    async def __aexit__(self, *exc):
+        await asyncio.gather(
+            *(client.close() for client, _ in self.clients if hasattr(client, "close")),
+            return_exceptions=True,
+        )
+
+
 async def generate_remote_llm_outputs_async(
     *,
     prompts: list[Prompt],

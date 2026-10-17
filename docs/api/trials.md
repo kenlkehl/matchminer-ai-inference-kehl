@@ -77,8 +77,19 @@ Configuration under `trial.hierarchy`:
 | `max_attempts` | 4 | Validation attempts per node; backend transport retries remain separate. |
 | `max_nodes` | 4096 | Maximum branches at a field; exceeding it fails rather than truncates. |
 | `max_calls` | 20000 | Logical node calls per trial, excluding retries. |
-| `batch_size` | 256 | Maximum parent requests passed to one backend batch. |
+| `batch_size` | 256 | Maximum parent requests in a synchronous local backend batch. |
+| `active_trials` | 32 | Minimum rolling remote trial window; enlarged to at least total endpoint concurrency. |
 | `checkpoint_dir` | unset | Optional directory of successful node responses. |
+
+Remote extraction uses one dependency-ready queue across trials and field levels.
+Each validated parent immediately releases its children, without waiting for
+siblings or other trials. Boilerplate starts independently of the field tree.
+A finished trial admits another immediately. Persistent clients share the
+configured `remote.max_concurrent_requests` cap per endpoint across all these
+requests, including retries. Only parent-child dependencies impose ordering;
+calls for the same branch cannot skip ahead. Completed leaves are sorted before
+numbering so response timing does not affect space IDs. Synchronous local vLLM
+generation retains batched field waves with one resident model.
 
 Node checkpoints fingerprint source, parent, scope, prompts, algorithm version,
 and runtime configuration. Changed inputs/configuration never reuse old nodes.

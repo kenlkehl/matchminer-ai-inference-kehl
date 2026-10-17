@@ -1,7 +1,9 @@
 """Batched backend adapter for the hierarchical extraction contract."""
 
+import asyncio
 import json
 import logging
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from pathlib import Path
 
@@ -15,10 +17,12 @@ from .hierarchy import (
     VERSION,
     Completion,
     Hierarchy,
+    ReadyHierarchy,
     ResponseCache,
     load_prompts,
     parse_response,
     retry_messages,
+    run_ready_hierarchies,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,12 +102,35 @@ def summarize_hierarchically(
     max_nodes = int(settings.get("max_nodes", 4096))
     max_calls = int(settings.get("max_calls", 20000))
     batch_size = int(settings.get("batch_size", 256))
-    if min(max_attempts, max_nodes, max_calls, batch_size) < 1:
+    if (
+        min(
+            max_attempts,
+            max_nodes,
+            max_calls,
+            batch_size,
+            int(settings.get("active_trials", 32)),
+        )
+        < 1
+    ):
         raise ValueError("Hierarchy limits must be positive")
     cache = ResponseCache(
         settings.get("checkpoint_dir"),
         {"version": VERSION, "prompts": prompts, "runtime": trial_config},
     )
+    if trial_config.get("backend_mode") == "remote":
+        from matchminer_ai.llm.remote_inference import _run_sync
+
+        return _run_sync(
+            lambda: _summarize_ready(
+                trial_texts,
+                backend,
+                trial_config,
+                prompts,
+                cache,
+                settings,
+                model_metadata_cache_dir,
+            )
+        )
     states = [
         Hierarchy(i, text, prompts, max_nodes=max_nodes, max_calls=max_calls)
         for i, text in enumerate(trial_texts)
@@ -210,4 +237,124 @@ def summarize_hierarchically(
         finishes.append("error" if state.error else "stop")
     return LLMGenerationResult(
         finals, {**model_metadata, "extraction_method": VERSION}, finishes, reasons, raw
+    )
+
+
+@asynccontextmanager
+async def _request_session(backend, config, metadata_dir):
+    if hasattr(backend, "open_request_session"):
+        async with backend.open_request_session(config, metadata_dir) as session:
+
+            async def generate(prompt, runtime):
+                result = await session.generate(prompt, runtime)
+                return Completion(
+                    result.summary, result.reasoning, result.finish_reason
+                )
+
+            yield session.capacity, session.model_metadata, generate
+    else:
+        # Custom/test backends retain their existing public interface. Each
+        # invocation contains one prompt; the outer scheduler owns the cap.
+        metadata = {"model_name": config.get("model_name")}
+
+        async def generate(prompt, runtime):
+            result = await asyncio.to_thread(
+                backend.generate_llm_outputs,
+                prompt_list=[prompt],
+                llm_config=runtime,
+                model_metadata_cache_dir=metadata_dir,
+            )
+            metadata.update(result.model_metadata)
+            return Completion(
+                result.final_outputs[0],
+                result.reasoning_outputs[0],
+                result.finish_reasons[0],
+                result.raw_outputs[0] if result.raw_outputs else "",
+            )
+
+        yield max(1, int(config.get("max_concurrent_requests", 16))), metadata, generate
+
+
+async def _summarize_ready(
+    texts, backend, config, prompts, cache, settings, metadata_dir
+):
+    states = [None] * len(texts)
+
+    def admit_states():
+        for i, text in enumerate(texts):
+            states[i] = ReadyHierarchy(
+                i,
+                text,
+                prompts,
+                max_nodes=int(settings.get("max_nodes", 4096)),
+                max_calls=int(settings.get("max_calls", 20000)),
+            )
+            yield states[i]
+
+    attempts = [[] for _ in states]
+    max_attempts = int(settings.get("max_attempts", 4))
+    async with _request_session(backend, config, metadata_dir) as (
+        capacity,
+        metadata,
+        generate,
+    ):
+
+        async def complete(request):
+            cached = cache.get(request)
+            if cached is not None:
+                return cached
+            messages = request.messages
+            for attempt in range(max_attempts):
+                runtime = retry_config(config, attempt)
+                prompt_list, runtime = _bounded_prompts([messages], runtime)
+                completion = await generate(prompt_list[0], runtime)
+                record = {
+                    "request_key": request.key,
+                    "field": request.field_name,
+                    "attempt": attempt + 1,
+                    **vars(completion),
+                }
+                attempts[request.trial_index].append(record)
+                try:
+                    parse_response(
+                        completion.final, request.field_name, completion.finish_reason
+                    )
+                except ValueError as exc:
+                    record["validation_error"] = str(exc)
+                    if (
+                        completion.finish_reason == "error"
+                        or attempt + 1 == max_attempts
+                    ):
+                        return Completion(
+                            str(exc), completion.reasoning, "error", completion.raw
+                        )
+                    messages = retry_messages(request, completion, str(exc))
+                else:
+                    cache.put(request, completion)
+                    return completion
+            raise AssertionError("Positive retry limit must produce a completion")
+
+        await run_ready_hierarchies(
+            admit_states(),
+            complete,
+            concurrency=capacity,
+            active_trials=max(capacity, int(settings.get("active_trials", 32))),
+        )
+    finals, traces, finishes = [], [], []
+    for state, trial_attempts in zip(states, attempts, strict=True):
+        traces.append(
+            json.dumps(
+                {
+                    "version": VERSION,
+                    "nodes": state.trace,
+                    "attempts": trial_attempts,
+                    "error": state.error,
+                },
+                ensure_ascii=False,
+            )
+        )
+        finals.append("" if state.error else state.output())
+        finishes.append("error" if state.error else "stop")
+    return LLMGenerationResult(
+        finals, {**metadata, "extraction_method": VERSION}, finishes, traces, traces
     )
