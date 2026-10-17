@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 import pandas as pd
+import pytest
 
 from matchminer_ai import __version__
 from matchminer_ai.config import MMAIConfig
@@ -9,7 +10,7 @@ from matchminer_ai.llm.backends import (
     build_llm_runtime_config,
 )
 from matchminer_ai.llm.prompt_rendering import Prompt
-from matchminer_ai.trials.postprocess import flatten_trial_to_spaces
+from matchminer_ai.trials.postprocess import flatten_trial_to_spaces, postprocess_trial_summaries
 from matchminer_ai.trials.prompt_builder import (
     build_trial_text,
     get_filled_trial_prompt,
@@ -298,6 +299,25 @@ def test_flatten_trial_to_spaces_uses_final_output_and_line_boilerplate():
     ]
     assert result["boilerplate_text"].tolist() == [boilerplate]
     assert result["clinical_space_number"].tolist() == [0]
+
+
+@pytest.mark.parametrize("state_label", ["Cancer burden allowed", "Disease state allowed", None])
+def test_trial_postprocessing_accepts_both_state_labels(default_config, state_label):
+    summary = (
+        "Age range allowed: 18+. Sex allowed: Both. Cancer type allowed: lung cancer. "
+        "Histology allowed: adenocarcinoma. "
+        + (f"{state_label}: metastatic. " if state_label else "")
+        + "Prior treatment required: NA. Prior treatment excluded: NA. "
+        "Biomarkers required: NA. Biomarkers excluded: NA."
+    )
+    trials = pd.DataFrame([{
+        "trial_id": "NCT00000001", "trial_text": "Synthetic trial",
+        "trial_answer_text": f"1. {summary}\nBoilerplate exclusions:\nActive infection.",
+    }])
+    flattened = flatten_trial_to_spaces(trials, "Boilerplate exclusions")
+    public_spaces, _ = postprocess_trial_summaries(trials, default_config)
+    for result in (flattened, public_spaces):
+        assert result.clinical_space_summary.tolist() == ([summary] if state_label else [])
 
 
 def test_local_backend_generate_llm_outputs(monkeypatch, default_config):

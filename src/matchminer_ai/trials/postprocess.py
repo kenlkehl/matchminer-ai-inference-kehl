@@ -34,6 +34,12 @@ REQUIRED_TRIAL_SPACE_KEYWORDS = [
 ]
 
 
+def _has_required_space_fields(text: str) -> bool:
+    # Accept the current label and saved spaces using the earlier label.
+    normalized = text.replace("Disease state allowed:", "Cancer burden allowed:")
+    return all(term in normalized for term in REQUIRED_TRIAL_SPACE_KEYWORDS)
+
+
 def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:
     """Split generated text at the line containing the boilerplate marker."""
     lines = text.splitlines()
@@ -116,7 +122,7 @@ def flatten_trial_to_spaces(
         return cohort_level_trials
     return cohort_level_trials.loc[
         cohort_level_trials["clinical_space_summary"].apply(
-            lambda text: all(term in text for term in REQUIRED_TRIAL_SPACE_KEYWORDS)
+            _has_required_space_fields
         )
     ]
 
@@ -134,7 +140,7 @@ def postprocess_trial_summaries(
     )
     spaces = unfiltered_spaces.loc[
         unfiltered_spaces["clinical_space_summary"].apply(
-            lambda text: all(term in text for term in REQUIRED_TRIAL_SPACE_KEYWORDS)
+            _has_required_space_fields
         )
     ]
     if spaces.empty:

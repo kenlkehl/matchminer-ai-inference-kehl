@@ -37,6 +37,11 @@ available. These settings were verified on 2026-10-16.
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
+Trial extraction now labels the disease-state field `Disease state allowed:`.
+Postprocessing and contextualization also accept the earlier `Cancer burden allowed:`
+label in saved spaces. Public output columns and structured disease-burden keys
+are unchanged; new prompt versions require fresh extraction outputs.
+
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
 TrialChecker or LLM probes to estimate how many leading patients should proceed

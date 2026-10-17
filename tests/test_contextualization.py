@@ -120,9 +120,14 @@ def http_error(message: str) -> RuntimeError:
     return RuntimeError(message)
 
 
-def test_parses_trial_space_without_query_planning_llm():
-    fields = parse_clinical_space_summary(SPACE_SUMMARY)
-    query = build_trial_space_query(_spaces().iloc[0].to_dict())
+@pytest.mark.parametrize("state_label", ["Cancer burden allowed", "Disease state allowed"])
+def test_parses_trial_space_without_query_planning_llm(state_label):
+    summary = SPACE_SUMMARY.replace("Cancer burden allowed", state_label)
+    fields = parse_clinical_space_summary(summary)
+    query = build_trial_space_query(_spaces(clinical_space_summary=summary).iloc[0].to_dict())
+
+    assert fields["cancer burden allowed"] == "metastatic disease"
+    assert query.disease_burden == "metastatic disease"
 
     assert fields["cancer type allowed"] == "non-small cell lung cancer"
     assert query.disease == "non-small cell lung cancer"

@@ -32,6 +32,7 @@ _FIELD_LABELS = (
     "Cancer type allowed",
     "Histology allowed",
     "Cancer burden allowed",
+    "Disease state allowed",
     "Prior treatment required",
     "Prior treatment excluded",
     "Biomarkers required",
@@ -96,6 +97,8 @@ def parse_clinical_space_summary(summary: Any) -> dict[str, str]:
     fields: dict[str, str] = {}
     for match in _FIELD_PATTERN.finditer(text):
         label = match.group("label").casefold()
+        if label == "disease state allowed":
+            label = "cancer burden allowed"
         value = match.group("value").strip(" .")
         fields[label] = value
     return fields
