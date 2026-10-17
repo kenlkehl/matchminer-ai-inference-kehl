@@ -165,7 +165,7 @@ def _run(
         for p in prompt_files.iterdir()
         if (p.name.startswith("guideline.") and p.name.endswith(".txt"))
         or p.name == "structured.retry.txt"
-        or (is_pdq and p.name == "pdq.system.txt")
+        or (is_pdq and p.name in prompts.PDQ_PROMPT_FILES)
     }
     config = {
         "schema_version": 2,

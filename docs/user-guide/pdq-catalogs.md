@@ -10,6 +10,14 @@ Every generation prompt opens with the library's purpose, the meaning of a clini
 space, and how its nine population fields support later patient-summary matching.
 The opening also distinguishes this source-extraction task from patient advice and
 explains that organizing PDQ evidence does not make it a clinical practice guideline.
+The PDQ system message also includes the complete current `trial.user.primer.txt`
+and `trial.user.question.txt` directly from the package, verbatim, as the population
+format reference. A PDQ adaptation preserves JSON output, source-only care populations,
+explicit treatment history, and fixed-definition stage boundaries; the trial prompt's
+plain-text output, boilerplate section, assumed sex criteria and trial washout rules
+do not override those requirements. Both trial prompt files and the adaptation are
+fingerprinted in PDQ checkpoints. Changing them requires a new output directory;
+they are not dependencies of NCCN catalog checkpoints.
 
 ## Snapshot sources
 

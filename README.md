@@ -22,6 +22,19 @@ switch rather than Qwen 3.8's graded effort; no graded effort is inferred for it
 Explicit caller sampling parameters still override these defaults. An opaque served
 alias can use `sampling_profile: qwen3.5` to select the same profile explicitly.
 
+Reflection Beam 1.0 is also recognized automatically, including BF16, FP8,
+NVFP4, quantized reuploads and served names `Beam-1.0-501B-A23B`, `beam`, and
+`reflection-beam`. Its [published vLLM defaults](https://developers.reflection.ai/serving-vllm)
+are temperature 0.7 and top-p 0.99; the checkpoint also specifies repetition
+penalty 1.0. The profile disables top-k/min-p filtering and presence penalty
+to avoid inheriting another model's settings. Explicit caller sampling overrides
+and task token budgets remain in effect. An opaque served alias can select
+`sampling_profile: reflection-beam` (or `beam`). Both vLLM parsers are `beam`;
+serving or parsing local raw completions requires a vLLM build with Beam support.
+Beam always reasons: this profile does not infer a boolean thinking switch or
+override its default effort. Explicit `reasoning_effort` request settings remain
+available. These settings were verified on 2026-10-16.
+
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a

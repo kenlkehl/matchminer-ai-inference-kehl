@@ -46,6 +46,11 @@ def resolve_reasoning_parser(
     if requested.lower() != "auto":
         return requested
 
+    from .model_profiles import resolve_model_profile
+
+    profile = resolve_model_profile(model_name)
+    if profile is not None and profile.reasoning_parser is not None:
+        return profile.reasoning_parser
     normalized = model_name.strip().lower()
     if normalized in MODEL_TO_REASONING_PARSER:
         return MODEL_TO_REASONING_PARSER[normalized]

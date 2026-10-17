@@ -207,11 +207,20 @@ profile after `/v1/models` identifies the actual served model.
 | Gemma 4 | 1.0 | 0.95 | 64 | Engine defaults for penalties |
 | Qwen 3.8, thinking | 1.0 | 0.95 | 20 | min-p 0, presence penalty 0, repetition penalty 1 |
 | Qwen 3.8, non-thinking | 0.7 | 0.8 | 20 | min-p 0, presence penalty 1.5, repetition penalty 1 |
+| Reflection Beam 1.0 | 0.7 | 0.99 | Disabled (-1) | min-p 0, presence penalty 0, repetition penalty 1 |
 
 These follow the vendor recommendations checked on 2026-09-24:
 [Google Gemma 4](https://ai.google.dev/gemma/docs/core/model_card_4),
 [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next), and
 [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B).
+Beam's temperature, top-p, and repetition penalty follow its
+[generation configuration](https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/main/generation_config.json),
+verified on 2026-10-16; its other sampling controls are neutral. Official Beam
+1.0 IDs, quantized variants, and the short aliases `beam` and `reflection-beam`
+are recognized. Local server startup selects `beam` for both reasoning and tool
+parsing and requires a [Beam-compatible vLLM build](https://developers.reflection.ai/serving-vllm).
+Beam always reasons: the profile does not infer an `enable_thinking` switch or
+a reasoning effort. Explicit template settings and output budgets are retained.
 
 Qwen defaults to thinking enabled, preserved thinking, and `xhigh` effort.
 Supported effort values are `xhigh`, `medium`, and `low`. Remote requests send
@@ -225,7 +234,8 @@ Explicit `local.generation`, `local.chat_template_kwargs`,
 To turn thinking off, set the applicable `chat_template_kwargs.enable_thinking`
 to false. The Qwen profile then selects the non-thinking sampling defaults.
 Set a stage's `sampling_profile` to `none` to use entirely explicit settings;
-`gemma4` and `qwen3.8` also allow explicit family selection for endpoint aliases.
+`gemma4`, `qwen3.8`, and `reflection-beam` (or `beam`) also allow explicit family
+selection for endpoint aliases.
 Unknown model families receive no automatic vendor settings. Existing custom
 configs without `sampling_profile` keep their explicit behavior.
 

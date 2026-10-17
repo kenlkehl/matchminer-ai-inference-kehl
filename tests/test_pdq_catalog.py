@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from matchminer_ai import load_default_preset
-from matchminer_ai._storage import read_json
+from matchminer_ai._storage import digest, read_json
 from matchminer_ai.trials import (
     audit_guideline_catalog,
     get_guideline_considerations,
@@ -420,7 +420,10 @@ def test_public_pdq_catalog_roundtrip_audit_lookup_and_offline_resume(
     assert metadata["validation"]["source_sections"] == 2
     assert "source_pdf_pages" not in metadata["validation"]
     assert metadata["run_config"]["prompt_version"].startswith("pdq-")
-    assert "pdq.system.txt" in metadata["run_config"]["prompt_resources_sha256"]
+    for filename in prompts.PDQ_PROMPT_FILES:
+        assert metadata["run_config"]["prompt_resources_sha256"][filename] == digest(
+            prompts.load_prompt_text(filename).encode()
+        )
     assert list(qc.columns) == ["metric", "value", "denominator", "percent", "ids"]
     report = (output / "report.md").read_text()
     assert (
@@ -444,6 +447,16 @@ def test_public_pdq_catalog_roundtrip_audit_lookup_and_offline_resume(
         assert system["role"] == "system"
         assert system["content"] == prompts.PDQ_SYSTEM
         assert system["content"].startswith("TASK CONTEXT AND PURPOSE\n")
+        # The complete current trial prompts must reach the endpoint, not a copied
+        # paraphrase, followed by the adaptation that preserves PDQ/JSON semantics.
+        for filename in prompts.PDQ_TRIAL_PROMPT_FILES:
+            reference = prompts.load_prompt_text(filename)
+            assert system["content"].count(reference) == 1
+            assert system["content"].index(reference) < system["content"].index(
+                "APPLY THAT POPULATION FORMAT TO THE CURRENT PDQ TASK"
+            )
+        assert "Return the requested JSON schema for the active stage" in system["content"]
+        assert "obey the\n  fixed-definition rules" in system["content"]
         assert (
             "searchable research library from NCI PDQ health-professional cancer"
             in system["content"]
@@ -571,8 +584,37 @@ def test_pdq_prompt_changes_do_not_invalidate_nccn_identity(
     root, output, config = guideline_run
     summarize_guidelines(root, disease="fictional", output_dir=output, config=config)
     run = read_json(output / "run_config.json")
-    assert "pdq.system.txt" not in run["prompt_resources_sha256"]
+    assert not set(prompts.PDQ_PROMPT_FILES) & run["prompt_resources_sha256"].keys()
     assert run["prompt_version"] == "nccn-trialspace-v14-field-contract"
     for _, body, _ in fake_endpoint:
         if body and "messages" in body:
             assert "PDQ is an evidence summary" not in body["messages"][0]["content"]
+            assert "CURRENT MATCHMINER-AI TRIAL-SPACE PROMPT" not in body["messages"][0]["content"]
+
+
+@pytest.mark.parametrize("filename", prompts.PDQ_PROMPT_FILES)
+def test_pdq_resume_rejects_changed_trial_reference_dependencies(
+    tmp_path, downloads, pdq_endpoint, filename,
+):
+    source, output = tmp_path / "source", tmp_path / "catalog"
+    prepare_pdq_library({"fictional": URL}, output_dir=source)
+    config = load_default_preset()
+    config.remote.update(enabled=True, server_urls=["http://synthetic.invalid/v1"])
+    summarize_pdq(source, disease="fictional", output_dir=output, config=config)
+    path = output / "run_config.json"
+    saved = read_json(path)
+    # Represent an internally consistent older run whose reference was different.
+    saved["prompt_resources_sha256"][filename] = digest(b"Previous reference text")
+    identity = {
+        k: copy.deepcopy(v) for k, v in saved.items()
+        if k not in {"config_sha256", "runtime", "stage_versions"}
+    }
+    for key in ("timeout", "attempts", "api_key_env", "stream", "max_concurrent_requests"):
+        identity["llm"].pop(key)
+    identity["llm"].pop("transport_base_url", None)
+    saved["config_sha256"] = digest(identity)
+    path.write_text(json.dumps(saved))
+    pdq_endpoint.clear()
+    with pytest.raises(ValueError, match="choose a new output_dir"):
+        summarize_pdq(source, disease="fictional", output_dir=output, config=config)
+    assert not any(url.endswith("completions") for url, _ in pdq_endpoint)

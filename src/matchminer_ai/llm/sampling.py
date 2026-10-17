@@ -6,6 +6,9 @@ https://huggingface.co/Qwen/Qwen3.8-Flash-Next
 https://huggingface.co/Qwen/Qwen3.8-27B
 Qwen 3.5 general-task defaults (verified 2026-10-01):
 https://huggingface.co/Qwen/Qwen3.5-4B#best-practices
+Reflection Beam defaults (verified 2026-10-16):
+https://developers.reflection.ai/serving-vllm
+https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/main/generation_config.json
 """
 
 from __future__ import annotations
@@ -25,8 +28,16 @@ def vendor_defaults(
     template = dict(template or {})
     if profile in (None, "none"):
         return {}, template
-    if profile not in {"auto", "gemma4", "qwen3.5", "qwen3.8", "nemotron-3.5-super-vl"}:
-        raise ValueError("sampling_profile must be auto, gemma4, qwen3.5, qwen3.8, nemotron-3.5-super-vl, or none")
+    if profile not in {"auto", "gemma4", "qwen3.5", "qwen3.8", "nemotron-3.5-super-vl", "reflection-beam", "beam"}:
+        raise ValueError("sampling_profile must be auto, gemma4, qwen3.5, qwen3.8, nemotron-3.5-super-vl, reflection-beam, beam, or none")
+    from .model_profiles import REFLECTION_BEAM
+
+    if profile in {"reflection-beam", "beam"} or (
+        profile == "auto" and REFLECTION_BEAM.matches(str(model_name or ""))
+    ):
+        # No inferred thinking switch, effort or output budget for Beam.
+        # Explicit template arguments and API sampling overrides remain intact.
+        return {**REFLECTION_BEAM.request_params, **REFLECTION_BEAM.extra_body}, template
     model = str(model_name or "").lower()
     family = profile
     if profile == "auto":

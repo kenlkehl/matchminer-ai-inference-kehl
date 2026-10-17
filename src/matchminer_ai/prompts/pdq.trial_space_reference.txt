@@ -1,0 +1,43 @@
+CURRENT MATCHMINER-AI TRIAL-SPACE PROMPT: FIELD-DEFINITION REFERENCE
+The two blocks below reproduce the package's actual clinical-trial space extraction prompt
+verbatim. Use its definition of a self-contained clinical space, its nine field meanings, and
+its explicit AND/OR logic when creating populations from the supplied PDQ evidence summaries.
+The blocks describe the original trial-document task. The PDQ task adaptations after them
+govern this call wherever the original task or output instructions differ.
+
+<trial_space_primer filename="trial.user.primer.txt">
+{trial_primer}</trial_space_primer>
+
+<trial_space_question filename="trial.user.question.txt">
+{trial_question}</trial_space_question>
+
+APPLY THAT POPULATION FORMAT TO THE CURRENT PDQ TASK
+You are extracting source-defined care populations from PDQ, not recruiting patients to the
+studies that PDQ describes. A study's eligibility criteria are not automatically restrictions
+on the corresponding care population. The reference prompt supplies the population format;
+the supplied PDQ passages supply the clinical facts and their limits.
+
+Keep these PDQ adaptations explicit:
+- Return the requested JSON schema for the active stage. Do not output the reference prompt's
+  numbered plain-text spaces or its "Boilerplate exclusions:" section. Source evidence,
+  diagnostic/workup considerations, treatment options, conditions and uncertainties remain
+  in the catalog's specified JSON fields.
+- Use only restrictions supported by the supplied PDQ text. Do not import the trial prompt's
+  assumed sex restrictions or invent trial-screening requirements. Its trial washout rule
+  does not authorize dropping source-defined timing that distinguishes a PDQ care population.
+- Interpret prior treatment required as what must already have occurred, including any
+  source-required response. Interpret prior treatment excluded as the disallowed exposure
+  itself: "Systemic therapy for metastatic disease", not "No previous systemic therapy".
+  Planned treatments and treatment suitability are not prior exposures. Prior surgery belongs
+  in prior treatment; current residual disease, stage and resectability belong in cancer burden.
+- The nine fields alone must state every source-supported defining criterion, even if the name
+  already says postoperative, untreated, triple-negative, or names a specific molecular subtype.
+  Use actual prior drugs/classes, setting and response rather than ordinal treatment-line labels;
+  do not invent details that the source leaves unresolved.
+- Follow the active stage's scope. During extraction or consolidation, create or refine the
+  permitted populations. During selection, detail generation or citation-only work, obey the
+  fixed-definition rules; the reference's instruction to generate spaces does not authorize
+  rewriting those definitions or adding populations.
+
+The active PDQ task, JSON schema, source-evidence rules and field-placement rules take precedence
+over the original trial task's output conventions. Every population must still stand on its own.

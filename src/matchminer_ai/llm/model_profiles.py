@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -38,9 +39,12 @@ class ModelProfile:
     min_max_tokens: int | None = None
     source: str = ""
     tool_call_parser: str | None = None
+    name_regex: str | None = None
 
     def matches(self, model_name: str) -> bool:
         normalized = model_name.strip().lower()
+        if self.name_regex is not None:
+            return re.search(self.name_regex, normalized) is not None
         return any(pattern in normalized for pattern in self.patterns)
 
 
@@ -94,7 +98,32 @@ NEMOTRON_3_5_SUPER_VL = ModelProfile(
     ),
 )
 
+REFLECTION_BEAM = ModelProfile(
+    name="reflection-beam",
+    patterns=(),
+    # Official IDs, quantized reuploads, local paths and beam/reflection-beam
+    # served aliases. Do not match beam-search models or the DFlash2 drafter.
+    name_regex=(
+        r"^(?!.*dflash)(?:.*[/\\])?(?:reflection[-_])?"
+        r"beam(?:$|[-_]1[._]0(?:$|[-_]))"
+    ),
+    reasoning_parser="beam",
+    tool_call_parser="beam",
+    request_params={"temperature": 0.7, "top_p": 0.99, "presence_penalty": 0.0},
+    # generation_config.json specifies repetition_penalty=1.0. The remaining
+    # controls are neutral, not extra publisher recommendations.
+    extra_body={"top_k": -1, "min_p": 0.0, "repetition_penalty": 1.0},
+    # Beam always reasons. Its template defaults to max effort; do not inject
+    # another family's boolean thinking switch or Qwen's default xhigh effort.
+    source=(
+        "https://huggingface.co/reflection/Beam-1.0-501B-A23B/"
+        "blob/main/generation_config.json; "
+        "https://developers.reflection.ai/serving-vllm (verified 2026-10-16)"
+    ),
+)
+
 MODEL_PROFILES: tuple[ModelProfile, ...] = (
+    REFLECTION_BEAM,
     NEMOTRON_3_5_SUPER_VL,
     QWEN3_8_FLASH_NEXT_THINKING,
     GEMMA_4_THINKING,
@@ -268,6 +297,7 @@ __all__ = [
     "MODEL_PROFILES",
     "NEMOTRON_3_5_SUPER_VL",
     "QWEN3_8_FLASH_NEXT_THINKING",
+    "REFLECTION_BEAM",
     "ModelProfile",
     "apply_model_profile",
     "configure_served_model",

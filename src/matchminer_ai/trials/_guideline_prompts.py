@@ -6,7 +6,14 @@ from ._guideline_schema import FIELDS
 from .prompt_builder import load_prompt_text
 
 PROMPT_VERSION = "nccn-trialspace-v14-field-contract"
-PDQ_PROMPT_VERSION = "pdq-trialspace-v2-field-contract"
+PDQ_PROMPT_VERSION = "pdq-trialspace-v3-trial-prompt-reference"
+
+PDQ_TRIAL_PROMPT_FILES = ("trial.user.primer.txt", "trial.user.question.txt")
+PDQ_PROMPT_FILES = (
+    "pdq.system.txt",
+    "pdq.trial_space_reference.txt",
+    *PDQ_TRIAL_PROMPT_FILES,
+)
 
 FIELD_PLACEMENT_RULES = load_prompt_text("guideline.field_placement_rules.txt").rstrip(
     "\n"
@@ -27,7 +34,14 @@ def population_rules(guideline_title):
 
 
 SYSTEM = load_prompt_text("guideline.system.txt").rstrip("\n")
-PDQ_SYSTEM = load_prompt_text("pdq.system.txt").rstrip("\n")
+PDQ_SYSTEM = (
+    load_prompt_text("pdq.system.txt").rstrip("\n")
+    + "\n\n"
+    + load_prompt_text("pdq.trial_space_reference.txt").format(
+        trial_primer=load_prompt_text(PDQ_TRIAL_PROMPT_FILES[0]),
+        trial_question=load_prompt_text(PDQ_TRIAL_PROMPT_FILES[1]),
+    ).rstrip("\n")
+)
 
 
 def source_system(guideline):
