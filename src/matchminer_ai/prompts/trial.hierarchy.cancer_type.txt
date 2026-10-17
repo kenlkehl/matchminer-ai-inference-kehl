@@ -1,4 +1,4 @@
-Enumerate eligible cancer primary sites for this age/sex candidate, following the full primary-site definition and exhaustive-enumeration instructions above. Return one specific site per branch. Respect source exclusions and the locked parent fields. Preserve restrictions that belong to later fields in each branch's scope.
+Enumerate eligible cancer primary sites for this age candidate, following the full primary-site definition and exhaustive-enumeration instructions above. Return one specific site per branch. Sex is determined at the next level, after primary site is selected. Respect source exclusions and the locked parent fields. Preserve restrictions that belong to later fields in each branch's scope.
 
 REMINDER OF FIELD-SPECIFIC RULES:
 {{field_rules}}

@@ -346,6 +346,18 @@ def test_checkpoint_identity_covers_source_parent_prompt_and_runtime(tmp_path):
     assert cache.get(Hierarchy(0, "trial", changed).requests()[0]) is None
 
 
+def test_previous_hierarchy_version_cannot_reuse_node_cache(tmp_path, monkeypatch):
+    from matchminer_ai.trials import hierarchy
+
+    cache = ResponseCache(tmp_path, {"model": "synthetic"})
+    with monkeypatch.context() as old:
+        old.setattr(hierarchy, "VERSION", "trial-hierarchy-v2")
+        request = Hierarchy(0, "trial", PROMPTS).requests()[0]
+        cache.put(request, Completion(branches(("18+", "all"))))
+    assert hierarchy.VERSION == "trial-hierarchy-v3"
+    assert cache.get(Hierarchy(0, "trial", PROMPTS).requests()[0]) is None
+
+
 class FakeBackend:
     def __init__(self, invalid=0, fail_trial=False):
         self.calls = []

@@ -16,6 +16,63 @@ from matchminer_ai.trials.hierarchy import (
 PROMPTS = load_prompts(Path(__file__).parents[1] / "src/matchminer_ai/prompts")
 
 
+def test_primary_site_is_locked_before_sex_in_both_schedulers():
+    seen = []
+
+    def complete(request):
+        seen.append(request)
+        if request.field_name == "boilerplate":
+            return Completion('{"exclusions": []}')
+        if request.field_name == "age":
+            values = ["18 years or older"]
+        elif request.field_name == "cancer_type":
+            assert list(request.parent) == ["age"]
+            values = ["ovary cancer", "lung cancer"]
+        elif request.field_name == "sex":
+            assert list(request.parent) == ["age", "cancer_type"]
+            values = [
+                "Female" if request.parent["cancer_type"] == "ovary cancer" else "Both"
+            ]
+        else:
+            values = ["NA"]
+        return Completion(
+            json.dumps(
+                {
+                    "branches": [{"value": v, "scope": request.scope} for v in values],
+                    "prune_reason": "",
+                }
+            )
+        )
+
+    wave = Hierarchy(0, "SYNTHETIC trial allowing ovarian and lung cancers", PROMPTS)
+    for _ in range(10):
+        requests = wave.requests()
+        wave.accept(requests, [complete(r) for r in requests])
+
+    async def scenario():
+        graph = ReadyHierarchy(0, wave.trial_text, PROMPTS)
+
+        async def remote(request):
+            return complete(request)
+
+        await run_ready_hierarchies([graph], remote, concurrency=4, active_trials=1)
+        assert graph.output() == wave.output()
+
+    asyncio.run(scenario())
+    lines = wave.output().splitlines()
+    assert lines[0].startswith(
+        "1. Age range allowed: 18 years or older. Sex allowed: Female. "
+        "Cancer type allowed: ovary cancer."
+    )
+    assert lines[1].startswith(
+        "2. Age range allowed: 18 years or older. Sex allowed: Both. "
+        "Cancer type allowed: lung cancer."
+    )
+    assert sum(r.field_name == "sex" for r in seen) == 4
+    assert "Cancer type is selected at the next level" not in PROMPTS["sex"]
+    assert "Sex is determined at the next level" in PROMPTS["cancer_type"]
+
+
 def answer(request):
     if request.field_name == "boilerplate":
         return Completion('{"exclusions": []}')

@@ -28,7 +28,7 @@ before combining old artifacts with newly summarized trials.
 ## Hierarchical extraction
 
 The default `trial.extraction_method` is `hierarchical`. It builds a tree in this
-fixed order: age, sex, cancer primary site, histology, disease state, required
+fixed order: age, cancer primary site, sex, histology, disease state, required
 prior treatment, excluded prior treatment, required biomarkers, excluded
 biomarkers. One request handles one parent and one field, returning a JSON array
 of alternative values rather than a full list of spaces. Independent parents
@@ -117,8 +117,10 @@ output format apply only to `trial.extraction_method = "one_shot"`, retained for
 comparison and reproduction. The shared engine, hierarchy prompts and primer
 are mirrored in training, with cross-repository contract tests.
 
-This prompt layout is `trial-hierarchy-v2`. Prompt and version fingerprints prevent
-reuse of v1 extraction checkpoints; compatible treatment screening can be retained.
+This hierarchy is `trial-hierarchy-v3`: primary site is fixed before the sex call,
+so sex can depend on that site. Final text retains the established age, sex,
+primary-site label order. Prompt and version fingerprints prevent reuse of v1/v2
+extraction checkpoints; compatible treatment screening can be retained.
 
 This design increases the number of calls and repeats source text. It improves
 structural control but does not establish clinical completeness: an erroneous

@@ -15,8 +15,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
-VERSION = "trial-hierarchy-v2"
-FIELDS = (
+VERSION = "trial-hierarchy-v3"
+# Keep the established final text layout separate from extraction dependencies.
+OUTPUT_FIELDS = (
     ("age", "Age range allowed"),
     ("sex", "Sex allowed"),
     ("cancer_type", "Cancer type allowed"),
@@ -27,6 +28,8 @@ FIELDS = (
     ("biomarkers_required", "Biomarkers required"),
     ("biomarkers_excluded", "Biomarkers excluded"),
 )
+# Resolve primary site before sex, which can depend on that site.
+FIELDS = (OUTPUT_FIELDS[0], OUTPUT_FIELDS[2], OUTPUT_FIELDS[1], *OUTPUT_FIELDS[3:])
 PROMPT_NAMES = (
     "common",
     *(key for key, _ in FIELDS),
@@ -372,7 +375,9 @@ class Hierarchy:
         )
         lines = [
             f"{i}. "
-            + " ".join(f"{label}: {values[key].rstrip('.')}." for key, label in FIELDS)
+            + " ".join(
+                f"{label}: {values[key].rstrip('.')}." for key, label in OUTPUT_FIELDS
+            )
             for i, values in enumerate(unique, 1)
         ]
         return (

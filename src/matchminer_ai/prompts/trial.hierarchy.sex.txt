@@ -1,5 +1,5 @@
-Identify eligible sex groups for this age branch using the full sex-criteria instructions above. Use Female, Male, or Both.
-Cancer type is selected at the next level. Account for dependencies now: if the source permits sex-specific primary sites, preserve the appropriate Female and Male pathways with their applicable site restrictions in scope. Use Both only when the same candidate population can correctly retain that value at subsequent levels. Do not invent a sex restriction for a population that has none.
+Identify eligible sex groups for this age and cancer-primary-site candidate using the full sex-criteria instructions above. Use Female, Male, or Both.
+Cancer primary site is already fixed in the current candidate. Apply the authored sex criteria to that selected site and the trial's restrictions. Do not invent a sex restriction for a population that has none.
 
 REMINDER OF FIELD-SPECIFIC RULES:
 {{field_rules}}

@@ -42,8 +42,8 @@ Postprocessing and contextualization also accept the earlier `Cancer burden allo
 label in saved spaces. Public output columns and structured disease-burden keys
 are unchanged; new prompt versions require fresh extraction outputs.
 
-`summarize_trials` now defaults to hierarchical extraction: age, sex, primary
-site, histology, disease state, required treatment, excluded treatment, required
+`summarize_trials` now defaults to hierarchical extraction: age, primary
+site, sex, histology, disease state, required treatment, excluded treatment, required
 biomarkers, then excluded biomarkers. Each call extends one parent with values
 for just the next field. Python assembles and numbers the completed spaces;
 general exclusions are extracted in a separate call. See the
