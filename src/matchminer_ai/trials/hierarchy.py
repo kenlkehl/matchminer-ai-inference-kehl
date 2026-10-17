@@ -369,7 +369,8 @@ class ReadyHierarchy:
         self._seen = set()
         self._counts = [0] * (len(FIELDS) + 1)
         self._leaves = {}
-        self._enqueue(0, {}, "All eligible populations in the trial.")
+        self._children = {}
+        self._root = self._enqueue(0, {}, "All eligible populations in the trial.")
         self._enqueue(len(FIELDS), {}, "All trial populations")
 
     def _enqueue(self, level, parent, scope):
@@ -384,7 +385,9 @@ class ReadyHierarchy:
             self.prompts,
         )
         key = request.key
-        if key in self._seen or self.error:
+        if key in self._seen:
+            return key
+        if self.error:
             return
         if len(self._seen) >= self.max_calls:
             self.error = f"Hierarchy exceeded max_calls={self.max_calls}; no partial spaces exported"
@@ -396,6 +399,7 @@ class ReadyHierarchy:
         self._seen.add(key)
         self._pending.add(key)
         self._ready.append(request)
+        return key
 
     def requests(self):
         ready, self._ready = self._ready, []
@@ -433,6 +437,7 @@ class ReadyHierarchy:
                     self.exclusions = list(dict.fromkeys(parsed["exclusions"]))
                 else:
                     level = len(request.parent) + 1
+                    children = []
                     for branch in parsed["branches"]:
                         values = {
                             **request.parent,
@@ -441,13 +446,17 @@ class ReadyHierarchy:
                         scope = branch["scope"].strip()
                         if level == len(FIELDS):
                             node = {"fields": values, "scope": scope}
-                            self._leaves[digest(node)] = node
+                            leaf_key = digest(node)
+                            self._leaves[leaf_key] = node
+                            children.append((True, leaf_key))
                             if len(self._leaves) > self.max_nodes:
                                 raise ValueError(
                                     f"Hierarchy exceeded max_nodes={self.max_nodes}; no partial spaces exported"
                                 )
                         else:
-                            self._enqueue(level, values, scope)
+                            child_key = self._enqueue(level, values, scope)
+                            children.append((False, child_key))
+                    self._children[key] = children
                 if not self._pending and not self._leaves:
                     raise ValueError(
                         "All branches were pruned; no partial spaces exported"
@@ -458,11 +467,18 @@ class ReadyHierarchy:
     def output(self):
         if self.error or not self.done:
             raise ValueError(self.error or "Hierarchy is incomplete")
-        # Completion timing must not change numbering or deduplication.
-        self.nodes = sorted(
-            self._leaves.values(),
-            key=lambda n: tuple(n["fields"][key] for key, _ in FIELDS) + (n["scope"],),
-        )
+        # Traverse source response branch order, not completion order. This also
+        # preserves the wave scheduler's IDs when resuming its cached responses.
+        pending, seen, self.nodes = [(False, self._root)], set(), []
+        while pending:
+            leaf, key = pending.pop()
+            if (leaf, key) in seen:
+                continue
+            seen.add((leaf, key))
+            if leaf:
+                self.nodes.append(self._leaves[key])
+            else:
+                pending.extend(reversed(self._children[key]))
         assembled = Hierarchy(self.trial_index, self.trial_text, self.prompts)
         assembled.stage = len(FIELDS) + 1
         assembled.nodes, assembled.exclusions = self.nodes, self.exclusions

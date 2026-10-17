@@ -87,8 +87,9 @@ siblings or other trials. Boilerplate starts independently of the field tree.
 A finished trial admits another immediately. Persistent clients share the
 configured `remote.max_concurrent_requests` cap per endpoint across all these
 requests, including retries. Only parent-child dependencies impose ordering;
-calls for the same branch cannot skip ahead. Completed leaves are sorted before
-numbering so response timing does not affect space IDs. Synchronous local vLLM
+calls for the same branch cannot skip ahead. Leaves retain the model's original
+branch order, so response timing does not affect space IDs and cached wave-based
+responses keep their existing numbering. Synchronous local vLLM
 generation retains batched field waves with one resident model.
 
 Node checkpoints fingerprint source, parent, scope, prompts, algorithm version,

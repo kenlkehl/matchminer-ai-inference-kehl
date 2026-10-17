@@ -7,6 +7,7 @@ import pytest
 from matchminer_ai.trials.hierarchy import (
     FIELDS,
     Completion,
+    Hierarchy,
     ReadyHierarchy,
     load_prompts,
     run_ready_hierarchies,
@@ -104,6 +105,41 @@ def test_numbering_is_independent_of_completion_order_and_scopes_survive():
         return state.output()
 
     assert asyncio.run(extract("fast")) == asyncio.run(extract("slow"))
+
+
+def test_graph_preserves_wave_scheduler_branch_order_and_existing_space_ids():
+    def reply(request):
+        if request.field_name == "age":
+            return Completion(
+                json.dumps(
+                    {
+                        "branches": [
+                            {"value": value, "scope": value}
+                            for value in ["z-first", "a-second"]
+                        ],
+                        "prune_reason": "",
+                    }
+                )
+            )
+        return answer(request)
+
+    wave = Hierarchy(0, "synthetic", PROMPTS)
+    for _ in range(10):
+        requests = wave.requests()
+        wave.accept(requests, [reply(request) for request in requests])
+
+    async def scenario():
+        graph = ReadyHierarchy(0, "synthetic", PROMPTS)
+
+        async def complete(request):
+            if request.scope == "z-first":
+                await asyncio.sleep(0.001)
+            return reply(request)
+
+        await run_ready_hierarchies([graph], complete, concurrency=4, active_trials=1)
+        assert graph.output() == wave.output()
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("limit", ["max_nodes", "max_calls"])
