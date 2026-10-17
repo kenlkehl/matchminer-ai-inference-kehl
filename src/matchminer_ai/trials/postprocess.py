@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -14,11 +15,7 @@ def _strip_numerical_prefix(text: str) -> str:
     """Remove leading numeric list markers (e.g., '1.' or '12.')."""
     if not text:
         return text
-    if len(text) > 2 and text[0:2].isnumeric() and text[2] == ".":
-        return text[3:].strip()
-    if len(text) > 1 and text[0].isnumeric() and text[1] == ".":
-        return text[2:].strip()
-    return text
+    return re.sub(r"^\s*\d+\.\s*", "", text)
 
 
 REQUIRED_TRIAL_SPACE_KEYWORDS = [

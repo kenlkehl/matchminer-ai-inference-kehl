@@ -36,14 +36,26 @@ def summarize_trials_multi_cohort(
     model_metadata_cache_dir: str | None = None,
 ) -> LLMGenerationResult:
     """Summarize trials using the configured backend."""
+    runtime = dict(trial_config)
+    method = runtime.pop("extraction_method", "hierarchical")
+    settings = runtime.pop("hierarchy", {})
+    if method == "hierarchical":
+        from ._hierarchical_backend import summarize_hierarchically
+
+        return summarize_hierarchically(
+            trial_texts, backend, trial_config=runtime, settings=settings,
+            model_metadata_cache_dir=model_metadata_cache_dir,
+        )
+    if method != "one_shot":
+        raise ValueError(f"Unknown trial extraction_method: {method}")
     messages_list = [
         get_filled_trial_prompt(text, primer_filename, question_filename)
         for text in trial_texts
     ]
-    prompt_list = build_prompt_list(messages_list, llm_config=trial_config)
+    prompt_list = build_prompt_list(messages_list, llm_config=runtime)
     return backend.generate_llm_outputs(
         prompt_list=prompt_list,
-        llm_config=trial_config,
+        llm_config=runtime,
         model_metadata_cache_dir=model_metadata_cache_dir,
     )
 

@@ -25,6 +25,65 @@ and paradigm memberships from the same snapshot together; see
 [trial-space numbering compatibility](space-paradigms.md#trial-space-numbering-compatibility)
 before combining old artifacts with newly summarized trials.
 
+## Hierarchical extraction
+
+The default `trial.extraction_method` is `hierarchical`. It builds a tree in this
+fixed order: age, sex, cancer primary site, histology, disease state, required
+prior treatment, excluded prior treatment, required biomarkers, excluded
+biomarkers. One request handles one parent and one field, returning a JSON array
+of alternative values rather than a full list of spaces. Independent parents
+are batched through the configured backend. A trial with one branch throughout
+uses ten logical calls: nine fields and one separate boilerplate call.
+
+Every request contains the full trial source, locked parent fields and an
+internal `scope` describing the applicable eligibility pathway. Scope preserves
+cross-field dependencies and conditional exceptions; it is not included in the
+final space text. Equal values with different scopes remain separate until the
+remaining fields are resolved. No Cartesian product of independent field lists
+is made. Python copies ancestors into each completed leaf, removes exact
+duplicate leaves, renders all nine labels, and adds numbering. Public column
+names and zero-based space IDs remain unchanged.
+
+The model returns `{"branches": [{"value": "...", "scope": "..."}],
+"prune_reason": ""}` for a field. Empty branches require an explicit source
+incompatibility and cannot be used at the root. Boilerplate instead returns
+`{"exclusions": ["..."]}` and retains subgroup qualifications. Malformed JSON,
+wrong keys, multiline values and truncated answers are rejected. Retries include
+the specific error and latest rejected answer. After two invalid answers,
+thinking flips; Beam uses lower reasoning effort instead. Exhausted nodes fail
+the trial rather than exporting only its successful branches. A trial for which
+all branches are pruned is also reported as failed for review.
+
+Configuration under `trial.hierarchy`:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `max_attempts` | 4 | Validation attempts per node; backend transport retries remain separate. |
+| `max_nodes` | 4096 | Maximum branches at a field; exceeding it fails rather than truncates. |
+| `max_calls` | 20000 | Logical node calls per trial, excluding retries. |
+| `batch_size` | 256 | Maximum parent requests passed to one backend batch. |
+| `checkpoint_dir` | unset | Optional directory of successful node responses. |
+
+Node checkpoints fingerprint source, parent, scope, prompts, algorithm version,
+and runtime configuration. Changed inputs/configuration never reuse old nodes.
+Debug `trial_reasoning_text` contains a JSON audit of the node responses,
+reasoning and validation attempts. Configured context limits reserve output
+space without truncating the source. Model sampling and parser selection still
+use the existing backend profiles.
+
+Active prompts are `src/matchminer_ai/prompts/trial.hierarchy.*.txt`. The old
+`trial.user.primer.txt` and `trial.user.question.txt` are used only with explicit
+`trial.extraction_method = "one_shot"`, retained for comparison and reproduction.
+Changing those legacy files does not change hierarchical extraction. The shared
+engine and new prompts are mirrored in the standalone training script, with a
+cross-repository byte-for-byte contract test.
+
+This design increases the number of calls and repeats source text. It improves
+structural control but does not establish clinical completeness: an erroneous
+early branch or an unsupported model interpretation can still propagate. Review
+the node traces and final populations against the source before adopting new
+spaces or regenerating embeddings. Existing saved spaces are not migrated.
+
 ## Trial-space eligibility criteria
 
 `extract_trial_space_eligibility_criteria` accepts one clinical-space summary

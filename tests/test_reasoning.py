@@ -98,3 +98,18 @@ def test_parse_reasoning_output_uses_reasoning_parser_manager(monkeypatch):
 
     assert reasoning == "parsed reasoning"
     assert content == "parsed final"
+
+
+def test_nemotron_direct_answer_parser_receives_disabled_thinking(monkeypatch):
+    class Parser:
+        def __init__(self, tokenizer, **options):
+            assert options == {"chat_template_kwargs": {"enable_thinking": False}}
+
+        def extract_reasoning(self, text, request):
+            assert request.chat_template_kwargs == {"enable_thinking": False}
+            return "", '{"branches": []}<|im_end|>'
+
+    manager = type('Manager', (), {'get_reasoning_parser': staticmethod(lambda name: Parser)})
+    monkeypatch.setitem(sys.modules, 'vllm.reasoning', _module('vllm.reasoning', ReasoningParserManager=manager))
+    assert parse_reasoning_output('raw', parser_name='nemotron_v3', tokenizer=object(),
+                                  enable_thinking=False) == ('', '{"branches": []}')

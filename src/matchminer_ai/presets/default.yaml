@@ -12,6 +12,12 @@ remote:
   batch_size: 1000
   retry_backoff_base: 1.0
 trial:
+  extraction_method: hierarchical
+  hierarchy:
+    max_attempts: 4
+    max_nodes: 4096
+    max_calls: 20000
+    batch_size: 256
   sampling_profile: auto
   reasoning_effort: xhigh
   reasoning_parser: auto

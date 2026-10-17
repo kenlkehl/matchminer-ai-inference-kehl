@@ -520,7 +520,10 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
         ]
     )
 
-    result = summarize_trials(trials)
+    from matchminer_ai.config import load_default_preset
+    config = load_default_preset()
+    config.trial['extraction_method'] = 'one_shot'
+    result = summarize_trials(trials, config=config)
     assert len(result) == 1
     assert (
         result["clinical_space_summary"].iloc[0]
@@ -569,6 +572,7 @@ def test_summarize_trials_metadata_uses_live_config(monkeypatch, default_config)
         ],
     )
 
+    default_config.trial['extraction_method'] = 'one_shot'
     default_config.raw = {"remote": {"enabled": False}}
     default_config.remote["enabled"] = True
     default_config.remote["server_urls"] = ["http://localhost:8000/v1"]

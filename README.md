@@ -42,6 +42,13 @@ Postprocessing and contextualization also accept the earlier `Cancer burden allo
 label in saved spaces. Public output columns and structured disease-burden keys
 are unchanged; new prompt versions require fresh extraction outputs.
 
+`summarize_trials` now defaults to hierarchical extraction: age, sex, primary
+site, histology, disease state, required treatment, excluded treatment, required
+biomarkers, then excluded biomarkers. Each call extends one parent with values
+for just the next field. Python assembles and numbers the completed spaces;
+general exclusions are extracted in a separate call. See the
+[extraction contract and configuration](docs/api/trials.md#hierarchical-extraction).
+
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
 TrialChecker or LLM probes to estimate how many leading patients should proceed

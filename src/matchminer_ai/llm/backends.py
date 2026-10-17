@@ -199,6 +199,8 @@ class LocalBackend:
                 "vllm_server_args",
                 "sampling_profile",
                 "reasoning_effort",
+                "extraction_method",
+                "hierarchy",
             }
         }
         sampling_params = dict(llm_config["sampling_params"])
@@ -253,6 +255,8 @@ class LocalBackend:
                 text,
                 parser_name=parser_name,
                 tokenizer=tokenizer,
+                **({"enable_thinking": llm_config["chat_template_kwargs"]["enable_thinking"]}
+                   if "enable_thinking" in llm_config.get("chat_template_kwargs", {}) else {}),
             )
             for text in raw_texts
         ]

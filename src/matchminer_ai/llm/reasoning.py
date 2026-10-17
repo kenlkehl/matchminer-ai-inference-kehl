@@ -81,6 +81,7 @@ def parse_reasoning_output(
     *,
     parser_name: str | None,
     tokenizer: Any,
+    enable_thinking: bool | None = None,
 ) -> tuple[str, str]:
     """Split raw local-mode vLLM output into ``(reasoning, final_text)``."""
     if parser_name is None:
@@ -100,8 +101,18 @@ def parse_reasoning_output(
         from vllm.reasoning import ReasoningParserManager
 
         parser_cls = ReasoningParserManager.get_reasoning_parser(parser_name)
-        parser = parser_cls(tokenizer)
-        reasoning, content = parser.extract_reasoning(text, request=None)
+        from types import SimpleNamespace
+        options = {} if enable_thinking is None else {
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
+        }
+        parser = parser_cls(tokenizer, **options)
+        reasoning, content = parser.extract_reasoning(
+            text, request=SimpleNamespace(**options) if options else None,
+        )
+        if parser_name == "nemotron_v3" and enable_thinking is False:
+            content = (content or "").strip()
+            if content.endswith("<|im_end|>"):
+                content = content[:-len("<|im_end|>")].rstrip()
 
     return (reasoning or "").strip(), (content or "").strip()
 
