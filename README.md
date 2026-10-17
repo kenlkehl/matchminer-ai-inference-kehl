@@ -50,7 +50,9 @@ general exclusions are extracted in a separate call. See the
 [extraction contract and configuration](docs/api/trials.md#hierarchical-extraction).
 Each field call introduces the hierarchy, supplies the full trial, includes the
 complete field definitions and examples from `trial.user.primer.txt`, shows the
-current candidate, then requests children for the next field. The primer remains
+current candidate, then requests children for the next field. Immediately before
+generation, `REMINDER OF FIELD-SPECIFIC RULES:` repeats the current field's authored
+instructions and valid/invalid examples verbatim. The primer remains
 the source of the clinical rules; only its one-shot output commands are omitted.
 Remote extraction schedules ready branches across trials and field levels,
 with independent boilerplate calls and shared per-endpoint concurrency limits.

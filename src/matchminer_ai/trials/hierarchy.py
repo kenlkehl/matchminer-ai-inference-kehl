@@ -48,10 +48,46 @@ def load_prompts(directory: str | Path) -> dict[str, str]:
         key: (Path(directory) / f"trial.hierarchy.{key}.txt").read_text()
         for key in PROMPT_NAMES
     }
-    prompts["definitions"] = _field_guidance(
-        (directory / "trial.user.primer.txt").read_text()
-    )
+    primer = (directory / "trial.user.primer.txt").read_text()
+    prompts["definitions"] = _field_guidance(primer)
+    for key, rules in _field_reminders(primer).items():
+        if prompts[key].count("{{field_rules}}") != 1:
+            raise ValueError(f"Expected one field_rules placeholder in {key} prompt")
+        prompts[key] = prompts[key].replace("{{field_rules}}", rules)
     return prompts
+
+
+def _field_reminders(primer: str) -> dict[str, str]:
+    """Repeat authored field sections verbatim beside the response instructions."""
+    sections = (
+        (("sex",), "-Re sex criteria:"),
+        (("cancer_type",), "-Re cancer primary site:"),
+        (("histology",), "-Re histology:"),
+        (("disease_state",), "-Re disease state:"),
+        (
+            ("prior_treatment_required", "prior_treatment_excluded"),
+            "-Re treatment history:",
+        ),
+        (("biomarkers_required", "biomarkers_excluded"), "-Re biomarkers:"),
+        ((), "Some trials have only one space"),
+        (("boilerplate",), "Then, list exclusion criteria described in the trial text"),
+        ((), "ALWAYS output plain text only."),
+    )
+    markers = [marker for _, marker in sections]
+    if any(primer.count(marker) != 1 for marker in markers):
+        raise ValueError(
+            "Cannot locate field-reminder sections in trial.user.primer.txt"
+        )
+    positions = [primer.index(marker) for marker in markers]
+    if positions != sorted(positions):
+        raise ValueError(
+            "Field-reminder sections in trial.user.primer.txt are out of order"
+        )
+    return {
+        key: primer[start:end].strip()
+        for ((keys, _), start, end) in zip(sections, positions, positions[1:])
+        for key in keys
+    }
 
 
 def _field_guidance(primer: str) -> str:
@@ -193,8 +229,6 @@ def build_request(
         + "\nEND TRIAL DOCUMENT\n\n"
         + "FULL FIELD DEFINITIONS AND POPULATION RULES:\n"
         + prompts["definitions"]
-        + "\n\nINSTRUCTIONS FOR THIS STEP:\n"
-        + prompts[field_name].strip()
     )
     if field_name == "boilerplate":
         instruction += (
@@ -212,6 +246,7 @@ def build_request(
             + "\n"
             + prompts["response"].strip()
         )
+    instruction += "\n\nINSTRUCTIONS FOR THIS STEP:\n" + prompts[field_name].strip()
     messages = [
         {
             "role": "system",

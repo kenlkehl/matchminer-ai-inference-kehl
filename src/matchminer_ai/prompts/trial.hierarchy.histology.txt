@@ -1,1 +1,4 @@
 Enumerate eligible histologies for this candidate's primary site and age/sex group, following the full histology definition and enumeration instructions above. Return one histology per branch. Preserve source-defined subtype conditions in scope for later fields; do not let a broader branch bypass a subtype's requirements.
+
+REMINDER OF FIELD-SPECIFIC RULES:
+{{field_rules}}

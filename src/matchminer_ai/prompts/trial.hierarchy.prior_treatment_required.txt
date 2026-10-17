@@ -1,1 +1,4 @@
 Identify the prior-treatment requirements for this candidate using the full treatment-history instructions above. Retain all applicable source-defined conditions and explicit AND/OR logic. Separate genuinely different eligible treatment-history pathways while retaining shared requirements in every branch and unresolved conditions in scope.
+
+REMINDER OF FIELD-SPECIFIC RULES:
+{{field_rules}}

@@ -35,11 +35,11 @@ def test_each_component_has_full_definitions_in_requested_order(field):
         f"CURRENT FIELD: {field}\n",
         f"TRIAL DOCUMENT:\n{source}\nEND TRIAL DOCUMENT",
         "FULL FIELD DEFINITIONS AND POPULATION RULES:\n" + PROMPTS["definitions"],
-        "INSTRUCTIONS FOR THIS STEP:\n" + PROMPTS[field].strip(),
         "CURRENT CANDIDATE SPACE (previous fields are locked):\n"
         + json.dumps({"fields": parent, "scope": scope}),
         f"RETURN CHILD SPACES FOR CURRENT FIELD: {field}\n"
         + PROMPTS["response"].strip(),
+        "INSTRUCTIONS FOR THIS STEP:\n" + PROMPTS[field].strip(),
     ]
     positions = [text.index(part) for part in expected_parts]
     assert positions == sorted(positions)
@@ -76,9 +76,9 @@ def test_boilerplate_gets_same_full_source_and_definitions_before_its_response()
         PROMPTS["common"].strip(),
         "TRIAL DOCUMENT:\nFULL SOURCE\nEND TRIAL DOCUMENT",
         PROMPTS["definitions"],
-        PROMPTS["boilerplate"].strip(),
         "EXTRACTION SCOPE:\nAll populations",
         "RETURN GENERAL EXCLUSIONS:\n" + PROMPTS["boilerplate_response"].strip(),
+        "INSTRUCTIONS FOR THIS STEP:\n" + PROMPTS["boilerplate"].strip(),
     ]
     assert [text.index(part) for part in parts] == sorted(
         text.index(part) for part in parts
@@ -88,6 +88,83 @@ def test_boilerplate_gets_same_full_source_and_definitions_before_its_response()
     assert "CURRENT CANDIDATE SPACE" not in text
     assert "RETURN CHILD SPACES" not in text
     assert "inclusion and exclusion sections" in text
+
+
+@pytest.mark.parametrize(
+    "field,start,end,example_label",
+    [
+        ("sex", "-Re sex criteria:", "-Re cancer primary site:", None),
+        (
+            "cancer_type",
+            "-Re cancer primary site:",
+            "-Re histology:",
+            "cancer primary site",
+        ),
+        ("histology", "-Re histology:", "-Re disease state:", "histology"),
+        (
+            "disease_state",
+            "-Re disease state:",
+            "-Re treatment history:",
+            "disease state",
+        ),
+        (
+            "prior_treatment_required",
+            "-Re treatment history:",
+            "-Re biomarkers:",
+            "treatment history",
+        ),
+        (
+            "prior_treatment_excluded",
+            "-Re treatment history:",
+            "-Re biomarkers:",
+            "treatment history",
+        ),
+        (
+            "biomarkers_required",
+            "-Re biomarkers:",
+            "Some trials have only one space",
+            "biomarker",
+        ),
+        (
+            "biomarkers_excluded",
+            "-Re biomarkers:",
+            "Some trials have only one space",
+            "biomarker",
+        ),
+        (
+            "boilerplate",
+            "Then, list exclusion criteria described in the trial text",
+            "ALWAYS output plain text only.",
+            None,
+        ),
+    ],
+)
+def test_closing_reminder_repeats_exact_authored_section_and_examples(
+    field, start, end, example_label
+):
+    primer = (
+        Path(__file__).parents[1] / "src/matchminer_ai/prompts/trial.user.primer.txt"
+    ).read_text()
+    expected = primer[primer.index(start) : primer.index(end)].strip()
+    request = build_request(0, 0, "source", field, {}, "all", PROMPTS)
+    text = request.messages[1]["content"]
+    reminder = text.split("REMINDER OF FIELD-SPECIFIC RULES:\n")
+    assert len(reminder) == 2
+    assert reminder[1] == expected
+    assert text.count(expected) == 2
+    assert "{{field_rules}}" not in text
+    if example_label:
+        for kind in ("valid", "invalid"):
+            assert f"Examples of {kind} {example_label} components:" in reminder[1]
+
+
+def test_age_reminder_uses_existing_rules_without_invented_examples():
+    request = build_request(0, 0, "source", "age", {}, "all", PROMPTS)
+    text = request.messages[1]["content"]
+    reminder = text.split("REMINDER OF FIELD-SPECIFIC RULES:\n")[1]
+    assert reminder.startswith("Identify every age group targeted by the trial")
+    assert "Do not invent age cutoffs when unstated; use NA." in reminder
+    assert "Examples of" not in reminder
 
 
 def test_full_authored_rules_are_reused_verbatim_and_live_edits_invalidate_cache(
@@ -113,6 +190,18 @@ def test_full_authored_rules_are_reused_verbatim_and_live_edits_invalidate_cache
     changed = Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0]
     assert "NEW AUTHORED RULE." in changed.messages[1]["content"]
     assert cache.get(changed) is None
+    for field in ("biomarkers_required", "biomarkers_excluded"):
+        text = build_request(
+            0, 0, "trial", field, {}, "all", load_prompts(tmp_path)
+        ).messages[1]["content"]
+        assert (
+            "NEW AUTHORED RULE." in text.split("REMINDER OF FIELD-SPECIFIC RULES:\n")[1]
+        )
+    primer_path.write_text(
+        primer.replace("-Re disease state:", "Changed field heading:")
+    )
+    with pytest.raises(ValueError, match="field-reminder sections"):
+        load_prompts(tmp_path)
     primer_path.write_text(
         primer.replace("Structure your output like this,", "Unexpected section layout")
     )

@@ -41,9 +41,11 @@ Every population-field request follows this order:
    field as the next level of granularity.
 2. The complete trial source.
 3. The full authored field definitions, examples, population rules and boilerplate
-   boundaries from `trial.user.primer.txt`, followed by instructions for this step.
+   boundaries from `trial.user.primer.txt`.
 4. The current candidate's locked fields and internal `scope`.
 5. The request for alternative child spaces across this field and the JSON contract.
+6. Instructions for this step, ending with `REMINDER OF FIELD-SPECIFIC RULES:`
+   and the current field's authored rules and examples.
 
 Every call sees all field definitions, so it can distinguish tumor biomarkers
 from general exclusions such as HIV/hepatitis or organ dysfunction. One-shot
@@ -103,7 +105,13 @@ The shared introduction, step instructions and closing response contracts live
 in `src/matchminer_ai/prompts/trial.hierarchy.*.txt`. The full semantic rules are
 loaded directly from `trial.user.primer.txt`, so edits to those definitions affect
 hierarchical extraction too. The loader preserves their wording and examples;
-if the primer's section boundaries change, it fails explicitly rather than
+the closing field component expands `{{field_rules}}` from the matching primer
+section under `REMINDER OF FIELD-SPECIFIC RULES:`. This reminder follows the
+candidate and JSON response contract. Required/excluded treatment share the
+treatment section, required/excluded biomarkers share the biomarker section,
+and the separate boilerplate call repeats the boilerplate rules. Age repeats its
+existing step instructions because the primer has no separate age section.
+If the primer's section boundaries change, it fails explicitly rather than
 silently dropping guidance. `trial.user.question.txt` and the primer's one-shot
 output format apply only to `trial.extraction_method = "one_shot"`, retained for
 comparison and reproduction. The shared engine, hierarchy prompts and primer

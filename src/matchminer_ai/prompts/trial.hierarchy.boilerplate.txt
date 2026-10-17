@@ -1,2 +1,5 @@
 Extract general exclusion criteria from this clinical trial in a separate pass using the full boilerplate definition above. Review both inclusion and exclusion sections, expressing general inclusion requirements as exclusions with the correct logical negation. Preserve source-defined thresholds, exceptions and conditional qualifications.
 If a condition applies only to a particular population, describe that population explicitly; do not make it a trial-wide exclusion. Use self-contained descriptions rather than opaque cohort references. Keep criteria assigned to the clinical-space fields out of boilerplate, and follow the authored instructions about criteria to omit. Do not generate clinical spaces or infer unstated exclusions.
+
+REMINDER OF FIELD-SPECIFIC RULES:
+{{field_rules}}

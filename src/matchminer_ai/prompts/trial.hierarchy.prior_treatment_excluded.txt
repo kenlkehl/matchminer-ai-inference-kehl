@@ -1,1 +1,4 @@
 Identify prior-treatment exclusions for this candidate using the full treatment-history instructions above. Preserve conditions on each exclusion and explicit AND/OR logic. Keep all independently applicable exclusions together; do not create alternative branches that omit a shared exclusion. Preserve source-defined differences between eligible pathways in scope.
+
+REMINDER OF FIELD-SPECIFIC RULES:
+{{field_rules}}

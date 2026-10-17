@@ -1,1 +1,4 @@
 Identify the required biomarkers for this target population candidate using the full biomarker definition and boilerplate boundaries above. Retain source-defined thresholds, conditions, AND/OR logic and testing requirements. Separate genuinely different eligible pathways while preserving shared requirements in every branch. Do not import criteria from unrelated populations or from other fields.
+
+REMINDER OF FIELD-SPECIFIC RULES:
+{{field_rules}}
