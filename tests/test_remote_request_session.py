@@ -2,10 +2,15 @@ import asyncio
 from collections import Counter
 from types import SimpleNamespace
 
+import pytest
+
 from matchminer_ai.llm import remote_inference as remote
 
 
-def test_persistent_session_obeys_each_server_cap_and_closes_clients(monkeypatch):
+@pytest.mark.parametrize("per_server", [1, 2, 5])
+def test_persistent_session_obeys_each_server_cap_and_closes_clients(
+    monkeypatch, per_server
+):
     async def scenario():
         running, peak, calls, closed = Counter(), Counter(), Counter(), []
 
@@ -41,7 +46,7 @@ def test_persistent_session_obeys_each_server_cap_and_closes_clients(monkeypatch
         config = {
             "server_urls": ["http://one", "http://two"],
             "model_name": "fake",
-            "max_concurrent_requests": 2,
+            "max_concurrent_requests": per_server,
             "request_timeout": 10,
             "max_retries": 1,
         }
@@ -51,13 +56,13 @@ def test_persistent_session_obeys_each_server_cap_and_closes_clients(monkeypatch
             max_tokens=10,
         )
         async with remote.RemoteRequestSession(config, "unused", {}) as session:
-            assert session.capacity == 4
+            assert session.capacity == 2 * per_server
             results = await asyncio.gather(
                 *(session.generate(prompt, config) for _ in range(12))
             )
             assert len(results) == 12
         assert set(closed) == {"one", "two"}
-        assert peak == {"one": 2, "two": 2}
+        assert peak == {"one": per_server, "two": per_server}
         assert sum(calls.values()) == 12 and not any(running.values())
 
     asyncio.run(scenario())

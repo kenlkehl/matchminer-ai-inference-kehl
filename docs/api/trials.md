@@ -94,6 +94,20 @@ branch order, so response timing does not affect space IDs and cached wave-based
 responses keep their existing numbering. Synchronous local vLLM
 generation retains batched field waves with one resident model.
 
+Set the remote request cap in the top-level `remote` configuration, for example
+`config.remote["max_concurrent_requests"] = 32`, or in YAML:
+
+```yaml
+remote:
+  max_concurrent_requests: 32
+```
+
+The default is 32 per server. With N endpoints the total ceiling is N times
+this value, shared across trials, field branches, boilerplate and retries within
+one extraction call. `trial.hierarchy.active_trials` controls how much work is
+available; it does not multiply the request cap. Separately launched clients
+each have their own cap. Set the value before starting extraction.
+
 Node checkpoints fingerprint source, parent, scope, prompts, algorithm version,
 and runtime configuration. Changed inputs/configuration never reuse old nodes.
 Trial extraction defaults to a 50,000-token output ceiling (reasoning plus final
