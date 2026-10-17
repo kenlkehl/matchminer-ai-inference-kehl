@@ -35,8 +35,24 @@ of alternative values rather than a full list of spaces. Independent parents
 are batched through the configured backend. A trial with one branch throughout
 uses ten logical calls: nine fields and one separate boilerplate call.
 
-Every request contains the full trial source, locked parent fields and an
-internal `scope` describing the applicable eligibility pathway. Scope preserves
+Every population-field request follows this order:
+
+1. An introduction explaining the target-population hierarchy and the current
+   field as the next level of granularity.
+2. The complete trial source.
+3. The full authored field definitions, examples, population rules and boilerplate
+   boundaries from `trial.user.primer.txt`, followed by instructions for this step.
+4. The current candidate's locked fields and internal `scope`.
+5. The request for alternative child spaces across this field and the JSON contract.
+
+Every call sees all field definitions, so it can distinguish tumor biomarkers
+from general exclusions such as HIV/hepatitis or organ dysfunction. One-shot
+numbering and output commands are omitted. Each branch adds only the current
+field; it must retain shared requirements rather than turn cumulative criteria
+into optional alternatives. The separate boilerplate call uses the same source
+and definitions, a trial-wide scope, and its own closing response instruction.
+
+The internal `scope` describes the applicable eligibility pathway. It preserves
 cross-field dependencies and conditional exceptions; it is not included in the
 final space text. Equal values with different scopes remain separate until the
 remaining fields are resolved. No Cartesian product of independent field lists
@@ -71,12 +87,18 @@ reasoning and validation attempts. Configured context limits reserve output
 space without truncating the source. Model sampling and parser selection still
 use the existing backend profiles.
 
-Active prompts are `src/matchminer_ai/prompts/trial.hierarchy.*.txt`. The old
-`trial.user.primer.txt` and `trial.user.question.txt` are used only with explicit
-`trial.extraction_method = "one_shot"`, retained for comparison and reproduction.
-Changing those legacy files does not change hierarchical extraction. The shared
-engine and new prompts are mirrored in the standalone training script, with a
-cross-repository byte-for-byte contract test.
+The shared introduction, step instructions and closing response contracts live
+in `src/matchminer_ai/prompts/trial.hierarchy.*.txt`. The full semantic rules are
+loaded directly from `trial.user.primer.txt`, so edits to those definitions affect
+hierarchical extraction too. The loader preserves their wording and examples;
+if the primer's section boundaries change, it fails explicitly rather than
+silently dropping guidance. `trial.user.question.txt` and the primer's one-shot
+output format apply only to `trial.extraction_method = "one_shot"`, retained for
+comparison and reproduction. The shared engine, hierarchy prompts and primer
+are mirrored in training, with cross-repository contract tests.
+
+This prompt layout is `trial-hierarchy-v2`. Prompt and version fingerprints prevent
+reuse of v1 extraction checkpoints; compatible treatment screening can be retained.
 
 This design increases the number of calls and repeats source text. It improves
 structural control but does not establish clinical completeness: an erroneous

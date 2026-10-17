@@ -13,12 +13,111 @@ from matchminer_ai.trials.hierarchy import (
     Completion,
     Hierarchy,
     ResponseCache,
+    build_request,
     load_prompts,
     parse_response,
 )
 from matchminer_ai.trials.postprocess import _strip_numerical_prefix
 
 PROMPTS = load_prompts(Path(__file__).parents[1] / "src/matchminer_ai/prompts")
+
+
+@pytest.mark.parametrize("field", [name for name, _ in FIELDS])
+def test_each_component_has_full_definitions_in_requested_order(field):
+    source = "SYNTHETIC FULL SOURCE\nAdults; no known hepatitis; ECOG 0 or 1."
+    index = [name for name, _ in FIELDS].index(field)
+    parent = {name: f"locked {name}" for name, _ in FIELDS[:index]}
+    scope = "Synthetic source-defined pathway with unresolved dependencies."
+    request = build_request(0, 0, source, field, parent, scope, PROMPTS)
+    text = request.messages[1]["content"]
+    expected_parts = [
+        PROMPTS["common"].strip(),
+        f"CURRENT FIELD: {field}\n",
+        f"TRIAL DOCUMENT:\n{source}\nEND TRIAL DOCUMENT",
+        "FULL FIELD DEFINITIONS AND POPULATION RULES:\n" + PROMPTS["definitions"],
+        "INSTRUCTIONS FOR THIS STEP:\n" + PROMPTS[field].strip(),
+        "CURRENT CANDIDATE SPACE (previous fields are locked):\n"
+        + json.dumps({"fields": parent, "scope": scope}),
+        f"RETURN CHILD SPACES FOR CURRENT FIELD: {field}\n"
+        + PROMPTS["response"].strip(),
+    ]
+    positions = [text.index(part) for part in expected_parts]
+    assert positions == sorted(positions)
+    assert text.startswith(expected_parts[0])
+    assert text.endswith(expected_parts[-1])
+    assert text.count(source) == 1
+    assert request.parent == parent
+    assert request.scope == scope
+    # All definitions, not only this field's abbreviated rules, reach the model.
+    for label in (
+        "sex criteria",
+        "cancer primary site",
+        "histology",
+        "disease state",
+        "treatment history",
+        "biomarkers",
+    ):
+        assert f"-Re {label}:" in text
+    assert "uncontrolled brain metastases, HIV or hepatitis" in text
+    assert '"ECOG > 1"' in text
+    assert 'Examples of invalid biomarker components: "AFP > 5", "ECOG > 2"' in text
+    assert "exhaustive list of spaces" in text
+    assert "Structure your output like this" not in text
+    assert "After you output the trial spaces" not in text
+    assert "1. Age range allowed:" not in text
+
+
+def test_boilerplate_gets_same_full_source_and_definitions_before_its_response():
+    request = build_request(
+        0, 0, "FULL SOURCE", "boilerplate", {}, "All populations", PROMPTS
+    )
+    text = request.messages[1]["content"]
+    parts = [
+        PROMPTS["common"].strip(),
+        "TRIAL DOCUMENT:\nFULL SOURCE\nEND TRIAL DOCUMENT",
+        PROMPTS["definitions"],
+        PROMPTS["boilerplate"].strip(),
+        "EXTRACTION SCOPE:\nAll populations",
+        "RETURN GENERAL EXCLUSIONS:\n" + PROMPTS["boilerplate_response"].strip(),
+    ]
+    assert [text.index(part) for part in parts] == sorted(
+        text.index(part) for part in parts
+    )
+    assert text.endswith(parts[-1])
+    assert "CURRENT FIELD:" not in text
+    assert "CURRENT CANDIDATE SPACE" not in text
+    assert "RETURN CHILD SPACES" not in text
+    assert "inclusion and exclusion sections" in text
+
+
+def test_full_authored_rules_are_reused_verbatim_and_live_edits_invalidate_cache(
+    tmp_path,
+):
+    source_dir = Path(__file__).parents[1] / "src/matchminer_ai/prompts"
+    for source in source_dir.glob("trial.hierarchy.*.txt"):
+        (tmp_path / source.name).write_bytes(source.read_bytes())
+    primer_path = tmp_path / "trial.user.primer.txt"
+    primer = (source_dir / primer_path.name).read_text()
+    primer_path.write_text(primer)
+    # Every original semantic paragraph and example is present, without the
+    # conflicting numbered-space and sequential boilerplate output commands.
+    paragraphs = PROMPTS["definitions"].split("\n\n")
+    assert len(paragraphs) == 3
+    assert all(paragraph in primer for paragraph in paragraphs)
+    original = Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0]
+    cache = ResponseCache(tmp_path / "cache", {"model": "synthetic"})
+    cache.put(original, Completion(branches(("18+", "all"))))
+    primer_path.write_text(
+        primer.replace("-Re biomarkers:", "-Re biomarkers: NEW AUTHORED RULE.")
+    )
+    changed = Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0]
+    assert "NEW AUTHORED RULE." in changed.messages[1]["content"]
+    assert cache.get(changed) is None
+    primer_path.write_text(
+        primer.replace("Structure your output like this,", "Unexpected section layout")
+    )
+    with pytest.raises(ValueError, match="field-guidance sections"):
+        load_prompts(tmp_path)
 
 
 def branches(*values):
@@ -175,7 +274,7 @@ class FakeBackend:
                 answers.append("not JSON")
                 finishes.append("stop")
                 continue
-            if self.fail_trial and text.endswith("BAD"):
+            if self.fail_trial and "TRIAL DOCUMENT:\nBAD\nEND TRIAL DOCUMENT" in text:
                 answers.append("transport failed")
                 finishes.append("error")
                 continue
