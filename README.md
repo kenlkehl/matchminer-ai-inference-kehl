@@ -54,7 +54,9 @@ current field] are relevant for determining eligibility?" It includes only that
 field's authored instructions and examples verbatim from `trial.user.primer.txt`,
 plus shared anti-boilerplate and omission guidance. Other fields' definitions are
 not included. The separate boilerplate prompt uses only its own authored rules and
-shared omissions. The primer and one-shot extraction remain unchanged. This v4
+shared omissions. Biomarker fields retain positive/negative result restrictions,
+including specified alterations and expression thresholds; testing or known-status
+requirements alone are omitted. These rules also apply to one-shot extraction. This v4
 prompt contract requires fresh extraction checkpoints; saved screening is reusable.
 Remote extraction schedules ready branches across trials and field levels,
 with independent boilerplate calls and shared per-endpoint concurrency limits.

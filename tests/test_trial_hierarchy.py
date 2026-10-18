@@ -183,6 +183,22 @@ def test_age_reminder_uses_existing_rules_without_invented_examples():
     assert "Examples of" not in reminder
 
 
+@pytest.mark.parametrize("field", [name for name, _ in FIELDS])
+def test_known_status_omission_is_scoped_to_biomarker_fields(field):
+    source = "BRAF status must be known; either result is allowed."
+    text = build_request(0, 0, source, field, {}, "all", PROMPTS).messages[1]["content"]
+    rules = (
+        "A requirement for biomarker status to be known, tested, assessed, or available is not part of a trial space.",
+        "Include only requirements for positive or negative biomarker results, including specific alterations, expression levels, or thresholds.",
+        "output NA when no other biomarker result restriction applies.",
+        "If the trial requires a particular biomarker result and specifies whether it will be assessed during screening, note that.",
+    )
+    for rule in rules:
+        assert (rule in text) == (
+            field in {"biomarkers_required", "biomarkers_excluded"}
+        )
+
+
 def test_authored_edits_reach_only_relevant_fields_and_invalidate_their_cache(
     tmp_path,
 ):

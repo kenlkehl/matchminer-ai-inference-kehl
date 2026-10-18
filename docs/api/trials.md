@@ -54,6 +54,11 @@ Primary-site and histology requests also receive the exact diagnosis-enumeration
 paragraph. Biomarker requests also receive the exact treatment-defining population
 example. Each branch adds only the current field and retains shared requirements.
 A condition assigned to this field must survive in its value, not only its scope.
+Biomarker fields include only restrictions on results: positive or negative status,
+specific alterations, or expression thresholds. A requirement to test or know a
+biomarker's status, while allowing either result, is omitted; use `NA` when no
+result restriction remains. Screening-assessment notes accompany actual result
+restrictions only. This rule is shared with one-shot extraction through the primer.
 The separate single boilerplate request uses the full source, a trial-wide scope,
 the authored boilerplate paragraph (including logical negation examples), and
 shared omissions. It does not receive the population fields' definitions.
@@ -129,8 +134,8 @@ The shared introduction and JSON response contracts live in
 original treatment section, and required/excluded biomarkers share the original
 biomarker section. Age retains its existing instructions because the primer has
 no separate age section. Changed section boundaries fail explicitly rather than
-silently dropping guidance. The active primer, its one-shot output format, and
-`trial.user.question.txt` remain unchanged for `trial.extraction_method = "one_shot"`.
+silently dropping guidance. One-shot extraction uses the same active primer;
+its output format and `trial.user.question.txt` are unchanged.
 The shared engine, hierarchy prompts and primer are mirrored in training, with
 cross-repository contract tests.
 
