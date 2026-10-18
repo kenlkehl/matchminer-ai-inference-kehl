@@ -530,6 +530,8 @@ def _build_context_messages(
                 "biomarkers_excluded": query.biomarkers_excluded,
                 "prior_treatment_required": query.prior_treatment_required,
                 "prior_treatment_excluded": query.prior_treatment_excluded,
+                "prior_treatment_requirements": query.prior_treatment_requirements,
+                "biomarker_requirements": query.biomarker_requirements,
             },
         },
         "retrieved_evidence": prompt_evidence,

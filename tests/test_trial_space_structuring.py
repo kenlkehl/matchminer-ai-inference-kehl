@@ -134,7 +134,10 @@ def test_structures_trial_space_with_bounded_ontology_prompts() -> None:
         ),
     ):
         structured = structure_trial_space(
-            "Synthetic package-format trial space",
+            "Age range allowed: 18+. Sex allowed: Any. Cancer primary site allowed: lung. "
+            "Histology allowed: adenocarcinoma. Disease state allowed: metastatic. "
+            "Prior treatment requirements: prior pembrolizumab with progression AND no prior cisplatin. "
+            "Biomarker requirements: EGFR activating mutation AND no ALK rearrangement.",
             trial_id="NCT00000001",
             space_trial_id="NCT00000001-1",
             config=config,
@@ -175,6 +178,8 @@ def test_structures_trial_space_with_bounded_ontology_prompts() -> None:
         for prompt in backend.prompts
         if prompt.messages is not None
     ]
+    assert any("no prior cisplatin" in text and "no ALK rearrangement" in text
+               and "preserve its polarity" in text for text in prompt_texts)
     root_prompt = next(text for text in prompt_texts if '"code": "LUNG"' in text)
     assert '"code": "BREAST"' in root_prompt
     assert "LUAD" not in root_prompt

@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from matchminer_ai._trial_space_format import (
+    REQUIRED_TRIAL_SPACE_KEYWORDS as REQUIRED_TRIAL_SPACE_KEYWORDS,
+    has_required_space_fields as _has_required_space_fields,
+)
+
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
@@ -16,25 +21,6 @@ def _strip_numerical_prefix(text: str) -> str:
     if not text:
         return text
     return re.sub(r"^\s*\d+\.\s*", "", text)
-
-
-REQUIRED_TRIAL_SPACE_KEYWORDS = [
-    "Age",
-    "Sex",
-    "Cancer type",
-    "Histology",
-    "Cancer burden",
-    "Prior treatment required",
-    "Prior treatment excluded",
-    "Biomarkers required",
-    "Biomarkers excluded",
-]
-
-
-def _has_required_space_fields(text: str) -> bool:
-    # Accept the current label and saved spaces using the earlier label.
-    normalized = text.replace("Disease state allowed:", "Cancer burden allowed:")
-    return all(term in normalized for term in REQUIRED_TRIAL_SPACE_KEYWORDS)
 
 
 def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:

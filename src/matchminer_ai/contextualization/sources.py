@@ -1094,9 +1094,11 @@ class EuropePMCOpenGuidelinesSource:
             f'(\"{disease_phrase}\") AND '
             f"{guideline_filter}"
         ]
-        required_biomarker_phrase = query.biomarkers_required.replace(
-            '"', " "
-        ).strip()
+        required_biomarker_phrase = (
+            (query.biomarker_requirements or query.biomarkers_required)
+            .replace('"', " ")
+            .strip()
+        )
         if required_biomarker_phrase:
             search_queries.insert(
                 0,
@@ -1145,7 +1147,9 @@ class EuropePMCOpenGuidelinesSource:
             "rearrangement",
             "status",
         }
-        biomarker_tokens = _significant_tokens(query.biomarkers_required).difference(
+        biomarker_tokens = _significant_tokens(
+            query.biomarker_requirements or query.biomarkers_required
+        ).difference(
             generic_biomarker_tokens
         )
         required_overlap = min(2, len(disease_tokens))

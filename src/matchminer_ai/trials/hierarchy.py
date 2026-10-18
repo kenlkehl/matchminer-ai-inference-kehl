@@ -15,31 +15,27 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
-VERSION = "trial-hierarchy-v4"
+VERSION = "trial-hierarchy-v5"
 # Keep the established final text layout separate from extraction dependencies.
 OUTPUT_FIELDS = (
     ("age", "Age range allowed"),
     ("sex", "Sex allowed"),
-    ("cancer_type", "Cancer type allowed"),
+    ("cancer_primary_site", "Cancer primary site allowed"),
     ("histology", "Histology allowed"),
     ("disease_state", "Disease state allowed"),
-    ("prior_treatment_required", "Prior treatment required"),
-    ("prior_treatment_excluded", "Prior treatment excluded"),
-    ("biomarkers_required", "Biomarkers required"),
-    ("biomarkers_excluded", "Biomarkers excluded"),
+    ("prior_treatment_requirements", "Prior treatment requirements"),
+    ("biomarker_requirements", "Biomarker requirements"),
 )
 # Resolve primary site before sex, which can depend on that site.
 FIELDS = (OUTPUT_FIELDS[0], OUTPUT_FIELDS[2], OUTPUT_FIELDS[1], *OUTPUT_FIELDS[3:])
 FIELD_QUESTIONS = {
     "age": "age ranges",
-    "cancer_type": "cancer primary sites",
+    "cancer_primary_site": "cancer primary sites",
     "sex": "sex criteria",
     "histology": "histologies",
     "disease_state": "disease states",
-    "prior_treatment_required": "treatment inclusion criteria",
-    "prior_treatment_excluded": "treatment exclusion criteria",
-    "biomarkers_required": "biomarker inclusion criteria",
-    "biomarkers_excluded": "biomarker exclusion criteria",
+    "prior_treatment_requirements": "prior treatment requirements",
+    "biomarker_requirements": "biomarker requirements",
 }
 PROMPT_NAMES = (
     "common",
@@ -75,20 +71,14 @@ def load_prompts(directory: str | Path) -> dict[str, str]:
             ("Critically, trials often specify", "Spell out treatment history"),
         )
     )
-    enumeration = _authored_section(
-        primer, "Some trials have only one space", "CRITICAL: Each trial space"
-    )
     for key, rules in _field_reminders(primer).items():
         if prompts[key].count("{{field_rules}}") != 1:
             raise ValueError(f"Expected one field_rules placeholder in {key} prompt")
         prompts[key] = prompts[key].replace("{{field_rules}}", rules)
-    for key in ("cancer_type", "histology"):
-        prompts[key] += "\n\n" + enumeration
     biomarker_populations = _authored_section(
         primer, "Create separate spaces when", "NEVER put a newline"
     )
-    for key in ("biomarkers_required", "biomarkers_excluded"):
-        prompts[key] += "\n\n" + biomarker_populations
+    prompts["biomarker_requirements"] += "\n\n" + biomarker_populations
     return prompts
 
 
@@ -96,14 +86,14 @@ def _field_reminders(primer: str) -> dict[str, str]:
     """Select only the current field's authored wording and examples verbatim."""
     sections = (
         (("sex",), "-Re sex criteria:"),
-        (("cancer_type",), "-Re cancer primary site:"),
+        (("cancer_primary_site",), "-Re cancer primary site:"),
         (("histology",), "-Re histology:"),
         (("disease_state",), "-Re disease state:"),
         (
-            ("prior_treatment_required", "prior_treatment_excluded"),
+            ("prior_treatment_requirements",),
             "-Re treatment history:",
         ),
-        (("biomarkers_required", "biomarkers_excluded"), "-Re biomarkers:"),
+        (("biomarker_requirements",), "-Re biomarkers:"),
         ((), "Some trials have only one space"),
         (("boilerplate",), "Then, list exclusion criteria described in the trial text"),
         ((), "ALWAYS output plain text only."),

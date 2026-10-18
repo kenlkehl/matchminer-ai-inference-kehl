@@ -54,11 +54,11 @@ def test_each_component_gets_only_its_field_rules_and_one_parent(field):
     assert request.scope == scope
     field_sections = {
         "sex criteria": {"sex"},
-        "cancer primary site": {"cancer_type"},
+        "cancer primary site": {"cancer_primary_site"},
         "histology": {"histology"},
         "disease state": {"disease_state"},
-        "treatment history": {"prior_treatment_required", "prior_treatment_excluded"},
-        "biomarkers": {"biomarkers_required", "biomarkers_excluded"},
+        "treatment history": {"prior_treatment_requirements"},
+        "biomarkers": {"biomarker_requirements"},
     }
     for label, relevant_fields in field_sections.items():
         assert (f"-Re {label}:" in text) == (field in relevant_fields)
@@ -68,10 +68,10 @@ def test_each_component_gets_only_its_field_rules_and_one_parent(field):
     assert "Do NOT include this type of time-specific treatment washout" in text
     assert "DO NOT BELONG IN YOUR TRIAL SPACE OUTPUT TEXT AT ALL" in text
     assert ("exhaustive list of spaces" in text) == (
-        field in {"cancer_type", "histology"}
+        field in {"cancer_primary_site"}
     )
     assert ("ALK-rearranged" in text) == (
-        field in {"biomarkers_required", "biomarkers_excluded"}
+        field in {"biomarker_requirements"}
     )
     assert "FULL FIELD DEFINITIONS" not in text
     assert "Structure your output like this" not in text
@@ -111,7 +111,7 @@ def test_boilerplate_gets_full_source_and_only_boilerplate_rules():
     [
         ("sex", "-Re sex criteria:", "-Re cancer primary site:", None),
         (
-            "cancer_type",
+            "cancer_primary_site",
             "-Re cancer primary site:",
             "-Re histology:",
             "cancer primary site",
@@ -124,25 +124,13 @@ def test_boilerplate_gets_full_source_and_only_boilerplate_rules():
             "disease state",
         ),
         (
-            "prior_treatment_required",
+            "prior_treatment_requirements",
             "-Re treatment history:",
             "-Re biomarkers:",
             "treatment history",
         ),
         (
-            "prior_treatment_excluded",
-            "-Re treatment history:",
-            "-Re biomarkers:",
-            "treatment history",
-        ),
-        (
-            "biomarkers_required",
-            "-Re biomarkers:",
-            "Some trials have only one space",
-            "biomarker",
-        ),
-        (
-            "biomarkers_excluded",
+            "biomarker_requirements",
             "-Re biomarkers:",
             "Some trials have only one space",
             "biomarker",
@@ -195,7 +183,7 @@ def test_known_status_omission_is_scoped_to_biomarker_fields(field):
     )
     for rule in rules:
         assert (rule in text) == (
-            field in {"biomarkers_required", "biomarkers_excluded"}
+            field in {"biomarker_requirements"}
         )
 
 
@@ -211,7 +199,7 @@ def test_authored_edits_reach_only_relevant_fields_and_invalidate_their_cache(
     assert PROMPTS["anti_boilerplate"] in primer
     assert all(p in primer for p in PROMPTS["omissions"].split("\n\n"))
     original = build_request(
-        0, 0, "trial", "biomarkers_required", {}, "all", load_prompts(tmp_path)
+        0, 0, "trial", "biomarker_requirements", {}, "all", load_prompts(tmp_path)
     )
     original_age = Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0]
     cache = ResponseCache(tmp_path / "cache", {"model": "synthetic"})
@@ -220,7 +208,7 @@ def test_authored_edits_reach_only_relevant_fields_and_invalidate_their_cache(
         primer.replace("-Re biomarkers:", "-Re biomarkers: NEW AUTHORED RULE.")
     )
     changed = build_request(
-        0, 0, "trial", "biomarkers_required", {}, "all", load_prompts(tmp_path)
+        0, 0, "trial", "biomarker_requirements", {}, "all", load_prompts(tmp_path)
     )
     assert "NEW AUTHORED RULE." in changed.messages[1]["content"]
     assert cache.get(changed) is None
@@ -228,7 +216,7 @@ def test_authored_edits_reach_only_relevant_fields_and_invalidate_their_cache(
         Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0].key
         == original_age.key
     )
-    for field in ("biomarkers_required", "biomarkers_excluded"):
+    for field in ("biomarker_requirements",):
         text = build_request(
             0, 0, "trial", field, {}, "all", load_prompts(tmp_path)
         ).messages[1]["content"]
@@ -266,15 +254,15 @@ def reply(request):
         )
     if field == "sex":
         return branches(("Female", request.scope))
-    if field == "cancer_type":
+    if field == "cancer_primary_site":
         return branches(("breast cancer", request.scope))
     if field == "histology":
         return branches(("invasive ductal carcinoma", request.scope))
     if field == "disease_state":
         return branches(("localized", request.scope))
-    if field == "prior_treatment_required":
+    if field == "prior_treatment_requirements":
         return branches(("lumpectomy with negative margins", request.scope))
-    if field == "biomarkers_required":
+    if field == "biomarker_requirements":
         value = (
             "Oncotype DX recurrence score >=26"
             if "younger" in request.scope
@@ -291,13 +279,13 @@ def reply(request):
 def test_parent_branches_preserve_dependencies_and_assemble_without_llm_numbering():
     state = Hierarchy(0, "SYNTHETIC TRIAL", PROMPTS)
     calls = []
-    for stage in range(10):
+    for stage in range(len(FIELDS) + 1):
         requests = state.requests()
         calls.extend(requests)
         for request in requests:
             assert (
                 list(request.parent) == [key for key, _ in FIELDS[:stage]]
-                if stage < 9
+                if stage < len(FIELDS)
                 else request.parent == {}
             )
             assert "SYNTHETIC TRIAL" in request.messages[-1]["content"]
@@ -311,11 +299,11 @@ def test_parent_branches_preserve_dependencies_and_assemble_without_llm_numberin
     assert "estrogen receptor positive" in lines[1]
     assert "Oncotype" not in lines[1]
     assert all(
-        "Prior treatment required: lumpectomy with negative margins." in line
+        "Prior treatment requirements: lumpectomy with negative margins." in line
         for line in lines
     )
     assert [r.field_name for r in calls].count("boilerplate") == 1
-    assert len(calls) == 18
+    assert len(calls) == 2 * len(FIELDS)
     assert not state.requests()
 
 
@@ -390,10 +378,10 @@ def test_previous_hierarchy_version_cannot_reuse_node_cache(tmp_path, monkeypatc
 
     cache = ResponseCache(tmp_path, {"model": "synthetic"})
     with monkeypatch.context() as old:
-        old.setattr(hierarchy, "VERSION", "trial-hierarchy-v3")
+        old.setattr(hierarchy, "VERSION", "trial-hierarchy-v4")
         request = Hierarchy(0, "trial", PROMPTS).requests()[0]
         cache.put(request, Completion(branches(("18+", "all"))))
-    assert hierarchy.VERSION == "trial-hierarchy-v4"
+    assert hierarchy.VERSION == "trial-hierarchy-v5"
     assert cache.get(Hierarchy(0, "trial", PROMPTS).requests()[0]) is None
 
 
@@ -425,7 +413,7 @@ class FakeBackend:
                 value = {
                     "age": "18+",
                     "sex": "Both",
-                    "cancer_type": "lung cancer",
+                    "cancer_primary_site": "lung cancer",
                     "histology": "adenocarcinoma",
                     "disease_state": "metastatic",
                 }.get(name, "NA")
@@ -454,7 +442,7 @@ def test_adapter_retries_with_error_then_switches_thinking_and_reuses_cache(tmp_
         settings={"checkpoint_dir": str(tmp_path)},
     )
     assert result.finish_reasons == ["stop"]
-    assert len(backend.calls) == 12
+    assert len(backend.calls) == 10
     age_calls = [
         call
         for call in backend.calls
@@ -475,7 +463,7 @@ def test_adapter_retries_with_error_then_switches_thinking_and_reuses_cache(tmp_
         settings={"checkpoint_dir": str(tmp_path)},
     )
     assert second.final_outputs == result.final_outputs
-    assert len(backend.calls) == 12
+    assert len(backend.calls) == 10
     assert "validation_error" in result.reasoning_outputs[0]
 
 
@@ -484,7 +472,7 @@ def test_failed_trial_does_not_export_partial_spaces_or_break_other_trials():
     result = summarize_hierarchically(["GOOD", "BAD"], backend, trial_config=runtime())
     assert result.finish_reasons == ["stop", "error"]
     assert result.final_outputs[1] == ""
-    assert len(backend.calls) == 12  # Failed trial's age and independent boilerplate.
+    assert len(backend.calls) == 10  # Failed trial's age and independent boilerplate.
 
 
 def test_public_default_uses_hierarchy_and_preserves_output_schema(monkeypatch):
@@ -512,7 +500,7 @@ def test_public_default_uses_hierarchy_and_preserves_output_schema(monkeypatch):
         ]
     )
     result = summarize_trials(trials, config=config)
-    assert len(backend.calls) == 10
+    assert len(backend.calls) == 8
     assert result.space_trial_id.tolist() == ["T1-0"]
     assert result.general_exclusion_criteria.tolist() == ["Active infection."]
     assert "Disease state allowed: metastatic." in result.clinical_space_summary.iloc[0]

@@ -1,6 +1,6 @@
 CURRENT MATCHMINER-AI TRIAL-SPACE PROMPT: FIELD-DEFINITION REFERENCE
 The two blocks below reproduce the package's actual clinical-trial space extraction prompt
-verbatim. Use its definition of a self-contained clinical space, its nine field meanings, and
+verbatim. Use its definition of a self-contained clinical space, its field meanings, and
 its explicit AND/OR logic when creating populations from the supplied PDQ evidence summaries.
 The blocks describe the original trial-document task. The PDQ task adaptations after them
 govern this call wherever the original task or output instructions differ.
@@ -25,6 +25,10 @@ Keep these PDQ adaptations explicit:
 - Use only restrictions supported by the supplied PDQ text. Do not import the trial prompt's
   assumed sex restrictions or invent trial-screening requirements. Its trial washout rule
   does not authorize dropping source-defined timing that distinguishes a PDQ care population.
+- The reference trial-space text now uses seven fields, combining prior-treatment
+  inclusions/exclusions and biomarker inclusions/exclusions. This PDQ catalog keeps its
+  separate nine-field JSON schema: map positive and negative clauses to the appropriate
+  required/excluded fields without losing negation, AND/OR logic, or exceptions.
 - Interpret prior treatment required as what must already have occurred, including any
   source-required response. Interpret prior treatment excluded as the disallowed exposure
   itself: "Systemic therapy for metastatic disease", not "No previous systemic therapy".

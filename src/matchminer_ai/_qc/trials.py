@@ -6,6 +6,11 @@ from typing import TYPE_CHECKING, Iterable
 
 import pandas as pd
 
+from matchminer_ai._trial_space_format import (
+    REQUIRED_TRIAL_SPACE_KEYWORDS,
+    has_space_keyword,
+)
+
 from matchminer_ai._qc.common import (
     build_qc_artifact,
     normalize_series,
@@ -17,17 +22,7 @@ if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
 
-DEFAULT_KEYWORDS = [
-    "Age",
-    "Sex",
-    "Cancer type",
-    "Histology",
-    "Cancer burden",
-    "Prior treatment required",
-    "Prior treatment excluded",
-    "Biomarkers required",
-    "Biomarkers excluded",
-]
+DEFAULT_KEYWORDS = list(REQUIRED_TRIAL_SPACE_KEYWORDS)
 
 
 def _as_list(value: Iterable[str]) -> list[str]:
@@ -231,7 +226,9 @@ def trial_qc_report(
     total_keyword_spaces = int(len(keyword_spaces))
     for keyword in expected_keywords:
         missing_spaces = keyword_spaces.loc[
-            ~keyword_spaces["clinical_space_summary"].str.contains(keyword, regex=False)
+            ~keyword_spaces["clinical_space_summary"].apply(
+                lambda text: has_space_keyword(text, keyword)
+            )
         ]
         metrics.append(
             qc_artifact_to_report_row(

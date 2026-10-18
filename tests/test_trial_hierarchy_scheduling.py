@@ -25,13 +25,13 @@ def test_primary_site_is_locked_before_sex_in_both_schedulers():
             return Completion('{"exclusions": []}')
         if request.field_name == "age":
             values = ["18 years or older"]
-        elif request.field_name == "cancer_type":
+        elif request.field_name == "cancer_primary_site":
             assert list(request.parent) == ["age"]
             values = ["ovary cancer", "lung cancer"]
         elif request.field_name == "sex":
-            assert list(request.parent) == ["age", "cancer_type"]
+            assert list(request.parent) == ["age", "cancer_primary_site"]
             values = [
-                "Female" if request.parent["cancer_type"] == "ovary cancer" else "Both"
+                "Female" if request.parent["cancer_primary_site"] == "ovary cancer" else "Both"
             ]
         else:
             values = ["NA"]
@@ -45,7 +45,7 @@ def test_primary_site_is_locked_before_sex_in_both_schedulers():
         )
 
     wave = Hierarchy(0, "SYNTHETIC trial allowing ovarian and lung cancers", PROMPTS)
-    for _ in range(10):
+    for _ in range(len(FIELDS) + 1):
         requests = wave.requests()
         wave.accept(requests, [complete(r) for r in requests])
 
@@ -62,15 +62,15 @@ def test_primary_site_is_locked_before_sex_in_both_schedulers():
     lines = wave.output().splitlines()
     assert lines[0].startswith(
         "1. Age range allowed: 18 years or older. Sex allowed: Female. "
-        "Cancer type allowed: ovary cancer."
+        "Cancer primary site allowed: ovary cancer."
     )
     assert lines[1].startswith(
         "2. Age range allowed: 18 years or older. Sex allowed: Both. "
-        "Cancer type allowed: lung cancer."
+        "Cancer primary site allowed: lung cancer."
     )
     assert sum(r.field_name == "sex" for r in seen) == 4
     assert "Cancer type is selected at the next level" not in PROMPTS["sex"]
-    assert "-Re sex criteria:" not in PROMPTS["cancer_type"]
+    assert "-Re sex criteria:" not in PROMPTS["cancer_primary_site"]
     assert "-Re sex criteria:" in PROMPTS["sex"]
 
 
@@ -182,7 +182,7 @@ def test_graph_preserves_wave_scheduler_branch_order_and_existing_space_ids():
         return answer(request)
 
     wave = Hierarchy(0, "synthetic", PROMPTS)
-    for _ in range(10):
+    for _ in range(len(FIELDS) + 1):
         requests = wave.requests()
         wave.accept(requests, [reply(request) for request in requests])
 
@@ -220,7 +220,7 @@ def test_failed_branch_never_exports_completed_siblings():
         state = ReadyHierarchy(0, "synthetic", PROMPTS)
 
         async def complete(request):
-            if request.field_name == "biomarkers_excluded" and request.scope == "slow":
+            if request.field_name == "biomarker_requirements" and request.scope == "slow":
                 return Completion("invalid")
             return answer(request)
 

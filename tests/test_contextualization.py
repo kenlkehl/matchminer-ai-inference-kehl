@@ -150,7 +150,8 @@ def test_contextualization_rejects_patient_bearing_columns(column):
         contextualize_trial_spaces(_spaces(**{column: "PRIVATE_PATIENT_MARKER"}))
 
 
-def test_partial_sources_are_synthesized_with_notices(monkeypatch):
+@pytest.mark.parametrize("combined", [False, True])
+def test_partial_sources_are_synthesized_with_notices(monkeypatch, combined):
     evidence_adapter = EvidenceAdapter()
     monkeypatch.setattr(
         "matchminer_ai.contextualization.api.resolve_sources",
@@ -176,8 +177,17 @@ def test_partial_sources_are_synthesized_with_notices(monkeypatch):
         "matchminer_ai.contextualization.api._run_llm",
         fake_llm,
     )
+    summary = SPACE_SUMMARY
+    if combined:
+        summary = summary.replace("Cancer type allowed", "Cancer primary site allowed").replace(
+            "Prior treatment required: platinum chemotherapy. Prior treatment excluded: prior osimertinib.",
+            "Prior treatment requirements: platinum chemotherapy AND no prior osimertinib.",
+        ).replace(
+            "Biomarkers required: EGFR L858R mutation. Biomarkers excluded: ALK rearrangement.",
+            "Biomarker requirements: EGFR L858R mutation AND no ALK rearrangement.",
+        )
     result = contextualize_trial_spaces(
-        _spaces(),
+        _spaces(clinical_space_summary=summary),
         sources=("nci_pdq", "pubmed"),
     )
 
@@ -195,6 +205,10 @@ def test_partial_sources_are_synthesized_with_notices(monkeypatch):
     assert result.evidence.iloc[0]["evidence_category"] == "general"
     assert len(llm_calls) == 1
     prompt = llm_calls[0][0][0][1]["content"]
+    if combined:
+        assert "platinum chemotherapy AND no prior osimertinib" in prompt
+        assert "EGFR L858R mutation AND no ALK rearrangement" in prompt
+        assert evidence_adapter.queries[0].biomarker_requirements == "EGFR L858R mutation AND no ALK rearrangement"
     assert "### Workup generally expected before this disease state" in prompt
     assert "### Workup to consider now or at the next decision point" in prompt
     assert "pathologic or histologic confirmation" in prompt

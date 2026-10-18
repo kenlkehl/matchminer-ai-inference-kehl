@@ -43,6 +43,8 @@ class TrialSpaceQuery:
     biomarkers_excluded: str = ""
     prior_treatment_required: str = ""
     prior_treatment_excluded: str = ""
+    prior_treatment_requirements: str = ""
+    biomarker_requirements: str = ""
 
     @property
     def disease_query(self) -> str:
@@ -59,7 +61,11 @@ class TrialSpaceQuery:
     def biomarker_query(self) -> str:
         """Return biomarker criteria without any patient context."""
 
-        parts = [self.biomarkers_required, self.biomarkers_excluded]
+        parts = [
+            self.biomarker_requirements,
+            self.biomarkers_required,
+            self.biomarkers_excluded,
+        ]
         return " ".join(
             part
             for part in parts

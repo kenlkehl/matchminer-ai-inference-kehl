@@ -15,6 +15,7 @@ from matchminer_ai.llm.prompt_rendering import (
 
 from .hierarchy import (
     VERSION,
+    FIELDS,
     Completion,
     Hierarchy,
     ReadyHierarchy,
@@ -137,13 +138,14 @@ def summarize_hierarchically(
     ]
     attempts = [[] for _ in states]
     model_metadata = {"model_name": trial_config.get("model_name")}
-    for stage in range(10):
+    for stage in range(len(FIELDS) + 1):
         requests_by_trial = [state.requests() for state in states]
         requests = [request for group in requests_by_trial for request in group]
         if not requests:
             break
         logger.info(
-            "Trial hierarchy stage %d/10: %d parent requests", stage + 1, len(requests)
+            "Trial hierarchy stage %d/%d: %d parent requests",
+            stage + 1, len(FIELDS) + 1, len(requests)
         )
         responses = {}
         for offset in range(0, len(requests), batch_size):

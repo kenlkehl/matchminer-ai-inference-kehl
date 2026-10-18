@@ -43,8 +43,8 @@ label in saved spaces. Public output columns and structured disease-burden keys
 are unchanged; new prompt versions require fresh extraction outputs.
 
 `summarize_trials` now defaults to hierarchical extraction: age, primary
-site, sex, histology, disease state, required treatment, excluded treatment, required
-biomarkers, then excluded biomarkers. Each call extends one parent with values
+site, sex, histology, disease state, prior treatment requirements, then biomarker
+requirements. Each call extends one parent with values
 for just the next field. Python assembles and numbers the completed spaces;
 general exclusions are extracted in a separate call. See the
 [extraction contract and configuration](docs/api/trials.md#hierarchical-extraction).
@@ -56,7 +56,7 @@ plus shared anti-boilerplate and omission guidance. Other fields' definitions ar
 not included. The separate boilerplate prompt uses only its own authored rules and
 shared omissions. Biomarker fields retain positive/negative result restrictions,
 including specified alterations and expression thresholds; testing or known-status
-requirements alone are omitted. These rules also apply to one-shot extraction. This v4
+requirements alone are omitted. These rules also apply to one-shot extraction. This v5
 prompt contract requires fresh extraction checkpoints; saved screening is reusable.
 Remote extraction schedules ready branches across trials and field levels,
 with independent boilerplate calls and shared per-endpoint concurrency limits.

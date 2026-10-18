@@ -28,12 +28,11 @@ before combining old artifacts with newly summarized trials.
 ## Hierarchical extraction
 
 The default `trial.extraction_method` is `hierarchical`. It builds a tree in this
-fixed order: age, cancer primary site, sex, histology, disease state, required
-prior treatment, excluded prior treatment, required biomarkers, excluded
-biomarkers. One request handles one parent and one field, returning a JSON array
+fixed order: age, cancer primary site, sex, histology, disease state, prior
+treatment requirements, and biomarker requirements. One request handles one parent and one field, returning a JSON array
 of alternative values rather than a full list of spaces. Independent parents
 are batched through the configured backend. A trial with one branch throughout
-uses ten logical calls: nine fields and one separate boilerplate call.
+uses eight logical calls: seven fields and one separate boilerplate call.
 
 Every population-field request includes:
 
@@ -41,8 +40,8 @@ Every population-field request includes:
 2. The complete trial source.
 3. "For a patient with this set of characteristics:" followed by the inherited
    characteristics of exactly one candidate branch and its source-grounded scope.
-4. "What sets of [age ranges / treatment inclusion criteria / biomarker exclusion
-   criteria / etc.] are relevant for determining eligibility for this trial?"
+4. "What sets of [age ranges / prior treatment requirements / biomarker
+   requirements / etc.] are relevant for determining eligibility for this trial?"
 5. Shared anti-boilerplate instructions and authored omissions.
 6. Only the current field's verbatim instructions and examples from the active
    `trial.user.primer.txt`, followed by the JSON response contract.
@@ -50,8 +49,8 @@ Every population-field request includes:
 Other fields' definitions are absent. The shared anti-boilerplate boundary uses
 the primer's definition and examples of general exclusions; the omission text
 retains its measurable-disease/biopsy-target and treatment-washout instructions.
-Primary-site and histology requests also receive the exact diagnosis-enumeration
-paragraph. Biomarker requests also receive the exact treatment-defining population
+The primary-site request includes the exact diagnosis-enumeration
+paragraph now contained in that authored section. Biomarker requests also receive the exact treatment-defining population
 example. Each branch adds only the current field and retains shared requirements.
 A condition assigned to this field must survive in its value, not only its scope.
 Biomarker fields include only restrictions on results: positive or negative status,
@@ -68,7 +67,7 @@ cross-field dependencies and conditional exceptions; it is not included in the
 final space text. Equal values with different scopes remain separate until the
 remaining fields are resolved. No Cartesian product of independent field lists
 is made. Python copies ancestors into each completed leaf, removes exact
-duplicate leaves, renders all nine labels, and adds numbering. Public column
+duplicate leaves, renders all seven labels, and adds numbering. Public column
 names and zero-based space IDs remain unchanged.
 
 The model returns `{"branches": [{"value": "...", "scope": "..."}],
@@ -130,19 +129,19 @@ use the existing backend profiles.
 The shared introduction and JSON response contracts live in
 `src/matchminer_ai/prompts/trial.hierarchy.*.txt`. Each field component expands
 `{{field_rules}}` with its exact section from `trial.user.primer.txt`, under
-`FIELD-SPECIFIC INSTRUCTIONS (verbatim):`. Required/excluded treatment share the
-original treatment section, and required/excluded biomarkers share the original
+`FIELD-SPECIFIC INSTRUCTIONS (verbatim):`. The combined treatment field receives the
+original treatment section, and the combined biomarker field receives the original
 biomarker section. Age retains its existing instructions because the primer has
 no separate age section. Changed section boundaries fail explicitly rather than
 silently dropping guidance. One-shot extraction uses the same active primer;
-its output format and `trial.user.question.txt` are unchanged.
+it now emits the same seven labels. `trial.user.question.txt` is unchanged.
 The shared engine, hierarchy prompts and primer are mirrored in training, with
 cross-repository contract tests.
 
-This hierarchy is `trial-hierarchy-v4`, the field-specific prompt contract.
+This hierarchy is `trial-hierarchy-v5`, the combined-requirements prompt contract.
 Primary site is still fixed before sex; final text retains the established age,
 sex, primary-site label order. Prompt and version fingerprints prevent reuse of
-v1/v2/v3 extraction checkpoints. Compatible treatment screening can be retained.
+v1/v2/v3/v4 extraction checkpoints. Compatible treatment screening can be retained.
 
 This design increases the number of calls and repeats source text. It improves
 structural control but does not establish clinical completeness: an erroneous
@@ -211,3 +210,14 @@ The OncoTree agent sees only one hierarchy level at a time. The NCIt agent sees
 only bounded search candidates and retrieves full definitions only for
 candidate indices it selects. A complete ontology is never placed in LLM
 context.
+
+New space text uses `Cancer primary site allowed`, `Prior treatment requirements`,
+and `Biomarker requirements`. Treatment and biomarker fields each retain both
+positive and negative conditions. Extraction postprocessing, QC, contextualization,
+and training's 0c sampling accept these seven fields as well as saved legacy
+nine-field spaces; they do not rewrite saved text or mix extraction checkpoints.
+TrialChecker and synthetic-patient prompts preserve clause polarity and AND/OR
+logic. The structured ontology API and PDQ catalog retain their separate JSON
+required/excluded fields, with explicit prompt adapters for the combined input.
+Existing trained models can consume the new text, but their quality on this prompt
+generation still requires evaluation; regenerate embeddings for changed spaces.

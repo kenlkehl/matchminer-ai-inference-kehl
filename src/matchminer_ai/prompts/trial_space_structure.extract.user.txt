@@ -39,6 +39,14 @@ Schema:
 }
 
 Rules:
+- Input spaces may use combined "Prior treatment requirements" and "Biomarker
+  requirements" fields, or legacy separate required/excluded fields. Read every
+  clause and preserve its polarity when filling this JSON schema. In particular,
+  "prior cisplatin and no prior pembrolizumab" requires cisplatin exposure and
+  excludes pembrolizumab exposure; a required negative biomarker result must
+  remain negative. Do not treat an entire combined field as positive requirements.
+- "Cancer primary site allowed" and legacy "Cancer type allowed" both describe
+  the cancer primary site.
 - Ages are in years. Use null for an open or unspecified bound.
 - For unrestricted sex, return ["female", "male", "other"].
 - Map localized, resectable, neoadjuvant, adjuvant, and explicitly curative

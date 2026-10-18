@@ -30,6 +30,7 @@ _FIELD_LABELS = (
     "Sex allowed",
     "Sex",
     "Cancer type allowed",
+    "Cancer primary site allowed",
     "Histology allowed",
     "Cancer burden allowed",
     "Disease state allowed",
@@ -37,6 +38,8 @@ _FIELD_LABELS = (
     "Prior treatment excluded",
     "Biomarkers required",
     "Biomarkers excluded",
+    "Prior treatment requirements",
+    "Biomarker requirements",
 )
 _FIELD_PATTERN = re.compile(
     r"(?P<label>"
@@ -99,6 +102,8 @@ def parse_clinical_space_summary(summary: Any) -> dict[str, str]:
         label = match.group("label").casefold()
         if label == "disease state allowed":
             label = "cancer burden allowed"
+        if label == "cancer primary site allowed":
+            label = "cancer type allowed"
         value = match.group("value").strip(" .")
         fields[label] = value
     return fields
@@ -125,7 +130,7 @@ def build_trial_space_query(row: Mapping[str, Any]) -> TrialSpaceQuery:
     if not disease:
         raise ValueError(
             f"Clinical space {_row_text(row, 'space_trial_id')!r} does not contain a "
-            "'Cancer type allowed:' field."
+            "'Cancer primary site allowed:' (or legacy 'Cancer type allowed:') field."
         )
     return TrialSpaceQuery(
         space_trial_id=_row_text(row, "space_trial_id"),
@@ -138,6 +143,8 @@ def build_trial_space_query(row: Mapping[str, Any]) -> TrialSpaceQuery:
         biomarkers_excluded=_field(fields, "Biomarkers excluded"),
         prior_treatment_required=_field(fields, "Prior treatment required"),
         prior_treatment_excluded=_field(fields, "Prior treatment excluded"),
+        prior_treatment_requirements=_field(fields, "Prior treatment requirements"),
+        biomarker_requirements=_field(fields, "Biomarker requirements"),
     )
 
 
