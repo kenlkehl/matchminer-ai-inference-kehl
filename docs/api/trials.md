@@ -221,3 +221,10 @@ logic. The structured ontology API and PDQ catalog retain their separate JSON
 required/excluded fields, with explicit prompt adapters for the combined input.
 Existing trained models can consume the new text, but their quality on this prompt
 generation still requires evaluation; regenerate embeddings for changed spaces.
+
+Hierarchical response parsing accepts one complete outer Markdown code fence
+(`json`, case-insensitive, or no language tag). It then applies the same strict
+JSON/schema, duplicate-key, and completion-status validation. Prose outside the
+fence, malformed JSON, and truncated responses still fail. Raw responses and
+reasoning remain unchanged in the audit. This presentation-only parser fix is
+compatible with existing v5 prompts and successful node checkpoints.

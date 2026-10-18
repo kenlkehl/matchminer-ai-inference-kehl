@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -140,7 +141,16 @@ def parse_response(text: str, field_name: str, finish_reason: str = "stop") -> d
     """Strict structural validation; a malformed answer never prunes a branch."""
     if finish_reason not in {"stop", "end_turn", "eos"}:
         raise ValueError(f"Incomplete {field_name} response: {finish_reason}")
-    value = json.loads(text, object_pairs_hook=_unique_keys)
+    # A complete outer Markdown fence is presentation only. Do not search for
+    # JSON inside prose, repair syntax, or change the saved final/raw response.
+    # Keep the prompt/cache contract unchanged: accepted JSON has the same schema.
+    fenced = re.fullmatch(
+        r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```",
+        text.strip(),
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    payload = fenced.group(1) if fenced else text
+    value = json.loads(payload, object_pairs_hook=_unique_keys)
     if not isinstance(value, dict):
         raise ValueError("Return one JSON object, not an array or scalar")  # noqa: TRY004 - output validation, not a caller type error
     if field_name == "boilerplate":

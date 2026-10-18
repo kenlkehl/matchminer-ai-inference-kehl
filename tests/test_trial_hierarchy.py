@@ -337,7 +337,10 @@ def test_equal_field_values_with_different_scopes_are_not_merged_early():
         (branches(("18+", "all")), "age", "length"),
     ],
 )
-def test_invalid_output_never_means_a_valid_empty_space(text, field, finish):
+@pytest.mark.parametrize("fenced", [False, True])
+def test_invalid_output_never_means_a_valid_empty_space(text, field, finish, fenced):
+    if fenced:
+        text = "```json\n" + text + "\n```"
     with pytest.raises(ValueError):
         parse_response(text, field, finish)
 
@@ -537,3 +540,38 @@ def test_context_budget_is_recounted_without_truncating(monkeypatch):
     assert large_context[0].messages == messages[0]
     with pytest.raises(ValueError, match="not truncated"):
         _bounded_prompts(messages, {**config, "max_model_len": 256})
+
+
+@pytest.mark.parametrize("language,newline", [("json", "\n"), ("JSON", "\r\n"), ("", "\n")])
+@pytest.mark.parametrize("field,payload", [
+    ("age", '{"branches": [{"value": "18+", "scope": "all"}], "prune_reason": ""}'),
+    ("boilerplate", '{"exclusions": ["Active infection."]}'),
+])
+def test_complete_outer_json_fence_is_presentation_only(language, newline, field, payload):
+    text = f" \n```{language}  {newline}{payload}{newline}```\t\n"
+    assert parse_response(text, field) == parse_response(payload, field)
+
+
+@pytest.mark.parametrize("wrapper", [
+    "Here is the answer:\n```json\n{payload}\n```",
+    "```json\n{payload}\n```\nExplanation.",
+    "```json\n{payload}",
+    "```javascript\n{payload}\n```",
+    "```json\n{payload}\n```\n```json\n{payload}\n```",
+    "```json\n```json\n{payload}\n```\n```",
+    "```json\n{payload} trailing junk\n```",
+])
+def test_fence_handling_does_not_salvage_ambiguous_or_malformed_answers(wrapper):
+    with pytest.raises(ValueError):
+        parse_response(wrapper.format(payload=branches(("18+", "all"))), "age")
+
+
+def test_cache_retains_original_fenced_response_and_reasoning(tmp_path):
+    request = Hierarchy(0, "trial", PROMPTS).requests()[0]
+    completion = Completion("```json\n" + branches(("18+", "all")) + "\n```",
+                            reasoning="Original reasoning.", raw="Original raw response.")
+    cache = ResponseCache(tmp_path, {"model": "synthetic"})
+    cache.put(request, completion)
+    assert cache.get(request) == completion
+    saved = json.loads(cache.path(request).read_text())["completion"]
+    assert saved == vars(completion)
