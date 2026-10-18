@@ -9,6 +9,7 @@ from matchminer_ai.llm.backends import LLMGenerationResult
 from matchminer_ai.trials import summarize_trials
 from matchminer_ai.trials._hierarchical_backend import summarize_hierarchically
 from matchminer_ai.trials.hierarchy import (
+    FIELD_QUESTIONS,
     FIELDS,
     Completion,
     Hierarchy,
@@ -23,7 +24,7 @@ PROMPTS = load_prompts(Path(__file__).parents[1] / "src/matchminer_ai/prompts")
 
 
 @pytest.mark.parametrize("field", [name for name, _ in FIELDS])
-def test_each_component_has_full_definitions_in_requested_order(field):
+def test_each_component_gets_only_its_field_rules_and_one_parent(field):
     source = "SYNTHETIC FULL SOURCE\nAdults; no known hepatitis; ECOG 0 or 1."
     index = [name for name, _ in FIELDS].index(field)
     parent = {name: f"locked {name}" for name, _ in FIELDS[:index]}
@@ -34,12 +35,15 @@ def test_each_component_has_full_definitions_in_requested_order(field):
         PROMPTS["common"].strip(),
         f"CURRENT FIELD: {field}\n",
         f"TRIAL DOCUMENT:\n{source}\nEND TRIAL DOCUMENT",
-        "FULL FIELD DEFINITIONS AND POPULATION RULES:\n" + PROMPTS["definitions"],
-        "CURRENT CANDIDATE SPACE (previous fields are locked):\n"
-        + json.dumps({"fields": parent, "scope": scope}),
+        "For a patient with this set of characteristics:\n" + json.dumps(parent),
+        "SOURCE-DEFINED CONTEXT FOR THIS BRANCH:\n" + scope,
+        f"What sets of {FIELD_QUESTIONS[field]} are relevant for determining eligibility for this trial?",
+        "ANTI-BOILERPLATE INSTRUCTIONS:",
+        PROMPTS["anti_boilerplate"],
+        "OMISSIONS (verbatim):\n" + PROMPTS["omissions"],
+        "INSTRUCTIONS FOR THIS STEP:\n" + PROMPTS[field].strip(),
         f"RETURN CHILD SPACES FOR CURRENT FIELD: {field}\n"
         + PROMPTS["response"].strip(),
-        "INSTRUCTIONS FOR THIS STEP:\n" + PROMPTS[field].strip(),
     ]
     positions = [text.index(part) for part in expected_parts]
     assert positions == sorted(positions)
@@ -48,26 +52,34 @@ def test_each_component_has_full_definitions_in_requested_order(field):
     assert text.count(source) == 1
     assert request.parent == parent
     assert request.scope == scope
-    # All definitions, not only this field's abbreviated rules, reach the model.
-    for label in (
-        "sex criteria",
-        "cancer primary site",
-        "histology",
-        "disease state",
-        "treatment history",
-        "biomarkers",
-    ):
-        assert f"-Re {label}:" in text
+    field_sections = {
+        "sex criteria": {"sex"},
+        "cancer primary site": {"cancer_type"},
+        "histology": {"histology"},
+        "disease state": {"disease_state"},
+        "treatment history": {"prior_treatment_required", "prior_treatment_excluded"},
+        "biomarkers": {"biomarkers_required", "biomarkers_excluded"},
+    }
+    for label, relevant_fields in field_sections.items():
+        assert (f"-Re {label}:" in text) == (field in relevant_fields)
+    assert text.count("For a patient with this set of characteristics:") == 1
     assert "uncontrolled brain metastases, HIV or hepatitis" in text
-    assert '"ECOG > 1"' in text
-    assert 'Examples of invalid biomarker components: "AFP > 5", "ECOG > 2"' in text
-    assert "exhaustive list of spaces" in text
+    assert "Make sure your boilerplate exclusions" not in text
+    assert "Do NOT include this type of time-specific treatment washout" in text
+    assert "DO NOT BELONG IN YOUR TRIAL SPACE OUTPUT TEXT AT ALL" in text
+    assert ("exhaustive list of spaces" in text) == (
+        field in {"cancer_type", "histology"}
+    )
+    assert ("ALK-rearranged" in text) == (
+        field in {"biomarkers_required", "biomarkers_excluded"}
+    )
+    assert "FULL FIELD DEFINITIONS" not in text
     assert "Structure your output like this" not in text
     assert "After you output the trial spaces" not in text
     assert "1. Age range allowed:" not in text
 
 
-def test_boilerplate_gets_same_full_source_and_definitions_before_its_response():
+def test_boilerplate_gets_full_source_and_only_boilerplate_rules():
     request = build_request(
         0, 0, "FULL SOURCE", "boilerplate", {}, "All populations", PROMPTS
     )
@@ -75,10 +87,10 @@ def test_boilerplate_gets_same_full_source_and_definitions_before_its_response()
     parts = [
         PROMPTS["common"].strip(),
         "TRIAL DOCUMENT:\nFULL SOURCE\nEND TRIAL DOCUMENT",
-        PROMPTS["definitions"],
         "EXTRACTION SCOPE:\nAll populations",
-        "RETURN GENERAL EXCLUSIONS:\n" + PROMPTS["boilerplate_response"].strip(),
+        "OMISSIONS (verbatim):\n" + PROMPTS["omissions"],
         "INSTRUCTIONS FOR THIS STEP:\n" + PROMPTS["boilerplate"].strip(),
+        "RETURN GENERAL EXCLUSIONS:\n" + PROMPTS["boilerplate_response"].strip(),
     ]
     assert [text.index(part) for part in parts] == sorted(
         text.index(part) for part in parts
@@ -88,6 +100,10 @@ def test_boilerplate_gets_same_full_source_and_definitions_before_its_response()
     assert "CURRENT CANDIDATE SPACE" not in text
     assert "RETURN CHILD SPACES" not in text
     assert "inclusion and exclusion sections" in text
+    assert "-Re " not in text
+    assert "For a patient with this set of characteristics:" not in text
+    assert '"ECOG > 1"' in text
+    assert '"Hct <= 30 and Hgb <= 10"' in text
 
 
 @pytest.mark.parametrize(
@@ -139,7 +155,7 @@ def test_boilerplate_gets_same_full_source_and_definitions_before_its_response()
         ),
     ],
 )
-def test_closing_reminder_repeats_exact_authored_section_and_examples(
+def test_field_instruction_includes_exact_authored_section_and_examples_once(
     field, start, end, example_label
 ):
     primer = (
@@ -148,10 +164,10 @@ def test_closing_reminder_repeats_exact_authored_section_and_examples(
     expected = primer[primer.index(start) : primer.index(end)].strip()
     request = build_request(0, 0, "source", field, {}, "all", PROMPTS)
     text = request.messages[1]["content"]
-    reminder = text.split("REMINDER OF FIELD-SPECIFIC RULES:\n")
+    reminder = text.split("FIELD-SPECIFIC INSTRUCTIONS (verbatim):\n")
     assert len(reminder) == 2
-    assert reminder[1] == expected
-    assert text.count(expected) == 2
+    assert reminder[1].startswith(expected)
+    assert text.count(expected) == 1
     assert "{{field_rules}}" not in text
     if example_label:
         for kind in ("valid", "invalid"):
@@ -161,13 +177,13 @@ def test_closing_reminder_repeats_exact_authored_section_and_examples(
 def test_age_reminder_uses_existing_rules_without_invented_examples():
     request = build_request(0, 0, "source", "age", {}, "all", PROMPTS)
     text = request.messages[1]["content"]
-    reminder = text.split("REMINDER OF FIELD-SPECIFIC RULES:\n")[1]
+    reminder = text.split("FIELD-SPECIFIC INSTRUCTIONS:\n")[1]
     assert reminder.startswith("Identify every age group targeted by the trial")
     assert "Do not invent age cutoffs when unstated; use NA." in reminder
     assert "Examples of" not in reminder
 
 
-def test_full_authored_rules_are_reused_verbatim_and_live_edits_invalidate_cache(
+def test_authored_edits_reach_only_relevant_fields_and_invalidate_their_cache(
     tmp_path,
 ):
     source_dir = Path(__file__).parents[1] / "src/matchminer_ai/prompts"
@@ -176,26 +192,33 @@ def test_full_authored_rules_are_reused_verbatim_and_live_edits_invalidate_cache
     primer_path = tmp_path / "trial.user.primer.txt"
     primer = (source_dir / primer_path.name).read_text()
     primer_path.write_text(primer)
-    # Every original semantic paragraph and example is present, without the
-    # conflicting numbered-space and sequential boilerplate output commands.
-    paragraphs = PROMPTS["definitions"].split("\n\n")
-    assert len(paragraphs) == 3
-    assert all(paragraph in primer for paragraph in paragraphs)
-    original = Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0]
+    assert PROMPTS["anti_boilerplate"] in primer
+    assert all(p in primer for p in PROMPTS["omissions"].split("\n\n"))
+    original = build_request(
+        0, 0, "trial", "biomarkers_required", {}, "all", load_prompts(tmp_path)
+    )
+    original_age = Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0]
     cache = ResponseCache(tmp_path / "cache", {"model": "synthetic"})
     cache.put(original, Completion(branches(("18+", "all"))))
     primer_path.write_text(
         primer.replace("-Re biomarkers:", "-Re biomarkers: NEW AUTHORED RULE.")
     )
-    changed = Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0]
+    changed = build_request(
+        0, 0, "trial", "biomarkers_required", {}, "all", load_prompts(tmp_path)
+    )
     assert "NEW AUTHORED RULE." in changed.messages[1]["content"]
     assert cache.get(changed) is None
+    assert (
+        Hierarchy(0, "trial", load_prompts(tmp_path)).requests()[0].key
+        == original_age.key
+    )
     for field in ("biomarkers_required", "biomarkers_excluded"):
         text = build_request(
             0, 0, "trial", field, {}, "all", load_prompts(tmp_path)
         ).messages[1]["content"]
         assert (
-            "NEW AUTHORED RULE." in text.split("REMINDER OF FIELD-SPECIFIC RULES:\n")[1]
+            "NEW AUTHORED RULE."
+            in text.split("FIELD-SPECIFIC INSTRUCTIONS (verbatim):\n")[1]
         )
     primer_path.write_text(
         primer.replace("-Re disease state:", "Changed field heading:")
@@ -203,9 +226,9 @@ def test_full_authored_rules_are_reused_verbatim_and_live_edits_invalidate_cache
     with pytest.raises(ValueError, match="field-reminder sections"):
         load_prompts(tmp_path)
     primer_path.write_text(
-        primer.replace("Structure your output like this,", "Unexpected section layout")
+        primer.replace("Details about measurable disease", "Unexpected section layout")
     )
-    with pytest.raises(ValueError, match="field-guidance sections"):
+    with pytest.raises(ValueError, match="shared-rule sections"):
         load_prompts(tmp_path)
 
 
@@ -351,10 +374,10 @@ def test_previous_hierarchy_version_cannot_reuse_node_cache(tmp_path, monkeypatc
 
     cache = ResponseCache(tmp_path, {"model": "synthetic"})
     with monkeypatch.context() as old:
-        old.setattr(hierarchy, "VERSION", "trial-hierarchy-v2")
+        old.setattr(hierarchy, "VERSION", "trial-hierarchy-v3")
         request = Hierarchy(0, "trial", PROMPTS).requests()[0]
         cache.put(request, Completion(branches(("18+", "all"))))
-    assert hierarchy.VERSION == "trial-hierarchy-v3"
+    assert hierarchy.VERSION == "trial-hierarchy-v4"
     assert cache.get(Hierarchy(0, "trial", PROMPTS).requests()[0]) is None
 
 

@@ -48,12 +48,14 @@ biomarkers, then excluded biomarkers. Each call extends one parent with values
 for just the next field. Python assembles and numbers the completed spaces;
 general exclusions are extracted in a separate call. See the
 [extraction contract and configuration](docs/api/trials.md#hierarchical-extraction).
-Each field call introduces the hierarchy, supplies the full trial, includes the
-complete field definitions and examples from `trial.user.primer.txt`, shows the
-current candidate, then requests children for the next field. Immediately before
-generation, `REMINDER OF FIELD-SPECIFIC RULES:` repeats the current field's authored
-instructions and valid/invalid examples verbatim. The primer remains
-the source of the clinical rules; only its one-shot output commands are omitted.
+Each field call supplies the full trial and one candidate's inherited characteristics,
+then asks: "For a patient with this set of characteristics ... what sets of [the
+current field] are relevant for determining eligibility?" It includes only that
+field's authored instructions and examples verbatim from `trial.user.primer.txt`,
+plus shared anti-boilerplate and omission guidance. Other fields' definitions are
+not included. The separate boilerplate prompt uses only its own authored rules and
+shared omissions. The primer and one-shot extraction remain unchanged. This v4
+prompt contract requires fresh extraction checkpoints; saved screening is reusable.
 Remote extraction schedules ready branches across trials and field levels,
 with independent boilerplate calls and shared per-endpoint concurrency limits.
 It does not wait for a complete field wave or trial batch before advancing.

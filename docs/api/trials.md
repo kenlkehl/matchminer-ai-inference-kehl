@@ -35,24 +35,28 @@ of alternative values rather than a full list of spaces. Independent parents
 are batched through the configured backend. A trial with one branch throughout
 uses ten logical calls: nine fields and one separate boilerplate call.
 
-Every population-field request follows this order:
+Every population-field request includes:
 
-1. An introduction explaining the target-population hierarchy and the current
-   field as the next level of granularity.
+1. The hierarchy's purpose and the current field.
 2. The complete trial source.
-3. The full authored field definitions, examples, population rules and boilerplate
-   boundaries from `trial.user.primer.txt`.
-4. The current candidate's locked fields and internal `scope`.
-5. The request for alternative child spaces across this field and the JSON contract.
-6. Instructions for this step, ending with `REMINDER OF FIELD-SPECIFIC RULES:`
-   and the current field's authored rules and examples.
+3. "For a patient with this set of characteristics:" followed by the inherited
+   characteristics of exactly one candidate branch and its source-grounded scope.
+4. "What sets of [age ranges / treatment inclusion criteria / biomarker exclusion
+   criteria / etc.] are relevant for determining eligibility for this trial?"
+5. Shared anti-boilerplate instructions and authored omissions.
+6. Only the current field's verbatim instructions and examples from the active
+   `trial.user.primer.txt`, followed by the JSON response contract.
 
-Every call sees all field definitions, so it can distinguish tumor biomarkers
-from general exclusions such as HIV/hepatitis or organ dysfunction. One-shot
-numbering and output commands are omitted. Each branch adds only the current
-field; it must retain shared requirements rather than turn cumulative criteria
-into optional alternatives. The separate boilerplate call uses the same source
-and definitions, a trial-wide scope, and its own closing response instruction.
+Other fields' definitions are absent. The shared anti-boilerplate boundary uses
+the primer's definition and examples of general exclusions; the omission text
+retains its measurable-disease/biopsy-target and treatment-washout instructions.
+Primary-site and histology requests also receive the exact diagnosis-enumeration
+paragraph. Biomarker requests also receive the exact treatment-defining population
+example. Each branch adds only the current field and retains shared requirements.
+A condition assigned to this field must survive in its value, not only its scope.
+The separate single boilerplate request uses the full source, a trial-wide scope,
+the authored boilerplate paragraph (including logical negation examples), and
+shared omissions. It does not receive the population fields' definitions.
 
 The internal `scope` describes the applicable eligibility pathway. It preserves
 cross-field dependencies and conditional exceptions; it is not included in the
@@ -118,26 +122,22 @@ reasoning and validation attempts. Configured context limits reserve output
 space without truncating the source. Model sampling and parser selection still
 use the existing backend profiles.
 
-The shared introduction, step instructions and closing response contracts live
-in `src/matchminer_ai/prompts/trial.hierarchy.*.txt`. The full semantic rules are
-loaded directly from `trial.user.primer.txt`, so edits to those definitions affect
-hierarchical extraction too. The loader preserves their wording and examples;
-the closing field component expands `{{field_rules}}` from the matching primer
-section under `REMINDER OF FIELD-SPECIFIC RULES:`. This reminder follows the
-candidate and JSON response contract. Required/excluded treatment share the
-treatment section, required/excluded biomarkers share the biomarker section,
-and the separate boilerplate call repeats the boilerplate rules. Age repeats its
-existing step instructions because the primer has no separate age section.
-If the primer's section boundaries change, it fails explicitly rather than
-silently dropping guidance. `trial.user.question.txt` and the primer's one-shot
-output format apply only to `trial.extraction_method = "one_shot"`, retained for
-comparison and reproduction. The shared engine, hierarchy prompts and primer
-are mirrored in training, with cross-repository contract tests.
+The shared introduction and JSON response contracts live in
+`src/matchminer_ai/prompts/trial.hierarchy.*.txt`. Each field component expands
+`{{field_rules}}` with its exact section from `trial.user.primer.txt`, under
+`FIELD-SPECIFIC INSTRUCTIONS (verbatim):`. Required/excluded treatment share the
+original treatment section, and required/excluded biomarkers share the original
+biomarker section. Age retains its existing instructions because the primer has
+no separate age section. Changed section boundaries fail explicitly rather than
+silently dropping guidance. The active primer, its one-shot output format, and
+`trial.user.question.txt` remain unchanged for `trial.extraction_method = "one_shot"`.
+The shared engine, hierarchy prompts and primer are mirrored in training, with
+cross-repository contract tests.
 
-This hierarchy is `trial-hierarchy-v3`: primary site is fixed before the sex call,
-so sex can depend on that site. Final text retains the established age, sex,
-primary-site label order. Prompt and version fingerprints prevent reuse of v1/v2
-extraction checkpoints; compatible treatment screening can be retained.
+This hierarchy is `trial-hierarchy-v4`, the field-specific prompt contract.
+Primary site is still fixed before sex; final text retains the established age,
+sex, primary-site label order. Prompt and version fingerprints prevent reuse of
+v1/v2/v3 extraction checkpoints. Compatible treatment screening can be retained.
 
 This design increases the number of calls and repeats source text. It improves
 structural control but does not establish clinical completeness: an erroneous

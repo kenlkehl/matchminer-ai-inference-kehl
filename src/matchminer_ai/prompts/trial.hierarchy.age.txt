@@ -1,2 +1,2 @@
-REMINDER OF FIELD-SPECIFIC RULES:
+FIELD-SPECIFIC INSTRUCTIONS:
 Identify every age group targeted by the trial, including conditional younger/older exceptions. Value contains only the age range, with units. Do not omit an age group because its other eligibility conditions have not been extracted yet: preserve those conditions in scope. Do not invent age cutoffs when unstated; use NA. Avoid splitting a continuous range unless different eligibility pathways require it. Overlapping ranges are acceptable when linked to distinct source-defined pathways; retain that distinction in scope.

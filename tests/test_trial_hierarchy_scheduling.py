@@ -70,7 +70,8 @@ def test_primary_site_is_locked_before_sex_in_both_schedulers():
     )
     assert sum(r.field_name == "sex" for r in seen) == 4
     assert "Cancer type is selected at the next level" not in PROMPTS["sex"]
-    assert "Sex is determined at the next level" in PROMPTS["cancer_type"]
+    assert "-Re sex criteria:" not in PROMPTS["cancer_type"]
+    assert "-Re sex criteria:" in PROMPTS["sex"]
 
 
 def answer(request):

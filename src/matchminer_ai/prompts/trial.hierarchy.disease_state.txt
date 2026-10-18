@@ -1,4 +1,2 @@
-Define the concise disease-state values for this candidate using the full authored disease-state instructions above. Return separate branches only for meaningfully different eligible populations. Keep conditions belonging to later fields in scope rather than adding them to this field's value.
-
-REMINDER OF FIELD-SPECIFIC RULES:
+FIELD-SPECIFIC INSTRUCTIONS (verbatim):
 {{field_rules}}

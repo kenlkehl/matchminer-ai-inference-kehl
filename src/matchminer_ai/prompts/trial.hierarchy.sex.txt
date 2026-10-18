@@ -1,5 +1,2 @@
-Identify eligible sex groups for this age and cancer-primary-site candidate using the full sex-criteria instructions above. Use Female, Male, or Both.
-Cancer primary site is already fixed in the current candidate. Apply the authored sex criteria to that selected site and the trial's restrictions. Do not invent a sex restriction for a population that has none.
-
-REMINDER OF FIELD-SPECIFIC RULES:
+FIELD-SPECIFIC INSTRUCTIONS (verbatim):
 {{field_rules}}

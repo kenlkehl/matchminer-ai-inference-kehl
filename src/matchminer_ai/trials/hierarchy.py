@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
-VERSION = "trial-hierarchy-v3"
+VERSION = "trial-hierarchy-v4"
 # Keep the established final text layout separate from extraction dependencies.
 OUTPUT_FIELDS = (
     ("age", "Age range allowed"),
@@ -30,6 +30,17 @@ OUTPUT_FIELDS = (
 )
 # Resolve primary site before sex, which can depend on that site.
 FIELDS = (OUTPUT_FIELDS[0], OUTPUT_FIELDS[2], OUTPUT_FIELDS[1], *OUTPUT_FIELDS[3:])
+FIELD_QUESTIONS = {
+    "age": "age ranges",
+    "cancer_type": "cancer primary sites",
+    "sex": "sex criteria",
+    "histology": "histologies",
+    "disease_state": "disease states",
+    "prior_treatment_required": "treatment inclusion criteria",
+    "prior_treatment_excluded": "treatment exclusion criteria",
+    "biomarkers_required": "biomarker inclusion criteria",
+    "biomarkers_excluded": "biomarker exclusion criteria",
+}
 PROMPT_NAMES = (
     "common",
     *(key for key, _ in FIELDS),
@@ -52,16 +63,37 @@ def load_prompts(directory: str | Path) -> dict[str, str]:
         for key in PROMPT_NAMES
     }
     primer = (directory / "trial.user.primer.txt").read_text()
-    prompts["definitions"] = _field_guidance(primer)
+    # The primer remains authoritative, but unrelated field definitions must
+    # never enter a field request. Only shared boundaries travel across fields.
+    prompts["anti_boilerplate"] = _authored_section(
+        primer, "Such exclusions tend to be common", "Make sure your boilerplate"
+    )
+    prompts["omissions"] = "\n\n".join(
+        _authored_section(primer, start, end)
+        for start, end in (
+            ("Details about measurable disease", "If a trial specifies stage IV"),
+            ("Critically, trials often specify", "Spell out treatment history"),
+        )
+    )
+    enumeration = _authored_section(
+        primer, "Some trials have only one space", "CRITICAL: Each trial space"
+    )
     for key, rules in _field_reminders(primer).items():
         if prompts[key].count("{{field_rules}}") != 1:
             raise ValueError(f"Expected one field_rules placeholder in {key} prompt")
         prompts[key] = prompts[key].replace("{{field_rules}}", rules)
+    for key in ("cancer_type", "histology"):
+        prompts[key] += "\n\n" + enumeration
+    biomarker_populations = _authored_section(
+        primer, "Create separate spaces when", "NEVER put a newline"
+    )
+    for key in ("biomarkers_required", "biomarkers_excluded"):
+        prompts[key] += "\n\n" + biomarker_populations
     return prompts
 
 
 def _field_reminders(primer: str) -> dict[str, str]:
-    """Repeat authored field sections verbatim beside the response instructions."""
+    """Select only the current field's authored wording and examples verbatim."""
     sections = (
         (("sex",), "-Re sex criteria:"),
         (("cancer_type",), "-Re cancer primary site:"),
@@ -93,43 +125,16 @@ def _field_reminders(primer: str) -> dict[str, str]:
     }
 
 
-def _field_guidance(primer: str) -> str:
-    """Reuse the complete authored rules, excluding one-shot output formatting.
-
-    Keep the original wording/examples instead of maintaining an abbreviated
-    second clinical contract. Fail visibly if an edit changes the section
-    boundaries, rather than silently dropping instructions.
-    """
-    boundaries = (
-        (
-            "CRITICAL: Concepts must be listed only in their appropriate fields",
-            "Structure your output like this,",
-        ),
-        (
-            "If a concept is not relevant,",
-            "NEVER put a newline within a single trial space.",
-        ),
-        (
-            "Then, list exclusion criteria described in the trial text",
-            "ALWAYS output plain text only.",
-        ),
-    )
-    sections = []
-    previous_end = -1
-    for start, end in boundaries:
-        if primer.count(start) != 1 or primer.count(end) != 1:
-            raise ValueError(
-                "Cannot locate field-guidance sections in trial.user.primer.txt; "
-                "update the hierarchy section boundaries before extraction"
-            )
-        start_index, end_index = primer.index(start), primer.index(end)
-        if not previous_end < start_index < end_index:
-            raise ValueError(
-                "Field-guidance sections in trial.user.primer.txt are out of order"
-            )
-        sections.append(primer[start_index:end_index].strip())
-        previous_end = end_index
-    return "\n\n".join(sections)
+def _authored_section(primer: str, start: str, end: str) -> str:
+    """Preserve exact shared wording and fail if its source boundaries change."""
+    if primer.count(start) != 1 or primer.count(end) != 1:
+        raise ValueError("Cannot locate shared-rule sections in trial.user.primer.txt")
+    first, last = primer.index(start), primer.index(end)
+    if first >= last:
+        raise ValueError(
+            "Shared-rule sections in trial.user.primer.txt are out of order"
+        )
+    return primer[first:last].strip()
 
 
 def _unique_keys(pairs):
@@ -226,30 +231,40 @@ def build_request(
         )
     else:
         instruction += "\nCURRENT FIELD: " + field_name
-    instruction += (
-        "\n\nTRIAL DOCUMENT:\n"
-        + trial_text
-        + "\nEND TRIAL DOCUMENT\n\n"
-        + "FULL FIELD DEFINITIONS AND POPULATION RULES:\n"
-        + prompts["definitions"]
-    )
+    instruction += "\n\nTRIAL DOCUMENT:\n" + trial_text + "\nEND TRIAL DOCUMENT\n\n"
     if field_name == "boilerplate":
         instruction += (
-            "\n\nEXTRACTION SCOPE:\n"
+            "EXTRACTION SCOPE:\n"
             + scope
+            + "\n\nOMISSIONS (verbatim):\n"
+            + prompts["omissions"]
+            + "\n\nINSTRUCTIONS FOR THIS STEP:\n"
+            + prompts["boilerplate"].strip()
             + "\n\nRETURN GENERAL EXCLUSIONS:\n"
             + prompts["boilerplate_response"].strip()
         )
     else:
         instruction += (
-            "\n\nCURRENT CANDIDATE SPACE (previous fields are locked):\n"
-            + json.dumps({"fields": parent, "scope": scope}, ensure_ascii=False)
+            "For a patient with this set of characteristics:\n"
+            + json.dumps(parent, ensure_ascii=False)
+            + "\n\nSOURCE-DEFINED CONTEXT FOR THIS BRANCH:\n"
+            + scope
+            + "\n\nWhat sets of "
+            + FIELD_QUESTIONS[field_name]
+            + " are relevant for determining eligibility for this trial?"
+            + "\n\nANTI-BOILERPLATE INSTRUCTIONS:\n"
+            + "Keep general exclusions out of this population field; "
+            + "a separate prompt extracts them.\n"
+            + prompts["anti_boilerplate"]
+            + "\n\nOMISSIONS (verbatim):\n"
+            + prompts["omissions"]
+            + "\n\nINSTRUCTIONS FOR THIS STEP:\n"
+            + prompts[field_name].strip()
             + "\n\nRETURN CHILD SPACES FOR CURRENT FIELD: "
             + field_name
             + "\n"
             + prompts["response"].strip()
         )
-    instruction += "\n\nINSTRUCTIONS FOR THIS STEP:\n" + prompts[field_name].strip()
     messages = [
         {
             "role": "system",
