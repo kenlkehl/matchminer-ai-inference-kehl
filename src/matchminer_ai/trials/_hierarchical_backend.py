@@ -302,7 +302,7 @@ async def _summarize_ready(
     ):
 
         async def complete(request):
-            cached = cache.get(request)
+            cached = await asyncio.to_thread(cache.get, request)
             if cached is not None:
                 return cached
             messages = request.messages
@@ -332,7 +332,7 @@ async def _summarize_ready(
                         )
                     messages = retry_messages(request, completion, str(exc))
                 else:
-                    cache.put(request, completion)
+                    await asyncio.to_thread(cache.put, request, completion)
                     return completion
             raise AssertionError("Positive retry limit must produce a completion")
 

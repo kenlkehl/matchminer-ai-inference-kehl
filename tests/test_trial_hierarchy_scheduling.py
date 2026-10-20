@@ -165,6 +165,30 @@ def test_numbering_is_independent_of_completion_order_and_scopes_survive():
     assert asyncio.run(extract("fast")) == asyncio.run(extract("slow"))
 
 
+def test_async_completed_trial_save_is_awaited_and_failure_propagates():
+    async def scenario(fail):
+        saved = []
+        state = ReadyHierarchy(0, "synthetic", PROMPTS)
+
+        async def complete(request):
+            return answer(request)
+
+        async def persist(finished):
+            await asyncio.sleep(0)
+            assert finished.done
+            if fail:
+                raise OSError("checkpoint unavailable")
+            saved.append(finished.output())
+
+        await run_ready_hierarchies([state], complete, concurrency=4,
+                                   active_trials=1, on_complete=persist)
+        assert saved == [state.output()]
+
+    asyncio.run(scenario(False))
+    with pytest.raises(OSError, match="checkpoint unavailable"):
+        asyncio.run(scenario(True))
+
+
 def test_graph_preserves_wave_scheduler_branch_order_and_existing_space_ids():
     def reply(request):
         if request.field_name == "age":

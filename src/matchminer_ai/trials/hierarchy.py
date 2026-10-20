@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import re
 from collections import deque
@@ -601,7 +602,9 @@ async def run_ready_hierarchies(
             for index, state in list(active.items()):
                 if state.done and index not in busy:
                     if on_complete is not None:
-                        on_complete(state)
+                        saved = on_complete(state)
+                        if inspect.isawaitable(saved):
+                            await saved
                     del active[index]
             admit()
             if active and not pending and not ready:
