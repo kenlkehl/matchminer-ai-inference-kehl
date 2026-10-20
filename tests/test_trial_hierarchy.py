@@ -376,6 +376,25 @@ def test_checkpoint_identity_covers_source_parent_prompt_and_runtime(tmp_path):
     assert cache.get(Hierarchy(0, "trial", changed).requests()[0]) is None
 
 
+def test_sharded_cache_reuses_flat_checkpoints_without_rewriting_them(tmp_path):
+    cache = ResponseCache(tmp_path, {"model": "synthetic"})
+    request = Hierarchy(0, "old trial", PROMPTS).requests()[0]
+    value = Completion(branches(("18+", "all")), reasoning="saved reasoning")
+    cache.put(request, value)
+    path = cache.path(request)
+    assert path.parent != tmp_path
+    legacy = tmp_path / path.name
+    path.replace(legacy)
+    before = legacy.read_bytes(), legacy.stat().st_mtime_ns
+    fresh = ResponseCache(tmp_path, {"model": "synthetic"})
+    assert fresh.get(request) == value
+    assert (legacy.read_bytes(), legacy.stat().st_mtime_ns) == before
+    other = Hierarchy(1, "new trial", PROMPTS).requests()[0]
+    fresh.put(other, value)
+    assert fresh.get(other) == value
+    assert fresh.get(request) == value
+
+
 def test_previous_hierarchy_version_cannot_reuse_node_cache(tmp_path, monkeypatch):
     from matchminer_ai.trials import hierarchy
 

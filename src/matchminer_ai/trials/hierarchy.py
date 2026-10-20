@@ -628,12 +628,23 @@ class ResponseCache:
             self.directory.mkdir(parents=True, exist_ok=True)
 
     def path(self, request):
-        return self.directory / (digest([self.identity, request.key]) + ".json")
+        name = digest([self.identity, request.key]) + ".json"
+        # Separate directory locks on shared filesystems during concurrent writes.
+        return self.directory / name[:2] / name
 
     def get(self, request):
-        if self.directory is None or not self.path(request).exists():
+        if self.directory is None:
             return None
-        data = json.loads(self.path(request).read_text())
+        path = self.path(request)
+        try:
+            content = path.read_text()
+        except FileNotFoundError:
+            # Existing runs used a flat directory. Reuse those entries in place.
+            try:
+                content = (self.directory / path.name).read_text()
+            except FileNotFoundError:
+                return None
+        data = json.loads(content)
         completion = Completion(**data["completion"])
         if data["request_key"] != request.key or data["identity"] != self.identity:
             raise ValueError("Hierarchy checkpoint identity mismatch")
@@ -644,6 +655,7 @@ class ResponseCache:
         parse_response(completion.final, request.field_name, completion.finish_reason)
         if self.directory is not None:
             path = self.path(request)
+            path.parent.mkdir(exist_ok=True)
             temporary = path.with_suffix(f".{uuid4().hex}.tmp")
             temporary.write_text(
                 json.dumps(
