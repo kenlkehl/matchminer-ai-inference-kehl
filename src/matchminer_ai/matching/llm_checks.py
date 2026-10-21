@@ -15,6 +15,7 @@ from matchminer_ai.llm.backends import (
     get_llm_backend,
 )
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
+from matchminer_ai.llm.reasoning import reasoning_system_prompt
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
@@ -33,7 +34,7 @@ def _load_prompt_template(filename: str) -> str:
 def _build_messages(user_content: str) -> list[dict[str, str]]:
     """Wrap task-specific user text in the chat message format used by checks."""
     return [
-        {"role": "system", "content": "Reasoning: high"},
+        {"role": "system", "content": ""},
         {"role": "user", "content": user_content},
     ]
 
@@ -86,6 +87,11 @@ def _run_llm_check(
         llm_config,
         config=config,
     )
+    system_content = reasoning_system_prompt(runtime_config.get("model_name"))
+    messages_list = [
+        [{"role": "system", "content": system_content}, *messages[1:]]
+        for messages in messages_list
+    ]
     prompt_list = build_prompt_list(messages_list, llm_config=runtime_config)
     backend = get_llm_backend(config)
     generation = backend.generate_llm_outputs(

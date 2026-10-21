@@ -5,6 +5,8 @@ from __future__ import annotations
 from importlib import resources
 from typing import TYPE_CHECKING
 
+from matchminer_ai.llm.reasoning import reasoning_system_prompt
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -30,15 +32,14 @@ def format_trial_text(
 
 
 def get_filled_trial_prompt(
-    trial_text: str, primer_filename: str, question_filename: str
+    trial_text: str, primer_filename: str, question_filename: str,
+    *, model_name: str = "",
 ) -> list[dict[str, str]]:
     """Prepare the chat-style prompt for a trial document."""
     return [
         {
             "role": "system",
-            "content": """
-Reasoning: high.
-""",
+            "content": reasoning_system_prompt(model_name),
         },
         {
             "role": "user",

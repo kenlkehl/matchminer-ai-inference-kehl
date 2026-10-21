@@ -49,7 +49,8 @@ def summarize_trials_multi_cohort(
     if method != "one_shot":
         raise ValueError(f"Unknown trial extraction_method: {method}")
     messages_list = [
-        get_filled_trial_prompt(text, primer_filename, question_filename)
+        get_filled_trial_prompt(text, primer_filename, question_filename,
+                               model_name=runtime.get("model_name", ""))
         for text in trial_texts
     ]
     prompt_list = build_prompt_list(messages_list, llm_config=runtime)

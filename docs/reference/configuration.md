@@ -789,3 +789,8 @@ The NCBI API works without an API key at its lower public rate limit. Supplying
 LLM task configuration for the separate per-patient, per-space review. This
 stage does not call public-source adapters. Its `local` and `remote` blocks
 follow the same structure as `trial.local` and `trial.remote`.
+
+Model-specific reasoning text: the literal `Reasoning: high` system header is
+added only for GPT-OSS model identities. Gemma, Nemotron, Qwen, and other families
+use their configured chat-template/API thinking controls; task instructions are
+preserved without the GPT-OSS header. Unknown model identities receive no header.

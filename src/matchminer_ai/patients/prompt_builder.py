@@ -104,7 +104,9 @@ def get_serial_patient_prompt(
         max_model_len=max_model_len,
         margin_tokens=margin_tokens,
     )
-    system_content = "Reasoning: high" if "gpt-oss" in model_name.lower() else ""
+    from matchminer_ai.llm.reasoning import reasoning_system_prompt
+
+    system_content = reasoning_system_prompt(model_name)
     return [
         {
             "role": "system",

@@ -12,6 +12,7 @@ from typing import Any, cast
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
+from matchminer_ai.llm.reasoning import reasoning_system_prompt
 
 from .ontology import (
     NCItDrugRecord,
@@ -118,8 +119,9 @@ class _JsonAgentRunner:
             [
                 {
                     "role": "system",
-                    "content": (
-                        "Reasoning: high. Follow the requested JSON contract exactly."
+                    "content": reasoning_system_prompt(
+                        self.runtime_config.get("model_name"),
+                        "Follow the requested JSON contract exactly.",
                     ),
                 },
                 {"role": "user", "content": user_prompt},

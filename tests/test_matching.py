@@ -792,8 +792,11 @@ def _llm_config(*, debug_mode: bool = False) -> MMAIConfig:
     )
 
 
-def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypatch):
+@pytest.mark.parametrize("model_name,expects_header", [("llm/model", False), ("google/gemma-4-31B-it", False), ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4", False), ("openai/gpt-oss-120b", True)])
+def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypatch, model_name, expects_header):
     """Run LLM match scoring through package backend config and score parser."""
+    config = _llm_config()
+    config.llm_match_quality["local"]["model_name"] = model_name
     captured_messages = []
 
     def fake_build_prompt_list(messages_list, *, llm_config):
@@ -823,7 +826,7 @@ def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypa
 
     result, metadata = score_match_quality_with_llm(
         pairs,
-        config=_llm_config(),
+        config=config,
         return_metadata=True,
     )
 
@@ -834,12 +837,12 @@ def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypa
     assert "llm_match_quality_answer_text" not in result.columns
     assert "llm_match_quality_reasoning_text" not in result.columns
     assert "llm_match_quality_parse_status" not in result.columns
-    assert captured_messages[0][0] == {"role": "system", "content": "Reasoning: high"}
+    assert captured_messages[0][0] == {"role": "system", "content": "Reasoning: high" if expects_header else ""}
     assert "metastatic lung cancer" in captured_messages[0][1]["content"]
     assert backend.last_llm_config["max_model_len"] == 50000
     assert backend.last_llm_config["sampling_params"]["max_tokens"] == 15000
     assert metadata["model_metadata"]["llm_match_quality_checker"]["model_name"] == (
-        "llm/model"
+        model_name
     )
 
 
@@ -879,10 +882,11 @@ def test_score_match_quality_with_llm_includes_debug_columns(monkeypatch):
     assert result["llm_match_quality_parse_status"].tolist() == ["parsed"]
 
 
-def test_exclusion_criteria_check_with_llm_builds_training_prompt_and_parses(
-    monkeypatch,
-):
+@pytest.mark.parametrize("model_name,expects_header", [("llm/model", False), ("google/gemma-4-31B-it", False), ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4", False), ("openai/gpt-oss-120b", True)])
+def test_exclusion_criteria_check_with_llm_builds_training_prompt_and_parses(monkeypatch, model_name, expects_header):
     """Run LLM exclusion scoring through package backend config and yes/no parser."""
+    config = _llm_config()
+    config.llm_exclusion_criteria["local"]["model_name"] = model_name
     captured_messages = []
 
     def fake_build_prompt_list(messages_list, *, llm_config):
@@ -910,7 +914,7 @@ def test_exclusion_criteria_check_with_llm_builds_training_prompt_and_parses(
         ]
     )
 
-    result = exclusion_criteria_check_with_llm(matches, config=_llm_config())
+    result = exclusion_criteria_check_with_llm(matches, config=config)
 
     assert result["llm_exclusion_criteria_pass"].tolist() == [True]
     assert "llm_exclusion_criteria_verdict" not in result.columns
@@ -919,7 +923,7 @@ def test_exclusion_criteria_check_with_llm_builds_training_prompt_and_parses(
     assert "llm_exclusion_criteria_answer_text" not in result.columns
     assert "llm_exclusion_criteria_reasoning_text" not in result.columns
     assert "llm_exclusion_criteria_parse_status" not in result.columns
-    assert captured_messages[0][0] == {"role": "system", "content": "Reasoning: high"}
+    assert captured_messages[0][0] == {"role": "system", "content": "Reasoning: high" if expects_header else ""}
     assert "uncontrolled brain mets" in captured_messages[0][1]["content"]
     assert backend.last_llm_config["max_model_len"] == 50000
     assert backend.last_llm_config["sampling_params"]["max_tokens"] == 20000

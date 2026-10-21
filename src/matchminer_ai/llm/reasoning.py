@@ -30,6 +30,20 @@ _SUBSTRING_FALLBACKS: tuple[tuple[str, str], ...] = (
 _DISABLED = {"", "none", "off", "false", "disabled", "null"}
 
 
+def reasoning_system_prompt(model_name: str | None, instruction: str = "") -> str:
+    """Add the GPT-OSS text control only for a known GPT-OSS model identity.
+
+    Other families request thinking through their chat-template/API controls.
+    Unknown names deliberately get no GPT-OSS header. Task instructions remain
+    intact regardless of model family.
+    """
+    normalized = (model_name or "").lower()
+    header = "Reasoning: high" if any(
+        name in normalized for name in ("gpt-oss", "gptoss", "gpt_oss")
+    ) else ""
+    return "\n\n".join(text for text in (header, instruction) if text)
+
+
 def resolve_reasoning_parser(
     model_name: str,
     explicit: str | None = "auto",
@@ -120,6 +134,7 @@ def parse_reasoning_output(
 __all__ = [
     "MODEL_TO_REASONING_PARSER",
     "parse_reasoning_output",
+    "reasoning_system_prompt",
     "resolve_reasoning_parser",
     "resolve_tool_call_parser",
 ]
