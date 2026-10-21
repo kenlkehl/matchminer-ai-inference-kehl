@@ -156,6 +156,7 @@ def summarize_trials(
             "model_metadata": {
                 "trial_summarizer": metadata["model_metadata"],
             },
+            "trial_rejections": metadata.get("trial_rejections", {}),
         }
         if return_qc:
             return result, metadata_payload, qc_report

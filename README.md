@@ -66,6 +66,12 @@ does not block request dispatch. Nemotron non-streaming reasoning parsers reuse
 their vocabulary/setup in a bounded cache, with separate tokenizer/thinking-mode
 entries and serialized access to each mutable parser. Prompts, output text, and
 checkpoint identities are unchanged by these execution optimizations.
+Malformed field responses receive the exact validation error and explicit JSON
+structure guidance. After two failures, thinking remains off for repair (Beam
+uses low effort). Empty population trees receive a separate source-grounded
+study-scope review: confirmed nontherapeutic/noncancer rejections are retained in
+metadata without generating spaces or counting as inference failures. Uncertain
+rejections and exhausted extraction errors remain failures.
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered

@@ -16,6 +16,51 @@ from matchminer_ai.trials.hierarchy import (
 PROMPTS = load_prompts(Path(__file__).parents[1] / "src/matchminer_ai/prompts")
 
 
+@pytest.mark.parametrize("decision,evidence,expected", [
+    ("reject", "healthy volunteers", "rejected"),
+    ("review", "healthy volunteers", "did not confirm"),
+    ("reject", "invented source quotation", "exact source excerpt"),
+])
+@pytest.mark.parametrize("ready", [False, True])
+def test_empty_tree_requires_independent_source_grounded_review(decision, evidence, expected, ready):
+    state = (ReadyHierarchy if ready else Hierarchy)(0, "Study in healthy volunteers", PROMPTS)
+    seen = []
+
+    def answer(request):
+        seen.append(request.field_name)
+        if request.field_name == "boilerplate":
+            data = {"exclusions": []}
+        elif request.field_name == "age":
+            data = {"branches": [{"value": "18+", "scope": "all"}], "prune_reason": ""}
+        elif request.field_name == "study_relevance":
+            data = {"decision": decision, "reason": "Healthy volunteer study", "evidence": evidence}
+        else:
+            data = {"branches": [], "prune_reason": "No cancer population"}
+        return Completion(json.dumps(data))
+
+    if ready:
+        async def scenario():
+            async def complete(request):
+                return answer(request)
+            await run_ready_hierarchies([state], complete, concurrency=4, active_trials=1)
+        asyncio.run(scenario())
+    else:
+        for _ in range(10):
+            requests = state.requests()
+            if not requests:
+                break
+            state.accept(requests, [answer(r) for r in requests])
+    assert seen.count("study_relevance") == 1
+    if expected == "rejected":
+        assert not state.error and state.rejection["evidence"] == evidence
+        assert state.output() == ""
+    else:
+        assert expected in state.error
+        assert not state.rejection
+        with pytest.raises(ValueError):
+            state.output()
+
+
 def test_primary_site_is_locked_before_sex_in_both_schedulers():
     seen = []
 

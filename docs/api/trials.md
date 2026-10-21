@@ -75,10 +75,21 @@ The model returns `{"branches": [{"value": "...", "scope": "..."}],
 incompatibility and cannot be used at the root. Boilerplate instead returns
 `{"exclusions": ["..."]}` and retains subgroup qualifications. Malformed JSON,
 wrong keys, multiline values and truncated answers are rejected. Retries include
-the specific error and latest rejected answer. After two invalid answers,
-thinking flips; Beam uses lower reasoning effort instead. Exhausted nodes fail
-the trial rather than exporting only its successful branches. A trial for which
-all branches are pruned is also reported as failed for review.
+the specific error, latest rejected answer, and a valid JSON structure, including
+explicit array/object closure guidance. After two invalid answers (or on the last
+retry with a smaller budget), thinking stays off; Beam stays at low reasoning
+effort. After repeated failures, the malformed draft is omitted and the model
+regenerates from the original source plus the error and schema. Exhausted nodes still fail the trial rather than exporting
+only its successful branches.
+
+When every population branch is explicitly pruned, a separate study-scope call
+reviews the full source. It must independently confirm that there is no human
+therapeutic cancer population and supply a verbatim source excerpt. Confirmed
+rejections produce no spaces and are recorded in `metadata.trial_rejections`,
+separately from inference failures. Uncertain decisions, eligible cancer studies,
+malformed reviews and unsupported excerpts remain failures. This is a targeted
+review of empty trees, not a replacement screening pass. Original field prompts,
+successful node identities, and the seven-field space format are unchanged.
 
 Configuration under `trial.hierarchy`:
 

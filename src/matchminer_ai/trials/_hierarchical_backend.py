@@ -22,8 +22,9 @@ from .hierarchy import (
     ReadyHierarchy,
     ResponseCache,
     load_prompts,
-    parse_response,
+    validate_completion,
     retry_messages,
+    retry_thinking,
     run_ready_hierarchies,
 )
 
@@ -82,10 +83,10 @@ def _bounded_prompts(messages, runtime):
     return prompts, runtime
 
 
-def retry_config(config, failures):
-    """After two invalid answers, alternate thinking (Beam alternates effort)."""
+def retry_config(config, failures, max_attempts=4):
+    """Disable thinking persistently during repair (Beam uses low effort)."""
     updated = deepcopy(config)
-    if (failures // 2) % 2 == 0:
+    if retry_thinking(True, failures, max_attempts):
         return updated
     template = updated.setdefault("chat_template_kwargs", {})
     extra = updated.setdefault("remote", {}).setdefault("extra_body", {})
@@ -99,11 +100,8 @@ def retry_config(config, failures):
         updated["reasoning_effort"] = "low"
         updated["remote"].setdefault("request_params", {})["reasoning_effort"] = "low"
     else:
-        enabled = remote_template.get(
-            "enable_thinking", template.get("enable_thinking", True)
-        )
-        template["enable_thinking"] = not enabled
-        remote_template["enable_thinking"] = not enabled
+        template["enable_thinking"] = False
+        remote_template["enable_thinking"] = False
     return updated
 
 
@@ -151,7 +149,7 @@ def summarize_hierarchically(
     ]
     attempts = [[] for _ in states]
     model_metadata = {"model_name": trial_config.get("model_name")}
-    for stage in range(len(FIELDS) + 1):
+    for stage in range(len(FIELDS) + 2):
         requests_by_trial = [state.requests() for state in states]
         requests = [request for group in requests_by_trial for request in group]
         if not requests:
@@ -176,7 +174,7 @@ def summarize_hierarchically(
             for attempt in range(max_attempts):
                 if not pending:
                     break
-                runtime = retry_config(trial_config, attempt)
+                runtime = retry_config(trial_config, attempt, max_attempts)
                 prompt_list, runtime = _bounded_prompts(
                     [messages[(r.trial_index, r.node_index)] for r in pending], runtime
                 )
@@ -210,7 +208,7 @@ def summarize_hierarchically(
                         **vars(completion),
                     }
                     try:
-                        parse_response(final, request.field_name, finish)
+                        validate_completion(request, completion)
                     except ValueError as exc:
                         record["validation_error"] = str(exc)
                         # Transport retries already belong to the backend. Do not
@@ -222,7 +220,7 @@ def summarize_hierarchically(
                             responses[identity] = completion
                         else:
                             messages[identity] = retry_messages(
-                                request, completion, str(exc)
+                                request, completion, str(exc), failures=attempt + 1
                             )
                             next_pending.append(request)
                     else:
@@ -243,13 +241,14 @@ def summarize_hierarchically(
                 "nodes": state.trace,
                 "attempts": trial_attempts,
                 "error": state.error,
+                "rejection": state.rejection,
             },
             ensure_ascii=False,
         )
         raw.append(trace)
         reasons.append(trace)
         finals.append("" if state.error else state.output())
-        finishes.append("error" if state.error else "stop")
+        finishes.append("error" if state.error else "rejected" if state.rejection else "stop")
     return LLMGenerationResult(
         finals, {**model_metadata, "extraction_method": VERSION}, finishes, reasons, raw
     )
@@ -321,7 +320,7 @@ async def _summarize_ready(
                 return cached
             messages = request.messages
             for attempt in range(max_attempts):
-                runtime = retry_config(config, attempt)
+                runtime = retry_config(config, attempt, max_attempts)
                 prompt_list, runtime = await prepare([messages], runtime)
                 completion = await generate(prompt_list[0], runtime)
                 record = {
@@ -332,9 +331,7 @@ async def _summarize_ready(
                 }
                 attempts[request.trial_index].append(record)
                 try:
-                    parse_response(
-                        completion.final, request.field_name, completion.finish_reason
-                    )
+                    validate_completion(request, completion)
                 except ValueError as exc:
                     record["validation_error"] = str(exc)
                     if (
@@ -344,7 +341,7 @@ async def _summarize_ready(
                         return Completion(
                             str(exc), completion.reasoning, "error", completion.raw
                         )
-                    messages = retry_messages(request, completion, str(exc))
+                    messages = retry_messages(request, completion, str(exc), failures=attempt + 1)
                 else:
                     await asyncio.to_thread(cache.put, request, completion)
                     return completion
@@ -365,12 +362,13 @@ async def _summarize_ready(
                     "nodes": state.trace,
                     "attempts": trial_attempts,
                     "error": state.error,
+                    "rejection": state.rejection,
                 },
                 ensure_ascii=False,
             )
         )
         finals.append("" if state.error else state.output())
-        finishes.append("error" if state.error else "stop")
+        finishes.append("error" if state.error else "rejected" if state.rejection else "stop")
     return LLMGenerationResult(
         finals, {**metadata, "extraction_method": VERSION}, finishes, traces, traces
     )

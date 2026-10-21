@@ -489,6 +489,96 @@ def test_adapter_retries_with_error_then_switches_thinking_and_reuses_cache(tmp_
     assert "validation_error" in result.reasoning_outputs[0]
 
 
+@pytest.mark.parametrize("mode", ["remote", "local"])
+def test_format_repair_stays_non_thinking_and_sends_latest_error(mode, monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr("matchminer_ai.llm.prompt_rendering._get_chat_template_tokenizer",
+                        lambda _: SimpleNamespace(apply_chat_template=lambda **kw: json.dumps(kw['conversation'])))
+    backend = FakeBackend(invalid=5)
+    config = {**runtime(), "backend_mode": mode}
+    result = summarize_hierarchically(["SOURCE"], backend, trial_config=config,
+                                     settings={"max_attempts": 8})
+    assert result.finish_reasons == ["stop"]
+    calls = [c for c in backend.calls if "CURRENT FIELD: age\n" in c[0][1]["content"]]
+    assert [c[1]["remote"]["extra_body"]["chat_template_kwargs"]["enable_thinking"]
+            for c in calls] == [True, True, False, False, False, False]
+    for messages, _ in calls[1:]:
+        assert "Expecting value" in messages[-1]["content"]
+        assert 'Close the branches array with ] BEFORE' in messages[-1]["content"]
+    assert all(m["role"] != "assistant" for m in calls[-1][0])
+    assert "not JSON" not in calls[-1][0][-1]["content"]
+
+
+def test_rejection_with_invented_evidence_cannot_enter_success_cache(tmp_path):
+    from matchminer_ai.trials.hierarchy import REJECTION_FIELD
+    request = build_request(0, 0, "healthy volunteers only", REJECTION_FIELD, {}, "No population", PROMPTS)
+    cache = ResponseCache(tmp_path, {})
+    completion = Completion('{"decision":"reject","reason":"No cancer population","evidence":"not in source"}')
+    with pytest.raises(ValueError, match="exact source excerpt"):
+        cache.put(request, completion)
+    assert cache.get(request) is None
+
+
+def test_retry_never_turns_on_disabled_thinking_and_reserves_last_retry():
+    from matchminer_ai.trials._hierarchical_backend import retry_config
+    config = runtime()
+    config["remote"]["extra_body"]["chat_template_kwargs"]["enable_thinking"] = False
+    for n in range(8):
+        assert retry_config(config, n, 8)["remote"]["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
+    assert retry_config(runtime(), 1, 2)["chat_template_kwargs"]["enable_thinking"] is False
+    beam = retry_config({**runtime(), "reasoning_parser": "beam"}, 5, 8)
+    assert beam["reasoning_effort"] == "low"
+
+
+class RejectionBackend(FakeBackend):
+    def generate_llm_outputs(self, *, prompt_list, llm_config, **kwargs):
+        result = super().generate_llm_outputs(prompt_list=prompt_list, llm_config=llm_config, **kwargs)
+        for i, prompt in enumerate(prompt_list):
+            text = prompt.messages[1]["content"]
+            if "CURRENT FIELD: cancer_primary_site\n" in text:
+                result.final_outputs[i] = '{"branches": [], "prune_reason": "Healthy volunteers only"}'
+            elif "Independently check whether" in text:
+                result.final_outputs[i] = json.dumps({"decision": "reject", "reason": "Healthy volunteers only", "evidence": "healthy volunteers"})
+        return result
+
+
+@pytest.mark.parametrize("mode", ["local", "remote"])
+def test_reviewed_rejection_is_not_an_inference_failure(mode, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr("matchminer_ai.llm.prompt_rendering._get_chat_template_tokenizer",
+                        lambda _: SimpleNamespace(apply_chat_template=lambda **kw: json.dumps(kw['conversation'])))
+    backend = RejectionBackend()
+    result = summarize_hierarchically(["Study in healthy volunteers"], backend,
+        trial_config={**runtime(), "backend_mode": mode}, settings={"checkpoint_dir": str(tmp_path)})
+    assert result.finish_reasons == ["rejected"]
+    assert result.final_outputs == [""]
+    assert json.loads(result.reasoning_outputs[0])["rejection"]["evidence"] == "healthy volunteers"
+    count = len(backend.calls)
+    again = summarize_hierarchically(["Study in healthy volunteers"], backend,
+        trial_config={**runtime(), "backend_mode": mode}, settings={"checkpoint_dir": str(tmp_path)})
+    assert again.finish_reasons == ["rejected"]
+    assert len(backend.calls) == count
+
+
+def test_public_summarization_retains_rejection_reasons_separately_from_failures(monkeypatch):
+    from matchminer_ai.trials.summarize import run_llm_summarization
+    config = load_default_preset()
+    config.remote["enabled"] = True
+    config.trial["remote"]["model_name"] = "fake"
+    config.trial["local"]["engine"].pop("max_model_len")
+    monkeypatch.setattr("matchminer_ai.trials.summarize.get_llm_backend", lambda config: RejectionBackend())
+    trials = pd.DataFrame([{"trial_id": "R1", "trial_title": "Study", "brief_summary": "healthy volunteers", "eligibility_criteria": "Healthy adults only"}])
+    rows, metadata, _, failures = run_llm_summarization(trials, config)
+    assert rows.empty
+    assert metadata["trial_rejections"]["R1"]["evidence"] == "healthy volunteers"
+    assert "R1" not in str(failures)
+    monkeypatch.setattr("matchminer_ai._qc.trials.count_embedding_tokens",
+                        lambda texts, embedding_config: [1] * len(texts))
+    spaces, public_metadata = summarize_trials(trials, config=config, return_metadata=True)
+    assert spaces.empty
+    assert public_metadata["trial_rejections"] == metadata["trial_rejections"]
+
+
 def test_remote_prompt_preparation_keeps_request_loop_responsive(monkeypatch):
     import asyncio
     import threading

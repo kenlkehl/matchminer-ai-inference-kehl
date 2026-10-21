@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from typing import Any, TYPE_CHECKING
 
 import pandas as pd
@@ -84,6 +85,8 @@ def _filter_failed_trial_inference(
         if str(finish_reason) == "error":
             failed_trial_ids.append(trial_id)
             logger.warning("Filtering trial %s after inference failed.", trial_id)
+        elif str(finish_reason) == "rejected":
+            logger.info("Trial %s has no therapeutic cancer population; rejection retained in metadata.", trial_id)
         else:
             successful_positions.append(position)
 
@@ -155,6 +158,12 @@ def run_llm_summarization(
     metadata = {
         "config_snapshot": {"trial": trial_config},
         "model_metadata": generation.model_metadata,
+        "trial_rejections": {
+            trial_id: json.loads(trace)["rejection"]
+            for trial_id, trace, finish in zip(
+                trial_ids, generation.reasoning_outputs, generation.finish_reasons, strict=True
+            ) if finish == "rejected"
+        },
     }
     return (
         trials_with_summaries,
