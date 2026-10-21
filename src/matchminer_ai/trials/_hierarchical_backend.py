@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from pathlib import Path
@@ -27,6 +28,18 @@ from .hierarchy import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _prompt_preparation():
+    # Keep tokenizer calls serialized without blocking HTTP dispatch or sharing
+    # the checkpoint I/O executor with a large queue of prompt preparation.
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="trial-prompts") as worker:
+        async def prepare(messages, runtime):
+            return await asyncio.get_running_loop().run_in_executor(
+                worker, _bounded_prompts, messages, runtime
+            )
+        yield prepare
 
 
 def _bounded_prompts(messages, runtime):
@@ -295,10 +308,11 @@ async def _summarize_ready(
 
     attempts = [[] for _ in states]
     max_attempts = int(settings.get("max_attempts", 4))
-    async with _request_session(backend, config, metadata_dir) as (
-        capacity,
-        metadata,
-        generate,
+    async with (
+        _prompt_preparation() as prepare,
+        _request_session(backend, config, metadata_dir) as (
+            capacity, metadata, generate,
+        ),
     ):
 
         async def complete(request):
@@ -308,7 +322,7 @@ async def _summarize_ready(
             messages = request.messages
             for attempt in range(max_attempts):
                 runtime = retry_config(config, attempt)
-                prompt_list, runtime = _bounded_prompts([messages], runtime)
+                prompt_list, runtime = await prepare([messages], runtime)
                 completion = await generate(prompt_list[0], runtime)
                 record = {
                     "request_key": request.key,

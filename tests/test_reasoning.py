@@ -113,3 +113,76 @@ def test_nemotron_direct_answer_parser_receives_disabled_thinking(monkeypatch):
     monkeypatch.setitem(sys.modules, 'vllm.reasoning', _module('vllm.reasoning', ReasoningParserManager=manager))
     assert parse_reasoning_output('raw', parser_name='nemotron_v3', tokenizer=object(),
                                   enable_thinking=False) == ('', '{"branches": []}')
+
+
+def test_nemotron_parser_reuse_is_isolated_and_serializes_concurrent_calls(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    import time
+
+    constructed = []
+
+    class Parser:
+        def __init__(self, tokenizer, **options):
+            self.tokenizer = tokenizer
+            self.thinking = options.get('chat_template_kwargs', {}).get('enable_thinking')
+            self.active = False
+            constructed.append(self)
+
+        def extract_reasoning(self, text, request):
+            assert not self.active, 'Mutable parser used concurrently'
+            self.active = True
+            try:
+                time.sleep(0.002)
+                mode = None if request is None else request.chat_template_kwargs['enable_thinking']
+                assert mode is self.thinking
+                return str(mode), text
+            finally:
+                self.active = False
+
+    manager = type('Manager', (), {'get_reasoning_parser': staticmethod(lambda name: Parser)})
+    monkeypatch.setitem(sys.modules, 'vllm.reasoning', _module('vllm.reasoning', ReasoningParserManager=manager))
+    tokenizers = [object(), object()]
+    barrier = Barrier(8)
+
+    def parse(i):
+        barrier.wait()
+        return parse_reasoning_output(str(i), parser_name='nemotron_v3',
+                                      tokenizer=tokenizers[0], enable_thinking=True)
+
+    with ThreadPoolExecutor(max_workers=8) as workers:
+        assert list(workers.map(parse, range(8))) == [('True', str(i)) for i in range(8)]
+    assert len(constructed) == 1
+    for tokenizer, mode in [(tokenizers[0], False), (tokenizers[0], None), (tokenizers[1], True)]:
+        assert parse_reasoning_output('answer', parser_name='nemotron_v3',
+                                      tokenizer=tokenizer, enable_thinking=mode) == (str(mode), 'answer')
+    assert len(constructed) == 4
+
+
+def test_nemotron_failed_parser_is_rebuilt_and_cache_is_bounded(monkeypatch):
+    from matchminer_ai.llm import reasoning
+
+    constructed = []
+
+    class Parser:
+        def __init__(self, tokenizer, **options):
+            constructed.append(self)
+
+        def extract_reasoning(self, text, request):
+            if text == 'bad':
+                raise ValueError('parse failure')
+            return '', text
+
+    manager = type('Manager', (), {'get_reasoning_parser': staticmethod(lambda name: Parser)})
+    monkeypatch.setitem(sys.modules, 'vllm.reasoning', _module('vllm.reasoning', ReasoningParserManager=manager))
+    tokenizer = object()
+    for text in ['ok', 'bad', 'ok']:
+        if text == 'bad':
+            with pytest.raises(ValueError, match='parse failure'):
+                parse_reasoning_output(text, parser_name='nemotron_v3', tokenizer=tokenizer)
+        else:
+            assert parse_reasoning_output(text, parser_name='nemotron_v3', tokenizer=tokenizer) == ('', text)
+    assert len(constructed) == 2
+    for _ in range(reasoning._PARSER_CACHE_SIZE + 2):
+        parse_reasoning_output('ok', parser_name='nemotron_v3', tokenizer=object())
+    assert len(reasoning._PARSER_CACHE) <= reasoning._PARSER_CACHE_SIZE

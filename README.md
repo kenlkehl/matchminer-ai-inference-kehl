@@ -61,6 +61,11 @@ prompt contract requires fresh extraction checkpoints; saved screening is reusab
 Remote extraction schedules ready branches across trials and field levels,
 with independent boilerplate calls and shared per-endpoint concurrency limits.
 It does not wait for a complete field wave or trial batch before advancing.
+Remote hierarchy prompt preparation runs on a dedicated worker so tokenization
+does not block request dispatch. Nemotron non-streaming reasoning parsers reuse
+their vocabulary/setup in a bounded cache, with separate tokenizer/thinking-mode
+entries and serialized access to each mutable parser. Prompts, output text, and
+checkpoint identities are unchanged by these execution optimizations.
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered

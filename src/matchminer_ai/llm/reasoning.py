@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
+from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any
 
 
@@ -28,6 +31,45 @@ _SUBSTRING_FALLBACKS: tuple[tuple[str, str], ...] = (
 )
 
 _DISABLED = {"", "none", "off", "false", "disabled", "null"}
+
+
+@dataclass
+class _ParserEntry:
+    # Retain the tokenizer: its identity cannot be recycled while cached.
+    tokenizer: Any
+    parser: Any = None
+    lock: Any = field(default_factory=Lock)
+
+
+_PARSER_CACHE: OrderedDict[tuple, _ParserEntry] = OrderedDict()
+_PARSER_CACHE_LOCK = Lock()
+_PARSER_CACHE_SIZE = 8
+
+
+def _extract_reasoning(parser_cls, parser_name, tokenizer, options, text, request):
+    # Nemotron's non-streaming extract_reasoning resets its engine per response.
+    # Other parsers retain their existing lifetime until reuse is verified.
+    if parser_name != "nemotron_v3":
+        return parser_cls(tokenizer, **options).extract_reasoning(text, request=request)
+    thinking = options.get("chat_template_kwargs", {}).get("enable_thinking")
+    key = (parser_cls, id(tokenizer), thinking)
+    with _PARSER_CACHE_LOCK:
+        entry = _PARSER_CACHE.pop(key, None)
+        if entry is None:
+            entry = _ParserEntry(tokenizer)
+        _PARSER_CACHE[key] = entry
+        while len(_PARSER_CACHE) > _PARSER_CACHE_SIZE:
+            _PARSER_CACHE.popitem(last=False)
+    # A parser is mutable. Serialize its use, including first construction, so
+    # concurrent worker threads cannot mix response state. Discard failed state.
+    with entry.lock:
+        try:
+            if entry.parser is None:
+                entry.parser = parser_cls(tokenizer, **options)
+            return entry.parser.extract_reasoning(text, request=request)
+        except BaseException:
+            entry.parser = None
+            raise
 
 
 def reasoning_system_prompt(model_name: str | None, instruction: str = "") -> str:
@@ -119,13 +161,13 @@ def parse_reasoning_output(
         options = {} if enable_thinking is None else {
             "chat_template_kwargs": {"enable_thinking": enable_thinking},
         }
-        parser = parser_cls(tokenizer, **options)
-        reasoning, content = parser.extract_reasoning(
-            text, request=SimpleNamespace(**options) if options else None,
+        reasoning, content = _extract_reasoning(
+            parser_cls, parser_name, tokenizer, options, text,
+            SimpleNamespace(**options) if options else None,
         )
         if parser_name == "nemotron_v3" and enable_thinking is False:
             content = (content or "").strip()
-            if content.endswith("<|im_end|>"):
+            while content.endswith("<|im_end|>"):
                 content = content[:-len("<|im_end|>")].rstrip()
 
     return (reasoning or "").strip(), (content or "").strip()

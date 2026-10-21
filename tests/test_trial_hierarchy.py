@@ -489,6 +489,39 @@ def test_adapter_retries_with_error_then_switches_thinking_and_reuses_cache(tmp_
     assert "validation_error" in result.reasoning_outputs[0]
 
 
+def test_remote_prompt_preparation_keeps_request_loop_responsive(monkeypatch):
+    import asyncio
+    import threading
+    from matchminer_ai.trials import _hierarchical_backend as adapter
+    from matchminer_ai.trials.hierarchy import ResponseCache
+
+    original = adapter._bounded_prompts
+    workers = set()
+
+    async def scenario():
+        loop = asyncio.get_running_loop()
+
+        def prepare(*args):
+            heartbeat = threading.Event()
+            loop.call_soon_threadsafe(heartbeat.set)
+            assert heartbeat.wait(2), 'Prompt preparation blocked request dispatch'
+            workers.add(threading.get_ident())
+            return original(*args)
+
+        monkeypatch.setattr(adapter, '_bounded_prompts', prepare)
+        backend = FakeBackend()
+        result = await adapter._summarize_ready(
+            ['SOURCE', 'OTHER SOURCE'], backend, runtime(), PROMPTS,
+            ResponseCache(None, {}), {}, None,
+        )
+        assert result.finish_reasons == ['stop', 'stop']
+        assert len(backend.calls) == 16
+        assert workers and threading.get_ident() not in workers
+        assert len(workers) == 1  # Tokenizer access remains serialized.
+
+    asyncio.run(scenario())
+
+
 def test_failed_trial_does_not_export_partial_spaces_or_break_other_trials():
     backend = FakeBackend(fail_trial=True)
     result = summarize_hierarchically(["GOOD", "BAD"], backend, trial_config=runtime())
