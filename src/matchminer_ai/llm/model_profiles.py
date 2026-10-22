@@ -113,8 +113,9 @@ REFLECTION_BEAM = ModelProfile(
     # generation_config.json specifies repetition_penalty=1.0. The remaining
     # controls are neutral, not extra publisher recommendations.
     extra_body={"top_k": -1, "min_p": 0.0, "repetition_penalty": 1.0},
-    # Beam always reasons. Its template defaults to max effort; do not inject
-    # another family's boolean thinking switch or Qwen's default xhigh effort.
+    # Workspace default, deliberately below the upstream template's max.
+    # Beam always reasons; do not inject another family's thinking switch.
+    chat_template_kwargs={"reasoning_effort": "medium"},
     source=(
         "https://huggingface.co/reflection/Beam-1.0-501B-A23B/"
         "blob/main/generation_config.json; "

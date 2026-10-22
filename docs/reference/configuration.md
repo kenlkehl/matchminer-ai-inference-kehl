@@ -219,8 +219,10 @@ verified on 2026-10-16; its other sampling controls are neutral. Official Beam
 1.0 IDs, quantized variants, and the short aliases `beam` and `reflection-beam`
 are recognized. Local server startup selects `beam` for both reasoning and tool
 parsing and requires a [Beam-compatible vLLM build](https://developers.reflection.ai/serving-vllm).
-Beam always reasons: the profile does not infer an `enable_thinking` switch or
-a reasoning effort. Explicit template settings and output budgets are retained.
+Beam always reasons. The workspace defaults `chat_template_kwargs.reasoning_effort`
+to `medium` rather than the upstream template's `max`, without inferring an
+`enable_thinking` switch. Explicit template or API effort overrides and output
+budgets are retained. When both API and template effort are supplied, they must agree.
 
 Qwen defaults to thinking enabled, preserved thinking, and `xhigh` effort.
 Supported effort values are `xhigh`, `medium`, and `low`. Remote requests send
@@ -690,13 +692,16 @@ structured facts instead, under `good_option_prompt`.
 Retrieval settings for both axes live on `ResearchSettings` rather than in this
 block: `class_facets`, `class_sources`, `class_research_rounds`, and the
 `max_class_*` record caps for the class axis, and `indication_terms_per_drug`
-(default 4), `indication_facets`, `indication_sources`, and the
+(default 25), `indication_facets`, `indication_sources`, and the
 `max_indication_*` caps for the indication axis. Indication terms come from the
 `conditionsModule.conditions` of the trials a drug appears in, falling back to
 `derivedSection.conditionBrowseModule.meshes`, so the catalog stays patient-free
 and cacheable. Both axes call only the query-driven sources; the registry, label,
 and curation adapters search by exact agent name and return nothing for a class
 name.
+
+`indication_facets` defaults to `efficacy_by_tumor`, `biomarker_prevalence`, and
+`biomarker_directed_efficacy` for both drug–disease and class–disease retrieval.
 
 ## `good_option_prompt`
 

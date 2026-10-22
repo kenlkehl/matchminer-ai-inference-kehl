@@ -51,10 +51,12 @@ anything else.
 
 A second pass searches the drug paired with a disease. The diseases come from
 the `conditionsModule.conditions` of the trials the drug appears in — up to
-`indication_terms_per_drug`, ranked by how many of those trials name each one —
-and re-runs the two efficacy facets against the four query-driven sources with
-the disease as a required clause. It is capped as a whole by
-`max_indication_passages_per_drug` and interleaved across diseases and sources.
+`indication_terms_per_drug`, selected round-robin across trials —
+and re-runs efficacy by tumor, biomarker prevalence, and biomarker-directed
+efficacy against the four query-driven sources with the disease as a required
+clause. It is capped as a whole by
+`max_indication_passages_per_drug` and interleaved across diseases, sources, and
+search facets so efficacy results cannot crowd out prevalence findings.
 Every passage records the axis that found it in `query_scope`, so nothing
 downstream confuses drug-name evidence with disease-conditioned evidence.
 
@@ -78,7 +80,9 @@ drugs landing on the same class share everything downstream.
 
 The same machinery as step 1, with the class name and aliases as the subject,
 run once per class rather than once per drug. Three facets, four query-driven
-sources, one round.
+sources, one round. The class is also paired with the diseases named by its
+member drugs' trials, searching the same three disease-specific facets,
+including biomarker prevalence.
 
 ### Step 4 — Synthesize the drug evidence
 

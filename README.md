@@ -31,9 +31,10 @@ to avoid inheriting another model's settings. Explicit caller sampling overrides
 and task token budgets remain in effect. An opaque served alias can select
 `sampling_profile: reflection-beam` (or `beam`). Both vLLM parsers are `beam`;
 serving or parsing local raw completions requires a vLLM build with Beam support.
-Beam always reasons: this profile does not infer a boolean thinking switch or
-override its default effort. Explicit `reasoning_effort` request settings remain
-available. These settings were verified on 2026-10-16.
+Beam always reasons. The workspace defaults `chat_template_kwargs.reasoning_effort`
+to `medium`, overriding the upstream template's `max`; explicit template or API
+effort overrides remain available. No boolean thinking switch is inferred.
+Publisher sampling settings were verified on 2026-10-16.
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 

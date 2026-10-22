@@ -35,8 +35,9 @@ def vendor_defaults(
     if profile in {"reflection-beam", "beam"} or (
         profile == "auto" and REFLECTION_BEAM.matches(str(model_name or ""))
     ):
-        # No inferred thinking switch, effort or output budget for Beam.
-        # Explicit template arguments and API sampling overrides remain intact.
+        # Workspace effort default; the generic reasoning_effort argument is
+        # Qwen's setting and must not override Beam with inherited xhigh.
+        template = {**REFLECTION_BEAM.chat_template_kwargs, **template}
         return {**REFLECTION_BEAM.request_params, **REFLECTION_BEAM.extra_body}, template
     model = str(model_name or "").lower()
     family = profile
@@ -99,6 +100,15 @@ def remote_sampling(runtime):
     params = copy.deepcopy(remote.get("request_params", {}))
     extra = copy.deepcopy(remote.get("extra_body", {}))
     profile = runtime.get("sampling_profile", "none")
+    from .model_profiles import REFLECTION_BEAM
+
+    beam = profile in {"beam", "reflection-beam"} or (
+        profile == "auto" and REFLECTION_BEAM.matches(str(runtime.get("model_name") or ""))
+    )
+    if beam and "reasoning_effort" in params:
+        extra.setdefault("chat_template_kwargs", {}).setdefault(
+            "reasoning_effort", params["reasoning_effort"]
+        )
     defaults, template = vendor_defaults(
         runtime.get("model_name"),
         profile=profile,
@@ -113,7 +123,7 @@ def remote_sampling(runtime):
         ).setdefault(key, value)
     if template:
         extra["chat_template_kwargs"] = template
-    if template.get("enable_thinking") and template.get("reasoning_effort"):
+    if (beam or template.get("enable_thinking")) and template.get("reasoning_effort"):
         if (
             "reasoning_effort" in params
             and params["reasoning_effort"] != template["reasoning_effort"]
@@ -122,5 +132,6 @@ def remote_sampling(runtime):
                 "API and chat-template reasoning_effort must agree so token "
                 "counting and generation use the same reasoning level"
             )
-        params.setdefault("reasoning_effort", template["reasoning_effort"])
+        if not beam:
+            params.setdefault("reasoning_effort", template["reasoning_effort"])
     return params, extra

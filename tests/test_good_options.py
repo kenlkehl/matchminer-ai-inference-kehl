@@ -1026,6 +1026,20 @@ def test_indication_retrieval_is_bounded_across_diseases_and_sources() -> None:
     }
     assert diseases == {"Colon Adenocarcinoma", "Lynch Syndrome"}
     assert {item.source for item in attempts} == {"pubmed", "europe_pmc"}
+    for disease in diseases:
+        for source in ("pubmed", "europe_pmc"):
+            assert {
+                item.facet for item in selected
+                if item.source == source and disease in item.query
+            } == {
+                "efficacy_by_tumor", "biomarker_prevalence", "biomarker_directed_efficacy"
+            }
+        prevalence_attempts = [
+            item for item in attempts
+            if item.facet == "biomarker_prevalence" and disease in item.query
+        ]
+        assert {item.source for item in prevalence_attempts} == {"pubmed", "europe_pmc"}
+        assert all("prevalence" in item.query for item in prevalence_attempts)
 
 
 def test_projection_gives_a_full_section_the_budget_thin_ones_do_not_use() -> None:
@@ -2086,7 +2100,24 @@ def test_catalog_retrieves_and_merges_class_and_indication_evidence(
             if evidence
             else [],
             "efficacy_by_tumor": [],
-            "biomarker_prevalence": [],
+            "biomarker_prevalence": [
+                {
+                    "text": (
+                        f"TARGET_MARKER occurs in 30% of the unselected synthetic "
+                        f"{disease} population."
+                    ),
+                    "biomarker": "TARGET_MARKER",
+                    "tumor_type": disease,
+                    "prevalence": "30%",
+                    "denominator": "Unselected synthetic cancer population",
+                    "support_ids": [f"P{index}"],
+                }
+                for index, item in enumerate(evidence, start=1)
+                if item.facet == "biomarker_prevalence"
+                and item.query_scope in {"drug_indication", "class_indication"}
+                for disease in ("Colon Adenocarcinoma", "Lynch Syndrome")
+                if disease in item.query
+            ],
             "biomarker_directed_efficacy": [],
             "safety": [],
             "limitations": [],
@@ -2130,6 +2161,19 @@ def test_catalog_retrieves_and_merges_class_and_indication_evidence(
     assert any("Colon Adenocarcinoma" in value for value in indication_queries)
     assert any("Lynch Syndrome" in value for value in indication_queries)
 
+    for evidence, scope, subject in (
+        (catalog.drug_evidence, "drug_indication", "Novel Agent"),
+        (catalog.class_evidence, "class_indication", "TARGET_MARKER inhibitor"),
+    ):
+        prevalence = evidence.loc[
+            evidence["query_scope"].eq(scope)
+            & evidence["facet"].eq("biomarker_prevalence")
+            & evidence["query"].str.contains(subject, regex=False)
+        ]
+        for disease in ("Colon Adenocarcinoma", "Lynch Syndrome"):
+            assert prevalence["query"].str.contains(disease, regex=False).any()
+        assert prevalence["query"].str.contains("prevalence", regex=False).all()
+
     facts = json.loads(
         catalog.class_summaries.iloc[0]["structured_facts_json"]
     )
@@ -2140,6 +2184,13 @@ def test_catalog_retrieves_and_merges_class_and_indication_evidence(
         if item.preferred_name == "Novel Agent"
     )
     assert novel.structured_facts["mechanism_and_targets"][0]["scope"] == "agent"
+    for stored_facts, scope in ((facts, "class"), (novel.structured_facts, "agent")):
+        prevalence_facts = stored_facts["biomarker_prevalence"]
+        assert {item["tumor_type"] for item in prevalence_facts} == {
+            "Colon Adenocarcinoma", "Lynch Syndrome"
+        }
+        assert all(item["scope"] == scope for item in prevalence_facts)
+        assert all(item["support_ids"] for item in prevalence_facts)
 
     blocks = catalog.class_evidence_for_trial("NCT12345678")
     assert [item.drug_names for item in blocks] == [("Novel Agent",)]

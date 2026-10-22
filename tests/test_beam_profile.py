@@ -32,7 +32,7 @@ def test_beam_family_uses_published_sampling_and_parsers(model):
     assert resolve_tool_call_parser(model) == "beam"
     defaults, template = vendor_defaults(model)
     assert defaults == EXPECTED
-    assert template == {}  # No guessed boolean switch or Qwen effort.
+    assert template == {"reasoning_effort": "medium"}
 
 
 @pytest.mark.parametrize("model", [
@@ -59,7 +59,7 @@ def test_explicit_profile_overrides_and_opt_out(profile):
     assert params == dict(temperature=0.0, top_p=0.99, presence_penalty=0.0,
                          reasoning_effort="low", max_tokens=123)
     assert extra == dict(top_k=7, min_p=0.1, repetition_penalty=1.0,
-                         chat_template_kwargs={"allow_missing_thinking": True})
+                         chat_template_kwargs={"allow_missing_thinking": True, "reasoning_effort": "low"})
     assert runtime == original
     assert vendor_defaults(MODEL, profile="none") == ({}, {})
     assert resolve_reasoning_parser(MODEL, "custom") == "custom"
@@ -78,6 +78,7 @@ def test_endpoint_discovery_and_local_server_command(monkeypatch):
     params, extra = remote_sampling(runtime)
     assert all({**params, **extra}[key] == value for key, value in EXPECTED.items())
     assert params["max_tokens"] == budget
+    assert extra["chat_template_kwargs"]["reasoning_effort"] == "medium"
     config.trial["local"]["model_name"] = MODEL
     command = build_vllm_server_command(config=config, task="trial").command
     assert command[command.index("--reasoning-parser") + 1] == "beam"
@@ -117,7 +118,8 @@ def test_structured_discovery_sends_beam_sampling_on_wire(monkeypatch):
     body = next(body for url, body in seen if url.endswith("/chat/completions"))
     assert body["model"] == MODEL and body["max_tokens"] == 1000
     assert all(body[key] == value for key, value in EXPECTED.items())
-    assert "chat_template_kwargs" not in body and "reasoning_effort" not in body
+    assert body["chat_template_kwargs"] == {"reasoning_effort": "medium"}
+    assert "reasoning_effort" not in body
 
 
 @pytest.mark.parametrize("temperature", [None, 0.0])
@@ -128,5 +130,26 @@ def test_local_generation_defaults_preserve_explicit_overrides(temperature):
     if temperature is not None:
         config.trial["local"]["generation"]["temperature"] = temperature
     runtime = build_llm_runtime_config("trial", config.trial, config=config)
+    assert runtime["chat_template_kwargs"] == {"reasoning_effort": "medium"}
     assert runtime["sampling_params"] == {**EXPECTED, "max_tokens": 123,
                                           "temperature": 0.7 if temperature is None else temperature}
+
+
+@pytest.mark.parametrize("effort", ["low", "max"])
+def test_explicit_beam_effort_survives_defaults(effort):
+    _, template = vendor_defaults(MODEL, template={"reasoning_effort": effort})
+    assert template == {"reasoning_effort": effort}
+    params, extra = remote_sampling({
+        "model_name": MODEL, "sampling_profile": "auto",
+        "remote": {"extra_body": {"chat_template_kwargs": template}},
+    })
+    assert extra["chat_template_kwargs"] == template
+    assert "reasoning_effort" not in params
+
+
+def test_beam_rejects_conflicting_api_and_template_efforts():
+    with pytest.raises(ValueError, match="must agree"):
+        remote_sampling({"model_name": MODEL, "sampling_profile": "auto", "remote": {
+            "request_params": {"reasoning_effort": "low"},
+            "extra_body": {"chat_template_kwargs": {"reasoning_effort": "max"}},
+        }})

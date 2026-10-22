@@ -80,14 +80,19 @@ Retrieval runs on three axes, and every passage records which one found it in
 
 The **drug** axis is the one above: the agent's own name and aliases.
 
-The **indication** axis reruns the efficacy facets with a disease as a required
-clause. The diseases come from the `conditionsModule.conditions` of the trials
+The **indication** axis searches efficacy by tumor, biomarker prevalence, and
+biomarker-directed efficacy with a disease as a required clause. The same
+three facets run for both drug–disease and class–disease searches. The diseases
+come from the `conditionsModule.conditions` of the trials
 the drug appears in, which the build already fetches and stores, so the axis
 stays patient-free and cacheable. Without it the drug evidence never names the
 patient's cancer for most patient-drug pairs, and the first rubric criterion
 fires far less often when the disease is absent than when it is present. The
 axis is bounded as a whole by `max_indication_passages_per_drug`, interleaved
-across diseases and sources, so it cannot swamp the agent's own corpus.
+across diseases, sources, and search facets, so it cannot swamp the agent's own
+corpus or let efficacy results crowd out prevalence findings.
+Research settings are part of the checkpoint fingerprint: catalogs built before
+the disease-specific prevalence searches need a fresh build to include them.
 
 The **class** axis retrieves literature for the pharmacologic classes a drug
 belongs to, once per class rather than once per drug, so agents that share a

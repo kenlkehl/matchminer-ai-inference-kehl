@@ -239,8 +239,10 @@ class ResearchSettings:
     #: studied in. A drug in one trial uses one slot; the cap only binds for
     #: agents like pembrolizumab that span hundreds of trials.
     indication_terms_per_drug: int = 25
+    # Shared by drug-indication and class-indication retrieval.
     indication_facets: tuple[str, ...] = (
         "efficacy_by_tumor",
+        "biomarker_prevalence",
         "biomarker_directed_efficacy",
     )
     indication_sources: tuple[str, ...] = ("pubmed", "europe_pmc", "nci", "web")
@@ -1389,7 +1391,7 @@ async def research_indications(
 ) -> tuple[list[EvidencePassage], list[ResearchAttempt]]:
     """Retrieve the drug conditioned on each disease its own trials name.
 
-    Returns a bounded set: the passages are interleaved by source and disease
+    Returns a bounded set: the passages are interleaved by source, disease, and facet
     and cut to ``max_indication_passages_per_drug``, so every disease and source
     is represented and none of them can swamp the drug's own corpus.
     """
@@ -1438,10 +1440,12 @@ async def research_indications(
         for attempt in subject_attempts
     ]
 
-    queues: dict[tuple[int, str], list[EvidencePassage]] = {}
+    # A prolific efficacy search must not consume a disease/source's entire
+    # allowance before its prevalence or biomarker-directed results are seen.
+    queues: dict[tuple[int, str, str], list[EvidencePassage]] = {}
     for index, items in enumerate(by_subject):
         for item in items:
-            queues.setdefault((index, item.source), []).append(item)
+            queues.setdefault((index, item.source, item.facet), []).append(item)
     selected: list[EvidencePassage] = []
     limit = max(0, settings.max_indication_passages_per_drug)
     while queues and len(selected) < limit:
