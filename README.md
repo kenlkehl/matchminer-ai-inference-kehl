@@ -30,7 +30,10 @@ penalty 1.0. The profile disables top-k/min-p filtering and presence penalty
 to avoid inheriting another model's settings. Explicit caller sampling overrides
 and task token budgets remain in effect. An opaque served alias can select
 `sampling_profile: reflection-beam` (or `beam`). Both vLLM parsers are `beam`;
-serving or parsing local raw completions requires a vLLM build with Beam support.
+serving requires a vLLM build with Beam support. Local raw-completion splitting
+uses Beam's native analysis/final delimiters directly, including on clients whose
+vLLM build lacks the Beam parser. It does not treat unframed or tool-call output
+as a final answer.
 Beam always reasons. The workspace defaults `chat_template_kwargs.reasoning_effort`
 to `medium`, overriding the upstream template's `max`; explicit template or API
 effort overrides remain available. No boolean thinking switch is inferred.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
+import re
 from threading import Lock
 from typing import Any
 
@@ -132,6 +133,30 @@ def resolve_tool_call_parser(model_name: str, explicit: str | None = "auto") -> 
     return profile.tool_call_parser if profile else None
 
 
+def _parse_beam_output(text: str) -> tuple[str, str]:
+    """Split non-streaming Beam 1.0 text using its checkpoint response template.
+
+    Beam's new vLLM parser uses the unified response-template API; its legacy
+    ``extract_reasoning`` method is not implemented even in Beam-aware builds.
+    These are the checkpoint's analysis/final openers and message boundaries,
+    not GPT-OSS's Harmony parser. Tool-call bodies are never answer text.
+    Unframed or analysis-only output has no final answer, so callers can reject
+    it while retaining the original raw completion for validation/retry.
+    """
+    text = text.strip()
+    opener = re.compile(
+        r"(?:\A|<\|start\|>assistant)<\|channel\|>(analysis|final)<\|message\|>"
+    )
+    boundary = re.compile(r"<\|(?:start|end|constrain|return|call|channel)\|>")
+    fields: dict[str, list[str]] = {"analysis": [], "final": []}
+    for match in opener.finditer(text):
+        end = boundary.search(text, match.end())
+        body = text[match.end():end.start() if end else len(text)].strip()
+        if body:
+            fields[match[1]].append(body)
+    return "\n\n".join(fields["analysis"]), "\n\n".join(fields["final"])
+
+
 def parse_reasoning_output(
     text: str,
     *,
@@ -143,7 +168,9 @@ def parse_reasoning_output(
     if parser_name is None:
         return "", text.strip()
 
-    if parser_name == "gemma4":
+    if parser_name == "beam":
+        reasoning, content = _parse_beam_output(text)
+    elif parser_name == "gemma4":
         from vllm.reasoning.gemma4_utils import parse_thinking_output
 
         parsed = parse_thinking_output(text)

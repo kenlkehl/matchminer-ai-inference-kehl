@@ -100,6 +100,33 @@ def test_parse_reasoning_output_uses_reasoning_parser_manager(monkeypatch):
     assert content == "parsed final"
 
 
+@pytest.mark.parametrize("prefix", ["", "<|start|>assistant"])
+@pytest.mark.parametrize("transition", [
+    "<|end|><|start|>assistant", "<|constrain|><|start|>assistant", "<|start|>assistant",
+])
+@pytest.mark.parametrize("ending", ["", "<|return|>", "<|end|>", "<|call|>"])
+def test_beam_native_channels_without_local_vllm(prefix, transition, ending, monkeypatch):
+    monkeypatch.setitem(sys.modules, "vllm", None)
+    raw = (prefix + "<|channel|>analysis<|message|> Reason about the seed. "
+           + transition + "<|channel|>final<|message|> <ngs_report> NRG1 <1%. " + ending)
+    assert parse_reasoning_output(raw, parser_name="beam", tokenizer=None) == (
+        "Reason about the seed.", "<ngs_report> NRG1 <1%.")
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("<|channel|>analysis<|message|>Unfinished reasoning", ("Unfinished reasoning", "")),
+    ("<|channel|>analysis<|message|>Think<|end|><|start|>assistant<|channel|>final",
+     ("Think", "")),
+    ("<|channel|>final<|message|>Final only<|return|>", ("", "Final only")),
+    ("<|start|>assistant to=search<|channel|>analysis <|constrain|>xml<|message|>"
+     "<rfl:parameter name=\"query\">\nnot an answer\n</rfl:parameter><|call|>", ("", "")),
+    ("unframed output", ("", "")),
+    ("", ("", "")),
+])
+def test_beam_does_not_promote_reasoning_or_tool_output_to_final(raw, expected):
+    assert parse_reasoning_output(raw, parser_name="beam", tokenizer=None) == expected
+
+
 def test_nemotron_direct_answer_parser_receives_disabled_thinking(monkeypatch):
     class Parser:
         def __init__(self, tokenizer, **options):
