@@ -82,6 +82,15 @@ Corrective calls use separate checkpoint keys; successful earlier work remains
 reusable, including when resuming a run that previously failed this review.
 Exhausted recovery and extraction errors remain failures.
 
+An opt-in completed-space review prompt lives in `prompts/trial.space_refinement.txt`,
+with rendering and response validation in `trials.space_refinement`. It supplies
+the full, verbatim `trial.user.primer.txt` and review directives first, the full
+trial document second, and one completed space last. It can preserve, correct,
+or split that population, or flag an unresolved case for review. It does not
+generate boilerplate, automatically run inside `summarize_trials`, or overwrite
+existing extraction outputs. Training's `review_trial_spaces.py` exercises the
+same mirrored contract and saves original spaces, prompts, reasoning, and results.
+
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
 TrialChecker or LLM probes to estimate how many leading patients should proceed
