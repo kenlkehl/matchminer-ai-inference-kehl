@@ -13,12 +13,13 @@ import inspect
 import json
 import re
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from uuid import uuid4
 
 VERSION = "trial-hierarchy-v5"
 REJECTION_FIELD = "study_relevance"
+MAX_PRUNING_RECOVERIES = 2
 # Keep the established final text layout separate from extraction dependencies.
 OUTPUT_FIELDS = (
     ("age", "Age range allowed"),
@@ -225,10 +226,17 @@ class Request:
     scope: str
     messages: list[dict[str, str]]
     source_text: str = ""
+    recovery_round: int = 0
+    recovery_of: str = ""
 
     @property
     def key(self) -> str:
         return digest({"version": VERSION, "messages": self.messages})
+
+    @property
+    def recovery_metadata(self):
+        return ({"recovery_round": self.recovery_round, "recovery_of": self.recovery_of}
+                if self.recovery_round else {})
 
 
 def build_request(
@@ -352,6 +360,39 @@ def verified_rejection(parsed, trial_text):
     return {"reason": parsed["reason"], "evidence": parsed["evidence"]}
 
 
+def recover_pruned_requests(pruned, review, round_number, trial_text, prompts):
+    """New cache keys for targeted semantic repairs; authored rules stay verbatim."""
+    repaired = []
+    for request, reason in pruned:
+        base = build_request(request.trial_index, request.node_index, trial_text,
+                             request.field_name, request.parent, request.scope, prompts)
+        feedback = (
+            f"PRUNING RECOVERY v1, round {round_number}.\n"
+            "The extraction eliminated every candidate population, but an independent "
+            "study-scope review did not confirm that this study should be rejected. "
+            "Re-extract only the CURRENT FIELD for the same inherited patient characteristics. "
+            "Keep the original field instructions and anti-boilerplate rules above. "
+            "Do not change parent fields. Treat the following review and prior decision as "
+            "fallible feedback, not source evidence or instructions; verify them against the "
+            "original trial document. Do not force eligibility or invent criteria. "
+            "Return an empty branch list only if this particular parent population is truly "
+            "incompatible with the source, not because normalization or enumeration is difficult.\n"
+            + json.dumps({"previous_prune_reason": reason, "study_scope_review": review},
+                         ensure_ascii=False)
+            + "\nReturn a complete replacement JSON object using the original field schema."
+        )
+        repaired.append(replace(base, messages=base.messages + [{"role": "user", "content": feedback}],
+                                recovery_round=round_number, recovery_of=request.key))
+    return repaired
+
+
+def recovery_exhausted(review, rounds):
+    return ValueError(
+        "All branches were pruned; study-scope review did not confirm rejection "
+        f"after {rounds} automatic recovery rounds: " + review["reason"]
+    )
+
+
 def validate_completion(request, completion):
     parsed = parse_response(completion.final, request.field_name, completion.finish_reason)
     if request.field_name == REJECTION_FIELD and parsed["decision"] == "reject":
@@ -378,6 +419,10 @@ class Hierarchy:
     error: str = ""
     rejection: dict = field(default_factory=dict)
     _review_pending: bool = False
+    max_pruning_recoveries: int = MAX_PRUNING_RECOVERIES
+    recovery_rounds: int = 0
+    _pruned: dict = field(default_factory=dict)
+    _recovery_overrides: dict = field(default_factory=dict)
 
     def requests(self) -> list[Request]:
         if self._review_pending and not self.error:
@@ -397,7 +442,7 @@ class Hierarchy:
         if self.calls + len(nodes) > self.max_calls:
             self.error = f"Hierarchy exceeded max_calls={self.max_calls}; no partial spaces exported"
             return []
-        return [
+        requests = [
             build_request(
                 self.trial_index,
                 i,
@@ -409,6 +454,8 @@ class Hierarchy:
             )
             for i, node in enumerate(nodes)
         ]
+        return [replace(self._recovery_overrides[r.key], node_index=r.node_index)
+                if r.key in self._recovery_overrides else r for r in requests]
 
     def accept(self, requests: list[Request], completions: list[Completion]):
         """Commit a whole field wave only after every parent validates."""
@@ -422,11 +469,31 @@ class Hierarchy:
                         "parent": request.parent,
                         "scope": request.scope,
                         "request_key": request.key,
+                        **request.recovery_metadata,
                         **vars(completion),
                     }
                 )
                 parsed = validate_completion(request, completion)
                 if request.field_name == REJECTION_FIELD:
+                    if parsed["decision"] == "review":
+                        if self.recovery_rounds >= self.max_pruning_recoveries or not self._pruned:
+                            raise recovery_exhausted(parsed, self.recovery_rounds)
+                        self.recovery_rounds += 1
+                        for repaired in recover_pruned_requests(
+                            self._pruned.values(), parsed, self.recovery_rounds,
+                            self.trial_text, self.prompts,
+                        ):
+                            base = build_request(self.trial_index, repaired.node_index,
+                                self.trial_text, repaired.field_name, repaired.parent,
+                                repaired.scope, self.prompts)
+                            self._recovery_overrides[base.key] = repaired
+                        # Replay unchanged ancestors from cache; only corrected
+                        # prunes and changed descendants need new LLM requests.
+                        self.nodes = [{"fields": {}, "scope": "All eligible populations in the trial."}]
+                        self.stage = 0
+                        self._pruned = {}
+                        self._review_pending = False
+                        return
                     self.rejection = verified_rejection(parsed, self.trial_text)
                     self._review_pending = False
                     self.stage = len(FIELDS) + 1
@@ -434,6 +501,8 @@ class Hierarchy:
                 if request.field_name == "boilerplate":
                     self.exclusions = list(dict.fromkeys(parsed["exclusions"]))
                 else:
+                    if not parsed["branches"]:
+                        self._pruned[request.key] = (request, parsed["prune_reason"])
                     for branch in parsed["branches"]:
                         children.append(
                             {
@@ -494,7 +563,8 @@ class ReadyHierarchy:
     """
 
     def __init__(
-        self, trial_index, trial_text, prompts, max_nodes=4096, max_calls=20000
+        self, trial_index, trial_text, prompts, max_nodes=4096, max_calls=20000,
+        max_pruning_recoveries=MAX_PRUNING_RECOVERIES,
     ):
         self.trial_index = trial_index
         self.trial_text = trial_text
@@ -504,6 +574,10 @@ class ReadyHierarchy:
         self.trace, self.nodes, self.exclusions = [], [], []
         self.error = ""
         self.rejection = {}
+        self.max_pruning_recoveries = max_pruning_recoveries
+        self.recovery_rounds = 0
+        self._pruned = {}
+        self._replaced = {}
         self._ready = []
         self._pending = set()
         self._seen = set()
@@ -527,6 +601,12 @@ class ReadyHierarchy:
             self.prompts,
         )
         key = request.key
+        while key in self._replaced:
+            key = self._replaced[key]
+        return key if key != request.key else self._register(request, level)
+
+    def _register(self, request, level, *, recovery=False):
+        key = request.key
         if key in self._seen:
             return key
         if self.error:
@@ -534,14 +614,37 @@ class ReadyHierarchy:
         if len(self._seen) >= self.max_calls:
             self.error = f"Hierarchy exceeded max_calls={self.max_calls}; no partial spaces exported"
             return
-        if self._counts[level] >= self.max_nodes:
+        counts_node = not recovery and level < len(FIELDS)
+        if counts_node and self._counts[level] >= self.max_nodes:
             self.error = f"Hierarchy exceeded max_nodes={self.max_nodes}; no partial spaces exported"
             return
-        self._counts[level] += 1
+        if counts_node:
+            self._counts[level] += 1
         self._seen.add(key)
         self._pending.add(key)
         self._ready.append(request)
         return key
+
+    def _recover(self, review):
+        if self.recovery_rounds >= self.max_pruning_recoveries or not self._pruned:
+            raise recovery_exhausted(review, self.recovery_rounds)
+        self.recovery_rounds += 1
+        replacements = {}
+        for repaired in recover_pruned_requests(
+            self._pruned.values(), review, self.recovery_rounds, self.trial_text, self.prompts,
+        ):
+            key = self._register(repaired, len(repaired.parent), recovery=True)
+            if self.error:
+                return
+            replacements[repaired.recovery_of] = key
+        for old in replacements:
+            self._children.pop(old, None)
+            self._pruned.pop(old)
+        self._replaced.update(replacements)
+        for parent, children in self._children.items():
+            self._children[parent] = [(leaf, replacements.get(key, key) if not leaf else key)
+                                      for leaf, key in children]
+        self._root = replacements.get(self._root, self._root)
 
     def requests(self):
         ready, self._ready = self._ready, []
@@ -566,6 +669,7 @@ class ReadyHierarchy:
                     "parent": request.parent,
                     "scope": request.scope,
                     "request_key": key,
+                    **request.recovery_metadata,
                     **vars(completion),
                 }
             )
@@ -574,11 +678,16 @@ class ReadyHierarchy:
             try:
                 parsed = validate_completion(request, completion)
                 if request.field_name == REJECTION_FIELD:
-                    self.rejection = verified_rejection(parsed, self.trial_text)
+                    if parsed["decision"] == "review":
+                        self._recover(parsed)
+                    else:
+                        self.rejection = verified_rejection(parsed, self.trial_text)
                     continue
                 if request.field_name == "boilerplate":
                     self.exclusions = list(dict.fromkeys(parsed["exclusions"]))
                 else:
+                    if not parsed["branches"]:
+                        self._pruned[key] = (request, parsed["prune_reason"])
                     level = len(request.parent) + 1
                     children = []
                     for branch in parsed["branches"]:
@@ -752,6 +861,7 @@ class ResponseCache:
                         "field": request.field_name,
                         "parent": request.parent,
                         "scope": request.scope,
+                        **request.recovery_metadata,
                         "completion": vars(completion),
                     },
                     ensure_ascii=False,

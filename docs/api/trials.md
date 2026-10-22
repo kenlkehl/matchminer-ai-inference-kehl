@@ -86,8 +86,16 @@ When every population branch is explicitly pruned, a separate study-scope call
 reviews the full source. It must independently confirm that there is no human
 therapeutic cancer population and supply a verbatim source excerpt. Confirmed
 rejections produce no spaces and are recorded in `metadata.trial_rejections`,
-separately from inference failures. Uncertain decisions, eligible cancer studies,
-malformed reviews and unsupported excerpts remain failures. This is a targeted
+separately from inference failures. A `review` decision triggers targeted
+re-extraction of the pruned fields, with the review explanation and original
+parent context. Up to two recovery rounds are allowed per trial. Recovery
+feedback does not authorize inventing eligibility, changing parent fields, or
+overriding the source. Corrective requests have distinct checkpoint keys and
+retain their recovery round and replaced request key in traces. Completed nodes
+remain reusable; replaying a previously failed trial reaches these new recovery
+requests instead of permanently repeating its cached pruning decision.
+Exhausted recovery, malformed reviews and unsupported rejection excerpts remain
+failures. This is a targeted
 review of empty trees, not a replacement screening pass. Original field prompts,
 successful node identities, and the seven-field space format are unchanged.
 

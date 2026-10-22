@@ -542,6 +542,36 @@ class RejectionBackend(FakeBackend):
         return result
 
 
+class RecoveryBackend(FakeBackend):
+    def generate_llm_outputs(self, *, prompt_list, llm_config, **kwargs):
+        result = super().generate_llm_outputs(prompt_list=prompt_list, llm_config=llm_config, **kwargs)
+        for i, prompt in enumerate(prompt_list):
+            text = prompt.messages[1]['content']
+            if 'CURRENT FIELD: cancer_primary_site\n' in text and 'PRUNING RECOVERY' not in prompt.messages[-1]['content']:
+                result.final_outputs[i] = '{"branches":[],"prune_reason":"No single site in basket trial"}'
+            elif 'Independently check whether' in text:
+                result.final_outputs[i] = '{"decision":"review","reason":"Therapeutic cancer population remains","evidence":"Cancer treatment study"}'
+        return result
+
+
+@pytest.mark.parametrize('mode', ['local', 'remote'])
+def test_backend_recovers_all_pruned_study_then_reuses_repaired_cache(mode, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr('matchminer_ai.llm.prompt_rendering._get_chat_template_tokenizer',
+        lambda _: SimpleNamespace(apply_chat_template=lambda **kw: json.dumps(kw['conversation'])))
+    backend = RecoveryBackend()
+    kwargs = dict(trial_config={**runtime(), 'backend_mode': mode}, settings={'checkpoint_dir': str(tmp_path)})
+    result = summarize_hierarchically(['Cancer treatment study'], backend, **kwargs)
+    assert result.finish_reasons == ['stop']
+    assert 'Cancer primary site allowed:' in result.final_outputs[0]
+    repairs = [messages for messages, _ in backend.calls if 'PRUNING RECOVERY' in messages[-1]['content']]
+    assert len(repairs) == 1 and 'Therapeutic cancer population remains' in repairs[0][-1]['content']
+    assert any(n.get('recovery_round') == 1 for n in json.loads(result.reasoning_outputs[0])['nodes'])
+    count = len(backend.calls)
+    again = summarize_hierarchically(['Cancer treatment study'], backend, **kwargs)
+    assert again.final_outputs == result.final_outputs and len(backend.calls) == count
+
+
 @pytest.mark.parametrize("mode", ["local", "remote"])
 def test_reviewed_rejection_is_not_an_inference_failure(mode, tmp_path, monkeypatch):
     from types import SimpleNamespace

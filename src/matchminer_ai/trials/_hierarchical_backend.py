@@ -149,15 +149,17 @@ def summarize_hierarchically(
     ]
     attempts = [[] for _ in states]
     model_metadata = {"model_name": trial_config.get("model_name")}
-    for stage in range(len(FIELDS) + 2):
+    stage = 0
+    while True:
         requests_by_trial = [state.requests() for state in states]
         requests = [request for group in requests_by_trial for request in group]
         if not requests:
             break
         logger.info(
-            "Trial hierarchy stage %d/%d: %d parent requests",
-            stage + 1, len(FIELDS) + 1, len(requests)
+            "Trial hierarchy wave %d: %d parent requests",
+            stage + 1, len(requests)
         )
+        stage += 1
         responses = {}
         for offset in range(0, len(requests), batch_size):
             chunk = requests[offset : offset + batch_size]

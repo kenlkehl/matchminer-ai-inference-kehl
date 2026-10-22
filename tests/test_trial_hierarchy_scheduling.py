@@ -50,7 +50,9 @@ def test_empty_tree_requires_independent_source_grounded_review(decision, eviden
             if not requests:
                 break
             state.accept(requests, [answer(r) for r in requests])
-    assert seen.count("study_relevance") == 1
+    assert seen.count("study_relevance") == (3 if decision == "review" else 1)
+    if decision == "review":
+        assert state.recovery_rounds == 2
     if expected == "rejected":
         assert not state.error and state.rejection["evidence"] == evidence
         assert state.output() == ""

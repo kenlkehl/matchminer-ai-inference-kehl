@@ -74,8 +74,13 @@ Malformed field responses receive the exact validation error and explicit JSON
 structure guidance. After two failures, thinking remains off for repair (Beam
 uses low effort). Empty population trees receive a separate source-grounded
 study-scope review: confirmed nontherapeutic/noncancer rejections are retained in
-metadata without generating spaces or counting as inference failures. Uncertain
-rejections and exhausted extraction errors remain failures.
+metadata without generating spaces or counting as inference failures. If review
+does not confirm rejection, the extractor retries the pruned fields with the
+reviewer's explanation, preserving their parent context and authored instructions.
+Two automatic recovery rounds are allowed before the trial needs intervention.
+Corrective calls use separate checkpoint keys; successful earlier work remains
+reusable, including when resuming a run that previously failed this review.
+Exhausted recovery and extraction errors remain failures.
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
