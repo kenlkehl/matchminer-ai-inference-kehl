@@ -91,6 +91,25 @@ generate boilerplate, automatically run inside `summarize_trials`, or overwrite
 existing extraction outputs. Training's `review_trial_spaces.py` exercises the
 same mirrored contract and saves original spaces, prompts, reasoning, and results.
 
+The separate `trials.space_residual_exclusions` pilot supplies only a short JSON
+extraction request, the full trial document, and one completed space. It asks for
+source criteria absent from that space that could exclude a patient in its target
+population, omitting inapplicable restrictions. No primer, field taxonomy, or
+"boilerplate" terminology is sent to the model. Its internal name does not appear
+in the prompt. This pilot also leaves production extraction unchanged.
+
+The opt-in `trials.space_residual_criteria` helper combines residual extraction
+with bounded core additions. It supplies the authored core definitions without
+the boilerplate task and keeps residual inclusion/exclusion polarity intact.
+Each criterion includes a source quote and a core-field classification. Missing
+core requirements trigger a separate update followed by another check. The
+default cap is three updates plus four checks; unchanged updates and repeated
+versions stop early. Every stop returns the latest valid space and remaining
+criteria, including any still classified as core, with a diagnostic stop reason
+and no human-review queue. The caller supplies audited transport and bounded
+request retries. Training's `review_trial_spaces.py --task residual-criteria`
+exercises this mirrored contract without changing production extraction.
+
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
 TrialChecker or LLM probes to estimate how many leading patients should proceed
