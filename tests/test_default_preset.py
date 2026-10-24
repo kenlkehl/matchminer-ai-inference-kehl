@@ -7,7 +7,7 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
 
     assert config.local == {}
     assert config.trial["local"]["model_name"] == "google/gemma-4-31B-it"
-    assert config.trial["local"]["engine"]["max_model_len"] == 30000
+    assert config.trial["local"]["engine"]["max_model_len"] == 100000
     from matchminer_ai.llm.backends import build_llm_runtime_config
 
     for name in ("trial", "patient", "llm_match_quality", "llm_exclusion_criteria"):

@@ -24,7 +24,7 @@ def registry(path, entries):
     temp.replace(path)
 
 
-def test_singleton_catalog_calls_share_pool_across_batches(monkeypatch):
+def test_singleton_catalog_calls_share_pool_across_batches(monkeypatch, tmp_path):
     import openai
     from matchminer_ai import load_default_preset
     from matchminer_ai.trials.drug_catalog import _run_llm_messages
@@ -40,12 +40,16 @@ def test_singleton_catalog_calls_share_pool_across_batches(monkeypatch):
     config = load_default_preset()
     urls = ['http://replica-a/v1', 'http://replica-b/v1', 'http://replica-c/v1']
     config.remote.update(enabled=True, server_urls=urls, max_concurrent_requests=2)
+    config.remote['trace_dir'] = str(tmp_path / 'traces')
     for _ in range(6):
         outputs = _run_llm_messages([[{'role': 'user', 'content': 'fabricated evidence'}]],
                                    config=config, stage='synthesis')
         assert outputs[0].text == 'Synthetic answer'
         assert outputs[0].reasoning == 'hidden'
     assert [url for url, _ in called] == urls * 2
+    traces = [json.loads(path.read_text()) for path in (tmp_path / 'traces').rglob('*.json')]
+    assert len(traces) == 6
+    assert all(trace['reasoning'] == 'hidden' and trace['messages'] for trace in traces)
 
 
 def test_registry_caps_and_removal_apply_without_restarting(tmp_path):

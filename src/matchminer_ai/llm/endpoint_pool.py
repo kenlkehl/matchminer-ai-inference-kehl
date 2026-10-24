@@ -1,6 +1,7 @@
 """Thread-safe OpenAI endpoint selection across batches and live worker changes."""
 from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -27,7 +28,7 @@ class EndpointPool:
     """
     def __init__(self, urls=(), *, registry=None, per_server=96, timeout=7200,
                  recovery_timeout=86400, api_key='EMPTY', refresh_seconds=1,
-                 client_factory=None, adaptive=None):
+                 client_factory=None, adaptive=None, trace_dir=None):
         from openai import OpenAI
         if per_server < 1 or timeout <= 0 or recovery_timeout <= 0:
             raise ValueError('Endpoint limits must be positive')
@@ -37,6 +38,7 @@ class EndpointPool:
         self.recovery_timeout, self.api_key = recovery_timeout, api_key
         self.refresh_seconds = refresh_seconds
         self.client_factory = client_factory or OpenAI
+        self.trace_dir = trace_dir or os.environ.get('MMAI_LLM_TRACE_DIR')
         self.adaptive = dict(adaptive or {})
         self.adaptive_enabled = self.adaptive.pop('enabled', False)
         self.metrics_interval = float(self.adaptive.pop('metrics_interval', 0))
@@ -211,6 +213,10 @@ class EndpointPool:
                     provenance = {'endpoint': url, 'request_model': model,
                                   'model_root': self.model_roots.get(url)}
                 response = client.chat.completions.create(**{**request, 'model': model})
+                if self.trace_dir:
+                    from .traces import write_response_trace
+                    provenance['trace_path'] = write_response_trace(self.trace_dir, response,
+                        request={**request, 'model': model}, provenance=dict(provenance))
                 successful = True
                 return response, provenance
             except Exception as error:
@@ -237,11 +243,13 @@ def shared_pool(config, urls, api_key):
                     per_server=int(config.get('concurrency_per_server', config.get('max_concurrent_requests', 96))),
                     timeout=float(config.get('request_timeout', 7200)),
                     recovery_timeout=float(config.get('recovery_timeout', 86400)), api_key=api_key,
-                    adaptive=config.get('adaptive_concurrency'))
+                    adaptive=config.get('adaptive_concurrency'),
+                    trace_dir=config.get('trace_dir') or os.environ.get('MMAI_LLM_TRACE_DIR'))
     # Registry contents deliberately do not enter this key.
     key = (str(settings['registry']), tuple(urls) if not settings['registry'] else (),
            settings['per_server'], settings['timeout'], settings['recovery_timeout'], api_key,
-           config.get('model_name'), json.dumps(settings['adaptive'], sort_keys=True))
+           config.get('model_name'), json.dumps(settings['adaptive'], sort_keys=True),
+           str(settings['trace_dir']))
     with _LOCK:
         if key not in _POOLS:
             _POOLS[key] = EndpointPool(urls, **settings)

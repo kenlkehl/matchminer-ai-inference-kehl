@@ -71,6 +71,17 @@ model alias, and registry model root so different quantizations remain traceable
 Concurrency is process-local; separate processes have separate admission limits.
 Callable credentials/providers retain their existing asynchronous transport.
 
+Pooled teacher requests can preserve complete local reasoning archives with
+`remote.trace_dir` or the `MMAI_LLM_TRACE_DIR` environment variable. Each response
+is saved atomically before application validation, including token-limited and
+malformed attempts. Archives contain the exact messages, returned reasoning
+channel, complete response, model/endpoint provenance, selected sampling settings,
+and finish reason. Credentials and HTTP headers are excluded. Response metadata
+includes `trace_path`; `MMAI_LLM_TRACE_STAGE` can identify the owning workflow.
+This is opt-in because the files contain original input text; use an authorized
+local directory appropriate to that data. Archiving does not add reasoning to
+normal API answers or change any model's training targets.
+
 The default result uses `cohort_trial_id`, `cohort_number`, and
 `cohort_eligibility_criteria`, plus the separate
 `cohort_specific_eligibility_criteria` and `common_eligibility_criteria` columns
