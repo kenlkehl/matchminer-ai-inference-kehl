@@ -72,17 +72,21 @@ The returned DataFrame contains accepted cohorts only:
 | `cohort_trial_id` | `<trial_id>-cohort-<zero-based number>`; distinct from legacy space IDs. |
 | `trial_id` | Source trial identifier. |
 | `cohort_number` | Zero-based population index in source order. |
-| `cohort_eligibility_criteria` | Cohort-specific plus common criteria joined in code, or original full trial text for one population. |
+| `cohort_eligibility_criteria` | Cohort-specific plus common criteria joined in code, or the original eligibility field for one population. |
 | `cohort_specific_eligibility_criteria` | The model's specific criteria string; null for single-population trials. |
 | `common_eligibility_criteria` | The model's shared criteria string, repeated in each row; null for single-population trials. |
-| `cohort_criteria_source` | `llm` for multiple populations; `trial_text` for a single population. |
+| `cohort_criteria_source` | `llm` for multiple populations; `eligibility_criteria` for a single population. |
 | `cancer_treatment_trial` | `yes` for every returned row. |
 | `multiple_cohorts` | The accepted model decision. |
 
 For a single eligibility population, the model deliberately emits no criteria.
-Code retains the original title, brief summary and eligibility criteria joined
-with newlines, avoiding loss of requirements stated outside the eligibility
-field. Rejected trials produce no rows. Empty/all-rejected runs retain the same
+Code copies the original `eligibility_criteria` field verbatim, without the
+title or summary. The combined title/summary/eligibility document remains the
+input to screening and cohort detection. If an accepted single-population trial
+has missing or blank eligibility, it produces no row and records a `trial_errors`
+entry; it is not reclassified as a treatment rejection. Derived row metadata uses
+`representation_version="trial-treatment-cohorts-v3"`; the LLM JSON schema remains
+v2 because the decisions and multi-cohort response shape have not changed. Rejected trials produce no rows. Empty/all-rejected runs retain the same
 column schema. General exclusions remain in either the specific or common field
 according to applicability. The common field is not the legacy boilerplate
 extraction: it includes all shared eligibility dimensions, not just exclusions.

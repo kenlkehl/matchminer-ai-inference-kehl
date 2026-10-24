@@ -17,6 +17,9 @@ from .cohort_schema import (
 )
 from .prompt_builder import build_trial_text
 
+# The model's JSON schema stays v2; this versions the derived row representation.
+COHORT_REPRESENTATION_VERSION = "trial-treatment-cohorts-v3"
+
 COHORT_COLUMNS = [
     "cohort_trial_id", "trial_id", "cohort_number", "cohort_eligibility_criteria",
     "cohort_specific_eligibility_criteria", "common_eligibility_criteria",
@@ -52,6 +55,7 @@ def summarize_trial_cohorts(trials, config):
     runtime = build_llm_runtime_config("trial", trial_config, config=config)
     metadata = {
         "extraction_method": "cohorts", "schema_version": COHORT_SCHEMA_VERSION,
+        "representation_version": COHORT_REPRESENTATION_VERSION,
         "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
         "model_metadata": {}, "trial_decisions": {}, "trial_rejections": {},
         "trial_errors": {}, "trial_attempts": {},
@@ -125,9 +129,15 @@ def summarize_trial_cohorts(trials, config):
         if parsed is None or parsed["cancer_treatment_trial"] == "no":
             continue
         multiple = parsed["multiple_cohorts"] == "yes"
-        # With one population the model deliberately emits no criteria. Keep
-        # the original full trial document so title/summary eligibility is not lost.
-        criteria = parsed["cohorts"] if multiple else [source.trial_text]
+        # Screening uses the full document, but a single population carries only
+        # the original eligibility field. Never substitute title/summary text.
+        if not multiple and (not isinstance(source.eligibility_criteria, str)
+                             or not source.eligibility_criteria.strip()):
+            metadata["trial_errors"][source.trial_id] = (
+                "Single-population trial has no original eligibility_criteria"
+            )
+            continue
+        criteria = parsed["cohorts"] if multiple else [source.eligibility_criteria]
         common = parsed["common_eligibility_criteria"] if multiple else None
         for number, text in enumerate(criteria):
             complete = text
@@ -142,7 +152,7 @@ def summarize_trial_cohorts(trials, config):
                 "cohort_eligibility_criteria": complete,
                 "cohort_specific_eligibility_criteria": text if multiple else None,
                 "common_eligibility_criteria": common,
-                "cohort_criteria_source": "llm" if multiple else "trial_text",
+                "cohort_criteria_source": "llm" if multiple else "eligibility_criteria",
                 "cancer_treatment_trial": "yes",
                 "multiple_cohorts": parsed["multiple_cohorts"],
             }
@@ -160,7 +170,7 @@ def summarize_trial_cohorts(trials, config):
     result["cohort_number"] = result.cohort_number.astype("int64")
     # Retain decisions even when return_metadata=False, including all-rejected runs.
     result.attrs.update({key: metadata[key] for key in (
-        "extraction_method", "schema_version", "prompt_sha256",
+        "extraction_method", "schema_version", "representation_version", "prompt_sha256",
         "trial_decisions", "trial_rejections", "trial_errors",
     )})
     qc = []

@@ -75,8 +75,10 @@ The default result uses `cohort_trial_id`, `cohort_number`, and
 `cohort_eligibility_criteria`, plus the separate
 `cohort_specific_eligibility_criteria` and `common_eligibility_criteria` columns
 and decision/source columns. Accepted
-single-population trials retain their original complete trial text without a
-second model call. Rejected trials produce no cohort rows and remain in metadata
+single-population trials retain only their original `eligibility_criteria` field,
+verbatim, without a second model call. The full title/summary/eligibility document
+still supplies screening and cohort detection. Missing single-population eligibility
+is recorded as an error rather than filled from the title or summary. Rejected trials produce no cohort rows and remain in metadata
 and DataFrame attrs; malformed/truncated responses are failures, not rejections.
 See the [cohort contract and configuration](docs/api/trials.md#combined-treatment-screening-and-cohort-extraction).
 

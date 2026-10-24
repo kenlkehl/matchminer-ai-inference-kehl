@@ -12,7 +12,7 @@ from matchminer_ai.trials import summarize_trials
 from matchminer_ai.trials.cohort_schema import (
     COHORT_SCHEMA_VERSION, build_cohort_messages, parse_cohort_response,
 )
-from matchminer_ai.trials.cohorts import COHORT_COLUMNS
+from matchminer_ai.trials.cohorts import COHORT_COLUMNS, COHORT_REPRESENTATION_VERSION
 
 NO = {"cancer_treatment_trial": "no"}
 SINGLE = {"cancer_treatment_trial": "yes", "multiple_cohorts": "no"}
@@ -155,10 +155,10 @@ def test_public_api_runs_one_combined_batch_and_keeps_sources(harness):
     assert list(result) == COHORT_COLUMNS
     assert result.trial_id.tolist() == ["T1", "T2", "T2"]
     assert result.cohort_trial_id.tolist() == ["T1-cohort-0", "T2-cohort-0", "T2-cohort-1"]
-    assert result.iloc[0].cohort_eligibility_criteria == "\n".join(trials.iloc[1][
-        ["trial_title", "brief_summary", "eligibility_criteria"]
-    ])
-    assert result.cohort_criteria_source.tolist() == ["trial_text", "llm", "llm"]
+    assert result.iloc[0].cohort_eligibility_criteria == trials.iloc[1].eligibility_criteria
+    assert result.cohort_criteria_source.tolist() == ["eligibility_criteria", "llm", "llm"]
+    assert trials.iloc[1].trial_title in str(calls[0][0])
+    assert trials.iloc[1].brief_summary in str(calls[0][0])
     assert pd.isna(result.iloc[0].cohort_specific_eligibility_criteria)
     assert pd.isna(result.iloc[0].common_eligibility_criteria)
     assert result.cohort_specific_eligibility_criteria.tolist()[1:] == MULTI["cohorts"]
@@ -169,12 +169,26 @@ def test_public_api_runs_one_combined_batch_and_keeps_sources(harness):
     assert "GFR >= 60" not in result.iloc[1].cohort_eligibility_criteria
     assert "GFR >= 40" not in result.iloc[2].cohort_eligibility_criteria
     assert metadata["schema_version"] == COHORT_SCHEMA_VERSION == "trial-treatment-cohorts-v2"
+    assert metadata["representation_version"] == result.attrs['representation_version'] == COHORT_REPRESENTATION_VERSION
     assert metadata["trial_decisions"] == {"T0": NO, "T1": SINGLE, "T2": MULTI}
     assert metadata["trial_rejections"] == {"T0": NO}
     assert metadata["trial_errors"] == {}
     assert result.attrs["trial_rejections"] == {"T0": NO}
     assert qc.set_index("metric").loc["trials_failed_inference", "value"] == 0
     pd.testing.assert_frame_equal(trials, original)
+
+
+@pytest.mark.parametrize('eligibility', [None, '', ' \n\t'])
+def test_single_population_missing_eligibility_is_an_error_without_title_fallback(harness, eligibility):
+    config, calls, answers = harness
+    answers.append([(SINGLE, 'stop')])
+    trials = source(['missing'])
+    trials['eligibility_criteria'] = eligibility
+    result, metadata, qc = summarize_trials(trials, config=config, return_metadata=True, return_qc=True)
+    assert result.empty and len(calls) == 1
+    assert 'original eligibility_criteria' in metadata['trial_errors']['missing']
+    assert metadata['trial_rejections'] == {}
+    assert metadata['trial_decisions']['missing'] == SINGLE
 
 
 def test_no_shared_criteria_keeps_cohort_text_without_inventing_common_rules(harness):
