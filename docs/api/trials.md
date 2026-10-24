@@ -14,20 +14,95 @@
         - get_guideline_considerations
         - structure_trial_space
 
-`summarize_trials` preserves source-field formatting and starts newly generated
-clinical-space numbers at zero. With the remote backend, exhausted requests are
-reported in `trials_failed_inference` QC and excluded from the returned spaces,
-while successful trials remain available. Run metadata includes the installed
-package name and version.
+## Combined treatment screening and cohort extraction
 
-Earlier Kehl snapshots used one-based space IDs. Keep saved spaces, embeddings,
-and paradigm memberships from the same snapshot together; see
-[trial-space numbering compatibility](space-paradigms.md#trial-space-numbering-compatibility)
-before combining old artifacts with newly summarized trials.
+The default `trial.extraction_method` is `cohorts`. `summarize_trials` accepts
+one row per trial with `trial_id`, `trial_title`, `brief_summary`, and
+`eligibility_criteria`. IDs must be unique and nonempty. Source-field formatting
+is preserved. Each trial uses one combined prompt, with up to three validation
+attempts (`trial.cohorts.max_attempts`); only failed trials are retried, using the
+same sampling and thinking settings. Existing local and remote backends are used.
+
+The model must return exactly one of these JSON shapes, in the indicated order:
+
+```json
+{"cancer_treatment_trial": "no"}
+```
+
+```json
+{"cancer_treatment_trial": "yes", "multiple_cohorts": "no"}
+```
+
+```json
+{
+  "cancer_treatment_trial": "yes",
+  "multiple_cohorts": "yes",
+  "cohorts": ["Complete criteria for population A", "Complete criteria for population B"]
+}
+```
+
+Values are lowercase strings, not booleans. A negative treatment decision stops
+before cohort assessment. Diagnostic-only, supportive-care and primary-prevention
+studies do not qualify merely because participants have cancer or receive
+background cancer therapy. Direct treatment studies qualify even with only
+PK/PD, safety, dose, or surrogate endpoints. The combined prompt owns these rules;
+the training screen imports it rather than maintaining another screening prompt.
+
+Arms/cohorts count separately only when eligibility differs. Equivalent groups
+are combined. Each extracted cohort includes every applicable shared and specific
+inclusion/exclusion criterion, including washout and general exclusions. It must
+stand alone, preserve exceptions and AND/OR logic, and explicitly flag incomplete
+source criteria without inventing missing details.
+
+The returned DataFrame contains accepted cohorts only:
+
+| Column | Meaning |
+| --- | --- |
+| `cohort_trial_id` | `<trial_id>-cohort-<zero-based number>`; distinct from legacy space IDs. |
+| `trial_id` | Source trial identifier. |
+| `cohort_number` | Zero-based population index in source order. |
+| `cohort_eligibility_criteria` | Complete generated criteria, or original full trial text for one population. |
+| `cohort_criteria_source` | `llm` for multiple populations; `trial_text` for a single population. |
+| `cancer_treatment_trial` | `yes` for every returned row. |
+| `multiple_cohorts` | The accepted model decision. |
+
+For a single eligibility population, the model deliberately emits no criteria.
+Code retains the original title, brief summary and eligibility criteria joined
+with newlines, avoiding loss of requirements stated outside the eligibility
+field. Rejected trials produce no rows. Empty/all-rejected runs retain the same
+column schema. No boilerplate criteria are separately generated or removed.
+
+```python
+from matchminer_ai.trials import summarize_trials
+
+cohorts, metadata, qc = summarize_trials(
+    trials, config=config, return_metadata=True, return_qc=True
+)
+print(metadata["trial_decisions"])
+print(metadata["trial_rejections"])
+print(metadata["trial_errors"])
+```
+
+Decision, rejection, error, schema-version and prompt-hash metadata also appear
+in `cohorts.attrs` when optional metadata is not requested. Returned metadata
+includes per-trial attempts and model/config provenance. Debug mode additionally
+retains input, final answer and reasoning for accepted rows, and all final
+responses/attempts in metadata. QC separates treatment rejections from exhausted
+inference errors and truncated responses. Duplicate keys, extra/missing fields,
+wrong order/types, empty/duplicate cohort descriptions, surrounding prose, and
+non-`stop` finishes fail validation; they never become negative decisions.
+
+This changes the default schema and text semantics. Do not rename these columns
+to legacy space columns or reuse saved space embeddings as if the representations
+were interchangeable. Existing matching/structuring consumers require adaptation
+and evaluation. `hierarchical` and `one_shot` remain explicit legacy modes with
+their previous space schema; the current Space applications opt into that mode.
+Saved trial-space artifacts remain unchanged.
 
 ## Hierarchical extraction
 
-The default `trial.extraction_method` is `hierarchical`. It builds a tree in this
+Set `trial.extraction_method` to `hierarchical` to use the legacy space workflow.
+It builds a tree in this
 fixed order: age, cancer primary site, sex, histology, disease state, prior
 treatment requirements, and biomarker requirements. One request handles one parent and one field, returning a JSON array
 of alternative values rather than a full list of spaces. Independent parents
@@ -212,8 +287,9 @@ eligibility.
 
 `structure_trial_space` accepts one free-text clinical-space summary and returns
 a JSON-compatible dictionary containing its `trial_id` and `space_trial_id`.
-The package trial summarizer defines each space as a single cancer-type and
-histology combination, so this API structures one space at a time. Its output
+The legacy trial-space summarizer defines each space as a single cancer-type and
+histology combination, so this API structures one legacy space at a time. Full
+cohort criteria from the new default summarizer are not this API's input contract. Its output
 contains:
 
 - `age_range` and `sex_allowed`;

@@ -140,6 +140,7 @@ def connect_to_remote_servers(
     server_urls: list[str],
     request_timeout: float = 600.0,
     api_key: AsyncAPIKey = "not-needed",
+    max_connections: int = 100,
 ) -> list[tuple[Any, int]]:
     """
     Create AsyncOpenAI clients for externally managed vLLM servers.
@@ -153,6 +154,9 @@ def connect_to_remote_servers(
         plus a small transport buffer.
     api_key
         API key passed to the OpenAI client.
+    max_connections
+        Per-server HTTP pool capacity; callers pass their request concurrency
+        so httpx's default 100-connection limit does not cap larger queues.
 
     Returns
     -------
@@ -172,6 +176,10 @@ def connect_to_remote_servers(
         http_client = httpx.AsyncClient(
             timeout=request_timeout + 60,
             follow_redirects=True,
+            limits=httpx.Limits(
+                max_connections=max(1, int(max_connections)),
+                max_keepalive_connections=max(1, int(max_connections)),
+            ),
         )
         client = AsyncOpenAI(
             base_url=url,
@@ -386,6 +394,7 @@ class RemoteRequestSession:
             server_urls=self.server_urls,
             request_timeout=float(self.config["request_timeout"]),
             api_key=self.api_key,
+            max_connections=self.per_server,
         )
         self.slots = asyncio.Queue()
         for _ in range(self.per_server):
@@ -462,6 +471,7 @@ async def generate_remote_llm_outputs_async(
         server_urls=server_urls,
         request_timeout=request_timeout,
         api_key=api_key,
+        max_connections=max_concurrent_requests,
     )
 
     try:

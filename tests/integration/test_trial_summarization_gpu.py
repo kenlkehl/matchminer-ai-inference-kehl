@@ -39,7 +39,9 @@ def test_trial_summarization_gpu_smoke():
     summaries, metadata = summarize_trials(trials, return_metadata=True)
 
     assert not summaries.empty
-    assert "space_trial_id" in summaries.columns
+    assert "cohort_trial_id" in summaries.columns
     assert "trial_id" in summaries.columns
-    assert "clinical_space_summary" in summaries.columns
+    assert "cohort_eligibility_criteria" in summaries.columns
+    assert metadata["extraction_method"] == "cohorts"
+    assert "trial_rejections" in metadata
     assert "model_metadata" in metadata

@@ -12,7 +12,9 @@ remote:
   batch_size: 1000
   retry_backoff_base: 1.0
 trial:
-  extraction_method: hierarchical
+  extraction_method: cohorts
+  cohorts:
+    max_attempts: 3
   hierarchy:
     max_attempts: 4
     max_nodes: 4096
@@ -43,6 +45,7 @@ trial:
       chat_template_kwargs:
         enable_thinking: true
   prompt_files:
+    cohorts: trial.cohorts.user.txt
     primer: trial.user.primer.txt
     question: trial.user.question.txt
   boilerplate_marker: Boilerplate exclusions

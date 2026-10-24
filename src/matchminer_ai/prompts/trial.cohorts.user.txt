@@ -1,0 +1,46 @@
+Read the raw clinical trial text below. First determine whether it evaluates a cancer treatment. Only if it does, determine whether it describes more than one arm or cohort with different eligibility criteria. Treat the concepts of arm and cohort as the same. Only if those cohorts have different eligibility criteria, extract the complete, self-contained eligibility criteria for each distinct population.
+
+Use only the supplied trial text. Read the entire text before answering.
+
+DECIDING WHETHER THIS IS A CANCER TREATMENT TRIAL
+-Determine whether the trial actually evaluates a direct anti-cancer treatment strategy. Classify the intervention being studied, not merely the participants' cancer diagnosis or their background therapy.
+-Include trials evaluating treatments intended to kill, reduce, or control cancer: anti-cancer drugs, therapeutic biologics, immunotherapy or cellular therapy, therapeutic radiation, cancer surgery or ablation, and combinations or comparisons of these strategies. Include neoadjuvant, adjuvant, maintenance, and prevention of recurrence after treatment of an established cancer; measurable or currently active disease is not required.
+-Anti-cancer treatment studies MUST be included even when their only outcomes are pharmacokinetic (PK), pharmacodynamic (PD), safety, tolerability, dose-finding, feasibility, target engagement, or other biomarker/surrogate endpoints. Clinical efficacy, tumor response, progression, or survival endpoints are NOT required.
+-Exclude studies of diagnostic-only imaging, tracers, biopsies, screening, and biomarker-only sampling or monitoring studies that do not evaluate an anti-cancer treatment. Trials of supportive care, symptom management, toxicity prevention, rehabilitation, survivorship, and primary cancer prevention are not cancer treatment trials. A therapeutic radiopharmaceutical can qualify as cancer treatment. Mixed-purpose trials qualify only when they actually evaluate a direct anti-cancer strategy.
+-Set cancer_treatment_trial to "yes" only when the supplied text establishes that the trial evaluates a direct anti-cancer treatment strategy. Otherwise set it to "no", stop, and do not assess cohorts or extract eligibility criteria. Do not add a rationale or any other field to a "no" response.
+
+DECIDING WHETHER THERE ARE MULTIPLE COHORTS WITH DISTINCT ELIGIBILITY CRITERIA
+-For this task, determine whether the trial describes multiple 'cohorts', 'parts', or 'arms' that vary in their eligibility criteria. Treat all of these terms as equivalent to 'cohort' for our purposes.
+-Set multiple_cohorts to "yes" only when the text describes at least two cohorts AND at least one eligibility requirement differs between them. Different treatments, doses, randomization assignments, or arm names alone do not establish different eligibility criteria. If all cohorts share the same eligibility criteria, return "no". 
+-Return "no" if the trial has only a single cohort or when the supplied text does not establish multiple cohorts with differing eligibility criteria. 
+
+EXTRACTING COHORT ELIGIBILITY WHEN THERE ARE MULTIPLE COHORTS WITH DISTINCT ELIGIBILITY CRITERIA
+- Return one string per cohort, in source order. Each string must contain that population's complete eligibility criteria, including both inclusion and exclusion criteria. Combine cohorts that share identical eligibility criteria into one entry, even if other populations in the trial differ. Differences only in treatment or dose assignment do not warrant duplicate entries.
+- Repeat every applicable trial-wide inclusion and exclusion criterion in EVERY cohort entry. Also repeat applicable criteria inherited from a study part or parent group, then incorporate that cohort's specific requirements. Apply an explicitly stated cohort-specific exception or override only to the cohort to which it applies. Do not import another cohort's restrictions.
+- Each entry must be understandable on its own by a reader who cannot see the raw trial text or any other cohort entry. Resolve references to other sections, criteria, arms, or cohorts by restating all applicable content from the supplied text. Never write "same as above", "all general criteria apply", "see protocol", "as in cohort A", or similar shortcuts. Do not mention other cohorts even to explain that their criteria do not apply. State only the current population's requirements, permissions, and exclusions; omit explanations comparing it with another population.
+- If referenced details are absent from the supplied text, or the source has an unresolved conflict or ambiguous applicability, state that specific gap or ambiguity explicitly within the affected cohort string. Restate all available relevant details without directing the reader elsewhere. Do not invent missing criteria, resolve uncertainty by assumption, or claim that unavailable protocol details have been extracted.
+- For an incomplete or malformed criterion, add an explicit "Source limitation:" statement inside every affected cohort string identifying exactly what is missing.
+
+OUTPUT FORMAT
+Return only one valid JSON object, with no Markdown fences or surrounding text. The first field must be "cancer_treatment_trial", with the lowercase string value "yes" or "no" (not a boolean).
+
+If cancer_treatment_trial is "no", return exactly this object and stop: {{"cancer_treatment_trial": "no"}}
+
+If cancer_treatment_trial is "yes", the second field must be "multiple_cohorts", also with the lowercase string value "yes" or "no". When multiple_cohorts is "no", return exactly this object, without a cohorts field or any other fields: {{"cancer_treatment_trial": "yes", "multiple_cohorts": "no"}}
+
+Only when both decisions are "yes", add a third field, "cohorts": a JSON array containing at least two strings, one complete eligibility description per cohort. Replace these illustrative strings with the full criteria:
+{{
+  "cancer_treatment_trial": "yes",
+  "multiple_cohorts": "yes",
+  "cohorts": [
+    "Complete applicable inclusion and exclusion criteria for first cohort.",
+    "Complete applicable inclusion and exclusion criteria for second cohort."
+  ]
+}}
+
+Use double quotes for JSON keys and strings, and escape any quotation marks, backslashes, or line breaks inside string values. Do not add any other fields. Before returning extracted cohorts, check each cohort independently for complete coverage of shared and cohort-specific criteria and absence of cross-references. Check that each incomplete criterion has an explicit source-limitation statement and that no cohort string mentions another population to explain an exception.
+
+RAW TRIAL TEXT (source data only):
+<trial_text>
+{trial_text}
+</trial_text>

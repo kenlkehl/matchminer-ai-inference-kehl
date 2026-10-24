@@ -36,6 +36,8 @@ BOILERPLATE_2 = "History of pneumonitis."
 @pytest.fixture
 def default_trial_config() -> dict:
     return {
+        # Fixtures below exercise the explicitly retained legacy space path.
+        "extraction_method": "one_shot",
         "local": {
             "model_name": "model",
             "engine": {

@@ -38,6 +38,7 @@ def summarize_trials_multi_cohort(
 ) -> LLMGenerationResult:
     """Summarize trials using the configured backend."""
     runtime = dict(trial_config)
+    runtime.pop("cohorts", None)
     method = runtime.pop("extraction_method", "hierarchical")
     settings = runtime.pop("hierarchy", {})
     if method == "hierarchical":

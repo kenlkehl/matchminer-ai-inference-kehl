@@ -593,6 +593,7 @@ def test_reviewed_rejection_is_not_an_inference_failure(mode, tmp_path, monkeypa
 def test_public_summarization_retains_rejection_reasons_separately_from_failures(monkeypatch):
     from matchminer_ai.trials.summarize import run_llm_summarization
     config = load_default_preset()
+    config.trial["extraction_method"] = "hierarchical"
     config.remote["enabled"] = True
     config.trial["remote"]["model_name"] = "fake"
     config.trial["local"]["engine"].pop("max_model_len")
@@ -650,9 +651,10 @@ def test_failed_trial_does_not_export_partial_spaces_or_break_other_trials():
     assert len(backend.calls) == 10  # Failed trial's age and independent boilerplate.
 
 
-def test_public_default_uses_hierarchy_and_preserves_output_schema(monkeypatch):
+def test_explicit_hierarchy_preserves_output_schema(monkeypatch):
     backend = FakeBackend()
     config = load_default_preset()
+    config.trial["extraction_method"] = "hierarchical"
     config.remote["enabled"] = True
     config.trial["remote"]["model_name"] = "fake"
     # This test isolates orchestration; token accounting has its own test below.

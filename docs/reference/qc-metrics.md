@@ -22,7 +22,22 @@ Returned by `summarize_patients(..., return_qc=True)`.
   used during embedding generation.
 
 ## Trial summarization QC
+
 Returned by `summarize_trials(..., return_qc=True)`.
+
+The default `cohorts` method reports:
+
+- `trials_rejected_cancer_treatment`: valid negative treatment decisions; these
+  trials produce no cohort rows and remain in `trial_rejections` metadata.
+- `trials_failed_inference`: responses that remain invalid or incomplete after
+  the configured attempts. These are errors, not treatment rejections.
+- `trials_truncated_llm_response`: trials whose final attempt ended at its
+  token limit. These are also counted as inference failures.
+
+Each denominator is the number of input trials. Full eligibility cohorts do not
+run the legacy keyword, boilerplate-separation, or embedding-length checks.
+
+Explicit legacy `hierarchical` and `one_shot` extraction reports:
 
 - `trials_missing_in_output`: trials present in the input but not represented
   in the output after summarization/postprocessing.

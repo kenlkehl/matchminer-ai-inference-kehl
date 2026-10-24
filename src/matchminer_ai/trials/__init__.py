@@ -35,67 +35,45 @@ def summarize_trials(
     | tuple[pd.DataFrame, dict, pd.DataFrame]
 ):
     """
-    Summarize clinical trials into clinical spaces and general exclusion criteria.
+    Screen for cancer treatment and extract distinct eligibility populations.
 
     Parameters
     ----------
     trials : pd.DataFrame
-        Trial-level input. One row per trial.
-
-        Expected columns
-        ----------------
-        trial_id : str
-            Unique trial identifier.
-        trial_title : str
-            Human-readable trial title.
-        brief_summary : str
-            Brief textual summary of the trial.
-        eligibility_criteria : str
-            Full eligibility criteria text for the trial.
+        One row per trial with unique, nonempty ``trial_id`` and the text columns
+        ``trial_title``, ``brief_summary``, and ``eligibility_criteria``.
+    config : MMAIConfig, optional
+        Defaults to the package preset, with ``trial.extraction_method=cohorts``.
     return_metadata : bool, optional
-        When True, also return a metadata dict containing the config snapshot
-        and model metadata for this run.
+        Also return package/config/model provenance, the prompt hash, validated
+        ``trial_decisions``, ``trial_rejections``, ``trial_errors``, and attempts.
     return_qc : bool, optional
-        When True, also return a QC report DataFrame for this run.
+        Also return QC separating treatment rejections, inference failures,
+        and truncated responses.
 
     Returns
     -------
-    pd.DataFrame
-        Clinical-space-level DataFrame. One row per clinical space per trial.
+    pd.DataFrame or tuple
+        With the default ``cohorts`` method, one row per accepted population:
+        ``cohort_trial_id`` (``<trial_id>-cohort-<number>``), ``trial_id``,
+        zero-based ``cohort_number``, ``cohort_eligibility_criteria``,
+        ``cohort_criteria_source``, ``cancer_treatment_trial``, and
+        ``multiple_cohorts``. Accepted single-population trials retain their
+        original title, brief summary and eligibility text; multi-population
+        criteria come from the combined LLM response. Rejected trials produce
+        no rows and remain in metadata and DataFrame attrs. Invalid responses
+        are failures, not rejections. Debug mode adds ``trial_input_text``,
+        ``trial_answer_text``, and ``trial_reasoning_text`` and retains all
+        responses in metadata.
 
-        Columns
-        -------
-        space_trial_id : str
-            Unique identifier for a specific trial + clinical space combination.
-        trial_id : str
-            Original trial identifier (copied through from input).
-        clinical_space_number : int
-            Zero-based index of the clinical space within the trial. Newly
-            generated space_trial_id values start at <trial_id>-0.
-        clinical_space_summary : str
-            Summary of the clinical space (disease context, line of therapy, etc).
-        general_exclusion_criteria : str
-            General trial-level exclusion criteria text extracted for this space.
+        Optional results are ``(rows, metadata)``, ``(rows, qc)`` or
+        ``(rows, metadata, qc)`` according to the flags.
 
-        Debug Columns
-        (Available only if pipeline initialized with debug_mode=True)
-        -------------------------------------------------------------
-        trial_input_text : str
-            Concatenation of trial_title + brief_summary + eligibility_criteria.
-            This is the raw input text fed into the LLM.
-        trial_answer_text : str
-            Text the package treated as the LLM answer and used for
-            postprocessing.
-        trial_reasoning_text : str
-            Optional separate reasoning trace returned by the backend or
-            extracted by the configured reasoning parser.
-    tuple[pd.DataFrame, dict]
-        When return_metadata is True, returns the DataFrame plus a metadata dict.
-    tuple[pd.DataFrame, pd.DataFrame]
-        When return_qc is True, returns the DataFrame plus a QC report DataFrame.
-    tuple[pd.DataFrame, dict, pd.DataFrame]
-        When return_metadata and return_qc are True, returns the DataFrame,
-        metadata dict, and QC report DataFrame.
+        The explicitly selected legacy ``hierarchical`` and ``one_shot`` methods
+        retain ``space_trial_id``, ``trial_id``, ``clinical_space_number``,
+        ``clinical_space_summary``, and ``general_exclusion_criteria``. Full
+        cohort criteria are not interchangeable with those model inputs or
+        their saved embeddings.
     """
     from matchminer_ai.config import MMAIConfig, load_default_preset
 
@@ -122,6 +100,24 @@ def summarize_trials(
         )
 
     logger.info("Starting trial summarization for %d trials.", len(trials))
+    if resolved_config.trial.get("extraction_method", "cohorts") == "cohorts":
+        from .cohorts import summarize_trial_cohorts
+
+        result, metadata, qc_report = summarize_trial_cohorts(trials, resolved_config)
+        metadata_payload = {
+            "package": package_metadata(),
+            "config_snapshot": config_snapshot(resolved_config),
+            **{key: value for key, value in metadata.items() if key != "model_metadata"},
+            "model_metadata": {"trial_summarizer": metadata["model_metadata"]},
+        }
+        if return_metadata and return_qc:
+            return result, metadata_payload, qc_report
+        if return_metadata:
+            return result, metadata_payload
+        if return_qc:
+            return result, qc_report
+        return result
+
     (
         trials_with_summaries,
         metadata,

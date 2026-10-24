@@ -437,6 +437,7 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
         preset_name="default",
         debug_mode=True,
         trial={
+            "extraction_method": "one_shot",
             "boilerplate_marker": "Boilerplate exclusions",
         },
         patient={},

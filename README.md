@@ -41,46 +41,28 @@ Publisher sampling settings were verified on 2026-10-16.
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
-Trial extraction now labels the disease-state field `Disease state allowed:`.
-Postprocessing and contextualization also accept the earlier `Cancer burden allowed:`
-label in saved spaces. Public output columns and structured disease-burden keys
-are unchanged; new prompt versions require fresh extraction outputs.
+`summarize_trials` now defaults to one combined cancer-treatment/cohort prompt.
+It first asks whether the studied intervention directly treats cancer; a negative
+answer ends the response. Accepted trials are then checked for populations with
+different eligibility criteria. Arms and cohorts are interchangeable, and
+assignment to different treatments alone does not create separate populations.
+For multiple populations, each extracted eligibility description repeats all
+applicable inclusion and exclusion criteria, including shared requirements.
 
-`summarize_trials` now defaults to hierarchical extraction: age, primary
-site, sex, histology, disease state, prior treatment requirements, then biomarker
-requirements. Each call extends one parent with values
-for just the next field. Python assembles and numbers the completed spaces;
-general exclusions are extracted in a separate call. See the
-[extraction contract and configuration](docs/api/trials.md#hierarchical-extraction).
-Each field call supplies the full trial and one candidate's inherited characteristics,
-then asks: "For a patient with this set of characteristics ... what sets of [the
-current field] are relevant for determining eligibility?" It includes only that
-field's authored instructions and examples verbatim from `trial.user.primer.txt`,
-plus shared anti-boilerplate and omission guidance. Other fields' definitions are
-not included. The separate boilerplate prompt uses only its own authored rules and
-shared omissions. Biomarker fields retain positive/negative result restrictions,
-including specified alterations and expression thresholds; testing or known-status
-requirements alone are omitted. These rules also apply to one-shot extraction. This v5
-prompt contract requires fresh extraction checkpoints; saved screening is reusable.
-Remote extraction schedules ready branches across trials and field levels,
-with independent boilerplate calls and shared per-endpoint concurrency limits.
-It does not wait for a complete field wave or trial batch before advancing.
-Remote hierarchy prompt preparation runs on a dedicated worker so tokenization
-does not block request dispatch. Nemotron non-streaming reasoning parsers reuse
-their vocabulary/setup in a bounded cache, with separate tokenizer/thinking-mode
-entries and serialized access to each mutable parser. Prompts, output text, and
-checkpoint identities are unchanged by these execution optimizations.
-Malformed field responses receive the exact validation error and explicit JSON
-structure guidance. After two failures, thinking remains off for repair (Beam
-uses low effort). Empty population trees receive a separate source-grounded
-study-scope review: confirmed nontherapeutic/noncancer rejections are retained in
-metadata without generating spaces or counting as inference failures. If review
-does not confirm rejection, the extractor retries the pruned fields with the
-reviewer's explanation, preserving their parent context and authored instructions.
-Two automatic recovery rounds are allowed before the trial needs intervention.
-Corrective calls use separate checkpoint keys; successful earlier work remains
-reusable, including when resuming a run that previously failed this review.
-Exhausted recovery and extraction errors remain failures.
+The default result uses `cohort_trial_id`, `cohort_number`, and
+`cohort_eligibility_criteria`, with decision and source columns. Accepted
+single-population trials retain their original complete trial text without a
+second model call. Rejected trials produce no cohort rows and remain in metadata
+and DataFrame attrs; malformed/truncated responses are failures, not rejections.
+See the [cohort contract and configuration](docs/api/trials.md#combined-treatment-screening-and-cohort-extraction).
+
+This is a new input representation, not a migration of saved trial spaces or
+embeddings. Existing TrialSpace/TrialChecker/BoilerplateChecker workflows must
+explicitly select `config.trial["extraction_method"] = "hierarchical"` (or the
+legacy `one_shot` method) until adapted and evaluated for complete cohort criteria.
+Both existing Spaces explicitly retain hierarchical extraction for their current
+matching models. The hierarchy's field prompts and seven-field space output
+remain available; see [legacy hierarchical extraction](docs/api/trials.md#hierarchical-extraction).
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
