@@ -19,6 +19,7 @@ from .prompt_builder import build_trial_text
 
 COHORT_COLUMNS = [
     "cohort_trial_id", "trial_id", "cohort_number", "cohort_eligibility_criteria",
+    "cohort_specific_eligibility_criteria", "common_eligibility_criteria",
     "cohort_criteria_source", "cancer_treatment_trial", "multiple_cohorts",
 ]
 
@@ -123,11 +124,20 @@ def summarize_trial_cohorts(trials, config):
         # With one population the model deliberately emits no criteria. Keep
         # the original full trial document so title/summary eligibility is not lost.
         criteria = parsed["cohorts"] if multiple else [source.trial_text]
+        common = parsed["common_eligibility_criteria"] if multiple else None
         for number, text in enumerate(criteria):
+            complete = text
+            if multiple and common:
+                complete = (
+                    f"Cohort-specific eligibility criteria:\n{text}\n\n"
+                    f"Common eligibility criteria:\n{common}"
+                )
             row = {
                 "cohort_trial_id": f"{source.trial_id}-cohort-{number}",
                 "trial_id": source.trial_id, "cohort_number": number,
-                "cohort_eligibility_criteria": text,
+                "cohort_eligibility_criteria": complete,
+                "cohort_specific_eligibility_criteria": text if multiple else None,
+                "common_eligibility_criteria": common,
                 "cohort_criteria_source": "llm" if multiple else "trial_text",
                 "cancer_treatment_trial": "yes",
                 "multiple_cohorts": parsed["multiple_cohorts"],

@@ -37,7 +37,8 @@ The model must return exactly one of these JSON shapes, in the indicated order:
 {
   "cancer_treatment_trial": "yes",
   "multiple_cohorts": "yes",
-  "cohorts": ["Complete criteria for population A", "Complete criteria for population B"]
+  "cohorts": ["Criteria specific to population A", "Criteria specific to population B"],
+  "common_eligibility_criteria": "Inclusion and exclusion criteria shared by every population"
 }
 ```
 
@@ -49,10 +50,20 @@ PK/PD, safety, dose, or surrogate endpoints. The combined prompt owns these rule
 the training screen imports it rather than maintaining another screening prompt.
 
 Arms/cohorts count separately only when eligibility differs. Equivalent groups
-are combined. Each extracted cohort includes every applicable shared and specific
-inclusion/exclusion criterion, including washout and general exclusions. It must
-stand alone, preserve exceptions and AND/OR logic, and explicitly flag incomplete
-source criteria without inventing missing details.
+are combined. Each `cohorts` string contains only that population's specific
+inclusion/exclusion criteria. `common_eligibility_criteria` is one string containing
+criteria that apply identically to every population, or `""` when none are
+established. Criteria shared by only some populations are repeated in their
+respective strings. If a rule differs by cohort, each string carries its complete
+applicable version; the common field must not introduce a conflicting default.
+Each cohort string together with the common field must be complete and
+self-contained, preserve exceptions and AND/OR logic, and explicitly flag
+incomplete source criteria without inventing missing details.
+
+This is schema `trial-treatment-cohorts-v2`. Live responses must include the
+shared field for multiple populations; v1 outputs cannot be reused as v2 results.
+Prompt hashes and schema versions distinguish the generations. The validator
+can read v1 only with explicit `schema_version="trial-treatment-cohorts-v1"`.
 
 The returned DataFrame contains accepted cohorts only:
 
@@ -61,7 +72,9 @@ The returned DataFrame contains accepted cohorts only:
 | `cohort_trial_id` | `<trial_id>-cohort-<zero-based number>`; distinct from legacy space IDs. |
 | `trial_id` | Source trial identifier. |
 | `cohort_number` | Zero-based population index in source order. |
-| `cohort_eligibility_criteria` | Complete generated criteria, or original full trial text for one population. |
+| `cohort_eligibility_criteria` | Cohort-specific plus common criteria joined in code, or original full trial text for one population. |
+| `cohort_specific_eligibility_criteria` | The model's specific criteria string; null for single-population trials. |
+| `common_eligibility_criteria` | The model's shared criteria string, repeated in each row; null for single-population trials. |
 | `cohort_criteria_source` | `llm` for multiple populations; `trial_text` for a single population. |
 | `cancer_treatment_trial` | `yes` for every returned row. |
 | `multiple_cohorts` | The accepted model decision. |
@@ -70,7 +83,12 @@ For a single eligibility population, the model deliberately emits no criteria.
 Code retains the original title, brief summary and eligibility criteria joined
 with newlines, avoiding loss of requirements stated outside the eligibility
 field. Rejected trials produce no rows. Empty/all-rejected runs retain the same
-column schema. No boilerplate criteria are separately generated or removed.
+column schema. General exclusions remain in either the specific or common field
+according to applicability. The common field is not the legacy boilerplate
+extraction: it includes all shared eligibility dimensions, not just exclusions.
+Raw model JSON in metadata keeps the common field only once per trial; the
+complete row text adds headings and concatenates the two strings without another
+model call. When the common string is empty, the specific string is used as-is.
 
 ```python
 from matchminer_ai.trials import summarize_trials

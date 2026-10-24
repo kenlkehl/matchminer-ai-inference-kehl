@@ -46,11 +46,14 @@ It first asks whether the studied intervention directly treats cancer; a negativ
 answer ends the response. Accepted trials are then checked for populations with
 different eligibility criteria. Arms and cohorts are interchangeable, and
 assignment to different treatments alone does not create separate populations.
-For multiple populations, each extracted eligibility description repeats all
-applicable inclusion and exclusion criteria, including shared requirements.
+For multiple populations, the model returns cohort-specific descriptions in
+`cohorts` and generates shared inclusion/exclusion criteria once in
+`common_eligibility_criteria`. Code joins the two for each complete cohort row.
 
 The default result uses `cohort_trial_id`, `cohort_number`, and
-`cohort_eligibility_criteria`, with decision and source columns. Accepted
+`cohort_eligibility_criteria`, plus the separate
+`cohort_specific_eligibility_criteria` and `common_eligibility_criteria` columns
+and decision/source columns. Accepted
 single-population trials retain their original complete trial text without a
 second model call. Rejected trials produce no cohort rows and remain in metadata
 and DataFrame attrs; malformed/truncated responses are failures, not rejections.

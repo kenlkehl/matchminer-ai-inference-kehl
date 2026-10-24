@@ -9,15 +9,17 @@ import pytest
 from matchminer_ai.config import load_default_preset
 from matchminer_ai.llm.backends import LLMGenerationResult
 from matchminer_ai.trials import summarize_trials
-from matchminer_ai.trials.cohort_schema import build_cohort_messages, parse_cohort_response
+from matchminer_ai.trials.cohort_schema import (
+    COHORT_SCHEMA_VERSION, build_cohort_messages, parse_cohort_response,
+)
 from matchminer_ai.trials.cohorts import COHORT_COLUMNS
 
 NO = {"cancer_treatment_trial": "no"}
 SINGLE = {"cancer_treatment_trial": "yes", "multiple_cohorts": "no"}
 MULTI = {"cancer_treatment_trial": "yes", "multiple_cohorts": "yes", "cohorts": [
-    "Cohort A. Inclusion: adult cancer, prior therapy. Exclusion: infection.",
-    "Cohort B. Inclusion: adult cancer, untreated. Exclusion: infection.",
-]}
+    "Cohort A. Inclusion: prior therapy; GFR >= 40 mL/min.",
+    "Cohort B. Inclusion: untreated; GFR >= 60 mL/min.",
+], "common_eligibility_criteria": "Inclusion: adult cancer. Exclusion: infection."}
 
 
 def source(ids):
@@ -62,12 +64,18 @@ def test_three_terminal_json_states(value):
 @pytest.mark.parametrize("value", [
     {}, [], {"cancer_treatment_trial": False},
     {**NO, "multiple_cohorts": "no"}, {**NO, "rationale": "not treatment"},
+    {**NO, "common_eligibility_criteria": ""},
     {"cancer_treatment_trial": "yes"}, {**SINGLE, "cohorts": []},
+    {**SINGLE, "common_eligibility_criteria": ""},
     {**SINGLE, "multiple_cohorts": False},
     {**MULTI, "cohorts": []}, {**MULTI, "cohorts": ["one"]},
     {**MULTI, "cohorts": ["one", " "]}, {**MULTI, "cohorts": ["one", 2]},
     {**MULTI, "cohorts": ["one", " ONE "]},
+    {k: v for k, v in MULTI.items() if k != "common_eligibility_criteria"},
+    *[{**MULTI, "common_eligibility_criteria": v} for v in (None, False, [], {}, " \n")],
     {"multiple_cohorts": "no", "cancer_treatment_trial": "yes"},
+    {**SINGLE, "multiple_cohorts": "yes", "common_eligibility_criteria": "common",
+     "cohorts": ["A", "B"]},
 ])
 def test_invalid_schema_never_becomes_a_rejection(value):
     with pytest.raises(ValueError):
@@ -84,6 +92,16 @@ def test_duplicate_fields_or_surrounding_text_fail(text):
         parse_cohort_response(text)
 
 
+def test_v1_requires_explicit_historical_schema_selection():
+    old = {k: v for k, v in MULTI.items() if k != "common_eligibility_criteria"}
+    text = json.dumps(old)
+    with pytest.raises(ValueError, match="common_eligibility_criteria"):
+        parse_cohort_response(text)
+    assert parse_cohort_response(text, schema_version="trial-treatment-cohorts-v1") == old
+    with pytest.raises(ValueError, match="Unsupported"):
+        parse_cohort_response(text, schema_version="unknown")
+
+
 def test_combined_prompt_has_only_literal_source_and_three_shapes():
     text = "Marker {cancer_treatment_trial}; literal <trial_text> text."
     messages = build_cohort_messages(text)
@@ -92,6 +110,9 @@ def test_combined_prompt_has_only_literal_source_and_three_shapes():
     assert '"cancer_treatment_trial": "no"' in prompt
     assert '"cancer_treatment_trial": "yes", "multiple_cohorts": "no"' in prompt
     assert "pharmacokinetic" in prompt and "background therapy" in prompt
+    assert '"common_eligibility_criteria"' in prompt
+    assert "Criteria shared by only a subset" in prompt
+    assert "Do not put a conflicting default in the common field" in prompt
 
 
 def test_public_api_runs_one_combined_batch_and_keeps_sources(harness):
@@ -108,13 +129,32 @@ def test_public_api_runs_one_combined_batch_and_keeps_sources(harness):
         ["trial_title", "brief_summary", "eligibility_criteria"]
     ])
     assert result.cohort_criteria_source.tolist() == ["trial_text", "llm", "llm"]
-    assert result.cohort_eligibility_criteria.tolist()[1:] == MULTI["cohorts"]
+    assert pd.isna(result.iloc[0].cohort_specific_eligibility_criteria)
+    assert pd.isna(result.iloc[0].common_eligibility_criteria)
+    assert result.cohort_specific_eligibility_criteria.tolist()[1:] == MULTI["cohorts"]
+    assert result.common_eligibility_criteria.tolist()[1:] == [MULTI["common_eligibility_criteria"]] * 2
+    for text, specific in zip(result.cohort_eligibility_criteria.tolist()[1:], MULTI["cohorts"]):
+        assert specific in text
+        assert text.count(MULTI["common_eligibility_criteria"]) == 1
+    assert "GFR >= 60" not in result.iloc[1].cohort_eligibility_criteria
+    assert "GFR >= 40" not in result.iloc[2].cohort_eligibility_criteria
+    assert metadata["schema_version"] == COHORT_SCHEMA_VERSION == "trial-treatment-cohorts-v2"
     assert metadata["trial_decisions"] == {"T0": NO, "T1": SINGLE, "T2": MULTI}
     assert metadata["trial_rejections"] == {"T0": NO}
     assert metadata["trial_errors"] == {}
     assert result.attrs["trial_rejections"] == {"T0": NO}
     assert qc.set_index("metric").loc["trials_failed_inference", "value"] == 0
     pd.testing.assert_frame_equal(trials, original)
+
+
+def test_no_shared_criteria_keeps_cohort_text_without_inventing_common_rules(harness):
+    config, _, answers = harness
+    decision = {**MULTI, "common_eligibility_criteria": ""}
+    answers.append([(decision, "stop")])
+    result, metadata = summarize_trials(source(["T0"]), config=config, return_metadata=True)
+    assert result.cohort_eligibility_criteria.tolist() == decision["cohorts"]
+    assert result.common_eligibility_criteria.tolist() == ["", ""]
+    assert metadata["trial_decisions"]["T0"] == decision
 
 
 def test_retry_only_invalid_trial_preserves_sampling_and_full_source(harness):

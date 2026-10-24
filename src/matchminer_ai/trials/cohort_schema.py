@@ -9,7 +9,7 @@ from typing import Any
 from matchminer_ai.llm.prompts import load_prompt_text
 
 COHORT_PROMPT = "trial.cohorts.user.txt"
-COHORT_SCHEMA_VERSION = "trial-treatment-cohorts-v1"
+COHORT_SCHEMA_VERSION = "trial-treatment-cohorts-v2"
 
 
 def load_cohort_prompt(filename: str = COHORT_PROMPT) -> str:
@@ -33,8 +33,13 @@ def _unique_keys(pairs):
     return result
 
 
-def parse_cohort_response(text: str, finish_reason: str = "stop") -> dict[str, Any]:
+def parse_cohort_response(
+    text: str, finish_reason: str = "stop", *,
+    schema_version: str = COHORT_SCHEMA_VERSION,
+) -> dict[str, Any]:
     """Validate all three terminal states; malformed output is never rejection."""
+    if schema_version not in ("trial-treatment-cohorts-v1", COHORT_SCHEMA_VERSION):
+        raise ValueError(f"Unsupported trial cohort schema: {schema_version}")
     if finish_reason != "stop":
         raise ValueError(f"Incomplete trial cohort response: {finish_reason}")
     try:
@@ -61,6 +66,14 @@ def parse_cohort_response(text: str, finish_reason: str = "stop") -> dict[str, A
             normalized = [re.sub(r"\s+", " ", c).strip().casefold() for c in cohorts]
             if len(normalized) != len(set(normalized)):
                 raise ValueError("Duplicate cohort eligibility descriptions")
+            if schema_version == COHORT_SCHEMA_VERSION:
+                expected.append("common_eligibility_criteria")
+                common = result.get("common_eligibility_criteria")
+                if not isinstance(common, str) or (common and not common.strip()):
+                    raise ValueError(
+                        "common_eligibility_criteria must be a criteria string "
+                        'or exactly "" when no shared criteria are established'
+                    )
     else:
         raise ValueError('cancer_treatment_trial must be the string "yes" or "no"')
     if list(result) != expected:

@@ -57,10 +57,13 @@ def summarize_trials(
         With the default ``cohorts`` method, one row per accepted population:
         ``cohort_trial_id`` (``<trial_id>-cohort-<number>``), ``trial_id``,
         zero-based ``cohort_number``, ``cohort_eligibility_criteria``,
+        ``cohort_specific_eligibility_criteria``, ``common_eligibility_criteria``,
         ``cohort_criteria_source``, ``cancer_treatment_trial``, and
         ``multiple_cohorts``. Accepted single-population trials retain their
         original title, brief summary and eligibility text; multi-population
-        criteria come from the combined LLM response. Rejected trials produce
+        criteria join the specific and common strings from the LLM response in
+        code. Separate specific/common columns are null for single-population
+        trials. Rejected trials produce
         no rows and remain in metadata and DataFrame attrs. Invalid responses
         are failures, not rejections. Debug mode adds ``trial_input_text``,
         ``trial_answer_text``, and ``trial_reasoning_text`` and retains all
