@@ -109,6 +109,11 @@ responses/attempts in metadata. QC separates treatment rejections from exhausted
 inference errors and truncated responses. Duplicate keys, extra/missing fields,
 wrong order/types, empty/duplicate cohort descriptions, surrounding prose, and
 non-`stop` finishes fail validation; they never become negative decisions.
+One complete outer Markdown fence is accepted when it is unlabeled or labeled
+`json` (case-insensitive), with only whitespace outside it. The enclosed JSON
+still undergoes all schema and completion checks. Debug responses retain the
+original fenced answer; accepting this presentation wrapper avoids unnecessary
+model retries without changing the extracted criteria.
 
 This changes the default schema and text semantics. Do not rename these columns
 to legacy space columns or reuse saved space embeddings as if the representations

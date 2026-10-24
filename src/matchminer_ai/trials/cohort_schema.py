@@ -33,6 +33,16 @@ def _unique_keys(pairs):
     return result
 
 
+def unwrap_json_fence(text: str) -> str:
+    """Remove only a complete outer JSON fence, without repairing its payload."""
+    fenced = re.fullmatch(
+        r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```",
+        text.strip(),
+        flags=re.IGNORECASE | re.DOTALL,
+    ) if isinstance(text, str) else None
+    return fenced.group(1) if fenced else text
+
+
 def parse_cohort_response(
     text: str, finish_reason: str = "stop", *,
     schema_version: str = COHORT_SCHEMA_VERSION,
@@ -43,7 +53,9 @@ def parse_cohort_response(
     if finish_reason != "stop":
         raise ValueError(f"Incomplete trial cohort response: {finish_reason}")
     try:
-        result = json.loads(text, object_pairs_hook=_unique_keys)
+        # Only unwrap a complete outer JSON fence; do not repair JSON or search
+        # inside prose. Keep the original response intact for debug metadata.
+        result = json.loads(unwrap_json_fence(text), object_pairs_hook=_unique_keys)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Trial cohort response must be valid JSON: {exc}") from exc
     if not isinstance(result, dict):

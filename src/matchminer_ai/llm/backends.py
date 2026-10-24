@@ -336,12 +336,16 @@ class RemoteBackend:
             model_name,
             cache_dir=model_metadata_cache_dir,
         )
+        response_metadata = []
         texts, reasonings, finish_reasons = generate_remote_llm_outputs(
             prompts=prompt_list,
             llm_config=llm_config,
             server_urls=server_urls,
             api_key=api_key,
+            response_metadata=response_metadata,
         )
+        if response_metadata:
+            model_metadata = {**model_metadata, 'responses': response_metadata}
         return LLMGenerationResult(
             final_outputs=texts,
             model_metadata=model_metadata,

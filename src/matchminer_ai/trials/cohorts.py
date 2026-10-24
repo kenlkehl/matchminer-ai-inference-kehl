@@ -76,14 +76,18 @@ def summarize_trial_cohorts(trials, config):
         )
         metadata["model_metadata"] = generation.model_metadata
         next_pending = []
-        for i, answer, reasoning, finish in zip(
+        provenance = {item['row_idx']: item for item in
+                      generation.model_metadata.get('responses', [])}
+        for response_index, (i, answer, reasoning, finish) in enumerate(zip(
             pending, generation.final_outputs, generation.reasoning_outputs,
             generation.finish_reasons, strict=True,
-        ):
+        )):
             trial_id = frame.at[i, "trial_id"]
             last_responses[i] = (answer, reasoning)
             last_finishes[i] = finish
             record = {"attempt": attempt, "finish_reason": finish}
+            if response_index in provenance:
+                record['response_metadata'] = provenance[response_index]
             if config.debug_mode:
                 record.update(answer=answer, reasoning=reasoning)
             try:

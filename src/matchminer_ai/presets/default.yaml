@@ -7,6 +7,16 @@ remote:
   server_urls:
     - http://localhost:8000/v1
   max_concurrent_requests: 32
+  adaptive_concurrency:
+    enabled: true
+    initial: 32
+    minimum: 1
+    success_threshold: 32
+    increase_step: 32
+    adjustment_interval: 10.0
+    backoff_factor: 0.5
+    # Optional vLLM /metrics feedback; zero uses transport outcomes only.
+    metrics_interval: 0
   request_timeout: 600
   max_retries: 6
   batch_size: 1000

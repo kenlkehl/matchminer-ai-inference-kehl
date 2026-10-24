@@ -57,8 +57,14 @@ def harness(monkeypatch, default_config):
 
 
 @pytest.mark.parametrize("value", [NO, SINGLE, MULTI])
-def test_three_terminal_json_states(value):
-    assert parse_cohort_response(json.dumps(value)) == value
+@pytest.mark.parametrize("language,newline", [
+    (None, "\n"), ("json", "\n"), ("JSON", "\r\n"), ("", "\n"),
+])
+def test_three_terminal_json_states(value, language, newline):
+    text = json.dumps(value)
+    if language is not None:
+        text = f" \n```{language}  {newline}{text}{newline}```\t\n"
+    assert parse_cohort_response(text) == value
 
 
 @pytest.mark.parametrize("value", [
@@ -77,19 +83,43 @@ def test_three_terminal_json_states(value):
     {**SINGLE, "multiple_cohorts": "yes", "common_eligibility_criteria": "common",
      "cohorts": ["A", "B"]},
 ])
-def test_invalid_schema_never_becomes_a_rejection(value):
+@pytest.mark.parametrize("fenced", [False, True])
+def test_invalid_schema_never_becomes_a_rejection(value, fenced):
+    text = json.dumps(value)
+    if fenced:
+        text = f"```json\n{text}\n```"
     with pytest.raises(ValueError):
-        parse_cohort_response(json.dumps(value))
+        parse_cohort_response(text)
 
 
 @pytest.mark.parametrize("text", [
     '{"cancer_treatment_trial":"no","cancer_treatment_trial":"no"}',
-    '```json\n{"cancer_treatment_trial":"no"}\n```',
+    '```json\n{"cancer_treatment_trial":"no","cancer_treatment_trial":"no"}\n```',
     '{"cancer_treatment_trial":"no"} extra',
 ])
 def test_duplicate_fields_or_surrounding_text_fail(text):
     with pytest.raises(ValueError):
         parse_cohort_response(text)
+
+
+@pytest.mark.parametrize("wrapper", [
+    "Here is the answer:\n```json\n{payload}\n```",
+    "```json\n{payload}\n```\nExplanation.",
+    "```json\n{payload}",
+    "```javascript\n{payload}\n```",
+    "```json\n{payload}\n```\n```json\n{payload}\n```",
+    "```json\n```json\n{payload}\n```\n```",
+    "```json\n{payload} trailing junk\n```",
+    "```json\n{payload},\n```",
+])
+def test_fences_do_not_salvage_ambiguous_or_malformed_output(wrapper):
+    with pytest.raises(ValueError):
+        parse_cohort_response(wrapper.format(payload=json.dumps(NO)))
+
+
+def test_fenced_complete_json_with_truncated_finish_still_fails():
+    with pytest.raises(ValueError, match="Incomplete"):
+        parse_cohort_response(f"```json\n{json.dumps(NO)}\n```", "length")
 
 
 def test_v1_requires_explicit_historical_schema_selection():
@@ -155,6 +185,27 @@ def test_no_shared_criteria_keeps_cohort_text_without_inventing_common_rules(har
     assert result.cohort_eligibility_criteria.tolist() == decision["cohorts"]
     assert result.common_eligibility_criteria.tolist() == ["", ""]
     assert metadata["trial_decisions"]["T0"] == decision
+
+
+def test_fenced_responses_need_no_retry_and_keep_raw_debug_text(harness):
+    config, calls, answers = harness
+    config.debug_mode = True
+    values = {"T0": NO, "T1": SINGLE, "T2": MULTI}
+    raw = {tid: f"```json\n{json.dumps(value)}\n```" for tid, value in values.items()}
+    answers.append([(text, "stop") for text in raw.values()])
+    result, metadata = summarize_trials(
+        source(list(values)), config=config, return_metadata=True,
+    )
+    assert len(calls) == 1
+    assert metadata["trial_decisions"] == values
+    assert metadata["trial_errors"] == {}
+    assert result.trial_id.tolist() == ["T1", "T2", "T2"]
+    assert result.cohort_specific_eligibility_criteria.tolist()[1:] == MULTI["cohorts"]
+    for tid, text in raw.items():
+        assert metadata["trial_responses"][tid]["answer"] == text
+        assert metadata["trial_attempts"][tid][0]["answer"] == text
+        assert len(metadata["trial_attempts"][tid]) == 1
+    assert result.trial_answer_text.tolist() == [raw["T1"], raw["T2"], raw["T2"]]
 
 
 def test_retry_only_invalid_trial_preserves_sampling_and_full_source(harness):

@@ -50,6 +50,27 @@ For multiple populations, the model returns cohort-specific descriptions in
 `cohorts` and generates shared inclusion/exclusion criteria once in
 `common_eligibility_criteria`. Code joins the two for each complete cohort row.
 
+Remote OpenAI-compatible inference uses a shared adaptive endpoint pool by
+default. `remote.max_concurrent_requests` is a per-server ceiling; the
+`remote.adaptive_concurrency` settings start below that ceiling and increase
+admission after successful, saturated windows, backing off on transient transport
+or capacity failures. Model-output validation failures do not reduce concurrency.
+Set `enabled: false` for fixed limits. Optional `metrics_interval` (seconds,
+default `0`) enables vLLM queue, KV-cache, and preemption feedback; unavailable
+metrics fall back to transport outcomes. Limits and counters are available from
+`matchminer_ai.llm.endpoint_pool.shared_pool(...).snapshot()`.
+
+For changing worker fleets, `remote.server_urls_file` points to an atomically
+updated JSON registry: `{"servers": [{"url": "http://host:8000/v1",
+"model": "served-alias", "model_root": "verified-checkpoint",
+"upstream_concurrency": 768}]}`. An operator/health watcher must verify model
+identity before admitting an endpoint. The pool rereads the registry during a
+run and balances against each server's current limit. `pool_max_workers` bounds
+total client workers. Cohort attempt metadata records the endpoint, served
+model alias, and registry model root so different quantizations remain traceable.
+Concurrency is process-local; separate processes have separate admission limits.
+Callable credentials/providers retain their existing asynchronous transport.
+
 The default result uses `cohort_trial_id`, `cohort_number`, and
 `cohort_eligibility_criteria`, plus the separate
 `cohort_specific_eligibility_criteria` and `common_eligibility_criteria` columns

@@ -31,6 +31,7 @@ class ModelResult:
     reasoning: str
     summary: str
     finish_reason: str = "stop"
+    response_metadata: dict | None = None
 
 
 def normalize_remote_server_urls(llm_config: Dict[str, Any]) -> list[str]:
@@ -390,6 +391,15 @@ class RemoteRequestSession:
         self.capacity = len(self.server_urls) * self.per_server
 
     async def __aenter__(self):
+        self.pool = None
+        if isinstance(self.api_key, str) and (
+                self.config.get('adaptive_concurrency', {}).get('enabled')
+                or self.config.get('server_urls_file') or self.config.get('use_endpoint_pool')):
+            from .endpoint_pool import shared_pool, MAX_POOL_WORKERS
+            self.pool = shared_pool(self.config, self.server_urls, self.api_key)
+            self.capacity = int(self.config.get('pool_max_workers', MAX_POOL_WORKERS))
+            self.executor = ThreadPoolExecutor(max_workers=self.capacity)
+            return self
         self.clients = connect_to_remote_servers(
             server_urls=self.server_urls,
             request_timeout=float(self.config["request_timeout"]),
@@ -408,6 +418,21 @@ class RemoteRequestSession:
             prompt.messages or [{"role": "user", "content": prompt.prompt_text}],
             llm_config,
         )
+        if self.pool is not None:
+            from functools import partial
+            from contextvars import copy_context
+            request = dict(model=remote_request_model_name(llm_config), messages=messages,
+                           **request_params_for_prompt(params, prompt))
+            if extra:
+                request['extra_body'] = extra
+            response, provenance = await asyncio.get_running_loop().run_in_executor(
+                self.executor, copy_context().run, partial(self.pool.request_with_metadata, **request),
+            )
+            choice = response.choices[0]
+            return ModelResult(prompt.row_idx,
+                getattr(choice.message, 'reasoning', None)
+                or getattr(choice.message, 'reasoning_content', None) or '',
+                choice.message.content or '', choice.finish_reason or 'stop', provenance)
         client = await self.slots.get()
         try:
             return await single_inference_request(
@@ -423,6 +448,9 @@ class RemoteRequestSession:
             self.slots.put_nowait(client)
 
     async def __aexit__(self, *exc):
+        if self.pool is not None:
+            self.executor.shutdown(wait=False, cancel_futures=True)
+            return
         await asyncio.gather(
             *(client.close() for client, _ in self.clients if hasattr(client, "close")),
             return_exceptions=True,
@@ -529,11 +557,14 @@ def generate_remote_llm_outputs(
     llm_config: Dict[str, Any],
     server_urls: list[str],
     api_key: AsyncAPIKey,
+    response_metadata: list | None = None,
 ) -> tuple[list[str], list[str], list[str]]:
     """Synchronous wrapper around ``generate_remote_llm_outputs_async``."""
-    if (llm_config.get("use_endpoint_pool") or llm_config.get("server_urls_file")) and isinstance(api_key, str):
+    if (llm_config.get("use_endpoint_pool") or llm_config.get("server_urls_file")
+            or llm_config.get("adaptive_concurrency", {}).get("enabled")) and isinstance(api_key, str):
         from .endpoint_pool import generate_pooled_outputs
-        return generate_pooled_outputs(prompts, llm_config, server_urls, api_key)
+        return generate_pooled_outputs(prompts, llm_config, server_urls, api_key,
+                                       response_metadata=response_metadata)
     return _run_sync(
         lambda: generate_remote_llm_outputs_async(
             prompts=prompts,
