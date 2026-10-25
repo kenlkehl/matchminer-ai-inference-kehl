@@ -64,7 +64,10 @@ def colbert_matches(query_df, corpus_df, *, query_id_col, corpus_id_col, k, sett
             raise ValueError(f'ColBERT requires {column}; embed both query/document roles')
     if query_df.empty or corpus_df.empty:
         return pd.DataFrame(columns=columns)
-    if _contract(query_df) != _contract(corpus_df):
+    # Freeze provenance once per input table, including the final result export.
+    # Never reload prompt/model metadata while constructing individual pairs.
+    query_contract = _contract(query_df)
+    if query_contract != _contract(corpus_df):
         raise ValueError('ColBERT model/prompt/context contracts differ; regenerate both sides')
     queries, documents = _vectors(query_df.query_embedding), _vectors(corpus_df.embedding)
     if len({vector.shape[1] for vector in queries + documents}) != 1:
@@ -110,5 +113,5 @@ def colbert_matches(query_df, corpus_df, *, query_id_col, corpus_id_col, k, sett
     result = pd.DataFrame(rows, columns=columns)
     result.attrs['retrieval'] = dict(method='colbert', score='mean_maxsim', exhaustive=True,
         corpus_chunks=chunks, pair_batch_size=pair_batch, query_batch_size=query_batch,
-        encoding_contract=_contract(query_df))
+        encoding_contract=query_contract)
     return result

@@ -122,3 +122,23 @@ def test_colbert_token_count_includes_direction_instruction_and_marker(monkeypat
     cfg = dict(backend='colbert', model_path='model', query_direction='cohort_to_patient')
     assert inference.count_embedding_tokens(['Full criteria'], embedding_config=cfg) == [4]
     assert seen == [regression_query('cohort_to_patient', 'Full criteria')]
+
+
+def test_retrieval_export_resolves_contract_once_per_table_without_prompt_io(monkeypatch):
+    from pathlib import Path
+    from matchminer_ai.matching import late_interaction as matching
+    q = table('patient_id', ['p1', 'p2'], [np.eye(2)] * 2, [np.eye(2)] * 2)
+    d = table('cohort_trial_id', ['c1', 'c2', 'c3'], [np.eye(2)] * 3, [np.eye(2)] * 3)
+    calls = []
+    original = matching._contract
+    def once(frame):
+        calls.append(id(frame))
+        return original(frame)
+    def no_prompt_reads(*args, **kwargs):
+        raise AssertionError('Retrieval/export must not reread prompt files per pair')
+    monkeypatch.setattr(matching, '_contract', once)
+    monkeypatch.setattr(Path, 'read_text', no_prompt_reads)
+    result = generate_candidate_matches(q, d, k=None, config=SimpleNamespace(embedding={'device': 'cpu'}))
+    assert len(result) == 6
+    assert calls == [id(q), id(d)]
+    assert result.attrs['retrieval']['encoding_contract'] == original(q)
