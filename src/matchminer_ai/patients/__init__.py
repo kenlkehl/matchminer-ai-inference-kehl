@@ -47,6 +47,7 @@ from .raw_note_qa import (
     answer_question_with_raw_patient_notes,
 )
 from .structure import structure_patient_summaries, structure_patient_summary
+from .summary_quality import check_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
 from .workup_colbert import (
@@ -245,6 +246,7 @@ __all__ = [
     "answer_patient_question_batch",
     "answer_patient_questions",
     "answer_question_with_raw_patient_notes",
+    "check_patient_summary",
     "compress_patient_note",
     "compress_patient_notes",
     "concatenate_patient_note_pdfs",

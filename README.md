@@ -18,6 +18,18 @@ those interfaces must explicitly set `config.patient["output_format"] =
 saved summaries or embeddings. Reasoning remains in debug/trace artifacts,
 separate from the patient-summary training text.
 
+`patients.check_patient_summary(text)` provides read-only quality checks for
+self-editing language (such as "I should" or "Wait,"), prompt/formatting
+commentary, raw reasoning delimiters, repeated cancer-field values, and repeated
+long prose. It returns versioned findings with character offsets, line numbers,
+and `high`/`review` confidence, without including patient text in the diagnostics.
+`summarize_patients(..., return_qc=True)` includes aggregate quality flags in its
+QC report. These are heuristic review signals, not automatic deletion or clinical
+validation. Multiple primary cancers and repeated headings are allowed. Matching
+age, cancer type, histology and biomarkers alone requests review; matching extent
+and treatment history as well identifies a repeated cancer section. The checker
+does not rewrite summaries or alter separate reasoning traces.
+
 Population workup workflows are available through
 `matching.retrieve_guideline_patients` and `matchminer_ai.population`. Supply
 patient summaries and source notes, select a finalized guideline space, retrieve

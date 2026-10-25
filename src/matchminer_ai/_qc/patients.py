@@ -12,6 +12,7 @@ from matchminer_ai._qc.common import (
     qc_artifact_to_report_row,
 )
 from matchminer_ai.embedding.inference import count_embedding_tokens
+from matchminer_ai.patients.summary_quality import check_patient_summary
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
@@ -85,6 +86,19 @@ def patient_summary_qc_report(
 
     metrics: list[dict[str, object]] = []
     total_patients = int(summaries["patient_id"].nunique())
+
+    quality_text = summaries["cancer_history_summary"]
+    if not combined:
+        quality_text = quality_text + "\n\n" + summaries["general_exclusion_criteria_evidence"]
+    checks = [check_patient_summary(value) for value in quality_text]
+    quality_codes = sorted({f["code"] for check in checks for f in check["findings"]})
+    for code in [None, *quality_codes]:
+        ids = [str(identifier) for identifier, check in zip(summaries["patient_id"], checks)
+               if check["flagged"] and (code is None or any(f["code"] == code for f in check["findings"]))]
+        metrics.append(qc_artifact_to_report_row(build_qc_artifact(
+            metric="patients_summary_quality_flagged" + (f":{code}" if code else ""),
+            ids=ids, denominator=total_patients,
+        )))
 
     # QC metric for summaries that exceed embedding model token limit
     if config is not None and config.embedding:
