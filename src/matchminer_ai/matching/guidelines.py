@@ -144,9 +144,11 @@ def retrieve_guideline_considerations(
         patients, entity_type="patient", config=resolved, return_metadata=True
     )
     patient_model = patient_metadata["model_metadata"]["embedding_model"]
-    matrix = np.asarray(patient_vectors["embedding"].tolist(), dtype=float)
-    if matrix.ndim != 2 or not matrix.size or not np.isfinite(matrix).all():
-        raise ValueError("TrialSpace returned invalid or non-finite embeddings.")
+    colbert = "query_embedding" in patient_vectors
+    if not colbert:
+        matrix = np.asarray(patient_vectors["embedding"].tolist(), dtype=float)
+        if matrix.ndim != 2 or not matrix.size or not np.isfinite(matrix).all():
+            raise ValueError("TrialSpace returned invalid or non-finite embeddings.")
     cache_metadata = {"enabled": False}
     if embedding_cache_dir is not None:
         from ._guideline_embedding_cache import cached_guideline_embeddings
@@ -155,7 +157,7 @@ def retrieve_guideline_considerations(
             spaces,
             config=resolved,
             patient_model=patient_model,
-            dimension=matrix.shape[1],
+            dimension=None if colbert else matrix.shape[1],
             directory=embedding_cache_dir,
             progress=progress,
             embed=embed_for_matching,
@@ -177,12 +179,18 @@ def retrieve_guideline_considerations(
             "Patient and guideline embedding model metadata differ; refusing to mix embeddings."
         )
     for vectors in (patient_vectors, space_vectors):
+        if colbert:
+            from .late_interaction import _contract, _vectors
+            _contract(vectors)
+            _vectors(vectors.embedding)
+            continue
         matrix = np.asarray(vectors["embedding"].tolist(), dtype=float)
         if matrix.ndim != 2 or not matrix.size or not np.isfinite(matrix).all():
             raise ValueError("TrialSpace returned invalid or non-finite embeddings.")
-    progress("Retrieving nearest guideline spaces by TrialSpace cosine similarity")
+    progress("Retrieving nearest guideline spaces by ColBERT mean-MaxSim" if colbert else
+             "Retrieving nearest guideline spaces by TrialSpace cosine similarity")
     candidates = generate_candidate_matches(
-        patient_vectors, space_vectors, k=candidate_k
+        patient_vectors, space_vectors, k=candidate_k, **({'config': resolved} if colbert else {})
     )
     candidates = candidates.rename(columns={"rank": "retrieval_rank"})
     pairs = candidates.merge(patients, on="patient_id", validate="many_to_one").merge(

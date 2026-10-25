@@ -109,8 +109,16 @@ is recorded as an error rather than filled from the title or summary. Rejected t
 and DataFrame attrs; malformed/truncated responses are failures, not rejections.
 See the [cohort contract and configuration](docs/api/trials.md#combined-treatment-screening-and-cohort-extraction).
 
+The default matching path now uses full cohort criteria and unified patient
+summaries with native ColBERT token embeddings. Runtime and training share the
+encoder, directional retrieval instruction, and fast resident-token batched
+mean-MaxSim scorer. The default model is the **base**
+`lightonai/GTE-ModernColBERT-v1`; select a trained TrialSpace checkpoint explicitly.
+See [embedding and bidirectional retrieval](docs/api/embedding.md) for the schema,
+8192-token limits, batching, and historical single-vector configuration.
+
 This is a new input representation, not a migration of saved trial spaces or
-embeddings. Existing TrialSpace/TrialChecker/BoilerplateChecker workflows must
+embeddings. Existing TrialChecker/BoilerplateChecker workflows must
 explicitly select `config.trial["extraction_method"] = "hierarchical"` (or the
 legacy `one_shot` method) until adapted and evaluated for complete cohort criteria.
 Both existing Spaces explicitly retain hierarchical extraction for their current

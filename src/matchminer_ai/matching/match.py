@@ -20,6 +20,8 @@ def _stack_embeddings(values: pd.Series) -> torch.Tensor:
         raise ValueError("Embeddings must be list or numpy array values.")
     if not vectors:
         return torch.empty((0, 0), dtype=torch.float32)
+    if any(vec.ndim != 1 for vec in vectors):
+        raise ValueError("Sequence embeddings must be vectors; ColBERT matrices require role/contract columns")
     dim = max(vec.size for vec in vectors)
     if any(vec.size != dim for vec in vectors):
         raise ValueError("Embedding vectors must share the same dimension.")
@@ -33,15 +35,15 @@ def _normalize_rows(matrix: torch.Tensor) -> torch.Tensor:
 
 
 def _resolve_id_column(df: pd.DataFrame, label: str) -> str:
-    candidates = [col for col in ("patient_id", "space_trial_id") if col in df.columns]
+    candidates = [col for col in ("patient_id", "cohort_trial_id", "space_trial_id") if col in df.columns]
     if not candidates:
-        raise ValueError(f"{label} must include either patient_id or space_trial_id")
+        raise ValueError(f"{label} must include patient_id, cohort_trial_id or space_trial_id")
     if len(candidates) > 1:
         raise ValueError(
             f"{label} must include only one identifier column; found {candidates}"
         )
     id_col = candidates[0]
-    if df[id_col].duplicated().any():
+    if df[id_col].isna().any() or df[id_col].duplicated().any():
         raise ValueError(f"{label} must have unique {id_col} values")
     return id_col
 
@@ -51,34 +53,19 @@ def generate_candidate_matches(
     corpus_df: pd.DataFrame,
     *,
     k: int | None = 20,
+    config=None,
 ) -> pd.DataFrame:
-    """
-    Generate top-k candidate matches by ranking corpus items for each query item.
+    """Return top-k corpus matches per query, preserving entity IDs and rank.
 
-    Parameters
-    ----------
-    query_df : pd.DataFrame
-        Query-side DataFrame with embeddings.
-        Must contain:
-            - patient_id or space_trial_id: str
-            - embedding : array-like
-    corpus_df : pd.DataFrame
-        Corpus-side DataFrame with embeddings.
-        Must contain:
-            - patient_id or space_trial_id: str
-            - embedding : array-like
-    k : int | None, default 20
-        Number of top matches to return per query entity. If None, return all
-        corpus items per query (sorted by similarity).
+    Inputs are tables from ``embed_for_matching``. ColBERT tables use batched
+    mean-MaxSim over query-role and document-role token matrices; their model,
+    prompt and context contracts must agree. Reverse the arguments for the other
+    retrieval direction. Historical vector tables use cosine similarity.
 
-    Returns
-    -------
-    pd.DataFrame
-        Ranked top-k match pairs including:
-            - patient_id or space_trial_id (from query_df)
-            - patient_id or space_trial_id (from corpus_df)
-            - similarity_score : float
-            - rank : int (1 = highest similarity per query)
+    ``k=None`` returns all corpus entities. ``config.embedding`` controls the
+    scoring device, pair/query batch sizes, and resident corpus cache budget.
+    Larger corpora are streamed without changing scores or truncating tokens.
+    Results include both identifiers, ``similarity_score``, and one-based rank.
     """
     # Validate required schema for IDs and embeddings.
     query_id_col = _resolve_id_column(query_df, "query_df")
@@ -87,8 +74,14 @@ def generate_candidate_matches(
         raise ValueError("query_df must include embedding")
     if "embedding" not in corpus_df.columns:
         raise ValueError("corpus_df must include embedding")
-    if k is not None and k <= 0:
+    if k is not None and (type(k) is not int or k <= 0):
         raise ValueError("k must be a positive integer or None")
+
+    if any(column in frame for frame in (query_df, corpus_df)
+           for column in ("query_embedding", "embedding_contract")):
+        from .late_interaction import colbert_matches
+        return colbert_matches(query_df, corpus_df, query_id_col=query_id_col,
+            corpus_id_col=corpus_id_col, k=k, settings=config.embedding if config else {})
 
     # Parse embeddings and ensure consistent vector dimensionality.
     query_embeddings = _stack_embeddings(query_df["embedding"])

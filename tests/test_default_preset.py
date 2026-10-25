@@ -87,8 +87,10 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
         "chat_template_kwargs"
     ] == {"enable_thinking": True}
 
-    assert config.embedding["model_path"] == "ksg-dfci/TrialSpace-0526"
-    assert config.embedding["max_seq_length"] == 2500
+    assert config.embedding["backend"] == "colbert"
+    assert config.embedding["model_path"] == "lightonai/GTE-ModernColBERT-v1"
+    assert config.embedding["query_length"] == config.embedding["document_length"] == 8192
+    assert config.embedding["pair_batch_size"] == 512
     assert config.raw["match_quality"]["model_name"] == "ksg-dfci/TrialChecker-0526"
     assert config.raw["match_quality"]["max_length"] == 4096
     assert config.raw["exclusion_criteria"]["model_name"] == (

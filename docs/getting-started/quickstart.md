@@ -34,8 +34,9 @@ print(cohorts[["cohort_trial_id", "cohort_eligibility_criteria"]])
 print(metadata["trial_rejections"])
 ```
 
-See the [trial API](../api/trials.md) for the cohort schema. The existing matching
-models and the example notebook still use clinical-space summaries and separate
+See the [trial API](../api/trials.md) for the cohort schema, and the
+[ColBERT embedding API](../api/embedding.md) for default bidirectional cohort
+retrieval. The historical checker models and example notebook use clinical-space summaries and separate
 general exclusions. To run that workflow, select its legacy extraction mode
 explicitly; full cohort criteria are not a drop-in replacement for its model
 inputs:
@@ -43,6 +44,8 @@ inputs:
 ```python
 config = load_preset("default")
 config.trial["extraction_method"] = "hierarchical"
+config.embedding = dict(backend="sequence", model_path="ksg-dfci/TrialSpace-0526",
+                        device="cuda", prompt_file="embedding.txt", max_seq_length=2500)
 trial_spaces = summarize_trials(trials, config=config)
 ```
 

@@ -622,6 +622,17 @@ def test_report_renders_input_conditions_sources_and_rank_order(
 def cached_stages(model_stages, monkeypatch):
     from types import SimpleNamespace
     from matchminer_ai.embedding import inference
+    from matchminer_ai import config as config_module
+    from matchminer_ai.matching import guidelines
+
+    original_preset = config_module.load_default_preset
+    def sequence_preset():
+        config = original_preset()
+        config.embedding = dict(backend='sequence', model_path='ksg-dfci/TrialSpace-0526',
+            device='cpu', prompt_file='embedding.txt', max_seq_length=2500)
+        return config
+    monkeypatch.setattr(config_module, 'load_default_preset', sequence_preset)
+    monkeypatch.setattr(guidelines, 'load_default_preset', sequence_preset)
 
     revision = SimpleNamespace(_commit_hash="actual-loaded-revision")
     tokens = {"model": {"vocab": {"synthetic": 1}}, "padding": {"length": 3}}
@@ -635,6 +646,29 @@ def cached_stages(model_stages, monkeypatch):
     encoder = SimpleNamespace(_first_module=lambda: first, _modules={})
     monkeypatch.setattr(inference, "_get_embedding_model", lambda *args: encoder)
     return model_stages, revision, tokens
+
+
+def test_colbert_guidelines_use_token_cache_and_fast_matcher(catalog_frame, patients, model_stages, monkeypatch, tmp_path):
+    from matchminer_ai.config import load_default_preset
+    from matchminer_ai.embedding.embed import embed_for_matching
+    from matchminer_ai.embedding import late_interaction
+    from test_colbert_matching import Encoder
+
+    encoder = Encoder()
+    monkeypatch.setattr(late_interaction, '_model', lambda *args: encoder)
+    monkeypatch.setattr('matchminer_ai.embedding.embed_for_matching', embed_for_matching)
+    config = load_default_preset()
+    config.embedding['device'] = 'cpu'
+    first, metadata = cached_retrieve(patients, catalog_frame, tmp_path / 'tokens', config=config)
+    assert metadata['guideline_embedding_cache']['embedded_texts'] == 3
+    encoder.calls.clear()
+    second, metadata = cached_retrieve(patients, catalog_frame, tmp_path / 'tokens', config=config)
+    assert metadata['guideline_embedding_cache']['cached_spaces'] == 3
+    assert len(encoder.calls) == 2  # Patient query and document roles only.
+    pd.testing.assert_frame_equal(first, second)
+    Path(metadata['guideline_embedding_cache']['path']).write_bytes(b'corrupted')
+    _, metadata = cached_retrieve(patients, catalog_frame, tmp_path / 'tokens', config=config)
+    assert metadata['guideline_embedding_cache']['embedded_texts'] == 3
 
 
 def cached_retrieve(patients, catalog, directory, **kwargs):

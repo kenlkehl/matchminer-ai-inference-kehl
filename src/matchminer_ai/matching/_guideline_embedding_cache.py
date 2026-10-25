@@ -92,6 +92,9 @@ def cached_guideline_embeddings(
             "Guideline embedding cache must stay outside the code repository."
         )
 
+    if patient_model.get('encoding_contract'):
+        return _cached_colbert(spaces, config, patient_model, root, progress, embed)
+
     identity = _embedding_cache_identity(config.embedding, patient_model)
     keys = [digest(text.encode()) for text in spaces.clinical_space_summary]
     unique = dict(zip(keys, spaces.index, strict=True))
@@ -169,3 +172,50 @@ def cached_guideline_embeddings(
         "cached_spaces": hit_spaces,
         "embedded_texts": len(missing),
     }
+
+
+def _cached_colbert(spaces, config, patient_model, root, progress, embed):
+    """Persist the complete typed token table, separate from historical vectors."""
+    from .late_interaction import _contract, _vectors
+    from uuid import uuid4
+
+    identity = digest(dict(model=patient_model, inputs=spaces[
+        ['space_trial_id', 'clinical_space_summary']].to_dict('records')))
+    path = root / f'colbert-{identity}.parquet'
+    checksum = path.with_suffix('.sha256')
+    try:
+        if digest(path.read_bytes()) == checksum.read_text():
+            result = pd.read_parquet(path)
+            if (result.space_trial_id.tolist() == spaces.space_trial_id.tolist()
+                    and _contract(result) == patient_model['encoding_contract']):
+                _vectors(result.embedding)
+                _vectors(result.query_embedding)
+                progress(f'Reusing {len(result)} cached ColBERT guideline token matrices')
+                return result, dict(enabled=True, status='ready', path=str(path),
+                                    cached_spaces=len(result), embedded_texts=0)
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    result, metadata = embed(spaces[['space_trial_id', 'clinical_space_summary']],
+        entity_type='trial', config=config, return_metadata=True)
+    if metadata['model_metadata']['embedding_model'] != patient_model:
+        raise ValueError('Patient and guideline embedding model metadata differ')
+    if result.space_trial_id.tolist() != spaces.space_trial_id.tolist():
+        raise ValueError('ColBERT did not return the requested guideline IDs')
+    _contract(result)
+    _vectors(result.embedding)
+    _vectors(result.query_embedding)
+    temporary = path.with_suffix(f'.{uuid4().hex}.tmp')
+    status = 'ready'
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        result.to_parquet(temporary, index=False)
+        data_hash = digest(temporary.read_bytes())
+        temporary.replace(path)
+        checksum.write_text(data_hash)
+    except OSError:
+        status = 'write_failed'
+        progress('ColBERT guideline tokens computed; disk cache could not be saved')
+    finally:
+        temporary.unlink(missing_ok=True)
+    return result, dict(enabled=True, status=status, path=str(path),
+                        cached_spaces=0, embedded_texts=len(result))

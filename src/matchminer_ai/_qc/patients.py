@@ -89,7 +89,7 @@ def patient_summary_qc_report(
     # QC metric for summaries that exceed embedding model token limit
     if config is not None and config.embedding:
         embedding_config = dict(config.embedding)
-        embedding_token_limit = int(embedding_config["max_seq_length"])
+        embedding_token_limit = int(embedding_config.get("query_length", embedding_config.get("max_seq_length", 8192)))
         token_series = pd.Series(
             count_embedding_tokens(
                 summaries["cancer_history_summary"].fillna("").astype(str).tolist(),

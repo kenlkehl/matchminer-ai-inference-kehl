@@ -1,5 +1,23 @@
 # Candidate Matching
 
+ColBERT tables from `embed_for_matching` select the shared batched mean-MaxSim
+path automatically. `config.embedding` controls its device and batching:
+`pair_batch_size=512`, `retrieval_query_batch_size=64`,
+`retrieval_document_batch_size=256`, and `device_cache_gb=8`. Pass the same config
+to both embedding and retrieval when overriding these settings.
+
+Ragged corpus tokens are packed and transferred once per retrieval call when
+they fit the cache budget. Larger corpora are streamed in bounded subsets with
+the same scoring and top-k merge. Setting the budget to zero disables whole-corpus
+residency. Retrieval scores the entire supplied corpus; production training
+mining separately uses recorded lexical/random proposal pools for exploration.
+No full query-by-corpus token-similarity tensor is allocated. Both directions use
+query-role tokens against document-role tokens. Returned pairs retain native
+`cohort_trial_id` IDs, and `result.attrs["retrieval"]` records execution settings.
+
+Historical vector tables retain cosine retrieval. They cannot be mixed with
+ColBERT tables, and changing models requires regenerating both sides.
+
 ::: matchminer_ai.matching.match
     options:
       members:

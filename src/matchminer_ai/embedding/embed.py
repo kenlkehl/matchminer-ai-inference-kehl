@@ -37,68 +37,34 @@ def embed_for_matching(
     config: MMAIConfig | None = None,
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
-    """
-    Convert trial or patient summaries into embedding vectors for semantic matching.
+    """Encode full patient/cohort text for bidirectional retrieval.
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input summaries to embed.
+    Patient rows require ``patient_id`` and ``patient_summary``; historical
+    ``cancer_history_summary`` plus exclusion history is also accepted. Trial
+    rows require ``cohort_trial_id`` and complete ``cohort_eligibility_criteria``;
+    historical ``space_trial_id`` / ``clinical_space_summary`` remains accepted.
 
-        For entity_type="patient"
-            One row per patient.
+    The default ColBERT backend returns the identifier, ``embedding`` (document
+    token matrix), ``query_embedding`` (instruction plus text with query marker),
+    and ``embedding_contract`` (JSON provenance). Retain all columns when saving.
+    Encoding is batched and never silently truncates text. Explicit sequence
+    configurations return the historical identifier and one embedding vector.
 
-            Expected columns
-            ----------------
-            patient_summary : str
-                Complete summary text to embed for each patient. Historical
-                cancer_history_summary inputs remain accepted.
-
-        For entity_type="trial"
-            One row per clinical space.
-
-            Expected columns
-            ----------------
-            clinical_space_summary : str
-                Summary text to embed for each clinical space.
-            space_trial_id : str
-                Unique identifier for the clinical space.
-    entity_type : {"patient", "trial"}
-        Controls which summary column is used as the text to embed.
-    config : MMAIConfig, optional
-        MMAI configuration containing embedding settings
-        (model_path, device, prompt_file/query_prompt). Uses default preset
-        when omitted.
-    return_metadata : bool, optional
-        When True, also return a metadata dict containing the config snapshot
-        and model metadata for this run.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame containing the embedding plus identifier columns for matching.
-
-        Columns
-        -------
-        For entity_type="patient"
-            patient_id : str
-            embedding : array-like
-                Vector representation of the summary text in a shared semantic space.
-
-        For entity_type="trial"
-            space_trial_id : str
-            embedding : array-like
-                Vector representation of the summary text in a shared semantic space.
-    tuple[pd.DataFrame, dict]
-        When return_metadata is True, returns the DataFrame plus a metadata dict.
+    ``config.embedding`` selects the checkpoint, backend, device, context and
+    batch sizes. With ``return_metadata=True``, also return the configuration and
+    model fingerprint. See docs/api/embedding.md for configuration examples.
     """
     text_col = _resolve_text_column(entity_type)
     if entity_type == "patient" and "patient_summary" in df.columns:
         text_col = "patient_summary"
+    if entity_type == "trial" and "cohort_eligibility_criteria" in df.columns:
+        text_col = "cohort_eligibility_criteria"
     if text_col not in df.columns:
         raise ValueError(f"df is missing required column for {entity_type}: {text_col}")
 
     id_cols = _resolve_id_columns(entity_type)
+    if entity_type == "trial" and "cohort_trial_id" in df.columns:
+        id_cols = ["cohort_trial_id"]
     missing = [col for col in id_cols if col not in df.columns]
     if missing:
         raise ValueError(f"df is missing required columns for {entity_type}: {missing}")
@@ -109,13 +75,35 @@ def embed_for_matching(
     output = df.copy()
 
     summaries = output[text_col].fillna("").astype(str).tolist()
-    embeddings, model_metadata = generate_embeddings(
-        summaries,
-        embedding_config=embedding_config,
-        model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-    )
-    output["embedding"] = embeddings
-    result = output[id_cols + ["embedding"]].copy()
+    backend = embedding_config.get("backend", "sequence")
+    if backend == "colbert":
+        from .late_interaction import encode_matching, token_series
+        if output[id_cols[0]].isna().any() or output[id_cols[0]].duplicated().any():
+            raise ValueError("ColBERT input identifiers must be present and unique")
+        if any(not text.strip() for text in summaries):
+            raise ValueError("ColBERT requires nonempty complete input text")
+        if entity_type == "patient":
+            from matchminer_ai.patients.postprocess import normalize_patient_summary
+            other_col = next((c for c in ("other_relevant_history",
+                "general_exclusion_criteria_evidence", "patient_boilerplate_text") if c in output), None)
+            other = output[other_col].fillna("").astype(str).tolist() if other_col else [""] * len(output)
+            summaries = [normalize_patient_summary(text, history) for text, history in zip(summaries, other)]
+        queries, documents, signature, model_metadata = encode_matching(
+            summaries, entity_type=entity_type, settings=embedding_config)
+        output["query_embedding"] = token_series(queries, output.index)
+        output["embedding"] = token_series(documents, output.index)
+        output["embedding_contract"] = signature
+        result = output[id_cols + ["embedding", "query_embedding", "embedding_contract"]].copy()
+    elif backend == "sequence":
+        embeddings, model_metadata = generate_embeddings(
+            summaries,
+            embedding_config=embedding_config,
+            model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+        )
+        output["embedding"] = embeddings
+        result = output[id_cols + ["embedding"]].copy()
+    else:
+        raise ValueError("embedding.backend must be 'colbert' or 'sequence'")
     if return_metadata:
         metadata_payload = {
             "package": package_metadata(),

@@ -143,6 +143,13 @@ def count_embedding_tokens(
     embedding_config: Dict[str, Any],
 ) -> list[int]:
     """Count embedding-model input tokens after applying the query prompt."""
+    if embedding_config.get("backend") == "colbert":
+        from .colbert_contract import regression_query
+        tokenizer = _get_embedding_tokenizer(str(embedding_config["model_path"]))
+        direction = embedding_config.get("query_direction", "patient_to_cohort")
+        encoded = tokenizer([regression_query(direction, text) for text in texts],
+                            add_special_tokens=True, truncation=False)
+        return [len(ids) + 1 for ids in encoded["input_ids"]]  # Trained Q marker.
     model_path, _device, query_prompt, _max_seq_length = _resolve_embedding_runtime(
         embedding_config
     )
