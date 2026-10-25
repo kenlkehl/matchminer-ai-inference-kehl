@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import httpx
 
 from matchminer_ai.llm.prompt_rendering import Prompt
+from matchminer_ai.llm.async_processing import BackgroundWork
 from matchminer_ai.llm.remote_auth import (
     AsyncAPIKey,
     GOOGLE_AGENT_PLATFORM_PROVIDER,
@@ -179,7 +180,9 @@ def connect_to_remote_servers(
             follow_redirects=True,
             limits=httpx.Limits(
                 max_connections=max(1, int(max_connections)),
-                max_keepalive_connections=max(1, int(max_connections)),
+                # Match the production teacher pool: stale idle connections
+                # must not turn long inference/checkpoint gaps into resets.
+                max_keepalive_connections=0,
             ),
         )
         client = AsyncOpenAI(
@@ -391,6 +394,7 @@ class RemoteRequestSession:
         self.capacity = len(self.server_urls) * self.per_server
 
     async def __aenter__(self):
+        self.preparation = BackgroundWork(workers=4, pending=8, name='mmai-request-preparation')
         self.pool = None
         if isinstance(self.api_key, str) and (
                 self.config.get('adaptive_concurrency', {}).get('enabled')
@@ -412,12 +416,19 @@ class RemoteRequestSession:
                 self.slots.put_nowait(client)
         return self
 
-    async def generate(self, prompt, llm_config):
+    def _prepare_request(self, prompt, llm_config):
         params, extra = build_remote_request_config(llm_config)
         messages = prepare_messages_for_provider(
             prompt.messages or [{"role": "user", "content": prompt.prompt_text}],
             llm_config,
         )
+        return params, extra, messages
+
+    async def generate(self, prompt, llm_config):
+        # Provider normalization and request construction must not delay other
+        # active network requests or adaptive-control feedback on this loop.
+        params, extra, messages = await self.preparation.run(
+            self._prepare_request, prompt, llm_config)
         if self.pool is not None:
             from functools import partial
             from contextvars import copy_context
@@ -448,6 +459,7 @@ class RemoteRequestSession:
             self.slots.put_nowait(client)
 
     async def __aexit__(self, *exc):
+        await self.preparation.__aexit__(*exc)
         if self.pool is not None:
             self.executor.shutdown(wait=False, cancel_futures=True)
             return

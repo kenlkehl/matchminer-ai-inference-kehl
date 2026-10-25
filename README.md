@@ -87,6 +87,17 @@ model alias, and registry model root so different quantizations remain traceable
 Concurrency is process-local; separate processes have separate admission limits.
 Callable credentials/providers retain their existing asynchronous transport.
 
+The shared `llm.async_processing` helpers provide bounded background work and
+batched, untruncated prompt tokenization. Production TrialSpace labeling imports
+these helpers from this package: four preprocessing workers batch up to 32
+independent prompts, with a separate bounded checkpoint I/O pool. Its gates,
+individual question calls, token budgets, exact prompt hashes, and reasoning
+archives are preserved. Remote chat inference already sends messages directly;
+its persistent sessions prepare requests in the same background-work mechanism
+without blocking active network calls. Both remote transports avoid reusing idle
+connections, and vLLM metrics polling probes up to 16 endpoints concurrently so
+a failed peer does not stall feedback for the rest of the pool.
+
 Pooled teacher requests can preserve complete local reasoning archives with
 `remote.trace_dir` or the `MMAI_LLM_TRACE_DIR` environment variable. Each response
 is saved atomically before application validation, including token-limited and

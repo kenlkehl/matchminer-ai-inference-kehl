@@ -129,21 +129,26 @@ class EndpointPool:
         import httpx
         # Missing metrics never prevents inference; transport outcomes remain
         # the fallback control signal. Probe only configured endpoints.
-        with httpx.Client(timeout=5, trust_env=False) as client:
+        with (httpx.Client(timeout=5, trust_env=False) as client,
+              ThreadPoolExecutor(max_workers=16, thread_name_prefix='mmai-load') as executor):
             while True:
                 with self.condition:
                     self._refresh()
                     urls = list(self.entries)
-                for url in urls:
-                    try:
-                        response = client.get(url.removesuffix('/v1') + '/metrics')
-                        response.raise_for_status()
-                        self.observe_load(url, vllm_load(response.text))
-                    except Exception as exc:
-                        with self.condition:
-                            self.states[url]['metrics_error'] = type(exc).__name__
-                            self.states[url]['controller'].growth_blocked = False
+                # A slow/preempted peer must not serialize every healthy
+                # endpoint's feedback behind its metrics timeout.
+                list(executor.map(lambda url: self._sample_load(client, url), urls))
                 time.sleep(self.metrics_interval)
+
+    def _sample_load(self, client, url):
+        try:
+            response = client.get(url.removesuffix('/v1') + '/metrics')
+            response.raise_for_status()
+            self.observe_load(url, vllm_load(response.text))
+        except Exception as exc:
+            with self.condition:
+                self.states[url]['metrics_error'] = type(exc).__name__
+                self.states[url]['controller'].growth_blocked = False
 
     def acquire(self, deadline):
         from matchminer_ai.cancellation import check_cancelled
@@ -171,7 +176,7 @@ class EndpointPool:
                     state['client'] = self.client_factory(base_url=url, api_key=self.api_key,
                         timeout=self.timeout, max_retries=0,
                         http_client=httpx.Client(trust_env=False, timeout=self.timeout,
-                            limits=httpx.Limits(max_connections=1024, max_keepalive_connections=1024)))
+                            limits=httpx.Limits(max_connections=1024, max_keepalive_connections=0)))
                 state['active'] += 1
                 state['last'] = self.sequence
                 self.sequence += 1

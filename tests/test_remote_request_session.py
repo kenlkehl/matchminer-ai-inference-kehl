@@ -1,10 +1,44 @@
 import asyncio
+import time
 from collections import Counter
 from types import SimpleNamespace
 
 import pytest
 
 from matchminer_ai.llm import remote_inference as remote
+
+
+def test_request_preparation_does_not_stall_an_active_event_loop(monkeypatch):
+    async def scenario():
+        ticks = 0
+        async def heartbeat():
+            nonlocal ticks
+            while True:
+                ticks += 1
+                await asyncio.sleep(.005)
+        def prepare(config):
+            time.sleep(.04)
+            return {'max_tokens': 10}, {}
+        async def close(): pass
+        async def generate(**kwargs):
+            return remote.ModelResult(kwargs['row_idx'], 'reasoning', 'answer')
+        monkeypatch.setattr(remote, 'build_remote_request_config', prepare)
+        monkeypatch.setattr(remote, 'connect_to_remote_servers',
+                            lambda **kw: [(SimpleNamespace(close=close), 0)])
+        monkeypatch.setattr(remote, 'single_inference_request', generate)
+        config = dict(server_urls=['http://synthetic/v1'], model_name='fake',
+                      max_concurrent_requests=8, request_timeout=10, max_retries=1)
+        prompt = remote.Prompt(0, 'synthetic', 10, [{'role': 'user', 'content': 'synthetic'}])
+        pulse = asyncio.create_task(heartbeat())
+        try:
+            async with remote.RemoteRequestSession(config, 'unused', {}) as session:
+                results = await asyncio.gather(*(session.generate(prompt, config) for _ in range(16)))
+                assert ticks >= 15
+                assert all(r.reasoning == 'reasoning' and r.summary == 'answer' for r in results)
+        finally:
+            pulse.cancel()
+            await asyncio.gather(pulse, return_exceptions=True)
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("per_server", [1, 2, 5])
@@ -118,4 +152,39 @@ def test_http_pool_allows_more_than_100_simultaneous_requests():
             server.close()
             await server.wait_closed()
 
+    asyncio.run(scenario())
+
+
+def test_remote_client_avoids_reusing_idle_connections():
+    async def scenario():
+        connections, handlers = [], set()
+        async def handle(reader, writer):
+            task = asyncio.current_task()
+            handlers.add(task)
+            connections.append(writer)
+            try:
+                while True:
+                    await reader.readuntil(b'\r\n\r\n')
+                    body = b'{"object":"list","data":[]}'
+                    writer.write(b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+                                 + f'Content-Length: {len(body)}\r\n\r\n'.encode() + body)
+                    await writer.drain()
+            except asyncio.IncompleteReadError:
+                pass
+            finally:
+                writer.close()
+                await writer.wait_closed()
+                handlers.discard(task)
+        server = await asyncio.start_server(handle, '127.0.0.1', 0)
+        port = server.sockets[0].getsockname()[1]
+        [(client, _)] = remote.connect_to_remote_servers([f'http://127.0.0.1:{port}/v1'])
+        try:
+            assert (await client.models.list()).data == []
+            assert (await client.models.list()).data == []
+            assert len(connections) == 2
+        finally:
+            await client.close()
+            server.close()
+            await server.wait_closed()
+            await asyncio.gather(*list(handlers))
     asyncio.run(scenario())

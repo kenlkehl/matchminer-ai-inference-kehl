@@ -153,3 +153,30 @@ def test_recovery_window_expires_without_any_available_server(tmp_path):
     pool = EndpointPool(registry=path, recovery_timeout=0.02, refresh_seconds=0.01)
     with pytest.raises(TimeoutError, match='recovery deadline'):
         pool.request(model='teacher')
+
+
+def test_metrics_feedback_does_not_wait_for_a_slow_peer(monkeypatch):
+    import httpx
+    from matchminer_ai.llm import endpoint_pool
+    healthy_seen = Event()
+    observed = []
+    class Finished(Exception): pass
+    class Client:
+        def __init__(self, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def get(self, url):
+            if 'slow' in url:
+                assert healthy_seen.wait(2), 'Healthy endpoint was blocked behind the slow peer'
+            else:
+                healthy_seen.set()
+            return SimpleNamespace(raise_for_status=lambda: None, text='synthetic metrics')
+    pool = EndpointPool(['http://slow/v1', 'http://healthy/v1'], adaptive={'enabled': True})
+    monkeypatch.setattr(httpx, 'Client', Client)
+    monkeypatch.setattr(endpoint_pool, 'vllm_load', lambda text: {})
+    monkeypatch.setattr(pool, 'observe_load', lambda url, load: observed.append(url))
+    def stop_after_one_sample(_): raise Finished()
+    monkeypatch.setattr(endpoint_pool.time, 'sleep', stop_after_one_sample)
+    with pytest.raises(Finished):
+        pool._monitor()
+    assert set(observed) == {'http://slow/v1', 'http://healthy/v1'}
