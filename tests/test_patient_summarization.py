@@ -2,6 +2,7 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pandas as pd
+import pytest
 
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.llm.backends import LLMGenerationResult, LocalBackend
@@ -10,6 +11,7 @@ from matchminer_ai.llm.remote_inference import generate_remote_llm_outputs
 from matchminer_ai.patients import summarize_patients
 from matchminer_ai.patients.prepare import prepare_patient_notes
 from matchminer_ai.patients.postprocess import parse_boilerplate
+from matchminer_ai.patients.postprocess import normalize_patient_summary, postprocess_patient_summaries
 from matchminer_ai.patients.prompt_builder import (
     PromptWorkItem,
     _RESPONSE_TOKEN_MARGIN,
@@ -137,6 +139,34 @@ def test_parse_boilerplate_splits_summary_and_exclusions():
     assert parsed.loc[1, "general_exclusion_criteria_evidence"] == "Cancer only."
 
 
+@pytest.mark.parametrize('heading', ['Other relevant history:', 'Boilerplate conditions:', 'BOILERPLATE:', '**Other relevant history:**'])
+def test_complete_patient_summary_normalizes_headings_without_dropping_history(heading):
+    value = f'Age: 60\nCancer type: Lung\n{heading} Dialysis.\nInactive prostate cancer.'
+    expected = 'Age: 60\nCancer type: Lung\n\nOther relevant history:\nDialysis.\nInactive prostate cancer.'
+    assert normalize_patient_summary(value) == expected
+    assert normalize_patient_summary(expected) == expected
+
+
+def test_default_patient_output_is_one_complete_field_and_preserves_reasoning():
+    frame = pd.DataFrame([dict(patient_id='p', patient_answer_text='Cancer.\nBoilerplate conditions:\nDialysis.',
+                               patient_reasoning_text='Recorded reasoning.', finish_reason='stop')])
+    result = postprocess_patient_summaries(frame, _config(debug_mode=True))
+    assert result.patient_summary.tolist() == ['Cancer.\n\nOther relevant history:\nDialysis.']
+    assert result.patient_reasoning_text.tolist() == ['Recorded reasoning.']
+    assert 'cancer_history_summary' not in result and 'general_exclusion_criteria_evidence' not in result
+    config = _config()
+    config.patient['output_format'] = 'legacy_split'
+    legacy = postprocess_patient_summaries(frame, config)
+    assert legacy.cancer_history_summary.tolist() == ['Cancer.']
+    assert legacy.general_exclusion_criteria_evidence.tolist() == ['Dialysis.']
+
+
+def test_missing_history_is_not_inferred_negative_and_empty_summary_stays_empty():
+    assert normalize_patient_summary('Cancer.') == 'Cancer.\n\nOther relevant history:\nNot documented.'
+    assert normalize_patient_summary('') == ''
+    assert normalize_patient_summary('ERROR: failed') == 'ERROR: failed'
+
+
 def test_parse_boilerplate_accepts_final_only_v22_output():
     """Parsed final content should not need a reasoning marker."""
     df = pd.DataFrame(
@@ -236,7 +266,8 @@ def test_get_serial_patient_prompt_includes_prior_summary_and_chunk_text():
     assert prompts[1]["role"] == "user"
     assert "Age: 70" in prompts[1]["content"]
     assert "Clinical note text." in prompts[1]["content"]
-    assert "Boilerplate conditions:" in prompts[1]["content"]
+    assert "Other relevant history:" in prompts[1]["content"]
+    assert "Boilerplate conditions:" not in prompts[1]["content"]
     assert "contradictory information across notes" in prompts[1]["content"]
 
 
@@ -373,7 +404,7 @@ def test_summarize_patient_notes_updates_running_summary_across_rounds(monkeypat
     result, metadata = summarize_patient_notes(notes, config=_config())
 
     assert seen_prior_summaries == [None, "Round 1\nBoilerplate conditions:\nNone"]
-    assert result.loc[result.index[0], "cancer_history_summary"] == "Round 2"
+    assert result.loc[result.index[0], "patient_summary"] == "Round 2\n\nOther relevant history:\nNone"
     assert metadata["model_metadata"]["model_sha"] == "sha"
 
 
@@ -449,7 +480,7 @@ def test_summarize_patient_notes_uses_existing_summary_in_first_round(monkeypatc
     )
 
     assert seen_prior_summaries == ["Existing summary"]
-    assert result.loc[result.index[0], "cancer_history_summary"] == "Updated"
+    assert result.loc[result.index[0], "patient_summary"] == "Updated\n\nOther relevant history:\nNone"
 
 
 def test_summarize_patient_notes_includes_standard_debug_columns(monkeypatch):
@@ -617,7 +648,7 @@ def test_remote_summarize_patient_notes_uses_parallel_prompt_workers(monkeypatch
         None,
     ]
     assert pool_calls["shutdown"] is True
-    assert result["cancer_history_summary"].tolist() == ["Remote 1", "Remote 2"]
+    assert result["patient_summary"].tolist() == [f"Remote {n}\n\nOther relevant history:\nNone" for n in (1, 2)]
     assert metadata["model_metadata"]["model_sha"] == "sha"
 
 

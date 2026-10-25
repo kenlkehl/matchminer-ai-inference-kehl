@@ -40,6 +40,6 @@ def test_patient_summarization_gpu_smoke():
 
     assert not summaries.empty
     assert "patient_id" in summaries.columns
-    assert "cancer_history_summary" in summaries.columns
+    assert "patient_summary" in summaries.columns
     assert "general_exclusion_criteria_evidence" in summaries.columns
     assert "model_metadata" in metadata

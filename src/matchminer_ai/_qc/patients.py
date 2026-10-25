@@ -45,8 +45,8 @@ def patient_summary_qc_report(
     ----------
     patient_summaries : pd.DataFrame
         Output from summarize_from_relevant_sentences, one row per patient.
-        Required columns: patient_id, cancer_history_summary,
-        general_exclusion_criteria_evidence.
+        Required columns: patient_id, patient_summary. Historical split
+        summaries are also accepted.
     config : MMAIConfig | None, optional
         Config used to resolve backend and embedding settings when token counts
         are computed inside this QC function.
@@ -61,6 +61,12 @@ def patient_summary_qc_report(
     expected_keywords = expected_keywords or _as_list(DEFAULT_KEYWORDS)
 
     summaries = patient_summaries.copy()
+    combined = "patient_summary" in summaries
+    if combined:
+        summaries["cancer_history_summary"] = summaries["patient_summary"].fillna("")
+        summaries["general_exclusion_criteria_evidence"] = (
+            summaries["patient_summary"].fillna("").str.partition("Other relevant history:")[2].str.strip()
+        )
     required = [
         "patient_id",
         "cancer_history_summary",
@@ -104,11 +110,10 @@ def patient_summary_qc_report(
         )
 
     # QC metric for patients whose exclusion criteria info was not extracted
-    same_text = summaries.loc[
-        summaries["cancer_history_summary"].str.strip()
-        == summaries["general_exclusion_criteria_evidence"].str.strip(),
-        "patient_id",
-    ]
+    missing_history = (summaries["general_exclusion_criteria_evidence"].str.strip().isin(["", "Not documented."])
+                       if combined else summaries["cancer_history_summary"].str.strip()
+                       == summaries["general_exclusion_criteria_evidence"].str.strip())
+    same_text = summaries.loc[missing_history, "patient_id"]
     metrics.append(
         qc_artifact_to_report_row(
             build_qc_artifact(

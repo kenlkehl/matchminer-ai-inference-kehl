@@ -50,8 +50,9 @@ def embed_for_matching(
 
             Expected columns
             ----------------
-            cancer_history_summary : str
-                Summary text to embed for each patient.
+            patient_summary : str
+                Complete summary text to embed for each patient. Historical
+                cancer_history_summary inputs remain accepted.
 
         For entity_type="trial"
             One row per clinical space.
@@ -92,6 +93,8 @@ def embed_for_matching(
         When return_metadata is True, returns the DataFrame plus a metadata dict.
     """
     text_col = _resolve_text_column(entity_type)
+    if entity_type == "patient" and "patient_summary" in df.columns:
+        text_col = "patient_summary"
     if text_col not in df.columns:
         raise ValueError(f"df is missing required column for {entity_type}: {text_col}")
 

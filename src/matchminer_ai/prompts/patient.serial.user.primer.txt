@@ -20,15 +20,16 @@ Current extent: (patient's current extent (localized, advanced, metastatic, etc)
 Biomarkers: (genomic results, protein expression, etc, relevant for informing treatment selection. Err on the side of including all possible biomarkers, including all IHC results, all positive genomic findings, and any pertinent negative genomic findings. However, critically, standard lab values (eg CBC, CMP, LFTs, etc) MUST NOT be included in this section - only tumor biomarkers relevant to cancer treatment selection should be included. Do NOT confuse eGFR (in the context of kidney function) with the EGFR mutation common in lung cancer. Do NOT confuse mention of a gene/protein just because it was tested (as in the appendices of many genomic sequencing reports) with that test result actually being positive or negative.)
 Treatment history: (surgery, radiation, chemotherapy/targeted therapy/immunotherapy, etc, including start and stop dates, and best response if noted. Treatment history should be provided chronologically. For cancer drug names, use generic names whenever you know them. Expand abbreviations where possible, (eg "carbo" -> "carboplatin", "pembro" -> "pembrolizumab", "AC/T" -> "doxorubicin + cyclophosphamide followed by paclitaxel", etc)
 
-Boilerplate conditions:
-(any history of conditions that might meet common "boilerplate" exclusion criteria for clinical trials, such as uncontrolled brain metastases, poor performance status, lack of measurable disease, congestive heart failure, pneumonitis, renal dysfunction, liver dysfunction, HIV or hepatitis infection, prior unrelated cancer diagnoses, etc.)
+Other relevant history:
+(any history of conditions that might meet clinical trial eligibility criteria for clinical trials, such as uncontrolled brain metastases, poor performance status, lack of measurable disease, congestive heart failure, pneumonitis, renal dysfunction, liver dysfunction, HIV or hepatitis infection, prior unrelated cancer diagnoses, etc.)
 
-Clearly separate the "boilerplate" section by adding a newline after the patient history; then the "Boilerplate conditions:" text VERBATIM; then another newline; and then the boilerplate condition output text.
+Clearly separate the "Other relevant history" section by adding a newline after the patient history; then the "Other relevant history:" text VERBATIM; then another newline; and then the other relevant history text.
+Always include Other relevant history, even if it is only "Not documented." Keep the cancer history and other relevant history together in one continuous summary.
 --(end of sections)
 
 Do not consider localized basal cell or squamous carcinomas of the skin, or colon polyps, to be cancers for your purposes.
 Do not include the patient's name, but do include relevant dates whenever documented.
-If a patient has more than one active cancer, document the active cancers one at a time. List the most active cancer first, followed by any other active cancers. Within each active cancer, events should be in chronological order. Inactive cancers should be listed in the boilerplate section with a note that they are inactive and indicating the date of last known activity if available, rather than in the main cancer summary section.
+If a patient has more than one active cancer, document the active cancers one at a time. List the most active cancer first, followed by any other active cancers. Within each active cancer, events should be in chronological order. Inactive cancers should be listed in the Other relevant history section with a note that they are inactive and indicating the date of last known activity if available, rather than in the main cancer summary section.
 CRITICAL: Format your response as free text ONLY. Do NOT output markdown, Unicode, or tables.
 
 Here is an example of the desired output format:
@@ -44,7 +45,7 @@ Treatment history:
 # 1/2021: Palliative radiation for progressive spinal metastases
 # 3/2021-present: docetaxel; achieved partial response, ongoing as of last note
 
-Boilerplate conditions:
+Other relevant history:
 ECOG 1. Remote history of prostate cancer (inactive).
 
 Reference: common systemic therapy regimen abbreviations (use this list to expand abbreviations into generic drug names whenever they appear in the clinical record):

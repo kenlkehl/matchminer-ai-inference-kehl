@@ -90,7 +90,8 @@ patient:
   prompt_files:
     primer: patient.serial.user.primer.txt
     question: patient.serial.user.question.txt
-  boilerplate_marker: Boilerplate conditions
+  output_format: combined
+  boilerplate_marker: Other relevant history
   text_token_threshold: 95000
 raw_patient_note_qa:
   embedding_model_name: Qwen/Qwen3-Embedding-0.6B

@@ -2,6 +2,22 @@
 
 ## Overview
 
+Patient summarization now returns one `patient_summary` text field. It retains
+age, sex, cancer type, histology, current extent, biomarkers and chronological
+treatment history, followed by `Other relevant history:` on its own line and
+the former boilerplate evidence on the next line. Relevant comorbidities,
+performance status, laboratory findings and inactive cancers stay in that same
+text. Missing history is marked undocumented, not assumed negative. Serial
+updates and existing-summary inputs use this complete text; QC and embedding
+accept it directly. Training imports the same prompt and text normalizer.
+
+The older split-summary checkers and demo interfaces still expect
+`cancer_history_summary` and `general_exclusion_criteria_evidence`. Callers of
+those interfaces must explicitly set `config.patient["output_format"] =
+"legacy_split"`; the default is `"combined"`. This does not migrate previously
+saved summaries or embeddings. Reasoning remains in debug/trace artifacts,
+separate from the patient-summary training text.
+
 Population workup workflows are available through
 `matching.retrieve_guideline_patients` and `matchminer_ai.population`. Supply
 patient summaries and source notes, select a finalized guideline space, retrieve

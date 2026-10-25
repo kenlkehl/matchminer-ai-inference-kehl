@@ -4,6 +4,20 @@ from matchminer_ai._qc.patients import patient_summary_qc_report
 from matchminer_ai.config import MMAIConfig
 
 
+def test_unified_summary_qc_includes_other_history_in_token_budget(monkeypatch):
+    full = 'Cancer type: Lung\n\nOther relevant history:\nDialysis.'
+    seen = []
+    def count(texts, **kwargs):
+        seen.extend(texts)
+        return [50]
+    monkeypatch.setattr('matchminer_ai._qc.patients.count_embedding_tokens', count)
+    from matchminer_ai.config import load_default_preset
+    report = patient_summary_qc_report(pd.DataFrame([dict(patient_id='p', patient_summary=full)]),
+                                      config=load_default_preset()).set_index('metric')
+    assert seen == [full]
+    assert report.loc['patients_exclusion_criteria_not_extracted', 'value'] == 0
+
+
 def test_patient_summary_qc_report_metrics(monkeypatch):
     """Validate summary QC metrics for embedding limits and content checks."""
     summaries = pd.DataFrame(

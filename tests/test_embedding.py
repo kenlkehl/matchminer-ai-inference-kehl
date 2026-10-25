@@ -60,6 +60,11 @@ def test_embed_for_matching_patient(monkeypatch):
     assert backend.last_texts == ["abc"]
     assert backend.last_embedding_config["model_path"] == "mock-model"
 
+    full = 'abc\n\nOther relevant history:\nDialysis.'
+    unified = pd.DataFrame([dict(patient_id='P1', patient_summary=full)])
+    embed_for_matching(unified, entity_type='patient', config=config)
+    assert backend.last_texts == [full]
+
 
 def test_embed_for_matching_trial(monkeypatch):
     """Embed trial space summaries using the trial summary text column."""

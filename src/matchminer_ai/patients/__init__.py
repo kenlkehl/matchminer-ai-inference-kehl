@@ -73,8 +73,8 @@ def summarize_patients(
     | tuple[pd.DataFrame, dict, pd.DataFrame]
 ):
     """
-    Summarize longitudinal patient notes into a cancer history summary and
-    evidence related to general clinical trial exclusion criteria.
+    Summarize longitudinal notes into one complete patient_summary, ending
+    with an Other relevant history section.
 
     Parameters
     ----------
@@ -124,11 +124,11 @@ def summarize_patients(
         -------
         patient_id : str
             Original patient identifier.
-        cancer_history_summary : str
-            Summary of the patient's cancer history.
-        general_exclusion_criteria_evidence : str
-            Summary of conditions / findings that correspond to common
-            clinical trial exclusion criteria.
+        patient_summary : str
+            Cancer history followed by ``Other relevant history:`` and a
+            newline containing relevant comorbidities, performance status,
+            inactive cancers and other eligibility evidence. Legacy consumers
+            may explicitly set patient.output_format to ``legacy_split``.
 
         Debug Columns
         (Available only if pipeline initialized with debug_mode=True)

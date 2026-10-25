@@ -1,5 +1,19 @@
 # Patients
 
+`summarize_patients` returns `patient_id`, a single `patient_summary`, and date
+metadata. The text contains all cancer-history sections and ends with:
+
+```text
+Other relevant history:
+ECOG 1. Chronic kidney disease. Remote inactive prostate cancer.
+```
+
+The header is followed by a newline; this evidence is not emitted as a second
+summary field. Historical boilerplate headings are normalized on output.
+`config.patient["output_format"] = "legacy_split"` explicitly adapts results for
+older split-summary consumers; new cohort/ColBERT workflows use the default
+`"combined"` output. Raw answers and reasoning remain separate debug/trace data.
+
 ::: matchminer_ai.patients
     options:
       members:
