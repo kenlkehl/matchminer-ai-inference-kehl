@@ -30,6 +30,17 @@ age, cancer type, histology and biomarkers alone requests review; matching exten
 and treatment history as well identifies a repeated cancer section. The checker
 does not rewrite summaries or alter separate reasoning traces.
 
+Serial summarization checks every generated chunk before accepting it as the
+next chunk's prior summary. Drafting text, repeated full sections, empty output,
+and incomplete completions trigger regeneration from the original notes and last
+accepted prior. Matching only the core cancer fields remains a review signal and
+does not force regeneration. `config.patient["summary_quality_max_attempts"]`
+defaults to 3; exhausted retries raise an error containing the attempt traces.
+Set `config.patient["summary_quality_trace_dir"]` to a local directory to retain
+every prompt, answer and separate reasoning trace, including rejected attempts.
+Debug output also includes `patient_summary_attempts`; metadata reports attempt
+and rejection counts. These checks do not establish clinical completeness.
+
 Population workup workflows are available through
 `matching.retrieve_guideline_patients` and `matchminer_ai.population`. Supply
 patient summaries and source notes, select a finalized guideline space, retrieve

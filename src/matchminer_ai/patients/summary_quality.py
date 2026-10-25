@@ -13,6 +13,15 @@ import unicodedata
 
 SUMMARY_QUALITY_VERSION = "patient-summary-quality-v1"
 
+
+def summary_retry_codes(text: str | None, finish_reason: str = "stop") -> list[str]:
+    """Regenerate contaminated output; shared fields alone may be valid primaries."""
+    codes = {f["code"] for f in check_patient_summary(text)["findings"]
+             if f["code"] != "repeated_cancer_fields"}
+    if finish_reason != "stop":
+        codes.add("incomplete_generation")
+    return sorted(codes)
+
 # Match the start of a sentence/line, not clinical uses such as "watch and wait"
 # or a patient's quoted "I should ..." within a clinical sentence.
 _SELF_EDIT = re.compile(

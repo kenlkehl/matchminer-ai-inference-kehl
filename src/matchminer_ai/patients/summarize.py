@@ -180,6 +180,8 @@ def summarize_patient_notes(
         patient_id: summary for patient_id, summary in existing_summary_lookup.items()
     }
     current_reasoning_outputs: dict[str, str] = {}
+    summary_attempts: dict[str, list] = {}
+    quality_counts = {"attempts": 0, "rejected_attempts": 0}
     model_metadata: dict[str, Any] = {}
     prompt_pool = None
 
@@ -204,11 +206,18 @@ def summarize_patient_notes(
                 prompt_pool=prompt_pool,
                 n_prompt_workers=n_prompt_workers,
             )
-            generation = backend.generate_llm_outputs(
-                prompt_list=prompt_list,
-                llm_config=runtime_patient_config,
-                model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+            from .summary_retry import generate_checked_summaries
+            generation, attempts = generate_checked_summaries(
+                backend, prompt_list, llm_config=runtime_patient_config,
+                metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+                max_attempts=int(patient_config.get("summary_quality_max_attempts", 3)),
+                trace_dir=patient_config.get("summary_quality_trace_dir"),
             )
+            for i, patient_id in enumerate(round_patient_ids):
+                quality_counts["attempts"] += len(attempts[i])
+                quality_counts["rejected_attempts"] += sum(bool(a["retry_codes"]) for a in attempts[i])
+                if resolved_config.debug_mode:
+                    summary_attempts.setdefault(patient_id, []).extend(attempts[i])
             if not model_metadata:
                 model_metadata = generation.model_metadata
             summaries = generation.final_outputs
@@ -237,6 +246,7 @@ def summarize_patient_notes(
         final_rows["patient_reasoning_text"] = final_rows["patient_id"].map(
             current_reasoning_outputs
         )
+        final_rows["patient_summary_attempts"] = final_rows["patient_id"].map(summary_attempts)
     final_rows = final_rows.dropna(subset=["patient_answer_text"]).copy()
 
     final_rows = postprocess_patient_summaries(final_rows, resolved_config)
@@ -245,6 +255,7 @@ def summarize_patient_notes(
         "package": package_metadata(),
         "config_snapshot": config_snapshot(resolved_config),
         "model_metadata": model_metadata,
+        "summary_quality": quality_counts,
     }
 
     if return_qc:
