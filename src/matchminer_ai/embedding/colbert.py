@@ -5,6 +5,7 @@ No dependency upgrades to the production generation environment are required.
 """
 import hashlib
 import json
+import logging
 from pathlib import Path
 
 import torch
@@ -150,9 +151,25 @@ class ColBERT(nn.Module):
     @torch.inference_mode()
     def encode_batch(self, texts, *, is_query, storage_dtype=torch.float16):
         self.eval()
-        with torch.autocast('cuda', dtype=torch.bfloat16, enabled=self.device.type == 'cuda'):
-            embeddings = self.encode_texts(texts, is_queries=[is_query] * len(texts))
-        return [embedding.to(device='cpu', dtype=storage_dtype) for embedding in embeddings]
+        embeddings = None
+        try:
+            with torch.autocast('cuda', dtype=torch.bfloat16, enabled=self.device.type == 'cuda'):
+                embeddings = self.encode_texts(texts, is_queries=[is_query] * len(texts))
+            return [embedding.to(device='cpu', dtype=storage_dtype) for embedding in embeddings]
+        except torch.cuda.OutOfMemoryError:
+            if self.device.type != 'cuda' or len(texts) <= 1:
+                raise
+        # Leave the exception handler before retrying: its traceback can retain
+        # the failed encoder's GPU tensors. This inference-only fallback keeps
+        # every token and the original row order; training uses encode_texts.
+        del embeddings
+        logging.getLogger(__name__).warning(
+            'ColBERT CUDA memory limit: retrying %d complete texts in smaller batches', len(texts))
+        with torch.cuda.device(self.device):
+            torch.cuda.empty_cache()
+        middle = len(texts) // 2
+        return (self.encode_batch(texts[:middle], is_query=is_query, storage_dtype=storage_dtype)
+                + self.encode_batch(texts[middle:], is_query=is_query, storage_dtype=storage_dtype))
 
     def save(self, path):
         from safetensors.torch import save_file

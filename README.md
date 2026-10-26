@@ -150,6 +150,9 @@ mean-MaxSim scorer. The default model is the **base**
 `lightonai/GTE-ModernColBERT-v1`; select a trained TrialSpace checkpoint explicitly.
 See [embedding and bidirectional retrieval](docs/api/embedding.md) for the schema,
 8192-token limits, batching, and historical single-vector configuration.
+Inference encoding automatically halves a batch after a CUDA out-of-memory
+error, preserving complete texts and row order. A single text that still cannot
+fit raises an error; this does not change differentiable training batches.
 
 This is a new input representation, not a migration of saved trial spaces or
 embeddings. Existing TrialChecker/BoilerplateChecker workflows must
