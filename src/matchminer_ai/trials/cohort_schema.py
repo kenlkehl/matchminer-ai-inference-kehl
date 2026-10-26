@@ -9,7 +9,7 @@ from typing import Any
 from matchminer_ai.llm.prompts import load_prompt_text
 
 COHORT_PROMPT = "trial.cohorts.user.txt"
-COHORT_SCHEMA_VERSION = "trial-treatment-cohorts-v2"
+COHORT_SCHEMA_VERSION = "trial-treatment-cohorts-v3"
 
 
 def load_cohort_prompt(filename: str = COHORT_PROMPT) -> str:
@@ -48,7 +48,7 @@ def parse_cohort_response(
     schema_version: str = COHORT_SCHEMA_VERSION,
 ) -> dict[str, Any]:
     """Validate all three terminal states; malformed output is never rejection."""
-    if schema_version not in ("trial-treatment-cohorts-v1", COHORT_SCHEMA_VERSION):
+    if schema_version not in ("trial-treatment-cohorts-v1", "trial-treatment-cohorts-v2", COHORT_SCHEMA_VERSION):
         raise ValueError(f"Unsupported trial cohort schema: {schema_version}")
     if finish_reason != "stop":
         raise ValueError(f"Incomplete trial cohort response: {finish_reason}")
@@ -72,13 +72,24 @@ def parse_cohort_response(
             expected.append("cohorts")
             cohorts = result.get("cohorts")
             if not isinstance(cohorts, list) or len(cohorts) < 2:
-                raise ValueError("cohorts must contain at least two eligibility strings")
-            if not all(isinstance(c, str) and c.strip() for c in cohorts):
-                raise ValueError("Every cohort must be a nonempty eligibility string")
-            normalized = [re.sub(r"\s+", " ", c).strip().casefold() for c in cohorts]
+                raise ValueError("cohorts must contain at least two cohort entries")
+            if schema_version == COHORT_SCHEMA_VERSION:
+                fields = {"cohort_name", "cohort_specific_eligibility_criteria"}
+                for cohort in cohorts:
+                    if not isinstance(cohort, dict) or set(cohort) != fields:
+                        raise ValueError("Every cohort must be an object with exactly cohort_name and cohort_specific_eligibility_criteria")
+                    if not all(isinstance(cohort[k], str) and cohort[k].strip() for k in fields):
+                        raise ValueError("Cohort names and eligibility criteria must be nonempty strings")
+                descriptions = [c["cohort_specific_eligibility_criteria"] for c in cohorts]
+            else:
+                if not all(isinstance(c, str) and c.strip() for c in cohorts):
+                    raise ValueError("Every historical cohort must be a nonempty eligibility string")
+                descriptions = cohorts
+            # Names cannot make otherwise identical eligibility populations distinct.
+            normalized = [re.sub(r"\s+", " ", c).strip().casefold() for c in descriptions]
             if len(normalized) != len(set(normalized)):
                 raise ValueError("Duplicate cohort eligibility descriptions")
-            if schema_version == COHORT_SCHEMA_VERSION:
+            if schema_version != "trial-treatment-cohorts-v1":
                 expected.append("common_eligibility_criteria")
                 common = result.get("common_eligibility_criteria")
                 if not isinstance(common, str) or (common and not common.strip()):

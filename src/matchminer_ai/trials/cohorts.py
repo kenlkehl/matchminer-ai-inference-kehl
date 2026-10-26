@@ -17,11 +17,11 @@ from .cohort_schema import (
 )
 from .prompt_builder import build_trial_text
 
-# The model's JSON schema stays v2; this versions the derived row representation.
-COHORT_REPRESENTATION_VERSION = "trial-treatment-cohorts-v3"
+# Named cohort objects are schema v3; derived rows now preserve names separately.
+COHORT_REPRESENTATION_VERSION = "trial-treatment-cohorts-v4"
 
 COHORT_COLUMNS = [
-    "cohort_trial_id", "trial_id", "cohort_number", "cohort_eligibility_criteria",
+    "cohort_trial_id", "trial_id", "cohort_number", "cohort_name", "cohort_eligibility_criteria",
     "cohort_specific_eligibility_criteria", "common_eligibility_criteria",
     "cohort_criteria_source", "cancer_treatment_trial", "multiple_cohorts",
 ]
@@ -139,7 +139,9 @@ def summarize_trial_cohorts(trials, config):
             continue
         criteria = parsed["cohorts"] if multiple else [source.eligibility_criteria]
         common = parsed["common_eligibility_criteria"] if multiple else None
-        for number, text in enumerate(criteria):
+        for number, cohort in enumerate(criteria):
+            name = cohort["cohort_name"] if multiple else None
+            text = cohort["cohort_specific_eligibility_criteria"] if multiple else cohort
             complete = text
             if multiple and common:
                 complete = (
@@ -149,6 +151,7 @@ def summarize_trial_cohorts(trials, config):
             row = {
                 "cohort_trial_id": f"{source.trial_id}-cohort-{number}",
                 "trial_id": source.trial_id, "cohort_number": number,
+                "cohort_name": name,
                 "cohort_eligibility_criteria": complete,
                 "cohort_specific_eligibility_criteria": text if multiple else None,
                 "common_eligibility_criteria": common,

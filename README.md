@@ -137,7 +137,7 @@ This is opt-in because the files contain original input text; use an authorized
 local directory appropriate to that data. Archiving does not add reasoning to
 normal API answers or change any model's training targets.
 
-The default result uses `cohort_trial_id`, `cohort_number`, and
+The default result uses `cohort_trial_id`, `cohort_number`, `cohort_name`, and
 `cohort_eligibility_criteria`, plus the separate
 `cohort_specific_eligibility_criteria` and `common_eligibility_criteria` columns
 and decision/source columns. Accepted

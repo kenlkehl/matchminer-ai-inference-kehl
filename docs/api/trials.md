@@ -37,7 +37,10 @@ The model must return exactly one of these JSON shapes, in the indicated order:
 {
   "cancer_treatment_trial": "yes",
   "multiple_cohorts": "yes",
-  "cohorts": ["Criteria specific to population A", "Criteria specific to population B"],
+  "cohorts": [
+    {"cohort_name": "Arm A", "cohort_specific_eligibility_criteria": "Criteria specific to the first cohort"},
+    {"cohort_name": "Arm B", "cohort_specific_eligibility_criteria": "Criteria specific to the second cohort"}
+  ],
   "common_eligibility_criteria": "Inclusion and exclusion criteria shared by every population"
 }
 ```
@@ -50,7 +53,11 @@ PK/PD, safety, dose, or surrogate endpoints. The combined prompt owns these rule
 the training screen imports it rather than maintaining another screening prompt.
 
 Arms/cohorts count separately only when eligibility differs. Equivalent groups
-are combined. Each `cohorts` string contains only that population's specific
+are combined. Each object contains exactly two nonempty strings: `cohort_name`
+and `cohort_specific_eligibility_criteria`. The name retains the source arm/cohort
+label (or `Cohort 1`, `Cohort 2`, etc. when unnamed); the criteria field starts
+directly with eligibility requirements, without a cohort-name heading.
+Each criteria field contains only that population's specific
 inclusion/exclusion criteria. `common_eligibility_criteria` is one string containing
 criteria that apply identically to every population, or `""` when none are
 established. Criteria shared by only some populations are repeated in their
@@ -60,10 +67,12 @@ Each cohort string together with the common field must be complete and
 self-contained, preserve exceptions and AND/OR logic, and explicitly flag
 incomplete source criteria without inventing missing details.
 
-This is schema `trial-treatment-cohorts-v2`. Live responses must include the
-shared field for multiple populations; v1 outputs cannot be reused as v2 results.
-Prompt hashes and schema versions distinguish the generations. The validator
-can read v1 only with explicit `schema_version="trial-treatment-cohorts-v1"`.
+This is schema `trial-treatment-cohorts-v3`. Live responses require named objects
+and the shared field for multiple populations. Historical v1/v2 string outputs
+are readable only with explicit `schema_version="trial-treatment-cohorts-v1"`
+or `schema_version="trial-treatment-cohorts-v2"`. They are never accepted as new
+v3 responses. Different cohort names do not make duplicate criteria distinct.
+Prompt hashes and schema versions distinguish the generations.
 
 The returned DataFrame contains accepted cohorts only:
 
@@ -72,6 +81,7 @@ The returned DataFrame contains accepted cohorts only:
 | `cohort_trial_id` | `<trial_id>-cohort-<zero-based number>`; distinct from legacy space IDs. |
 | `trial_id` | Source trial identifier. |
 | `cohort_number` | Zero-based population index in source order. |
+| `cohort_name` | Source cohort/arm name or deterministic fallback from the model; null for single-population trials. Kept out of complete eligibility text and embeddings. |
 | `cohort_eligibility_criteria` | Cohort-specific plus common criteria joined in code, or the original eligibility field for one population. |
 | `cohort_specific_eligibility_criteria` | The model's specific criteria string; null for single-population trials. |
 | `common_eligibility_criteria` | The model's shared criteria string, repeated in each row; null for single-population trials. |
@@ -85,8 +95,8 @@ title or summary. The combined title/summary/eligibility document remains the
 input to screening and cohort detection. If an accepted single-population trial
 has missing or blank eligibility, it produces no row and records a `trial_errors`
 entry; it is not reclassified as a treatment rejection. Derived row metadata uses
-`representation_version="trial-treatment-cohorts-v3"`; the LLM JSON schema remains
-v2 because the decisions and multi-cohort response shape have not changed. Rejected trials produce no rows. Empty/all-rejected runs retain the same
+`representation_version="trial-treatment-cohorts-v4"` to distinguish the separate
+name column; the LLM JSON schema is v3. Rejected trials produce no rows. Empty/all-rejected runs retain the same
 column schema. General exclusions remain in either the specific or common field
 according to applicability. The common field is not the legacy boilerplate
 extraction: it includes all shared eligibility dimensions, not just exclusions.
