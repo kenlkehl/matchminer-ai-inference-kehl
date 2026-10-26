@@ -99,6 +99,11 @@ default `0`) enables vLLM queue, KV-cache, and preemption feedback; unavailable
 metrics fall back to transport outcomes. Limits and counters are available from
 `matchminer_ai.llm.endpoint_pool.shared_pool(...).snapshot()`.
 
+Ready requests select the available endpoint with the lowest active-request
+fraction of its current limit, breaking ties by least recent use. The async
+training pool imports this same selection rule. Idle endpoints do not reserve
+queue positions, so a faster server can refill while slower servers remain busy.
+
 For changing worker fleets, `remote.server_urls_file` points to an atomically
 updated JSON registry: `{"servers": [{"url": "http://host:8000/v1",
 "model": "served-alias", "model_root": "verified-checkpoint",

@@ -7,6 +7,7 @@ import threading
 import time
 
 from .adaptive_concurrency import AdaptiveConcurrency, vllm_load
+from .dispatch import least_loaded_endpoint
 
 MAX_POOL_WORKERS = 1536
 
@@ -169,7 +170,8 @@ class EndpointPool:
             available = [url for url, limit in self.entries.items()
                          if self.states[url]['active'] < self._limit(url) and self.states[url]['until'] <= now]
             if available:
-                url = min(available, key=lambda u: (self.states[u]['active'] / self._limit(u), self.states[u]['last']))
+                url = least_loaded_endpoint((u, self.states[u]['active'], self._limit(u), self.states[u]['last'])
+                                            for u in available)
                 state = self.states[url]
                 if state['client'] is None:
                     import httpx
