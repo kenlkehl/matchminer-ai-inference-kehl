@@ -162,6 +162,12 @@ The shared encoder groups texts by length to reduce padding while preserving
 complete inputs, query/document roles, and output order. Differentiable training
 scores candidate documents with batched mean-MaxSim using the same token masks
 and scoring rule; the scalar reference scorer remains available for validation.
+The shared encoder can also prepare several query groups on CPU and encode them
+together. Training enables a bounded RAM token cache and reuses these prepared
+inputs for gradient replay; learned vectors are always recomputed. Integer token
+indices are prepared on CPU to avoid per-text CUDA boolean compaction. Inference
+retains no token cache by default; complete text, roles and output order are
+preserved in both paths.
 
 This is a new input representation, not a migration of saved trial spaces or
 embeddings. Existing TrialChecker/BoilerplateChecker workflows must

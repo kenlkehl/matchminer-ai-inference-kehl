@@ -13,6 +13,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from .colbert_inputs import TokenCache
+
 BASE_MODEL = 'lightonai/GTE-ModernColBERT-v1'
 
 
@@ -140,14 +142,54 @@ class ColBERT(nn.Module):
     def encode_text(self, text, *, is_query):
         return self.encode_texts([text], is_queries=[is_query])[0]
 
-    def forward(self, query, documents):
-        if not documents:
-            raise ValueError('At least one document is required')
-        q, *docs = self.encode_texts([query, *documents], is_queries=[True] + [False] * len(documents))
-        return maxsim_batch(q, docs)
+    def forward(self, query=None, documents=None, *, prepared_groups=None):
+        """Score one query or several prepared groups through the DDP forward path."""
+        if prepared_groups is None:
+            prepared_groups = self.prepare_groups([query], [documents])
+        elif query is not None or documents is not None:
+            raise ValueError('Pass raw texts or prepared groups, not both')
+        if not prepared_groups or any(len(group) < 2 for group in prepared_groups):
+            raise ValueError('Each group requires a query and at least one document')
+        embeddings = self.encode_prepared([row for group in prepared_groups for row in group])
+        scores, offset = [], 0
+        for group in prepared_groups:
+            q, *docs = embeddings[offset:offset + len(group)]
+            scores.append(maxsim_batch(q, docs))
+            offset += len(group)
+        return torch.cat(scores)
+
+    def configure_token_cache(self, max_tokens):
+        self._token_cache = TokenCache(max_tokens)
+
+    def token_cache_info(self):
+        return self._token_cache.info() if hasattr(self, '_token_cache') else {}
+
+    def prepare_groups(self, queries, documents):
+        if not queries or len(queries) != len(documents) or any(not docs for docs in documents):
+            raise ValueError('Each query requires at least one document')
+        texts, roles = [], []
+        for query, docs in zip(queries, documents, strict=True):
+            texts.extend([query, *docs])
+            roles.extend([True] + [False] * len(docs))
+        rows = self.prepare_texts(texts, is_queries=roles)
+        groups, offset = [], 0
+        for docs in documents:
+            groups.append(rows[offset:offset + 1 + len(docs)])
+            offset += 1 + len(docs)
+        return groups
+
+    def prepared_batch_tokens(self, groups):
+        """Padded encoder tokens for packing; one oversized group stays complete."""
+        buckets = defaultdict(list)
+        for group in groups:
+            for row in group:
+                bucket = (row.length - 1).bit_length() if getattr(self, 'length_bucketing', True) else 0
+                buckets[bucket].append(row.length)
+        return sum(len(lengths) * max(lengths) for lengths in buckets.values())
 
     def execution_settings(self):
-        return dict(encoder_length_bucketing=self.length_bucketing, scoring='batched_maxsim_v1')
+        return dict(encoder_length_bucketing=self.length_bucketing, scoring='batched_maxsim_v1',
+                    inputs='cpu_prepared_integer_masks_v1')
 
     @torch.inference_mode()
     def encode(self, texts, *, is_query, storage_dtype=torch.float16, batch_size=16):
@@ -160,38 +202,42 @@ class ColBERT(nn.Module):
 
     def encode_texts(self, texts, *, is_queries):
         """Shared differentiable batch path for training and all inference roles."""
+        return self.encode_prepared(self.prepare_texts(texts, is_queries=is_queries))
+
+    def prepare_texts(self, texts, *, is_queries):
         if not texts or any(not isinstance(text, str) or not text.strip() for text in texts):
             raise ValueError('A nonempty batch of nonempty texts is required')
         if len(is_queries) != len(texts) or any(type(role) is not bool for role in is_queries):
             raise ValueError('Each text requires an explicit query/document role')
         if self.tokenizer.padding_side != 'right':
             raise ValueError('The checkpoint batch contract requires right padding')
-        inputs = self.tokenizer(texts, return_tensors='pt', padding=True, truncation=False)
-        for key, value in inputs.items():
-            markers = [self.prefixes['query' if role else 'document'] if key == 'input_ids'
-                       else 1 if key == 'attention_mask' else 0 for role in is_queries]
-            inputs[key] = torch.cat((value[:, :1], torch.tensor(markers, dtype=value.dtype)[:, None], value[:, 1:]), dim=1)
-        lengths = inputs['attention_mask'].sum(dim=1).tolist()
-        for length, query in zip(lengths, is_queries):
+        if not hasattr(self, '_token_cache'):
+            self.configure_token_cache(0)
+        rows = self._token_cache.prepare(self.tokenizer, texts, is_queries, self.prefixes, self.skiplist)
+        for row, query in zip(rows, is_queries, strict=True):
             limit = self.query_length if query else self.document_length
-            if length > limit:
-                raise ValueError(f'{"query" if query else "document"} has {length} tokens, exceeding {limit}; no truncation performed')
+            if row.length > limit:
+                raise ValueError(f'{"query" if query else "document"} has {row.length} tokens, exceeding {limit}; no truncation performed')
+        return rows
+
+    def encode_prepared(self, rows):
         buckets = defaultdict(list)
-        for index, length in enumerate(lengths):
-            bucket = (length - 1).bit_length() if getattr(self, 'length_bucketing', True) else 0
+        for index, row in enumerate(rows):
+            bucket = (row.length - 1).bit_length() if getattr(self, 'length_bucketing', True) else 0
             buckets[bucket].append(index)
-        output = [None] * len(texts)
+        output = [None] * len(rows)
         for indices in buckets.values():
-            width = max(lengths[i] for i in indices)
-            batch = {key: value[indices, :width].to(self.device) for key, value in inputs.items()}
+            batch = {key: nn.utils.rnn.pad_sequence([rows[i].inputs[key] for i in indices],
+                        batch_first=True, padding_value=(getattr(self.tokenizer, 'pad_token_id', 0) or 0)
+                        if key == 'input_ids' else 0).to(self.device) for key in rows[indices[0]].inputs}
             hidden = self.encoder(**batch).last_hidden_state
             embeddings = F.normalize(self.projection(hidden).float(), dim=-1)
-            mask = batch['attention_mask'].bool()
-            if self.skiplist:
-                query_rows = torch.tensor([is_queries[i] for i in indices], device=self.device)[:, None]
-                mask &= query_rows | ~torch.isin(batch['input_ids'], torch.tensor(sorted(self.skiplist), device=self.device))
-            for index, embedding, keep in zip(indices, embeddings, mask, strict=True):
-                output[index] = embedding[keep]
+            # CPU-derived integer indices avoid CUDA boolean compaction and its
+            # device synchronization once per text. Transfer all indices together.
+            sizes = [len(rows[i].keep_indices) for i in indices]
+            keeps = torch.cat([rows[i].keep_indices for i in indices]).to(self.device).split(sizes)
+            for index, embedding, keep in zip(indices, embeddings, keeps, strict=True):
+                output[index] = embedding.index_select(0, keep)
         return output
 
     @torch.inference_mode()

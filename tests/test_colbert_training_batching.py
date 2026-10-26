@@ -30,8 +30,10 @@ def test_batched_maxsim_preserves_scores_gradients_order_and_negative_padding(ti
 
 class Tokenizer:
     padding_side = 'right'
+    calls = 0
 
     def __call__(self, texts, **kwargs):
+        self.calls += 1
         assert kwargs['truncation'] is False
         rows = [[1] + [4 if word == 'word' else 5 for word in text.split()] + [2] for text in texts]
         width = max(map(len, rows))
@@ -83,3 +85,68 @@ def test_encoder_length_buckets_keep_complete_text_roles_order_and_gradients():
 def test_batched_maxsim_rejects_empty_inputs():
     with pytest.raises(ValueError, match='empty'):
         maxsim_batch(torch.ones(1, 4), [torch.empty(0, 4)])
+
+
+def small_model():
+    torch.manual_seed(13)
+    model = ColBERT.__new__(ColBERT)
+    torch.nn.Module.__init__(model)
+    model.tokenizer, model.encoder = Tokenizer(), Encoder()
+    model.projection = torch.nn.Linear(8, 4, bias=False)
+    model.prefixes, model.skiplist = {'query': 8, 'document': 9}, {5}
+    model.query_length = model.document_length = 128
+    model.length_bucketing = True
+    model.configure_token_cache(1000)
+    return model
+
+
+def test_multi_query_forward_keeps_pair_order_roles_scores_and_gradients():
+    model = small_model()
+    reference = copy.deepcopy(model)
+    queries = ['word .', 'word ' * 20, 'word . word']
+    documents = [['word .', 'word ' * 13], ['word ' * 7], ['word .', 'word ' * 3, 'word ' * 22]]
+    expected = torch.cat([reference(q, d) for q, d in zip(queries, documents)])
+    groups = model.prepare_groups(queries, documents)
+    calls = model.tokenizer.calls
+    actual = model(prepared_groups=groups)
+    assert model.tokenizer.calls == calls
+    torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)
+    weights = torch.arange(1, 7)
+    (actual * weights).sum().backward()
+    (expected * weights).sum().backward()
+    for left, right in zip(model.parameters(), reference.parameters(), strict=True):
+        torch.testing.assert_close(left.grad, right.grad, atol=2e-5, rtol=1e-4)
+    model.prepare_groups(queries, documents)
+    assert model.tokenizer.calls == calls  # A new update reuses RAM tokens too.
+    query, document = groups[0][:2]
+    assert query.inputs['input_ids'][1] == 8 and document.inputs['input_ids'][1] == 9
+    assert len(query.keep_indices) == len(document.keep_indices) + 1
+    assert model.prepared_batch_tokens(groups) == model.encoder.padded_tokens
+
+
+def test_token_cache_is_bounded_and_eviction_never_changes_complete_inputs():
+    model = small_model()
+    model.configure_token_cache(12)
+    original = model.prepare_groups(['word .'], [['word ' * 3]])
+    model.prepare_groups(['word ' * 20], [['word ' * 2]])
+    assert model.token_cache_info()['tokens'] <= 12
+    restored = model.prepare_groups(['word .'], [['word ' * 3]])
+    for left, right in zip(original[0], restored[0], strict=True):
+        for key in left.inputs:
+            torch.testing.assert_close(left.inputs[key], right.inputs[key])
+        torch.testing.assert_close(left.keep_indices, right.keep_indices)
+    model.query_length = 4  # Capacity checks apply to cache hits as well.
+    with pytest.raises(ValueError, match='no truncation'):
+        model.prepare_groups(['word .'], [['word ' * 3]])
+    assert all(row.inputs['input_ids'].device.type == 'cpu' for row in original[0])
+
+
+def test_tokens_cached_during_inference_remain_usable_for_training():
+    model = small_model()
+    model.encode(['word .', 'word word'], is_query=False)
+    model.train()
+    scores = model('word .', ['word .', 'word word'])
+    scores.sum().backward()
+    assert torch.isfinite(model.projection.weight.grad).all()
+    assert model.projection.weight.grad.abs().sum() > 0
+    assert model.token_cache_info()['hits'] >= 2
