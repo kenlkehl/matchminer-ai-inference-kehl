@@ -158,6 +158,10 @@ See [embedding and bidirectional retrieval](docs/api/embedding.md) for the schem
 Inference encoding automatically halves a batch after a CUDA out-of-memory
 error, preserving complete texts and row order. A single text that still cannot
 fit raises an error; this does not change differentiable training batches.
+The shared encoder groups texts by length to reduce padding while preserving
+complete inputs, query/document roles, and output order. Differentiable training
+scores candidate documents with batched mean-MaxSim using the same token masks
+and scoring rule; the scalar reference scorer remains available for validation.
 
 This is a new input representation, not a migration of saved trial spaces or
 embeddings. Existing TrialChecker/BoilerplateChecker workflows must

@@ -6,6 +6,7 @@ No dependency upgrades to the production generation environment are required.
 import hashlib
 import json
 import logging
+from collections import defaultdict
 from pathlib import Path
 
 import torch
@@ -33,9 +34,40 @@ not a calibrated binary probability; training and retrieval use this same rule.
     return torch.cat(scores).mean()
 
 
+def maxsim_batch(query, documents, *, query_block=128, document_block=2048, batch_size=32):
+    """Differentiable mean-MaxSim over length-bucketed documents in parallel."""
+    if not len(query) or not documents or any(not len(d) for d in documents):
+        raise ValueError('Cannot score empty token embeddings')
+    if min(query_block, document_block, batch_size) < 1:
+        raise ValueError('MaxSim block and batch sizes must be positive')
+    buckets = defaultdict(list)
+    for index, document in enumerate(documents):
+        buckets[(len(document) - 1).bit_length()].append(index)
+    output = [None] * len(documents)
+    for indices in buckets.values():
+        for start in range(0, len(indices), batch_size):
+            selected = indices[start:start + batch_size]
+            padded = nn.utils.rnn.pad_sequence([documents[i] for i in selected], batch_first=True)
+            lengths = torch.tensor([len(documents[i]) for i in selected], device=padded.device)
+            chunks = []
+            for q in query.split(query_block):
+                best = None
+                for dstart in range(0, padded.shape[1], document_block):
+                    d = padded[:, dstart:dstart + document_block]
+                    valid = torch.arange(dstart, dstart + d.shape[1], device=d.device)[None] < lengths[:, None]
+                    similarities = torch.bmm(q.expand(len(selected), -1, -1), d.transpose(1, 2)).float()
+                    values = similarities.masked_fill(~valid[:, None], -torch.inf).max(dim=-1).values
+                    best = values if best is None else torch.maximum(best, values)
+                chunks.append(best)
+            scores = torch.cat(chunks, dim=1).mean(dim=1)
+            for index, score in zip(selected, scores, strict=True):
+                output[index] = score
+    return torch.stack(output)
+
+
 class ColBERT(nn.Module):
     def __init__(self, model=BASE_MODEL, *, revision=None, query_length=8192,
-                 document_length=8192, cache_dir=None, checkpointing=False):
+                 document_length=8192, cache_dir=None, checkpointing=False, length_bucketing=True):
         super().__init__()
         from huggingface_hub import snapshot_download
         from safetensors.torch import load_file
@@ -59,6 +91,7 @@ class ColBERT(nn.Module):
         self.projection.load_state_dict({k.removeprefix('linear.'): v for k, v in
                                         load_file(folder / '1_Dense/model.safetensors').items()})
         self.query_length, self.document_length = query_length, document_length
+        self.length_bucketing = length_bucketing
         capacity = self.encoder.config.max_position_embeddings
         if min(query_length, document_length) < 4 or max(query_length, document_length) > capacity:
             raise ValueError(f'Lengths must fit the checkpoint context ({capacity}); text is never silently truncated')
@@ -111,7 +144,10 @@ class ColBERT(nn.Module):
         if not documents:
             raise ValueError('At least one document is required')
         q, *docs = self.encode_texts([query, *documents], is_queries=[True] + [False] * len(documents))
-        return torch.stack([maxsim(q, document) for document in docs])
+        return maxsim_batch(q, docs)
+
+    def execution_settings(self):
+        return dict(encoder_length_bucketing=self.length_bucketing, scoring='batched_maxsim_v1')
 
     @torch.inference_mode()
     def encode(self, texts, *, is_query, storage_dtype=torch.float16, batch_size=16):
@@ -135,18 +171,28 @@ class ColBERT(nn.Module):
             markers = [self.prefixes['query' if role else 'document'] if key == 'input_ids'
                        else 1 if key == 'attention_mask' else 0 for role in is_queries]
             inputs[key] = torch.cat((value[:, :1], torch.tensor(markers, dtype=value.dtype)[:, None], value[:, 1:]), dim=1)
-        for length, query in zip(inputs['attention_mask'].sum(dim=1).tolist(), is_queries):
+        lengths = inputs['attention_mask'].sum(dim=1).tolist()
+        for length, query in zip(lengths, is_queries):
             limit = self.query_length if query else self.document_length
             if length > limit:
                 raise ValueError(f'{"query" if query else "document"} has {length} tokens, exceeding {limit}; no truncation performed')
-        inputs = {key: value.to(self.device) for key, value in inputs.items()}
-        hidden = self.encoder(**inputs).last_hidden_state
-        embeddings = F.normalize(self.projection(hidden).float(), dim=-1)
-        mask = inputs['attention_mask'].bool()
-        if self.skiplist:
-            query_rows = torch.tensor(is_queries, device=self.device)[:, None]
-            mask &= query_rows | ~torch.isin(inputs['input_ids'], torch.tensor(sorted(self.skiplist), device=self.device))
-        return [embedding[keep] for embedding, keep in zip(embeddings, mask)]
+        buckets = defaultdict(list)
+        for index, length in enumerate(lengths):
+            bucket = (length - 1).bit_length() if getattr(self, 'length_bucketing', True) else 0
+            buckets[bucket].append(index)
+        output = [None] * len(texts)
+        for indices in buckets.values():
+            width = max(lengths[i] for i in indices)
+            batch = {key: value[indices, :width].to(self.device) for key, value in inputs.items()}
+            hidden = self.encoder(**batch).last_hidden_state
+            embeddings = F.normalize(self.projection(hidden).float(), dim=-1)
+            mask = batch['attention_mask'].bool()
+            if self.skiplist:
+                query_rows = torch.tensor([is_queries[i] for i in indices], device=self.device)[:, None]
+                mask &= query_rows | ~torch.isin(batch['input_ids'], torch.tensor(sorted(self.skiplist), device=self.device))
+            for index, embedding, keep in zip(indices, embeddings, mask, strict=True):
+                output[index] = embedding[keep]
+        return output
 
     @torch.inference_mode()
     def encode_batch(self, texts, *, is_query, storage_dtype=torch.float16):
