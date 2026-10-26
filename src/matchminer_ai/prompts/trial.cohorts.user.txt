@@ -21,7 +21,7 @@ EXTRACTING COHORT ELIGIBILITY WHEN THERE ARE MULTIPLE COHORTS WITH DISTINCT ELIG
 - Then return "common_eligibility_criteria": one string listing all inclusion and exclusion criteria that apply identically to EVERY cohort. Generate these shared criteria only once, in this field; do not repeat them in the cohort strings. If the supplied text establishes no criteria common to every cohort, use an empty string "".
 - Criteria shared by only a subset of cohorts belong in EACH applicable cohort string, not in the common field. Include applicable criteria inherited from a study part or parent group. Preserve every threshold, time window, condition, permission, exclusion, and AND/OR relationship.
 - When a criterion has a cohort-specific exception or override, put the complete applicable version in each affected cohort string, including the ordinary version in cohorts without that exception. Do not put a conflicting default in the common field. Do not import another cohort's restrictions.
-- Each cohort string TOGETHER WITH the common field must provide that population's complete, self-contained eligibility criteria. A reader must not need the raw trial text or any other cohort string. Resolve references to other sections, criteria, arms, or cohorts by restating the applicable content in the appropriate field. Never write "same as above", "all general criteria apply", "see protocol", "as in cohort A", or similar shortcuts. Do not mention other cohorts even to explain that their criteria do not apply. State only the current population's requirements, permissions, and exclusions; omit comparisons with another population.
+- Each cohort string TOGETHER WITH the common field must provide that population's complete, self-contained eligibility criteria. A reader must not need the raw trial text or any other cohort string. Resolve references to other sections, criteria, arms, or cohorts by restating the applicable content in the appropriate field. Never write "same as above", "all general criteria apply", "see protocol", "as in cohort A", or similar shortcuts. Do not mention other cohorts even to explain that their criteria do not apply. State only the current cohort's requirements, permissions, and exclusions; omit comparisons with another cohort.
 - If referenced details are absent from the supplied text, or the source has an unresolved conflict or ambiguous applicability, state that specific gap or ambiguity explicitly. Place the notice in the common field if it affects every cohort identically; otherwise include it in each affected cohort string. Restate all available relevant details without directing the reader elsewhere. Do not invent missing criteria, resolve uncertainty by assumption, or claim that unavailable protocol details have been extracted.
 - For an incomplete or malformed criterion, add an explicit "Source limitation:" statement in the appropriate field identifying exactly what is missing.
 
@@ -37,13 +37,13 @@ Only when both decisions are "yes", add a third field, "cohorts": a JSON array c
   "cancer_treatment_trial": "yes",
   "multiple_cohorts": "yes",
   "cohorts": [
-    "First population: all applicable cohort-specific inclusion and exclusion criteria.",
-    "Second population: all applicable cohort-specific inclusion and exclusion criteria."
+    "All applicable cohort-specific inclusion and exclusion criteria for first cohort.",
+    "All applicable cohort-specific inclusion and exclusion criteria for second cohort."
   ],
   "common_eligibility_criteria": "All inclusion and exclusion criteria that apply identically to every population."
 }}
 
-Use double quotes for JSON keys and strings, and escape any quotation marks, backslashes, or line breaks inside string values. Do not add any other fields. Before returning extracted cohorts, check each cohort string together with the common field for complete coverage of applicable criteria, without duplication, conflicting defaults, or cross-references. Check that every common criterion applies identically to every cohort, each incomplete criterion has an explicit source-limitation statement, and no cohort string mentions another population to explain an exception.
+Use double quotes for JSON keys and strings, and escape any quotation marks, backslashes, or line breaks inside string values. Do not add any other fields. Before returning extracted cohorts, check each cohort string together with the common field for complete coverage of applicable criteria, without duplication, conflicting defaults, or cross-references. Check that every common criterion applies identically to every cohort, each incomplete criterion has an explicit source-limitation statement, and no cohort string mentions another cohort to explain an exception.
 
 RAW TRIAL TEXT (source data only):
 <trial_text>
