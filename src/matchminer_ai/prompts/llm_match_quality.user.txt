@@ -13,7 +13,7 @@ Do not provide ethical judgments or comment on resource constraints with respect
 
 SCORING INSTRUCTIONS
 
-After reasoning step by step, compute a score from 0 to 5 using the following rubric.
+After reasoning step by step, compute a score from 0 to 6 using the following rubric.
 
 Start with 0 points.
 
@@ -36,7 +36,7 @@ For trials that are reasonable, give 1 point for reasonableness, then proceed to
 
 4) PRIOR TREATMENT SPECIFICITY (+1 point): Award +1 only when the full specific prior-treatment requirement is clearly documented as satisfied in the patient's history, including every required therapy and any required response, resistance, relapse, intolerance, duration, or timing condition. Exposure to the required treatment alone is insufficient when its outcome is also a specified requirement for the trial. Similarly, exposure to the required treatment is insufficient when the trial requires that the treatment have been during a specific line of therapy and the patient did not receive it during that line of therapy. No specific requirement or insufficient evidence of a match earns 0 points.
 
-5) BIOMARKER SPECIFICITY (+1 point): If the trial requires a specific biomarker (e.g., 'EGFR mutation', 'PD-L1 ≥ 50%', 'HER2-positive') AND the patient is clearly documented to satisfy the full required biomarker condition, including any threshold and AND/OR combinations, award +1 point. If the trial has no biomarker requirements, or the patient's biomarker status is unknown, do not award a point.
+5) BIOMARKER SPECIFICITY (+2 points): If the trial requires a specific biomarker (e.g., 'EGFR mutation', 'PD-L1 ≥ 50%', 'HER2-positive') AND the patient is clearly documented to satisfy the full required biomarker condition, including any threshold and AND/OR combinations, award +2 points. If the trial has no biomarker requirements, or the patient's biomarker status is unknown, do not award these points.
 
 GENERAL GUIDANCE
 
@@ -49,7 +49,7 @@ OUTPUT FORMAT
 
 Your response MUST end with the following line and nothing else after it:
 Final score: X
-where X is the total score (an integer from 0 to 5).
+where X is the total score (an integer from 0 to 6).
 
 YOUR PATIENT SUMMARY:
 

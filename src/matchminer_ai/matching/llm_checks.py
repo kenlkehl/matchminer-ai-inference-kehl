@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 
 
 _TRIAL_CHECK_SCORE_PATTERN = re.compile(r"[Ff]inal\s+[Ss]core\s*:\s*(\d)")
+# Highest llm_match_quality.user.txt score: gate 1, cancer type 1, burden 1,
+# prior treatment 1, and biomarker 2.
+MAX_MATCH_QUALITY_SCORE = 6
 
 
 def _load_prompt_template(filename: str) -> str:
@@ -44,13 +47,13 @@ def _parse_match_quality_score(response_text: str) -> tuple[int, str]:
     tail = response_text[-60:].replace("*", "").replace("\u202f", " ")
     match = _TRIAL_CHECK_SCORE_PATTERN.search(tail)
     if match:
-        score = min(int(match.group(1)), 5)
+        score = min(int(match.group(1)), MAX_MATCH_QUALITY_SCORE)
         return score, "parsed"
 
     tail_upper = tail.upper()
     fallback = re.search(r"SCORE\s*[:\-=]\s*(\d)", tail_upper)
     if fallback:
-        score = min(int(fallback.group(1)), 5)
+        score = min(int(fallback.group(1)), MAX_MATCH_QUALITY_SCORE)
         return score, "parsed_fallback"
     if "NOT REASONABLE" in tail_upper or "NOT A REASONABLE" in tail_upper:
         return 0, "parsed_fallback"
@@ -152,7 +155,7 @@ def score_match_quality_with_llm(
         space_trial_id : str
             Trial-space identifier.
         llm_match_quality_score : int
-            Parsed LLM score from 0 to 5, or -1 when parsing failed.
+            Parsed LLM score from 0 to 6, or -1 when parsing failed.
         Debug Columns
         -------------
         llm_match_quality_answer_text : str

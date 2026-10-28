@@ -389,7 +389,7 @@ def find_trial_centric_cutoff(
         Required columns are ``patient_id``, ``space_trial_id``, ``rank``,
         ``cancer_history_summary``, and ``clinical_space_summary``.
     check_method : {"trial_checker", "llm"}, default "trial_checker"
-        Use TrialChecker's 0-1 sigmoid score or the LLM checker's 0-5 score for
+        Use TrialChecker's 0-1 sigmoid score or the LLM checker's 0-6 score for
         the boundary probes.
     score_threshold : float, optional
         Score at or above which a probe patient passes. Defaults to 0.20 for

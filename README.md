@@ -181,7 +181,7 @@ For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
 TrialChecker or LLM probes to estimate how many leading patients should proceed
 to both full checker stages. Its default pass thresholds are 0.20 on
-TrialChecker's 0-1 sigmoid scale and 1 on the LLM checker's 0-5 scale. This is a
+TrialChecker's 0-1 sigmoid scale and 1 on the LLM checker's 0-6 scale. This is a
 compute-allocation heuristic, not an eligibility threshold.
 The first probe defaults to 50% down the ranking and can be moved with
 `initial_cutoff_proportion` when the expected qualifying fraction is known to
@@ -462,7 +462,7 @@ python llm_trial_check.py http://localhost:8000/v1
 The command discovers the endpoint's model through `/v1/models`, then prompts
 for a multiline patient summary and trial space. End each paste with a line
 containing only `.done`. It prints the endpoint's complete separate reasoning
-trace, complete final answer, and the parsed 0-5 MatchMiner-AI score. If the
+trace, complete final answer, and the parsed 0-6 MatchMiner-AI score. If the
 server requires an API key, set `OPENAI_API_KEY` before running the command.
 The patient summary is sent to the specified endpoint, so use only an endpoint
 authorized for the sensitivity of the input data.

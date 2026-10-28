@@ -125,7 +125,7 @@ def test_main_discovers_model_and_scores_with_public_package_api(monkeypatch):
     assert "Model: served-model" in stdout.getvalue()
     assert "Reasoning:\nComplete reasoning" in stdout.getvalue()
     assert "Final output:\nComplete final answer\nFinal score: 4" in stdout.getvalue()
-    assert "LLM trial match score: 4/5" in stdout.getvalue()
+    assert "LLM trial match score: 4/6" in stdout.getvalue()
     assert captured["candidate"].to_dict("records") == [
         {
             "patient_id": "interactive-patient",

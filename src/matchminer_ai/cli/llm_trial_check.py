@@ -236,15 +236,17 @@ def main(
     print("\nFinal output:", file=stdout)
     print(result.final_output, file=stdout)
 
-    if result.score not in range(6):
+    from matchminer_ai.matching.llm_checks import MAX_MATCH_QUALITY_SCORE
+
+    if result.score not in range(MAX_MATCH_QUALITY_SCORE + 1):
         print(
-            "The final output did not contain a valid 0-5 score "
+            f"The final output did not contain a valid 0-{MAX_MATCH_QUALITY_SCORE} score "
             f"(parse status: {result.parse_status}).",
             file=stderr,
         )
         return 1
 
-    print(f"\nLLM trial match score: {result.score}/5", file=stdout)
+    print(f"\nLLM trial match score: {result.score}/{MAX_MATCH_QUALITY_SCORE}", file=stdout)
     print(
         "This is a research prioritization signal, not an eligibility "
         "determination or treatment recommendation.",
