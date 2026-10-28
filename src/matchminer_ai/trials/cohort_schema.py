@@ -10,6 +10,31 @@ from matchminer_ai.llm.prompts import load_prompt_text
 
 COHORT_PROMPT = "trial.cohorts.user.txt"
 COHORT_SCHEMA_VERSION = "trial-treatment-cohorts-v3"
+# Full protocol documents have no registry eligibility field to fall back on,
+# so a single-cohort response must carry that cohort's criteria itself.
+PROTOCOL_COHORT_PROMPT = "trial.cohorts.protocol.user.txt"
+PROTOCOL_COHORT_SCHEMA_VERSION = "trial-protocol-cohorts-v1"
+
+_TEXT = {"type": "string", "minLength": 1}
+_COHORT = {"type": "object", "additionalProperties": False,
+           "required": ["cohort_name", "cohort_specific_eligibility_criteria"],
+           "properties": {"cohort_name": _TEXT, "cohort_specific_eligibility_criteria": _TEXT}}
+# Pass as a structured-output JSON schema when requesting protocol extraction:
+# on long multi-cohort protocols Nemotron otherwise appended a stray closing
+# brace, which the strict parser rightly rejects. The parser still validates.
+PROTOCOL_COHORT_JSON_SCHEMA = {"anyOf": [
+    {"type": "object", "additionalProperties": False, "required": ["cancer_treatment_trial"],
+     "properties": {"cancer_treatment_trial": {"const": "no"}}},
+    {"type": "object", "additionalProperties": False,
+     "required": ["cancer_treatment_trial", "multiple_cohorts", "eligibility_criteria"],
+     "properties": {"cancer_treatment_trial": {"const": "yes"}, "multiple_cohorts": {"const": "no"},
+                    "eligibility_criteria": _TEXT}},
+    {"type": "object", "additionalProperties": False,
+     "required": ["cancer_treatment_trial", "multiple_cohorts", "cohorts", "common_eligibility_criteria"],
+     "properties": {"cancer_treatment_trial": {"const": "yes"}, "multiple_cohorts": {"const": "yes"},
+                    "cohorts": {"type": "array", "minItems": 2, "items": _COHORT},
+                    "common_eligibility_criteria": {"type": "string"}}},
+]}
 
 
 def load_cohort_prompt(filename: str = COHORT_PROMPT) -> str:
@@ -22,6 +47,14 @@ def build_cohort_messages(
     """Format once so braces in the source document remain literal."""
     template = load_cohort_prompt() if prompt is None else prompt
     return [{"role": "user", "content": template.format(trial_text=trial_text)}]
+
+
+def build_protocol_cohort_messages(
+    protocol_text: str, *, prompt: str | None = None,
+) -> list[dict[str, str]]:
+    """Full protocol text (for example, OCR output) in one user message."""
+    template = load_cohort_prompt(PROTOCOL_COHORT_PROMPT) if prompt is None else prompt
+    return [{"role": "user", "content": template.format(protocol_text=protocol_text)}]
 
 
 def _unique_keys(pairs):
@@ -48,7 +81,8 @@ def parse_cohort_response(
     schema_version: str = COHORT_SCHEMA_VERSION,
 ) -> dict[str, Any]:
     """Validate all three terminal states; malformed output is never rejection."""
-    if schema_version not in ("trial-treatment-cohorts-v1", "trial-treatment-cohorts-v2", COHORT_SCHEMA_VERSION):
+    if schema_version not in ("trial-treatment-cohorts-v1", "trial-treatment-cohorts-v2", COHORT_SCHEMA_VERSION,
+                              PROTOCOL_COHORT_SCHEMA_VERSION):
         raise ValueError(f"Unsupported trial cohort schema: {schema_version}")
     if finish_reason != "stop":
         raise ValueError(f"Incomplete trial cohort response: {finish_reason}")
@@ -68,12 +102,17 @@ def parse_cohort_response(
         if multiple not in ("yes", "no"):
             raise ValueError('multiple_cohorts must be the string "yes" or "no"')
         expected = ["cancer_treatment_trial", "multiple_cohorts"]
+        if multiple == "no" and schema_version == PROTOCOL_COHORT_SCHEMA_VERSION:
+            expected.append("eligibility_criteria")
+            criteria = result.get("eligibility_criteria")
+            if not isinstance(criteria, str) or not criteria.strip():
+                raise ValueError("eligibility_criteria must be a nonempty string for a single-cohort protocol")
         if multiple == "yes":
             expected.append("cohorts")
             cohorts = result.get("cohorts")
             if not isinstance(cohorts, list) or len(cohorts) < 2:
                 raise ValueError("cohorts must contain at least two cohort entries")
-            if schema_version == COHORT_SCHEMA_VERSION:
+            if schema_version in (COHORT_SCHEMA_VERSION, PROTOCOL_COHORT_SCHEMA_VERSION):
                 fields = {"cohort_name", "cohort_specific_eligibility_criteria"}
                 for cohort in cohorts:
                     if not isinstance(cohort, dict) or set(cohort) != fields:

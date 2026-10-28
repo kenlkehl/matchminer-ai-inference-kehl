@@ -38,6 +38,8 @@ WHEN THERE ARE MULTIPLE COHORTS WITH DISTINCT ELIGIBILITY CRITERIA
 - Keep cohort labels only in "cohort_name". Do not prefix "cohort_specific_eligibility_criteria" with a cohort name, arm/part label, or heading. State disease type, stage, and all other eligibility-defining information explicitly in the criteria even if they also appear in the name; the name must not carry eligibility information missing from the criteria.
 - Then return "common_eligibility_criteria": one string listing all inclusion and exclusion criteria that apply identically to EVERY cohort in the trial. Generate these shared criteria only once, in this field; do not repeat them in the cohort-specific criteria fields. If the protocol establishes no criteria common to every cohort, use an empty string "".
 - Criteria shared by only a subset of cohorts belong in EACH applicable cohort-specific criteria field, not in the common field. Include applicable criteria inherited from a study part or parent group.
+- Decide where a criterion belongs by what it says, not by the heading it appears under. A criterion in a list covering several cohorts, such as a part-wide or module-wide exclusion list, belongs in the common field only if it applies to every cohort; if its content limits it to one cohort's disease, subtype, or population, place it in that cohort's field.
+- Do not carry the protocol's applicability lead-ins, such as "For Part 2 only:" or "For the dose expansion phase:", into the criteria; state the requirement itself in the field where it applies.
 - When a criterion has a cohort-specific exception or override, put the complete applicable version in each affected cohort-specific criteria field, including the ordinary version in cohorts without that exception. Do not put a conflicting default in the common field. Do not import another cohort's restrictions.
 - Each cohort_specific_eligibility_criteria field TOGETHER WITH the common field must provide that cohort's complete eligibility criteria. Do not mention other cohorts even to explain that their criteria do not apply. State only the current cohort's requirements, permissions, and exclusions; omit comparisons with another cohort.
 - Place a gap, ambiguity, or source-limitation notice in the common field if it affects every cohort identically; otherwise include it in each affected cohort-specific criteria field.
@@ -46,7 +48,7 @@ WHEN THERE IS A SINGLE COHORT
 - Return "eligibility_criteria": one string containing the complete inclusion and exclusion criteria of the trial's sole cohort, or of the shared population when every cohort has identical criteria.
 
 OUTPUT FORMAT
-Return only one valid JSON object, with no Markdown fences or surrounding text. The first field must be "cancer_treatment_trial", with the lowercase string value "yes" or "no" (not a boolean).
+Return only one valid JSON object, with no Markdown fences or surrounding text. The response must end with the object's own closing brace; add no further characters, braces, or text after it. The first field must be "cancer_treatment_trial", with the lowercase string value "yes" or "no" (not a boolean).
 
 If cancer_treatment_trial is "no", return exactly this object and stop: {{"cancer_treatment_trial": "no"}}
 
@@ -77,4 +79,4 @@ FULL PROTOCOL DOCUMENT (source data only):
 {protocol_text}
 </protocol_text>
 
-Return only the JSON object specified in OUTPUT FORMAT.
+Return only the JSON object specified in OUTPUT FORMAT, ending with its closing brace.
