@@ -817,3 +817,34 @@ def test_review_issues_survive_ranking_and_report(catalog_frame, patients, model
     assert "Population source support unresolved" in report
     assert "Source support unresolved" in report
     assert "Synthetic source supports only a narrower test" in report
+
+
+def test_encoder_identity_digests_weights_when_no_revision_is_reported(monkeypatch):
+    from types import SimpleNamespace
+
+    import torch
+    from matchminer_ai.embedding import inference
+
+    def encoder(weights):
+        first = SimpleNamespace(
+            auto_model=SimpleNamespace(config=SimpleNamespace()),  # transformers 5
+            tokenizer=SimpleNamespace(
+                backend_tokenizer=SimpleNamespace(to_str=lambda: "{}"),
+                special_tokens_map={},
+            ),
+        )
+        return SimpleNamespace(_first_module=lambda: first, _modules={},
+                               state_dict=lambda: weights)
+
+    config = dict(model_path="ksg-dfci/TrialSpace-0526", device="cpu",
+                  prompt_file="embedding.txt", max_seq_length=2500)
+    weights = {"w": torch.ones(2, 3), "b": torch.zeros(3, dtype=torch.bfloat16)}
+    loaded = encoder(weights)
+    monkeypatch.setattr(inference, "_get_embedding_model", lambda *args: loaded)
+    identity = inference._embedding_cache_identity(config, {"model": "m"})
+    assert identity["loaded_revision"] is None
+    assert len(identity["loaded_weights_sha256"]) == 64
+    assert inference._embedding_cache_identity(config, {"model": "m"}) == identity
+    changed = encoder({**weights, "w": torch.full((2, 3), 2.0)})
+    monkeypatch.setattr(inference, "_get_embedding_model", lambda *args: changed)
+    assert inference._embedding_cache_identity(config, {"model": "m"}) != identity

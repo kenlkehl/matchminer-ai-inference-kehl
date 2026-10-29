@@ -160,6 +160,22 @@ def count_embedding_tokens(
     return [len(ids) for ids in input_ids]
 
 
+def _loaded_weights_sha256(model):
+    """Digest the loaded parameters once per model object."""
+    import hashlib
+
+    import torch
+
+    if getattr(model, "_mmai_weights_sha256", None) is None:
+        hasher = hashlib.sha256()
+        for name, tensor in sorted(model.state_dict().items()):
+            data = tensor.detach().to("cpu").contiguous().reshape(-1)
+            hasher.update(f"{name}:{data.dtype}:{tuple(tensor.shape)}".encode())
+            hasher.update(data.view(torch.uint8).numpy())
+        model._mmai_weights_sha256 = hasher.hexdigest()
+    return model._mmai_weights_sha256
+
+
 def _embedding_cache_identity(embedding_config, model_metadata):
     """Identify the already-loaded encoder, not just a mutable Hub model name."""
     from matchminer_ai._storage import digest
@@ -176,8 +192,11 @@ def _embedding_cache_identity(embedding_config, model_metadata):
         None,
     )
     tokenizer = getattr(first, "tokenizer", None)
-    if not revision or not hasattr(tokenizer, "backend_tokenizer"):
+    if not hasattr(tokenizer, "backend_tokenizer"):
         return None
+    # transformers 5 no longer records the resolved commit on the config; the
+    # loaded weights themselves then identify the encoder.
+    weights = None if revision else _loaded_weights_sha256(model)
     tokenization = json.loads(tokenizer.backend_tokenizer.to_str())
     # These fields are modified by each encode batch; the cutoff is captured below.
     tokenization.pop("padding", None)
@@ -186,6 +205,7 @@ def _embedding_cache_identity(embedding_config, model_metadata):
         "schema": 1,
         "model_path": model_path,
         "loaded_revision": revision,
+        **({"loaded_weights_sha256": weights} if weights else {}),
         "reported_model_metadata": model_metadata,
         "tokenizer_sha256": digest(tokenization),
         "special_tokens": tokenizer.special_tokens_map,
