@@ -149,7 +149,7 @@ def extract_protocol_cohorts(
     ``protocol_cohort_extraction.structured_outputs`` enabled (the default), the
     request constrains the answer to the protocol cohort JSON schema with vLLM
     structured outputs; local in-process generation relies on validation and
-    retries. Every answer is checked with the ``trial-protocol-cohorts-v1``
+    retries. Every answer is checked with the ``trial-protocol-cohorts-v2``
     contract, and only failed trials are retried, up to ``max_attempts``.
 
     Requests go through the backend in chunks of ``chunk_size``, with up to

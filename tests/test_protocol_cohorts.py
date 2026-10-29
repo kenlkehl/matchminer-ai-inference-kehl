@@ -54,6 +54,11 @@ def test_structured_output_schema_matches_parser_field_order():
                for v in PROTOCOL_COHORT_JSON_SCHEMA["anyOf"])
 
 
+def test_structured_output_strings_allow_escapes():
+    # vLLM's grammar admits no JSON escape (line break, quote) in a minLength string.
+    assert "minLength" not in json.dumps(PROTOCOL_COHORT_JSON_SCHEMA)
+
+
 def test_protocol_prompt_keeps_source_literal_and_its_examples_parse():
     rendered = build_protocol_cohort_messages("Section {5.1} criteria")[0]["content"]
     assert "Section {5.1} criteria" in rendered and "{protocol_text}" not in rendered

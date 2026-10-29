@@ -13,9 +13,12 @@ COHORT_SCHEMA_VERSION = "trial-treatment-cohorts-v3"
 # Full protocol documents have no registry eligibility field to fall back on,
 # so a single-cohort response must carry that cohort's criteria itself.
 PROTOCOL_COHORT_PROMPT = "trial.cohorts.protocol.user.txt"
-PROTOCOL_COHORT_SCHEMA_VERSION = "trial-protocol-cohorts-v1"
+PROTOCOL_COHORT_SCHEMA_VERSION = "trial-protocol-cohorts-v2"
 
-_TEXT = {"type": "string", "minLength": 1}
+# No minLength: under vLLM 0.31 structured outputs a minLength string admits no
+# JSON escape, so v1 criteria lost every line break and double quote. The
+# parser rejects empty names and criteria instead.
+_TEXT = {"type": "string"}
 _COHORT = {"type": "object", "additionalProperties": False,
            "required": ["cohort_name", "cohort_specific_eligibility_criteria"],
            "properties": {"cohort_name": _TEXT, "cohort_specific_eligibility_criteria": _TEXT}}

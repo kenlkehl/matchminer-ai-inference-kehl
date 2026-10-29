@@ -162,7 +162,9 @@ cohort's criteria:
 ```
 
 Multi-cohort and negative answers have the registry shapes. This is schema
-`trial-protocol-cohorts-v1`. With a remote backend and
+`trial-protocol-cohorts-v2` (v1 had the same shape, but its `minLength` strings kept
+vLLM structured outputs from writing any JSON escape, so criteria lost their line
+breaks and double quotes). With a remote backend and
 `protocol_cohort_extraction.structured_outputs: true` (the default), requests
 set an OpenAI-compatible `response_format` with `PROTOCOL_COHORT_JSON_SCHEMA`,
 so vLLM structured outputs constrain the answer; vLLM applies the grammar after
