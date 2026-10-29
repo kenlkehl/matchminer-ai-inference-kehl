@@ -250,3 +250,25 @@ def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(
             )
     with pytest.raises(ValueError, match="batch_size"):
         embed_guideline_patients(patients(), batch_size=0)
+
+
+def test_default_colbert_retrieval_scores_patient_token_matrices(
+    catalog_frame, stages, monkeypatch
+):
+    from matchminer_ai.config import load_default_preset
+    from matchminer_ai.embedding import late_interaction
+    from matchminer_ai.embedding.embed import embed_for_matching
+    from test_colbert_matching import Encoder
+
+    monkeypatch.setattr(late_interaction, "_model", lambda *args: Encoder())
+    monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed_for_matching)
+    config = load_default_preset()
+    config.embedding["device"] = "cpu"
+    assert config.embedding["backend"] == "colbert"
+    selected, meta = retrieve_guideline_patients(
+        patients(), catalog_frame, space_trial_id="a", candidate_k=2,
+        min_match_score=None, config=config,
+    )
+    assert len(stages[0]) == 2 and meta["scored_count"] == 2
+    assert selected.similarity_score.notna().all()
+    assert set(selected.patient_id) <= {"first", "second", "third"}

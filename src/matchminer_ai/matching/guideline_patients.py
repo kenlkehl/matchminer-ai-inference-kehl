@@ -210,14 +210,21 @@ def retrieve_guideline_patients(
                 "Precomputed patient embeddings came from a different or unverifiable "
                 "TrialSpace encoder; rebuild them."
             )
+    colbert = "query_embedding" in sv
     for frame in (pv, sv):
+        if colbert:
+            from .late_interaction import _contract, _vectors
+
+            _contract(frame)
+            _vectors(frame.embedding)
+            continue
         matrix = np.asarray(frame.embedding.tolist(), dtype=float)
         if matrix.ndim != 2 or not matrix.size or not np.isfinite(matrix).all():
             raise ValueError("TrialSpace returned invalid embeddings.")
     # Query is the trial space; the corpus is the full patient population.
-    candidates = generate_candidate_matches(sv, pv, k=candidate_k).rename(
-        columns={"rank": "retrieval_rank"}
-    )
+    candidates = generate_candidate_matches(
+        sv, pv, k=candidate_k, **({"config": config} if colbert else {})
+    ).rename(columns={"rank": "retrieval_rank"})
     pairs = candidates.merge(patients, on="patient_id", validate="one_to_one").merge(
         spaces[["space_trial_id", "clinical_space_summary"]],
         on="space_trial_id",
