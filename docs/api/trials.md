@@ -5,6 +5,7 @@
       members:
         - extract_trial_space_eligibility_criteria
         - extract_protocol_cohorts
+        - generate_synthetic_protocols
         - summarize_trials
         - list_guidelines
         - summarize_guidelines
@@ -177,6 +178,28 @@ counts, and the config snapshot. The whole document reaches the configured LLM
 endpoint, so use only documents without patient data unless that endpoint is
 authorized for their sensitivity. Outputs are research abstractions for human
 review, not eligibility determinations.
+
+## Synthetic protocols seeded by registry records
+
+`generate_synthetic_protocols` writes one fabricated full protocol per registry
+seed, for building training corpora of realistic, often messily specified
+eligibility text. Seeds have a unique `trial_id` and optional `title`,
+`brief_summary`, `detailed_description` and `eligibility_criteria` strings;
+missing fields are marked as not provided. The record is a seed, not a
+specification. The prompt pair `trial.synthetic_protocol.system.txt` and
+`trial.synthetic_protocol.user.txt` asks for a prospective sponsor-style
+protocol in Markdown with no synthetic-document disclaimer, and assigns each
+trial one of the weighted eligibility layouts in
+`data/synthetic_protocol_layouts.json` (stable per trial ID).
+
+Requests run through the configured backend in chunks, with several chunks in
+flight. Remote runs use the shared endpoint pool, so adaptive concurrency,
+vLLM load feedback and `remote.server_urls_file` registries (which can give
+each endpoint its own served model ID) apply. With `output_dir`, each trial's
+`protocol.md`, `reasoning.txt` and `meta.json` are written as its chunk
+returns, completed trials with the same prompt hash are skipped on rerun, and
+the returned frame holds file paths. Empty or truncated outputs are retried.
+Outputs are fabricated and must be labeled as synthetic wherever they are used.
 
 ## Hierarchical extraction
 

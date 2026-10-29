@@ -471,6 +471,23 @@ The default model context is 262,144 tokens with up to 50,000 completion tokens,
 so that full industry protocols (often 50,000-160,000 tokens) fit with room for
 reasoning.
 
+## `synthetic_protocol_generation`
+
+Configuration for `generate_synthetic_protocols`. Its `local`, `remote`,
+`sampling_profile`, `reasoning_effort` and `reasoning_parser` fields follow the
+other LLM task sections.
+
+- `chunk_size`: prompts per backend call (default 500); outputs are written
+  when a chunk returns.
+- `chunks_in_flight`: chunks running at once (default 2, at most 16), so fast
+  endpoints keep working while an earlier chunk's slowest requests finish.
+- `max_attempts`: attempts per trial for empty or truncated outputs (1-10,
+  default 3).
+- `layouts_file`: optional override of `synthetic_protocol_layouts.json`.
+
+The default model context is 262,144 tokens with up to 100,000 completion
+tokens, so long protocols and reasoning traces fit.
+
 ## `patient_structuring`
 
 Configuration for ontology-grounded JSON conversion of an existing patient
