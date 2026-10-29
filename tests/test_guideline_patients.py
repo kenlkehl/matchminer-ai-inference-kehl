@@ -252,19 +252,25 @@ def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(
         embed_guideline_patients(patients(), batch_size=0)
 
 
-def test_default_colbert_retrieval_scores_patient_token_matrices(
-    catalog_frame, stages, monkeypatch
-):
+@pytest.fixture
+def colbert(monkeypatch):
     from matchminer_ai.config import load_default_preset
     from matchminer_ai.embedding import late_interaction
     from matchminer_ai.embedding.embed import embed_for_matching
     from test_colbert_matching import Encoder
 
-    monkeypatch.setattr(late_interaction, "_model", lambda *args: Encoder())
+    encoder = Encoder()
+    monkeypatch.setattr(late_interaction, "_model", lambda *args: encoder)
     monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed_for_matching)
     config = load_default_preset()
-    config.embedding["device"] = "cpu"
-    assert config.embedding["backend"] == "colbert"
+    config.embedding = dict(
+        backend="colbert", model_path="lightonai/GTE-ModernColBERT-v1", device="cpu"
+    )
+    return encoder, config
+
+
+def test_colbert_retrieval_scores_patient_token_matrices(catalog_frame, stages, colbert):
+    _, config = colbert
     selected, meta = retrieve_guideline_patients(
         patients(), catalog_frame, space_trial_id="a", candidate_k=2,
         min_match_score=None, config=config,
@@ -272,3 +278,45 @@ def test_default_colbert_retrieval_scores_patient_token_matrices(
     assert len(stages[0]) == 2 and meta["scored_count"] == 2
     assert selected.similarity_score.notna().all()
     assert set(selected.patient_id) <= {"first", "second", "third"}
+
+
+def test_precomputed_colbert_tokens_match_computed_retrieval(
+    catalog_frame, stages, colbert
+):
+    from dataclasses import replace
+
+    from matchminer_ai.matching import embed_guideline_patients
+
+    encoder, config = colbert
+    cached = embed_guideline_patients(patients(), config=config)
+    assert cached.vectors.dtype == object and len(cached.vectors) == 3
+    assert all(tokens.ndim == 2 for tokens in cached.vectors)
+    assert cached.encoder_identity["artifact_sha256"] == "test-weights"
+    expected, _ = retrieve_guideline_patients(
+        patients(), catalog_frame, space_trial_id="a", candidate_k=2,
+        min_match_score=None, config=config,
+    )
+    encoder.calls.clear()
+    selected, meta = retrieve_guideline_patients(
+        patients(), catalog_frame, space_trial_id="a", candidate_k=2,
+        min_match_score=None, config=config, patient_embeddings=cached,
+    )
+    assert len(encoder.calls) == 2  # Guideline query and document roles only.
+    assert meta["patient_embeddings"] == "precomputed"
+    pd.testing.assert_frame_equal(selected, expected)
+
+    changed = patients()
+    changed.loc[1, "cancer_history_summary"] = "Edited after embedding"
+    broken = cached.vectors.copy()
+    broken[0] = np.full((2, 3), np.nan, dtype=np.float16)
+    for frame, embeddings, message in [
+        (changed, cached, "changed after"),
+        (patients(), replace(cached, encoder_identity={"artifact_sha256": "other"}), "different"),
+        (patients(), replace(cached, vectors=broken), "invalid"),
+        (patients(), replace(cached, model_metadata={"embedding_model": {}}), "malformed"),
+    ]:
+        with pytest.raises(ValueError, match=message):
+            retrieve_guideline_patients(
+                frame, catalog_frame, space_trial_id="a", config=config,
+                patient_embeddings=embeddings,
+            )

@@ -18,10 +18,12 @@ from .guidelines import _patient_frame
 class PatientEmbeddings:
     """Reusable TrialSpace vectors; row i of ``vectors`` belongs to ``patient_ids[i]``.
 
-    ``summary_sha256`` binds each vector to its exact summary text and
-    ``encoder_identity`` to the loaded encoder, so retrieval rejects stale or
-    mixed vectors. Vectors derive from patient summaries: store them as privately
-    as the summaries themselves.
+    ``vectors`` is an (N, D) float array for single-vector encoders, or for ColBERT
+    a length-N object array of float16 document-role token matrices (patients are
+    always the retrieval corpus). ``summary_sha256`` binds each row to its exact
+    summary text and ``encoder_identity`` to the loaded encoder, so retrieval
+    rejects stale or mixed vectors. Vectors derive from patient summaries: store
+    them as privately as the summaries themselves.
     """
 
     patient_ids: tuple[str, ...]
@@ -40,6 +42,16 @@ def _same(a, b):
 
 def _summary_digests(patients):
     return tuple(digest(text.encode()) for text in patients.cancer_history_summary)
+
+
+def _encoder_identity(config, embedding_model):
+    # A ColBERT contract hashes the loaded weights, so it is verified even for a
+    # local checkpoint directory; vector encoders need a verified Hub revision.
+    if embedding_model.get("encoding_contract"):
+        return embedding_model["encoding_contract"]
+    from matchminer_ai.embedding.inference import _embedding_cache_identity
+
+    return _embedding_cache_identity(config.embedding, embedding_model)
 
 
 def _embed_patients(patients, config, progress, batch_size):
@@ -77,12 +89,11 @@ def embed_guideline_patients(
 
     Uses the same TrialSpace configuration and summary text as retrieval. The
     result records each summary's SHA-256 and the verified encoder identity;
-    ``encoder_identity`` is None when the encoder revision cannot be verified
-    (for example a mutable local model directory), and retrieval then refuses to
-    reuse the vectors. Nothing is written to disk here.
+    ``encoder_identity`` is None when a single-vector encoder's revision cannot be
+    verified (for example a mutable local model directory), and retrieval then
+    refuses to reuse the vectors. ColBERT embeddings use their encoding contract,
+    which hashes the loaded checkpoint. Nothing is written to disk here.
     """
-    from matchminer_ai.embedding.inference import _embedding_cache_identity
-
     if type(batch_size) is not int or batch_size < 1:
         raise ValueError("batch_size must be a positive integer.")
     config = config or load_default_preset()
@@ -90,16 +101,24 @@ def embed_guideline_patients(
     pv, pm = _embed_patients(
         patients, config, progress_callback or (lambda _: None), batch_size
     )
-    vectors = np.asarray(pv.embedding.tolist(), dtype=np.float32)
-    if vectors.ndim != 2 or not vectors.size or not np.isfinite(vectors).all():
-        raise ValueError("TrialSpace returned invalid embeddings.")
+    if "query_embedding" in pv:
+        from .late_interaction import _contract, _vectors
+
+        _contract(pv)
+        vectors = np.empty(len(pv), dtype=object)
+        for row, tokens in enumerate(_vectors(pv.embedding)):
+            vectors[row] = tokens.numpy()
+    else:
+        vectors = np.asarray(pv.embedding.tolist(), dtype=np.float32)
+        if vectors.ndim != 2 or not vectors.size or not np.isfinite(vectors).all():
+            raise ValueError("TrialSpace returned invalid embeddings.")
     return PatientEmbeddings(
         patient_ids=tuple(patients.patient_id),
         summary_sha256=_summary_digests(patients),
         vectors=vectors,
         model_metadata=pm["model_metadata"],
-        encoder_identity=_embedding_cache_identity(
-            config.embedding, pm["model_metadata"]["embedding_model"]
+        encoder_identity=_encoder_identity(
+            config, pm["model_metadata"]["embedding_model"]
         ),
     )
 
@@ -109,9 +128,14 @@ def _precomputed_patients(patients, embeddings):
     if not isinstance(embeddings, PatientEmbeddings):
         raise ValueError("patient_embeddings must come from embed_guideline_patients.")
     vectors = np.asarray(embeddings.vectors)
+    colbert = vectors.dtype == object
+    contract = embeddings.model_metadata.get("embedding_model", {}).get(
+        "encoding_contract"
+    )
     count = len(embeddings.patient_ids)
     if (
-        vectors.ndim != 2
+        vectors.ndim != (1 if colbert else 2)
+        or colbert != bool(contract)
         or vectors.shape[0] != count
         or len(embeddings.summary_sha256) != count
         or len(set(embeddings.patient_ids)) != count
@@ -132,11 +156,23 @@ def _precomputed_patients(patients, embeddings):
             "Patient summaries changed after their embeddings were made; rebuild them."
         )
     selected = vectors[rows]
-    if not np.isfinite(selected).all():
+    if not (
+        all(
+            isinstance(tokens, np.ndarray)
+            and tokens.ndim == 2
+            and tokens.size
+            and np.isfinite(tokens).all()
+            for tokens in selected
+        )
+        if colbert
+        else np.isfinite(selected).all()
+    ):
         raise ValueError("Precomputed patient embeddings are invalid.")
     pv = pd.DataFrame(
         {"patient_id": patients.patient_id.to_numpy(), "embedding": list(selected)}
     )
+    if colbert:
+        pv["embedding_contract"] = json.dumps(contract, sort_keys=True)
     return pv, {"model_metadata": embeddings.model_metadata}
 
 
@@ -200,11 +236,7 @@ def retrieve_guideline_patients(
     ):
         raise ValueError("Patient and guideline embedding models differ.")
     if patient_embeddings is not None:
-        from matchminer_ai.embedding.inference import _embedding_cache_identity
-
-        current = _embedding_cache_identity(
-            config.embedding, sm["model_metadata"]["embedding_model"]
-        )
+        current = _encoder_identity(config, sm["model_metadata"]["embedding_model"])
         if current is None or not _same(patient_embeddings.encoder_identity, current):
             raise ValueError(
                 "Precomputed patient embeddings came from a different or unverifiable "
