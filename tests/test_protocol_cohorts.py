@@ -199,3 +199,39 @@ def test_local_generation_is_not_grammar_constrained(tmp_path, backend):
     runtime = calls[0][1]
     assert runtime["backend_mode"] == "local" and "response_format" not in runtime["sampling_params"]
     assert result.attrs["structured_outputs"] is False
+
+
+def test_saved_decisions_are_reused_only_for_unchanged_documents(tmp_path, backend):
+    config, calls, answers = backend
+    config.protocol_cohort_extraction["max_attempts"] = 1
+    protocols = pd.DataFrame([{"trial_id": t, "protocol_path": str(tmp_path / f"{t}.md")} for t in ("T1", "T2", "T3")])
+    for trial_id in ("T1", "T2", "T3"):
+        (tmp_path / f"{trial_id}.md").write_text(f"# Protocol {trial_id}", encoding="utf-8")
+    out = tmp_path / "decisions"
+    answers.append([SOLE, NO, "not json"])
+    first = extract_protocol_cohorts(protocols, config=config, output_dir=out)
+    saved = json.loads((out / "T1" / "extraction.json").read_text())
+    assert saved["decision"] == SOLE and saved["schema_version"] == PROTOCOL_COHORT_SCHEMA_VERSION
+    assert saved["source_document"]["protocol_path"] == str(tmp_path / "T1.md") and saved["attempts"][0]["attempt"] == 1
+    assert (out / "T1" / "reasoning.txt").read_text() == "r" and not (out / "T3").exists()
+    assert set(first.attrs["trial_rejections"]) == {"T2"} and set(first.attrs["trial_errors"]) == {"T3"}
+
+    # Only the failed trial and the edited document are sent again.
+    (tmp_path / "T2.md").write_text("# Protocol T2, amended", encoding="utf-8")
+    answers.append([MULTI, SOLE])
+    again, metadata = extract_protocol_cohorts(protocols, config=config, output_dir=out, return_metadata=True)
+    assert [prompt_text(p).count("amended") for p in calls[1][0]] == [1, 0]
+    assert metadata["skipped_completed"] == 1 and metadata["trial_errors"] == {}
+    assert again.cohort_trial_id.tolist() == ["T1-cohort-0", "T2-cohort-0", "T2-cohort-1", "T3-cohort-0"]
+
+
+def test_chunked_requests_retry_failures_after_later_chunks(tmp_path, backend):
+    config, calls, answers = backend
+    config.protocol_cohort_extraction.update(chunk_size=1, chunks_in_flight=1)
+    protocols = protocol_files(tmp_path, {"T1": "First protocol", "T2": "Second protocol"})
+    answers.extend([["not json"], [MULTI], [SOLE]])
+    result, metadata = extract_protocol_cohorts(protocols, config=config, return_metadata=True)
+    sent = [prompt_text(batch[0]) for batch, _ in calls]
+    assert ["First protocol" in s for s in sent] == [True, False, True] and "failed validation" in sent[2]
+    assert [r["attempt"] for r in metadata["trial_attempts"]["T1"]] == [1, 2]
+    assert result.cohort_trial_id.tolist() == ["T1-cohort-0", "T2-cohort-0", "T2-cohort-1"]

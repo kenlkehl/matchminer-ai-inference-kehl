@@ -221,6 +221,9 @@ protocol_cohort_extraction:
   # above max_document_characters fail rather than being truncated.
   max_document_characters: 800000
   max_attempts: 3
+  # Prompts per backend call, and calls running at once so fast endpoints stay busy.
+  chunk_size: 500
+  chunks_in_flight: 2
   # Remote requests constrain the answer with the protocol cohort JSON schema.
   structured_outputs: true
   prompt_file: trial.cohorts.protocol.user.txt

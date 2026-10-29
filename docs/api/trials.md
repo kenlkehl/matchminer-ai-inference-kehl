@@ -142,8 +142,8 @@ Saved trial-space artifacts remain unchanged.
 
 `extract_protocol_cohorts` applies the same treatment and cohort decisions to
 complete protocol documents instead of registry text. It accepts one row per
-trial with a unique `trial_id` and a `protocol_path` to a PDF or UTF-8 text
-file. PDFs are converted locally with `ocr_pdf`; pass `text_output_dir` to keep
+trial with a unique `trial_id` and a `protocol_path` to a PDF or a UTF-8 text
+file (`.txt` or `.md`). PDFs are converted locally with `ocr_pdf`; pass `text_output_dir` to keep
 the converted text, which is otherwise written to a temporary directory and
 removed. Each document is sent whole with `trial.cohorts.protocol.user.txt`;
 documents longer than `protocol_cohort_extraction.max_document_characters`
@@ -170,6 +170,16 @@ the reasoning section when the server runs a reasoning parser. Local in-process
 generation is not grammar-constrained and relies on validation. Every answer is
 checked strictly, and only failed trials are retried with the complete document
 and the validation error, up to `max_attempts`.
+
+Requests go through the backend in chunks of
+`protocol_cohort_extraction.chunk_size`, with `chunks_in_flight` chunks running
+at once; remote runs use the shared endpoint pool, so adaptive concurrency and
+endpoint registries apply. With `output_dir`, each accepted decision is saved
+as its chunk returns to `<output_dir>/<trial_id>/extraction.json` (raw answer,
+parsed decision, every attempt with its serving endpoint, prompt hash, schema
+version and source-document SHA-256) with `reasoning.txt`. A rerun with the
+same `output_dir` reuses a saved decision only when the prompt, schema and
+document bytes are unchanged, and sends the rest.
 
 The result has the `summarize_trials` cohort columns, with
 `cohort_criteria_source` set to `"protocol"`; `return_metadata=True` adds

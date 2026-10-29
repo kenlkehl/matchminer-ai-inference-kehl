@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from copy import deepcopy
+from datetime import datetime, timezone
 import hashlib
+import json
 from pathlib import Path
 import tempfile
 from typing import Any
 
 import pandas as pd
 
+from matchminer_ai._storage import atomic_json, atomic_text
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 from matchminer_ai.documents import ocr_pdf
 from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
@@ -44,8 +48,8 @@ def _read_protocols(protocols, *, text_dir, keep_text, max_characters, progress)
         raise ValueError("trial_id must be unique")
     paths = [Path(p) for p in protocols["protocol_path"]]
     for path in paths:
-        if path.suffix.lower() not in {".pdf", ".txt"}:
-            raise ValueError(f"protocol_path must be a .pdf or .txt file: {path}")
+        if path.suffix.lower() not in {".pdf", ".txt", ".md"}:
+            raise ValueError(f"protocol_path must be a .pdf, .txt or .md file: {path}")
         if not path.is_file():
             raise FileNotFoundError(f"Protocol document does not exist: {path}")
     documents = []
@@ -92,6 +96,15 @@ def _runtime(settings, config):
     return runtime, structured
 
 
+def _saved_decision(trial_dir, identity):
+    """A saved decision is reused only for the same prompt, schema and document bytes."""
+    path = trial_dir / "extraction.json"
+    if not path.exists():
+        return None
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    return saved if all(saved.get(key) == value for key, value in identity.items()) else None
+
+
 def _rows(trial_id, parsed):
     if parsed["multiple_cohorts"] == "no":
         criteria = parsed["eligibility_criteria"]
@@ -121,13 +134,14 @@ def extract_protocol_cohorts(
     *,
     config: MMAIConfig | None = None,
     text_output_dir: str | Path | None = None,
+    output_dir: str | Path | None = None,
     return_metadata: bool = False,
     progress_callback: ProtocolCohortProgress | None = None,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     """Screen full protocol documents and extract their cohort eligibility criteria.
 
     ``protocols`` has one row per trial with a unique ``trial_id`` and a
-    ``protocol_path`` to a PDF or UTF-8 text file. PDFs are converted locally
+    ``protocol_path`` to a PDF or UTF-8 text file (``.txt`` or ``.md``). PDFs are converted locally
     with :func:`matchminer_ai.ocr_pdf`; pass ``text_output_dir`` to keep the
     text files, otherwise they are written to a temporary directory and removed.
     Each document is sent whole, without truncation, to the configured LLM with
@@ -137,6 +151,15 @@ def extract_protocol_cohorts(
     structured outputs; local in-process generation relies on validation and
     retries. Every answer is checked with the ``trial-protocol-cohorts-v1``
     contract, and only failed trials are retried, up to ``max_attempts``.
+
+    Requests go through the backend in chunks of ``chunk_size``, with up to
+    ``chunks_in_flight`` chunks running at once so fast endpoints are not left
+    idle while an earlier chunk finishes. With ``output_dir``, each accepted
+    decision is written to ``<output_dir>/<trial_id>/extraction.json`` (answer,
+    parsed decision, attempts, serving endpoint, source-document hash) with its
+    ``reasoning.txt`` when its chunk returns; a rerun reuses saved decisions made
+    with the same prompt and schema for the same document bytes and sends only
+    the rest.
 
     Returns one row per accepted cohort with the same columns as
     :func:`summarize_trials` cohort extraction (``COHORT_COLUMNS``); a
@@ -162,6 +185,12 @@ def extract_protocol_cohorts(
         raise ValueError("protocol_cohort_extraction.max_attempts must be an integer from 1 to 10")
     if type(max_characters) is not int or max_characters < 1:
         raise ValueError("protocol_cohort_extraction.max_document_characters must be a positive integer")
+    chunk_size = settings.get("chunk_size", 500)
+    chunks_in_flight = settings.get("chunks_in_flight", 2)
+    if type(chunk_size) is not int or chunk_size < 1:
+        raise ValueError("protocol_cohort_extraction.chunk_size must be a positive integer")
+    if type(chunks_in_flight) is not int or not 1 <= chunks_in_flight <= 16:
+        raise ValueError("protocol_cohort_extraction.chunks_in_flight must be an integer from 1 to 16")
 
     with tempfile.TemporaryDirectory(prefix="mmai-protocol-text-") as scratch:
         text_dir = Path(text_output_dir) if text_output_dir is not None else Path(scratch)
@@ -180,48 +209,88 @@ def extract_protocol_cohorts(
     }
     if resolved.debug_mode:
         metadata["trial_responses"] = {}
-    texts = {i: text for i, (_, text, _) in enumerate(documents)}
-    messages = {i: build_protocol_cohort_messages(text, prompt=prompt) for i, text in texts.items()}
-    pending = list(messages)
-    backend = get_llm_backend(resolved) if pending else None
-    for attempt in range(1, max_attempts + 1):
-        if not pending:
-            break
-        _emit(progress_callback, "extract", len(documents) - len(pending), len(documents),
-              f"Extracting cohorts, attempt {attempt} for {len(pending)} protocol(s)")
-        generation = backend.generate_llm_outputs(
-            prompt_list=build_prompt_list([messages[i] for i in pending], llm_config=runtime),
-            llm_config=runtime, model_metadata_cache_dir=resolved.model_metadata_cache_dir,
-        )
-        metadata["model_metadata"] = generation.model_metadata
-        next_pending = []
-        for i, answer, reasoning, finish in zip(pending, generation.final_outputs, generation.reasoning_outputs,
-                                                generation.finish_reasons, strict=True):
-            trial_id = documents[i][0]
+    root = Path(output_dir) if output_dir is not None else None
+    identity = {"prompt_sha256": metadata["prompt_sha256"], "schema_version": PROTOCOL_COHORT_SCHEMA_VERSION}
+    metadata["skipped_completed"] = 0
+    pending = []
+    for i, (trial_id, text, info) in enumerate(documents):
+        saved = _saved_decision(root / trial_id, {**identity, "source_sha256": info["sha256"]}) if root else None
+        if saved is None:
+            pending.append((i, 1, build_protocol_cohort_messages(text, prompt=prompt)))
+            continue
+        metadata["skipped_completed"] += 1
+        metadata["trial_decisions"][trial_id] = saved["decision"]
+        metadata["trial_attempts"][trial_id] = saved["attempts"]
+        if saved["decision"]["cancer_treatment_trial"] == "no":
+            metadata["trial_rejections"][trial_id] = saved["decision"]
+
+    def record_chunk(chunk, generation):
+        """Record decisions and save accepted ones; return the items to retry."""
+        retry = []
+        metadata["model_metadata"] = {k: v for k, v in generation.model_metadata.items() if k != "responses"}
+        provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
+        for index, ((i, attempt, _), answer, reasoning, finish) in enumerate(zip(
+                chunk, generation.final_outputs, generation.reasoning_outputs, generation.finish_reasons, strict=True)):
+            trial_id, text, info = documents[i]
             record = {"attempt": attempt, "finish_reason": finish}
+            if index in provenance:
+                record["response_metadata"] = provenance[index]
             if resolved.debug_mode:
                 record.update(answer=answer, reasoning=reasoning)
                 metadata["trial_responses"][trial_id] = {"answer": answer, "reasoning": reasoning, "finish_reason": finish}
+            attempts = metadata["trial_attempts"].setdefault(trial_id, [])
+            attempts.append(record)
             try:
                 parsed = parse_cohort_response(answer, finish, schema_version=PROTOCOL_COHORT_SCHEMA_VERSION)
             except ValueError as exc:
                 record["validation_error"] = str(exc)
                 metadata["trial_errors"][trial_id] = str(exc)
-                next_pending.append(i)
-                # Retry with the complete document and original instructions.
-                messages[i] = build_protocol_cohort_messages(texts[i], prompt=prompt) + [{
-                    "role": "user",
-                    "content": (f"The preceding attempt failed validation: {exc}. Return a complete "
-                                "replacement JSON object following the original instructions and full protocol."),
-                }]
-            else:
-                metadata["trial_errors"].pop(trial_id, None)
-                metadata["trial_decisions"][trial_id] = parsed
-                if parsed["cancer_treatment_trial"] == "no":
-                    metadata["trial_rejections"][trial_id] = parsed
-            metadata["trial_attempts"].setdefault(trial_id, []).append(record)
-        pending = next_pending
-    _emit(progress_callback, "extract", len(documents) - len(pending), len(documents), "Cohort extraction finished")
+                if attempt < max_attempts:
+                    # Retry with the complete document and original instructions.
+                    retry.append((i, attempt + 1, build_protocol_cohort_messages(text, prompt=prompt) + [{
+                        "role": "user",
+                        "content": (f"The preceding attempt failed validation: {exc}. Return a complete "
+                                    "replacement JSON object following the original instructions and full protocol."),
+                    }]))
+                continue
+            metadata["trial_errors"].pop(trial_id, None)
+            metadata["trial_decisions"][trial_id] = parsed
+            if parsed["cancer_treatment_trial"] == "no":
+                metadata["trial_rejections"][trial_id] = parsed
+            if root:
+                atomic_text(root / trial_id / "reasoning.txt", str(reasoning or ""))
+                atomic_json(root / trial_id / "extraction.json", {
+                    "trial_id": trial_id, **identity, "source_sha256": info["sha256"],
+                    "representation_version": COHORT_REPRESENTATION_VERSION, "structured_outputs": structured,
+                    "completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "source_document": info, "answer": answer, "decision": parsed, "attempts": attempts,
+                })
+        return retry
+
+    def report():
+        _emit(progress_callback, "extract", len(metadata["trial_decisions"]), len(documents),
+              f"{len(metadata['trial_decisions'])} of {len(documents)} protocols decided; "
+              f"{len(metadata['trial_errors'])} awaiting retry or failed")
+
+    report()
+    if pending:
+        backend = get_llm_backend(resolved)
+        # Chunks run in worker threads against the shared endpoint pool; results,
+        # files and retry bookkeeping are handled only in this thread.
+        with ThreadPoolExecutor(max_workers=chunks_in_flight) as executor:
+            running = {}
+            while pending or running:
+                while pending and len(running) < chunks_in_flight:
+                    chunk, pending = pending[:chunk_size], pending[chunk_size:]
+                    running[executor.submit(
+                        backend.generate_llm_outputs,
+                        prompt_list=build_prompt_list([m for _, _, m in chunk], llm_config=runtime),
+                        llm_config=runtime, model_metadata_cache_dir=resolved.model_metadata_cache_dir,
+                    )] = chunk
+                finished, _ = wait(running, return_when=FIRST_COMPLETED)
+                for future in finished:
+                    pending.extend(record_chunk(running.pop(future), future.result()))
+                report()
 
     rows = []
     for trial_id, _, _ in documents:
@@ -232,7 +301,7 @@ def extract_protocol_cohorts(
     result["cohort_number"] = result.cohort_number.astype("int64")
     result.attrs.update({key: metadata[key] for key in (
         "extraction_method", "schema_version", "representation_version", "prompt_sha256",
-        "structured_outputs", "trial_decisions", "trial_rejections", "trial_errors",
+        "structured_outputs", "trial_decisions", "trial_rejections", "trial_errors", "skipped_completed",
     )})
     _emit(progress_callback, "complete", 1, 1, "Protocol cohorts ready for human review")
     if not return_metadata:

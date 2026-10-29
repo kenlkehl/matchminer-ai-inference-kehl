@@ -455,7 +455,7 @@ referenced trailing-footnote normalization.
 ## `protocol_cohort_extraction`
 
 Configuration for `extract_protocol_cohorts`, which screens full protocol
-documents (PDF or OCR text) and extracts their cohort eligibility criteria. Its
+documents (PDF, OCR text or Markdown) and extracts their cohort eligibility criteria. Its
 `local`, `remote`, `sampling_profile`, `reasoning_effort` and
 `reasoning_parser` fields follow the other LLM task sections.
 
@@ -463,6 +463,10 @@ documents (PDF or OCR text) and extracts their cohort eligibility criteria. Its
   Oversized documents fail rather than being truncated.
 - `max_attempts`: total validation attempts per protocol (1-10, default 3);
   only failed protocols are retried.
+- `chunk_size`: prompts per backend call (default 500). With `output_dir`,
+  decisions are saved as each chunk returns.
+- `chunks_in_flight`: chunks running at once (default 2, at most 16), so fast
+  endpoints are not left idle while an earlier chunk finishes.
 - `structured_outputs`: when true and the remote backend is enabled, requests
   carry a strict JSON-schema `response_format` for the protocol cohort schema.
 - `prompt_file`: the bundled prompt, `trial.cohorts.protocol.user.txt`.
