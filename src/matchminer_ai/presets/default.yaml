@@ -247,6 +247,34 @@ protocol_cohort_extraction:
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
+synthetic_protocol_generation:
+  # Registry-seeded synthetic protocols for training data (prompt v11 and its
+  # weighted eligibility layouts in data/synthetic_protocol_layouts.json).
+  chunk_size: 500
+  max_attempts: 3
+  sampling_profile: auto
+  reasoning_effort: xhigh
+  reasoning_parser: auto
+  local:
+    model_name: google/gemma-4-31B-it
+    engine:
+      max_model_len: 262144
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      max_tokens: 100000
+      skip_special_tokens: false
+  remote:
+    model_name: google/gemma-4-31B-it
+    request_params:
+      max_tokens: 100000
+    extra_body:
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
 patient_structuring:
   oncotree_resource: oncotree_stable_7-31-26.json
   oncotree_version: stable-2026-07-31

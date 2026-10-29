@@ -1,0 +1,18 @@
+[
+  {
+    "weight": 20,
+    "text": "use one numbered inclusion list and one numbered exclusion list for all participants. Where requirements differ by part, cohort, arm, disease or line of therapy, express the difference inside the relevant criterion, as most protocols do: for example a criterion naming each eligible disease with its own sub-items for prior therapy, a single criterion giving different thresholds for different parts, or a NOTE giving an exception."
+  },
+  {
+    "weight": 9,
+    "text": "use one numbered inclusion list and one numbered exclusion list for all participants. Most criteria apply to everyone and carry no label of any kind; never tag them with labels such as \"(All parts)\" or \"[All participants]\". Only the few criteria limited to some parts, cohorts or arms carry a short qualifier at the start of the criterion or in parentheses, as some sponsors do; other differences appear inside criteria through sub-items or notes."
+  },
+  {
+    "weight": 1,
+    "text": "if eligibility depends on the disease or tumor type, group the disease-defining requirements in a subsection such as \"Disease-specific inclusion criteria\" (one numbered item or sub-item per disease) followed by \"Other inclusion criteria\" and then the exclusion criteria, as some sponsors do; otherwise use one numbered inclusion list and one numbered exclusion list."
+  },
+  {
+    "weight": 1,
+    "text": "if the study is organized into separately described parts or modules, give the core inclusion and exclusion criteria in the study population section, and in each part's or module's own later section give its additional or modified inclusion and exclusion criteria under headings such as \"Additional inclusion criteria for Part B\", opening with one sentence such as \"In addition to the inclusion criteria in Section 5.1, patients in Part B must meet the following criteria:\", as modular sponsor protocols do; otherwise use one numbered inclusion list and one numbered exclusion list."
+  }
+]

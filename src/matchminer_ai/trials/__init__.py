@@ -14,6 +14,7 @@ from .eligibility import (
     extract_trial_space_eligibility_criteria,
 )
 from .protocol_cohorts import ProtocolCohortProgress, extract_protocol_cohorts
+from .synthetic_protocols import SyntheticProtocolProgress, generate_synthetic_protocols
 from .structure import structure_trial_space
 from .guidelines import audit_guideline_catalog, list_guidelines, summarize_guidelines, review_guideline_citations
 from .guideline_catalog import load_guideline_catalog, get_guideline_considerations
@@ -175,6 +176,8 @@ __all__ = [
     "extract_trial_space_eligibility_criteria",
     "ProtocolCohortProgress",
     "extract_protocol_cohorts",
+    "SyntheticProtocolProgress",
+    "generate_synthetic_protocols",
     "structure_trial_space",
     "summarize_trials",
     "summarize_guidelines",
