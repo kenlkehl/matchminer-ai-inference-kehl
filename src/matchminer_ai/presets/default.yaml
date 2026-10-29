@@ -216,6 +216,37 @@ trial_space_criteria_extraction:
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
+protocol_cohort_extraction:
+  # Full protocol documents: PDFs are converted locally with ocr_pdf. Documents
+  # above max_document_characters fail rather than being truncated.
+  max_document_characters: 800000
+  max_attempts: 3
+  # Remote requests constrain the answer with the protocol cohort JSON schema.
+  structured_outputs: true
+  prompt_file: trial.cohorts.protocol.user.txt
+  sampling_profile: auto
+  reasoning_effort: xhigh
+  reasoning_parser: auto
+  local:
+    model_name: google/gemma-4-31B-it
+    engine:
+      max_model_len: 262144
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      max_tokens: 50000
+      skip_special_tokens: false
+  remote:
+    model_name: google/gemma-4-31B-it
+    request_params:
+      max_tokens: 50000
+    extra_body:
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
 patient_structuring:
   oncotree_resource: oncotree_stable_7-31-26.json
   oncotree_version: stable-2026-07-31

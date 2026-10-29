@@ -452,6 +452,25 @@ backend; no web search is used. Every accepted criterion must match a source
 excerpt after conservative whitespace, ordinal-suffix, repeated page-edge, and
 referenced trailing-footnote normalization.
 
+## `protocol_cohort_extraction`
+
+Configuration for `extract_protocol_cohorts`, which screens full protocol
+documents (PDF or OCR text) and extracts their cohort eligibility criteria. Its
+`local`, `remote`, `sampling_profile`, `reasoning_effort` and
+`reasoning_parser` fields follow the other LLM task sections.
+
+- `max_document_characters`: hard input bound (default 800,000 characters).
+  Oversized documents fail rather than being truncated.
+- `max_attempts`: total validation attempts per protocol (1-10, default 3);
+  only failed protocols are retried.
+- `structured_outputs`: when true and the remote backend is enabled, requests
+  carry a strict JSON-schema `response_format` for the protocol cohort schema.
+- `prompt_file`: the bundled prompt, `trial.cohorts.protocol.user.txt`.
+
+The default model context is 262,144 tokens with up to 50,000 completion tokens,
+so that full industry protocols (often 50,000-160,000 tokens) fit with room for
+reasoning.
+
 ## `patient_structuring`
 
 Configuration for ontology-grounded JSON conversion of an existing patient

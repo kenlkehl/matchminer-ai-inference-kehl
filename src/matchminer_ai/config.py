@@ -36,6 +36,7 @@ class MMAIConfig:
     raw_patient_note_qa: dict[str, Any] = field(default_factory=dict)
     full_patient_screen: dict[str, Any] = field(default_factory=dict)
     trial_space_criteria_extraction: dict[str, Any] = field(default_factory=dict)
+    protocol_cohort_extraction: dict[str, Any] = field(default_factory=dict)
     guideline: dict[str, Any] = field(default_factory=dict)
 
 
@@ -69,6 +70,7 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "trial_space_criteria_extraction": deepcopy(
                 config.trial_space_criteria_extraction
             ),
+            "protocol_cohort_extraction": deepcopy(config.protocol_cohort_extraction),
             "guideline": deepcopy(config.guideline),
             "model_metadata_cache_dir": config.model_metadata_cache_dir,
         }
@@ -110,6 +112,7 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
         trial_space_criteria_extraction=dict(
             data.get("trial_space_criteria_extraction", {})
         ),
+        protocol_cohort_extraction=dict(data.get("protocol_cohort_extraction", {})),
         guideline=dict(data.get("guideline", {})),
         model_metadata_cache_dir=data["model_metadata_cache_dir"],
         raw=deepcopy(data),

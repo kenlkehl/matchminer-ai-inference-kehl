@@ -4,6 +4,7 @@
     options:
       members:
         - extract_trial_space_eligibility_criteria
+        - extract_protocol_cohorts
         - summarize_trials
         - list_guidelines
         - summarize_guidelines
@@ -135,6 +136,47 @@ were interchangeable. Existing matching/structuring consumers require adaptation
 and evaluation. `hierarchical` and `one_shot` remain explicit legacy modes with
 their previous space schema; the current Space applications opt into that mode.
 Saved trial-space artifacts remain unchanged.
+
+## Cohort extraction from full protocol documents
+
+`extract_protocol_cohorts` applies the same treatment and cohort decisions to
+complete protocol documents instead of registry text. It accepts one row per
+trial with a unique `trial_id` and a `protocol_path` to a PDF or UTF-8 text
+file. PDFs are converted locally with `ocr_pdf`; pass `text_output_dir` to keep
+the converted text, which is otherwise written to a temporary directory and
+removed. Each document is sent whole with `trial.cohorts.protocol.user.txt`;
+documents longer than `protocol_cohort_extraction.max_document_characters`
+fail rather than being truncated.
+
+The prompt locates eligibility anywhere in the document (study design, part or
+module sections, appendices), prefers body text over abbreviated synopsis
+criteria and current text over superseded amendment text, excludes crossover,
+rollover and optional sub-study criteria, and resolves cross-references by
+restating the referenced content. Because a protocol has no registry
+eligibility field to fall back on, a single-cohort answer carries that
+cohort's criteria:
+
+```json
+{"cancer_treatment_trial": "yes", "multiple_cohorts": "no", "eligibility_criteria": "Inclusion criteria: ..."}
+```
+
+Multi-cohort and negative answers have the registry shapes. This is schema
+`trial-protocol-cohorts-v1`. With a remote backend and
+`protocol_cohort_extraction.structured_outputs: true` (the default), requests
+set an OpenAI-compatible `response_format` with `PROTOCOL_COHORT_JSON_SCHEMA`,
+so vLLM structured outputs constrain the answer; vLLM applies the grammar after
+the reasoning section when the server runs a reasoning parser. Local in-process
+generation is not grammar-constrained and relies on validation. Every answer is
+checked strictly, and only failed trials are retried with the complete document
+and the validation error, up to `max_attempts`.
+
+The result has the `summarize_trials` cohort columns, with
+`cohort_criteria_source` set to `"protocol"`; `return_metadata=True` adds
+per-trial decisions, attempts and errors, source-document hashes and page
+counts, and the config snapshot. The whole document reaches the configured LLM
+endpoint, so use only documents without patient data unless that endpoint is
+authorized for their sensitivity. Outputs are research abstractions for human
+review, not eligibility determinations.
 
 ## Hierarchical extraction
 

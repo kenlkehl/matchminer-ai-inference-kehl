@@ -13,6 +13,7 @@ from .eligibility import (
     TrialSpaceCriteriaProgress,
     extract_trial_space_eligibility_criteria,
 )
+from .protocol_cohorts import ProtocolCohortProgress, extract_protocol_cohorts
 from .structure import structure_trial_space
 from .guidelines import audit_guideline_catalog, list_guidelines, summarize_guidelines, review_guideline_citations
 from .guideline_catalog import load_guideline_catalog, get_guideline_considerations
@@ -172,6 +173,8 @@ __all__ = [
     "TrialSpaceCriteriaExtractionError",
     "TrialSpaceCriteriaProgress",
     "extract_trial_space_eligibility_criteria",
+    "ProtocolCohortProgress",
+    "extract_protocol_cohorts",
     "structure_trial_space",
     "summarize_trials",
     "summarize_guidelines",
