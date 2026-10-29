@@ -44,11 +44,12 @@ def embed_for_matching(
     rows require ``cohort_trial_id`` and complete ``cohort_eligibility_criteria``;
     historical ``space_trial_id`` / ``clinical_space_summary`` remains accepted.
 
-    The default ColBERT backend returns the identifier, ``embedding`` (document
-    token matrix), ``query_embedding`` (instruction plus text with query marker),
-    and ``embedding_contract`` (JSON provenance). Retain all columns when saving.
-    Encoding is batched and never silently truncates text. Explicit sequence
-    configurations return the historical identifier and one embedding vector.
+    The default sequence (TrialSpace) backend returns the historical identifier
+    and one embedding vector. The opt-in ColBERT backend returns the identifier,
+    ``embedding`` (document token matrix), ``query_embedding`` (instruction plus
+    text with query marker), and ``embedding_contract`` (JSON provenance). Retain
+    all columns when saving. ColBERT encoding is batched and never silently
+    truncates text.
 
     ``config.embedding`` selects the checkpoint, backend, device, context and
     batch sizes. With ``return_metadata=True``, also return the configuration and

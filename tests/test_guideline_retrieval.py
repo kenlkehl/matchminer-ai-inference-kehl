@@ -658,7 +658,8 @@ def test_colbert_guidelines_use_token_cache_and_fast_matcher(catalog_frame, pati
     monkeypatch.setattr(late_interaction, '_model', lambda *args: encoder)
     monkeypatch.setattr('matchminer_ai.embedding.embed_for_matching', embed_for_matching)
     config = load_default_preset()
-    config.embedding['device'] = 'cpu'
+    config.embedding = dict(backend='colbert', model_path='lightonai/GTE-ModernColBERT-v1',
+                            device='cpu')
     first, metadata = cached_retrieve(patients, catalog_frame, tmp_path / 'tokens', config=config)
     assert metadata['guideline_embedding_cache']['embedded_texts'] == 3
     encoder.calls.clear()

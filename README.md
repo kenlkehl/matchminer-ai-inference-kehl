@@ -148,14 +148,16 @@ is recorded as an error rather than filled from the title or summary. Rejected t
 and DataFrame attrs; malformed/truncated responses are failures, not rejections.
 See the [cohort contract and configuration](docs/api/trials.md#combined-treatment-screening-and-cohort-extraction).
 
-The default matching path now uses full cohort criteria and unified patient
-summaries with native ColBERT token embeddings. Runtime and training share the
-encoder, directional retrieval instruction, and fast resident-token batched
-mean-MaxSim scorer. The default model is the **base**
-`lightonai/GTE-ModernColBERT-v1`; select a trained TrialSpace checkpoint explicitly.
-See [embedding and bidirectional retrieval](docs/api/embedding.md) for the schema,
-8192-token limits, batching, and historical single-vector configuration.
-Inference encoding automatically halves a batch after a CUDA out-of-memory
+The default matching embedder is the single-vector `ksg-dfci/TrialSpace-0526`
+with cosine retrieval, the same release generation as the default checkers.
+Native ColBERT token embeddings over full cohort criteria and unified patient
+summaries are an explicit opt-in (`config.embedding["backend"] = "colbert"`).
+Runtime and training share that encoder, directional retrieval instruction, and
+fast resident-token batched mean-MaxSim scorer. Its base checkpoint is
+`lightonai/GTE-ModernColBERT-v1`; select a trained TrialSpace ColBERT checkpoint
+explicitly. See [embedding and bidirectional retrieval](docs/api/embedding.md)
+for both configurations, the ColBERT schema, 8192-token limits, and batching.
+ColBERT inference encoding automatically halves a batch after a CUDA out-of-memory
 error, preserving complete texts and row order. A single text that still cannot
 fit raises an error; this does not change differentiable training batches.
 The shared encoder groups texts by length to reduce padding while preserving
@@ -170,7 +172,7 @@ retains no token cache by default; complete text, roles and output order are
 preserved in both paths.
 
 This is a new input representation, not a migration of saved trial spaces or
-embeddings. Existing TrialChecker/BoilerplateChecker workflows must
+embeddings. Existing TrialSpace/TrialChecker/BoilerplateChecker workflows must
 explicitly select `config.trial["extraction_method"] = "hierarchical"` (or the
 legacy `one_shot` method) until adapted and evaluated for complete cohort criteria.
 Both existing Spaces explicitly retain hierarchical extraction for their current

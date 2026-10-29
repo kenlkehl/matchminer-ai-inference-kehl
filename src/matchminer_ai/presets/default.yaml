@@ -361,17 +361,12 @@ trial_space_structuring:
       chat_template_kwargs:
         enable_thinking: true
 embedding:
-  backend: colbert
-  # Base checkpoint until a trained TrialSpace checkpoint is explicitly selected.
-  model_path: "lightonai/GTE-ModernColBERT-v1"
+  # Single-vector (sequence) TrialSpace. ColBERT token retrieval is opt-in with
+  # backend: colbert; see docs/api/embedding.md.
+  model_path: "ksg-dfci/TrialSpace-0526"
   device: cuda
-  query_length: 8192
-  document_length: 8192
-  batch_size: 16
-  pair_batch_size: 512
-  retrieval_query_batch_size: 64
-  retrieval_document_batch_size: 256
-  device_cache_gb: 8
+  prompt_file: embedding.txt
+  max_seq_length: 2500
 match_quality:
   model_name: "ksg-dfci/TrialChecker-0526"
   device: cuda

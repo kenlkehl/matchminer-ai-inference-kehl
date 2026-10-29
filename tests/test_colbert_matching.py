@@ -44,6 +44,7 @@ def test_public_embedding_uses_full_text_and_separate_roles(monkeypatch):
     model = Encoder()
     monkeypatch.setattr(encoding, '_model', lambda *args: model)
     cfg = load_default_preset()
+    cfg.embedding = dict(backend='colbert', model_path='lightonai/GTE-ModernColBERT-v1')
     patient = pd.DataFrame([dict(patient_id='p', patient_summary='History.',
                                  patient_boilerplate_text='Kidney history.')])
     result, metadata = embed_for_matching(patient, entity_type='patient', config=cfg, return_metadata=True)
