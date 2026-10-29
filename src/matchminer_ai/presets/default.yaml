@@ -251,6 +251,8 @@ synthetic_protocol_generation:
   # Registry-seeded synthetic protocols for training data (prompt v11 and its
   # weighted eligibility layouts in data/synthetic_protocol_layouts.json).
   chunk_size: 500
+  # Chunks running at once, so fast endpoints keep working while a chunk drains.
+  chunks_in_flight: 2
   max_attempts: 3
   sampling_profile: auto
   reasoning_effort: xhigh

@@ -86,7 +86,7 @@ def test_empty_or_truncated_outputs_are_retried_then_reported(tmp_path, backend)
 
 def test_in_memory_results_and_chunking(backend):
     config, calls, answers = backend
-    config.synthetic_protocol_generation["chunk_size"] = 1
+    config.synthetic_protocol_generation.update(chunk_size=1, chunks_in_flight=1)
     answers.extend([[("# One", "stop")], [("# Two", "stop")]])
     result = generate_synthetic_protocols(SEEDS, config=config)
     assert len(calls) == 2 and result.protocol.tolist() == ["# One", "# Two"]
@@ -99,3 +99,30 @@ def test_invalid_seeds_fail_before_inference(backend, seeds):
     with pytest.raises(ValueError):
         generate_synthetic_protocols(seeds, config=config)
     assert calls == []
+
+
+def test_chunks_overlap_so_fast_endpoints_are_not_left_idle(tmp_path, monkeypatch):
+    import threading
+
+    config = load_default_preset()
+    config.remote["enabled"] = True
+    config.synthetic_protocol_generation.update(chunk_size=1, chunks_in_flight=2)
+    second_started = threading.Event()
+
+    class Backend:
+        def generate_llm_outputs(self, *, prompt_list, llm_config, **kwargs):
+            text = content(prompt_list[0])
+            if "Phase 2 {alpha} study" in text:
+                # The first chunk cannot finish until the second chunk is also in flight.
+                assert second_started.wait(timeout=10)
+            else:
+                second_started.set()
+            name = "first" if "Phase 2 {alpha} study" in text else "second"
+            return LLMGenerationResult(final_outputs=[f"# {name}"], finish_reasons=["stop"],
+                                       reasoning_outputs=[""], raw_outputs=[], model_metadata={})
+
+    monkeypatch.setattr("matchminer_ai.trials.synthetic_protocols.get_llm_backend", lambda _: Backend())
+    result = generate_synthetic_protocols(SEEDS, config=config, output_dir=tmp_path)
+    assert result.trial_id.tolist() == ["NCT00000001", "NCT00000002"]
+    assert (tmp_path / "NCT00000001" / "protocol.md").read_text() == "# first"
+    assert (tmp_path / "NCT00000002" / "protocol.md").read_text() == "# second"

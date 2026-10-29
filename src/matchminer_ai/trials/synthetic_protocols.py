@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
@@ -96,13 +97,15 @@ def generate_synthetic_protocols(
     ``synthetic_protocol_layouts.json``, chosen by a stable hash of the trial ID.
 
     Requests go through the configured backend in chunks of
-    ``synthetic_protocol_generation.chunk_size``; remote runs use the shared
-    endpoint pool, so adaptive concurrency and endpoint registries
-    (``remote.server_urls_file``) apply as for other workloads. With
-    ``output_dir``, each trial's ``protocol.md``, ``reasoning.txt`` and
-    ``meta.json`` are written after its chunk, trials already completed with the
-    same prompt are skipped, and the result holds file paths instead of text.
-    Empty or truncated outputs are retried up to ``max_attempts``.
+    ``synthetic_protocol_generation.chunk_size``, with up to ``chunks_in_flight``
+    chunks running at once so fast endpoints are not left idle while an earlier
+    chunk's slowest requests finish. Remote runs use the shared endpoint pool, so
+    adaptive concurrency and endpoint registries (``remote.server_urls_file``)
+    apply as for other workloads. With ``output_dir``, each trial's
+    ``protocol.md``, ``reasoning.txt`` and ``meta.json`` are written when its
+    chunk returns, trials already completed with the same prompt are skipped, and
+    the result holds file paths instead of text. Empty or truncated outputs are
+    retried up to ``max_attempts``.
 
     Outputs are fabricated training documents, not real protocols, and must not
     be presented as trial criteria. Registry text reaches the configured LLM.
@@ -118,11 +121,14 @@ def generate_synthetic_protocols(
     ids = seeds["trial_id"]
     if ids.isna().any() or ids.astype(str).str.strip().eq("").any() or not ids.astype(str).is_unique:
         raise ValueError("trial_id must be nonempty and unique")
-    chunk_size, max_attempts = settings.get("chunk_size", 500), settings.get("max_attempts", 3)
-    if type(chunk_size) is not int or chunk_size < 1:
-        raise ValueError("synthetic_protocol_generation.chunk_size must be a positive integer")
-    if type(max_attempts) is not int or not 1 <= max_attempts <= 10:
-        raise ValueError("synthetic_protocol_generation.max_attempts must be an integer from 1 to 10")
+    chunk_size = settings.get("chunk_size", 500)
+    chunks_in_flight = settings.get("chunks_in_flight", 2)
+    max_attempts = settings.get("max_attempts", 3)
+    for name, value, upper in (("chunk_size", chunk_size, None), ("chunks_in_flight", chunks_in_flight, 16),
+                               ("max_attempts", max_attempts, 10)):
+        if type(value) is not int or value < 1 or (upper and value > upper):
+            raise ValueError(f"synthetic_protocol_generation.{name} must be an integer from 1"
+                             + (f" to {upper}" if upper else ""))
 
     system, user = load_prompt_text(SYNTHETIC_PROTOCOL_SYSTEM_PROMPT), load_prompt_text(SYNTHETIC_PROTOCOL_USER_PROMPT)
     layouts = load_synthetic_protocol_layouts(settings.get("layouts_file", SYNTHETIC_PROTOCOL_LAYOUTS))
@@ -150,15 +156,10 @@ def generate_synthetic_protocols(
         pending.append((record, layout_index, 1))
     total = len(records)
     _emit(progress_callback, "generate", len(rows), total, f"{len(pending)} protocol(s) to generate")
-    backend = get_llm_backend(resolved) if pending else None
-    while pending:
-        chunk, pending = pending[:chunk_size], pending[chunk_size:]
-        generation = backend.generate_llm_outputs(
-            prompt_list=build_prompt_list(
-                [build_synthetic_protocol_messages(r, layouts[i]["text"], system=system, user=user) for r, i, _ in chunk],
-                llm_config=runtime),
-            llm_config=runtime, model_metadata_cache_dir=resolved.model_metadata_cache_dir,
-        )
+
+    def record_chunk(chunk, generation):
+        """Save accepted outputs; return the items to retry."""
+        retry = []
         metadata["model_metadata"] = {k: v for k, v in generation.model_metadata.items() if k != "responses"}
         provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
         for index, ((record, layout_index, attempt), text, reasoning, finish) in enumerate(zip(
@@ -169,10 +170,9 @@ def generate_synthetic_protocols(
                 attempt_record["response_metadata"] = provenance[index]
             metadata["trial_attempts"].setdefault(trial_id, []).append(attempt_record)
             if finish != "stop" or not text.strip():
-                error = f"finish_reason={finish}, {len(text)} characters"
-                metadata["trial_errors"][trial_id] = error
+                metadata["trial_errors"][trial_id] = f"finish_reason={finish}, {len(text)} characters"
                 if attempt < max_attempts:
-                    pending.append((record, layout_index, attempt + 1))
+                    retry.append((record, layout_index, attempt + 1))
                 continue
             metadata["trial_errors"].pop(trial_id, None)
             row = dict(trial_id=trial_id, layout_index=layout_index, finish_reason=finish, attempts=attempt,
@@ -190,8 +190,27 @@ def generate_synthetic_protocols(
                 ), indent=2, default=str))
                 row.update(protocol=None, protocol_path=str(run_dir / "protocol.md"))
             rows[trial_id] = row
-        _emit(progress_callback, "generate", len(rows), total,
-              f"{len(rows)} of {total} generated; {len(metadata['trial_errors'])} awaiting retry or failed")
+        return retry
+
+    if pending:
+        backend = get_llm_backend(resolved)
+        # Chunks run in worker threads against the shared endpoint pool; results,
+        # files and retry bookkeeping are handled only in this thread.
+        with ThreadPoolExecutor(max_workers=chunks_in_flight) as executor:
+            running = {}
+            while pending or running:
+                while pending and len(running) < chunks_in_flight:
+                    chunk, pending = pending[:chunk_size], pending[chunk_size:]
+                    prompts = build_prompt_list(
+                        [build_synthetic_protocol_messages(r, layouts[i]["text"], system=system, user=user)
+                         for r, i, _ in chunk], llm_config=runtime)
+                    running[executor.submit(backend.generate_llm_outputs, prompt_list=prompts, llm_config=runtime,
+                                            model_metadata_cache_dir=resolved.model_metadata_cache_dir)] = chunk
+                finished, _ = wait(running, return_when=FIRST_COMPLETED)
+                for future in finished:
+                    pending.extend(record_chunk(running.pop(future), future.result()))
+                _emit(progress_callback, "generate", len(rows), total,
+                      f"{len(rows)} of {total} generated; {len(metadata['trial_errors'])} awaiting retry or failed")
 
     columns = ["trial_id", "layout_index", "finish_reason", "attempts", "protocol", "protocol_path"]
     result = pd.DataFrame([rows[r["trial_id"]] for r in records if r["trial_id"] in rows], columns=columns)
