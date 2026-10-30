@@ -153,7 +153,11 @@ The prompt locates eligibility anywhere in the document (study design, part or
 module sections, appendices), prefers body text over abbreviated synopsis
 criteria and current text over superseded amendment text, excludes crossover,
 rollover and optional sub-study criteria, and resolves cross-references by
-restating the referenced content. Because a protocol has no registry
+restating the referenced content. Closed, completed and terminated cohorts are
+extracted like open ones. Country-specific criteria use the United States
+version, and cohorts limited to countries that exclude the United States (for
+example a Japan-only cohort) are omitted; a trial enrolling in a single country
+is extracted as usual. Because a protocol has no registry
 eligibility field to fall back on, a single-cohort answer carries that
 cohort's criteria:
 
