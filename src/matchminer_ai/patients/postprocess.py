@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 import re
 
@@ -9,6 +10,9 @@ import pandas as pd
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 OTHER_HISTORY_HEADING = "Other relevant history:"
@@ -69,11 +73,33 @@ def parse_boilerplate(df: pd.DataFrame, boilerplate_marker: str) -> pd.DataFrame
     return df
 
 
+def clean_bad_data(
+    df: pd.DataFrame,
+    *,
+    summary_column: str = "cancer_history_summary",
+) -> tuple[pd.DataFrame, set[str]]:
+    """Remove empty or non-informative summaries and return their patient IDs."""
+    cleaned = df.copy()
+    initial_patient_ids = set(cleaned["patient_id"].astype(str))
+    cleaned[summary_column] = cleaned[summary_column].fillna("").astype(str)
+
+    cleaned = cleaned[cleaned[summary_column] != ""]
+    cleaned = cleaned[~cleaned[summary_column].str.startswith("No information")]
+
+    retained_patient_ids = set(cleaned["patient_id"].astype(str))
+    removed_patient_ids = initial_patient_ids - retained_patient_ids
+    logger.info(
+        "Filtered %d patient summary row(s) as non-informative.",
+        len(removed_patient_ids),
+    )
+    return cleaned, removed_patient_ids
+
+
 def postprocess_patient_summaries(
     df: pd.DataFrame,
     config: MMAIConfig,
-) -> pd.DataFrame:
-    """Postprocess final serial patient summaries into clean outputs."""
+) -> tuple[pd.DataFrame, set[str]]:
+    """Parse patient summaries, remove non-informative rows, and return their IDs."""
     patient_config = dict(config.patient)
     output_format = patient_config.get("output_format", "combined")
     if output_format == "combined":
@@ -86,7 +112,11 @@ def postprocess_patient_summaries(
         cleaned = parse_boilerplate(normalized, OTHER_HISTORY_HEADING)
     else:
         raise ValueError("patient.output_format must be combined or legacy_split")
+    summary_column = (
+        "patient_summary" if output_format == "combined" else "cancer_history_summary"
+    )
+    cleaned, removed_patient_ids = clean_bad_data(cleaned, summary_column=summary_column)
     if not config.debug_mode:
         cleaned = cleaned.drop(columns=["patient_answer_text"], errors="ignore")
     cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
-    return cleaned
+    return cleaned, removed_patient_ids

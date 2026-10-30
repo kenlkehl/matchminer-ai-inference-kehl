@@ -9,6 +9,7 @@ import pandas as pd
 
 from matchminer_ai.config import load_default_preset
 from matchminer_ai.embedding import embed_for_matching
+from matchminer_ai.embedding.embed import embedding_model_metadata
 from matchminer_ai.matching import generate_candidate_matches, score_match_quality
 
 if TYPE_CHECKING:
@@ -211,7 +212,7 @@ def _positive_integer(value: int, *, label: str) -> int:
 def _embedding_metadata_signature(metadata: dict[str, Any]) -> dict[str, Any]:
     try:
         embedding_config = dict(metadata["config_snapshot"]["embedding"])
-        model_metadata = dict(metadata["model_metadata"]["embedding_model"])
+        model_metadata = dict(embedding_model_metadata(metadata["model_metadata"]))
         model_name = str(model_metadata["model_name"])
         model_sha = str(model_metadata["model_sha"])
     except (KeyError, TypeError, ValueError) as exc:
@@ -686,9 +687,9 @@ def rank_patient_space_paradigms(
             "paradigm_matches": len(paradigm_matches),
         },
         "model_metadata": {
-            "embedding_model": patient_signature,
-            "match_quality_checker": checker_metadata.get("model_metadata", {}).get(
-                "match_quality_checker"
+            "embed_for_matching": patient_signature,
+            "score_match_quality": checker_metadata.get("model_metadata", {}).get(
+                "score_match_quality"
             ),
         },
     }

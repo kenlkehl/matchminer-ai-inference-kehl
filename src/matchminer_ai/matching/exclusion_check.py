@@ -181,7 +181,7 @@ def exclusion_criteria_check(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
-                "exclusion_criteria_checker": model_metadata,
+                "exclusion_criteria_check": model_metadata,
             },
         }
         return output, metadata_payload
@@ -286,7 +286,7 @@ def interpret_exclusion_criteria(
     if return_metadata:
         return output, {
             "config_snapshot": config_snapshot(resolved_config),
-            "model_metadata": {"exclusion_criteria_checker": model_metadata},
+            "model_metadata": {"interpret_exclusion_criteria": model_metadata},
             "interpretability": {
                 "method": "gradient_x_input",
                 "top_k_per_source": top_k,

@@ -21,7 +21,7 @@ def stages(monkeypatch):
             else [[1.0, 0.0]]
         )
         assert "note_text" not in frame
-        return result, {"model_metadata": {"embedding_model": {"model": "same"}}}
+        return result, {"model_metadata": {"embed_for_matching": {"model": "same"}}}
 
     def score(frame, **kwargs):
         calls.append(frame.copy())
@@ -32,7 +32,7 @@ def stages(monkeypatch):
         )
         result["match_quality_pass"] = result.match_quality_score >= 0.2
         return result.iloc[::-1], {
-            "model_metadata": {"match_quality_checker": {"model": "test"}}
+            "model_metadata": {"score_match_quality": {"model": "test"}}
         }
 
     monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed)
@@ -120,7 +120,7 @@ def test_large_population_reports_batches_and_cancels_before_next_batch(
         calls.append(len(frame))
         result = frame[["patient_id"]].copy()
         result["embedding"] = [[1.0, 0.0]] * len(frame)
-        return result, {"model_metadata": {"embedding_model": {"model": "same"}}}
+        return result, {"model_metadata": {"embed_for_matching": {"model": "same"}}}
 
     def update(message):
         progress.append(message)
@@ -152,14 +152,14 @@ def test_multiple_embedding_and_checker_batches_cover_requested_candidates(
         calls.append((entity_type, len(frame)))
         result = frame[[key]].copy()
         result["embedding"] = [[1.0, 0.0]] * len(frame)
-        return result, {"model_metadata": {"embedding_model": {"model": "fixed"}}}
+        return result, {"model_metadata": {"embed_for_matching": {"model": "fixed"}}}
 
     def score(frame, **kwargs):
         calls.append(("checker", len(frame)))
         result = frame[["patient_id", "space_trial_id"]].copy()
         result["match_quality_score"] = result.patient_id.astype(int) / 70
         result["match_quality_pass"] = result.match_quality_score >= 0.2
-        return result, {"model_metadata": {"match_quality_checker": {"model": "fixed"}}}
+        return result, {"model_metadata": {"score_match_quality": {"model": "fixed"}}}
 
     monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed)
     monkeypatch.setattr("matchminer_ai.matching.score_match_quality", score)
@@ -214,7 +214,7 @@ def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(
             embedded.append(entity_type),
             (
                 frame[["space_trial_id"]].assign(embedding=[[1.0, 0.0]]),
-                {"model_metadata": {"embedding_model": {"model": "same"}}},
+                {"model_metadata": {"embed_for_matching": {"model": "same"}}},
             ),
         )[1],
     )

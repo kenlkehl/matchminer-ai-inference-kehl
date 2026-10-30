@@ -8,18 +8,17 @@ from matchminer_ai.llm.backends import LLMGenerationResult
 from .summary_quality import check_patient_summary, summary_retry_codes
 
 
-class PatientSummaryQualityError(ValueError):
-    def __init__(self, rows, attempts):
-        super().__init__(f"Patient summary quality retries exhausted for input rows {rows}")
-        self.attempts = attempts
-
-
 def generate_checked_summaries(backend, prompts, *, llm_config, metadata_cache_dir,
                                max_attempts=3, trace_dir=None):
+    """Regenerate rejected rows; rows still rejected after max_attempts fail.
+
+    A failed row keeps its last answer and reasoning with finish_reason "error",
+    so serial summarization drops that patient. Its attempts keep every trace.
+    """
     if max_attempts < 1:
         raise ValueError("summary_quality_max_attempts must be positive")
     pending = list(range(len(prompts)))
-    accepted, attempts = {}, {i: [] for i in pending}
+    accepted, rejected, attempts = {}, {}, {i: [] for i in pending}
     metadata = {}
     for attempt in range(1, max_attempts + 1):
         if not pending:
@@ -57,11 +56,11 @@ def generate_checked_summaries(backend, prompts, *, llm_config, metadata_cache_d
             attempts[i].append(trace)
             if codes:
                 remaining.append(i)
+                rejected[i] = (answer, reasoning, raw, "error")
             else:
                 accepted[i] = (answer, reasoning, raw, finish)
         pending = remaining
-    if pending:
-        raise PatientSummaryQualityError(pending, attempts)
+    accepted.update((i, rejected[i]) for i in pending)
     values = [accepted[i] for i in range(len(prompts))]
     return LLMGenerationResult(final_outputs=[v[0] for v in values],
         reasoning_outputs=[v[1] for v in values],

@@ -30,6 +30,41 @@ def _resolve_id_columns(entity_type: Literal["patient", "trial"]) -> list[str]:
     raise ValueError("entity_type must be one of: 'patient', 'trial'")
 
 
+def embed_texts(
+    texts: list[str],
+    *,
+    config: MMAIConfig | None = None,
+) -> tuple[list[list[float]], dict]:
+    """Embed summary strings in input order and return vectors plus model metadata.
+
+    Accepts patient or trial text without identifiers or DataFrames. Uses the
+    default preset when config is omitted and reuses the cached inference model.
+    Model metadata includes model_name and model_sha.
+    """
+    resolved_config = config or load_default_preset()
+    embedding_config = dict(getattr(resolved_config, "embedding", {}))
+    if embedding_config.get("backend", "sequence") != "sequence":
+        raise ValueError(
+            "embed_texts supports only the sequence embedding backend; "
+            "use embed_for_matching for ColBERT token matrices."
+        )
+    return generate_embeddings(
+        texts,
+        embedding_config=embedding_config,
+        model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+    )
+
+
+def embedding_model_metadata(model_metadata: dict) -> dict:
+    """Return encoder metadata from an ``embed_for_matching`` ``model_metadata``.
+
+    Payloads saved before 0.6 recorded it under ``embedding_model``.
+    """
+    if "embed_for_matching" in model_metadata:
+        return model_metadata["embed_for_matching"]
+    return model_metadata["embedding_model"]
+
+
 def embed_for_matching(
     df: pd.DataFrame,
     *,
@@ -96,11 +131,7 @@ def embed_for_matching(
         output["embedding_contract"] = signature
         result = output[id_cols + ["embedding", "query_embedding", "embedding_contract"]].copy()
     elif backend == "sequence":
-        embeddings, model_metadata = generate_embeddings(
-            summaries,
-            embedding_config=embedding_config,
-            model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-        )
+        embeddings, model_metadata = embed_texts(summaries, config=resolved_config)
         output["embedding"] = embeddings
         result = output[id_cols + ["embedding"]].copy()
     else:
@@ -110,7 +141,7 @@ def embed_for_matching(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
-                "embedding_model": model_metadata,
+                "embed_for_matching": model_metadata,
             },
         }
         return result, metadata_payload

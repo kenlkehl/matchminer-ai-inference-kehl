@@ -34,7 +34,9 @@ def _config() -> MMAIConfig:
     )
 
 
-def _embedding_metadata(*, model_sha: str = "trialspace-sha") -> dict:
+def _embedding_metadata(
+    *, model_sha: str = "trialspace-sha", key: str = "embed_for_matching"
+) -> dict:
     return {
         "config_snapshot": {
             "embedding": {
@@ -45,7 +47,7 @@ def _embedding_metadata(*, model_sha: str = "trialspace-sha") -> dict:
             }
         },
         "model_metadata": {
-            "embedding_model": {
+            key: {
                 "model_name": "trialspace/test",
                 "model_sha": model_sha,
             }
@@ -150,7 +152,7 @@ def _mock_models(monkeypatch):
         output["match_quality_pass"] = output["match_quality_score"] >= 0.2
         return output, {
             "model_metadata": {
-                "match_quality_checker": {
+                "score_match_quality": {
                     "model_name": "checker/test",
                     "model_sha": "checker-sha",
                 }
@@ -200,7 +202,7 @@ def test_rank_patient_space_paradigms_reranks_and_preserves_fanout(monkeypatch):
     assert paradigms["supporting_space_count"].tolist() == [2, 1]
     assert paradigms.loc[0, "supporting_space_ids"] == ("NCT2-1", "NCT1-1")
     assert paradigms.loc[1, "document_status"] == "caveated_best_available"
-    assert result.metadata["model_metadata"]["embedding_model"]["model_sha"] == (
+    assert result.metadata["model_metadata"]["embed_for_matching"]["model_sha"] == (
         "trialspace-sha"
     )
     assert result.metadata["trial_embeddings_reused"] is False
@@ -342,7 +344,7 @@ def test_rank_patient_space_paradigms_reuses_compatible_trial_embeddings(
         output = candidate_pairs[["patient_id", "space_trial_id"]].copy()
         output["match_quality_score"] = 0.5
         output["match_quality_pass"] = True
-        return output, {"model_metadata": {"match_quality_checker": {}}}
+        return output, {"model_metadata": {"score_match_quality": {}}}
 
     monkeypatch.setattr(
         "matchminer_ai.paradigms.ranking.embed_for_matching",
@@ -369,7 +371,8 @@ def test_rank_patient_space_paradigms_reuses_compatible_trial_embeddings(
         retrieval_k=2,
         top_space_count=1,
         trial_embeddings=cached,
-        trial_embedding_metadata=_embedding_metadata(),
+        # Saved before 0.6, when the encoder was keyed as embedding_model.
+        trial_embedding_metadata=_embedding_metadata(key="embedding_model"),
     )
 
     assert calls == ["patient"]

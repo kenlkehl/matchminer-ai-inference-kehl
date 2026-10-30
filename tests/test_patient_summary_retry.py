@@ -1,11 +1,9 @@
 from types import SimpleNamespace
 from dataclasses import replace
 
-import pytest
-
 from matchminer_ai.llm.backends import LLMGenerationResult
 from matchminer_ai.llm.prompt_rendering import Prompt
-from matchminer_ai.patients.summary_retry import generate_checked_summaries, PatientSummaryQualityError
+from matchminer_ai.patients.summary_retry import generate_checked_summaries
 
 
 def result(answers):
@@ -29,11 +27,15 @@ def test_retries_only_failed_rows_with_original_prompt_and_archives_reasoning(tm
     assert len(list(tmp_path.glob('*.json')))==3
 
 
-def test_exhaustion_is_explicit_and_preserves_failed_attempts():
-    backend=SimpleNamespace(generate_llm_outputs=lambda **kw:result(['Final Polish: malformed']))
-    with pytest.raises(PatientSummaryQualityError) as error:
-        generate_checked_summaries(backend,[Prompt(0,'notes',100)],llm_config={},metadata_cache_dir=None,max_attempts=2)
-    assert len(error.value.attempts[0])==2
+def test_exhaustion_marks_row_failed_and_preserves_failed_attempts():
+    outputs=iter([result(['Good clinical history.', 'Final Polish: malformed']), result(['Final Polish: malformed'])])
+    backend=SimpleNamespace(generate_llm_outputs=lambda **kw:next(outputs))
+    prompts=[Prompt(i,f'notes {i}',100) for i in range(2)]
+    final,attempts=generate_checked_summaries(backend,prompts,llm_config={},metadata_cache_dir=None,max_attempts=2)
+    assert final.final_outputs==['Good clinical history.','Final Polish: malformed']
+    assert final.finish_reasons==['stop','error']
+    assert len(attempts[0])==1 and len(attempts[1])==2
+    assert [a['finish_reason'] for a in attempts[1]]==['stop','stop']
 
 
 def test_remote_raw_absence_and_token_limit_are_handled():

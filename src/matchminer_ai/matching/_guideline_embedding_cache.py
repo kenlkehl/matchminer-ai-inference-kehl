@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from matchminer_ai._storage import digest
+from matchminer_ai.embedding.embed import embedding_model_metadata
 from matchminer_ai.embedding.inference import _embedding_cache_identity
 
 
@@ -133,7 +134,7 @@ def cached_guideline_embeddings(
         fresh, metadata = embed(
             subset, entity_type="trial", config=config, return_metadata=True
         )
-        if metadata["model_metadata"]["embedding_model"] != patient_model:
+        if embedding_model_metadata(metadata["model_metadata"]) != patient_model:
             raise ValueError(
                 "Patient and guideline embedding model metadata differ; refusing to mix embeddings."
             )
@@ -197,7 +198,7 @@ def _cached_colbert(spaces, config, patient_model, root, progress, embed):
         pass
     result, metadata = embed(spaces[['space_trial_id', 'clinical_space_summary']],
         entity_type='trial', config=config, return_metadata=True)
-    if metadata['model_metadata']['embedding_model'] != patient_model:
+    if embedding_model_metadata(metadata['model_metadata']) != patient_model:
         raise ValueError('Patient and guideline embedding model metadata differ')
     if result.space_trial_id.tolist() != spaces.space_trial_id.tolist():
         raise ValueError('ColBERT did not return the requested guideline IDs')

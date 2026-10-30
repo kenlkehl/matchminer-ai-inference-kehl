@@ -4,6 +4,16 @@ from matchminer_ai._qc.patients import patient_summary_qc_report
 from matchminer_ai.config import MMAIConfig
 
 
+_QC_ARTIFACTS = dict(
+    noninformative_summary_qc_artifact=dict(
+        metric="patients_dropped_noninformative_summary", ids=[], denominator=1
+    ),
+    failed_inference_qc_artifact=dict(
+        metric="patients_failed_inference", ids=[], denominator=1
+    ),
+)
+
+
 def test_unified_summary_qc_includes_other_history_in_token_budget(monkeypatch):
     full = 'Cancer type: Lung\n\nOther relevant history:\nDialysis.'
     seen = []
@@ -13,7 +23,7 @@ def test_unified_summary_qc_includes_other_history_in_token_budget(monkeypatch):
     monkeypatch.setattr('matchminer_ai._qc.patients.count_embedding_tokens', count)
     from matchminer_ai.config import load_default_preset
     report = patient_summary_qc_report(pd.DataFrame([dict(patient_id='p', patient_summary=full)]),
-                                      config=load_default_preset()).set_index('metric')
+                                      config=load_default_preset(), **_QC_ARTIFACTS).set_index('metric')
     assert seen == [full]
     assert report.loc['patients_exclusion_criteria_not_extracted', 'value'] == 0
 
@@ -62,10 +72,26 @@ def test_patient_summary_qc_report_metrics(monkeypatch):
 
     report = patient_summary_qc_report(
         summaries,
+        noninformative_summary_qc_artifact={
+            "metric": "patients_dropped_noninformative_summary",
+            "numerator": 1,
+            "denominator": 4,
+            "ids": ["P4"],
+        },
+        failed_inference_qc_artifact={
+            "metric": "patients_failed_inference",
+            "numerator": 1,
+            "denominator": 4,
+            "ids": ["P5"],
+        },
         config=config,
         expected_keywords=["Cancer type", "Histology"],
     ).set_index("metric")
 
+    assert report.loc["patients_dropped_noninformative_summary", "value"] == 1
+    assert report.loc["patients_dropped_noninformative_summary", "ids"] == ["P4"]
+    assert report.loc["patients_failed_inference", "value"] == 1
+    assert report.loc["patients_failed_inference", "ids"] == ["P5"]
     assert report.loc["patients_exceed_embedding_token_limit", "value"] == 1
     assert report.loc["patients_exceed_embedding_token_limit", "ids"] == ["P2"]
     assert report.loc["patients_exclusion_criteria_not_extracted", "value"] == 1
@@ -111,6 +137,18 @@ def test_patient_summary_qc_uses_embedding_max_seq_length(monkeypatch):
 
     report = patient_summary_qc_report(
         summaries,
+        noninformative_summary_qc_artifact={
+            "metric": "patients_dropped_noninformative_summary",
+            "numerator": 0,
+            "denominator": 2,
+            "ids": [],
+        },
+        failed_inference_qc_artifact={
+            "metric": "patients_failed_inference",
+            "numerator": 0,
+            "denominator": 2,
+            "ids": [],
+        },
         config=config,
         expected_keywords=[],
     ).set_index("metric")

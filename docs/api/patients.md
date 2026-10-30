@@ -1,7 +1,7 @@
 # Patients
 
-`summarize_patients` returns `patient_id`, a single `patient_summary`, and date
-metadata. The text contains all cancer-history sections and ends with:
+`summarize_patients` returns `patient_id` and a single `patient_summary`. The
+text contains all cancer-history sections and ends with:
 
 ```text
 Other relevant history:
@@ -367,3 +367,37 @@ This is a documentation review for human review, **not an overall guideline
 concordance determination**. Not documented does not mean not done. Conditional
 indications, compound items, alternatives, historical tests, timing and conflicting
 evidence need clinical review. Treatment-concordance assessment is not included.
+
+## Resuming patient summarization
+
+Pass a run-specific filesystem directory as `checkpoint_dir` to save progress
+during patient summarization. If processing is interrupted, call
+`summarize_patients` again with the same directory to continue from the last
+saved point.
+
+Omit `checkpoint_dir` to run without writing checkpoint files.
+
+### Checkpoint files
+
+When `checkpoint_dir` is supplied, patient summarization writes these
+Parquet files to that directory:
+
+- `prepared_chunks.parquet` — the patient note chunks prepared for
+  summarization, saved once before the first round runs.
+- `round_0000.parquet`, `round_0001.parquet`, ... — one file per
+  summarization round, each holding every patient's result for that round.
+
+Each round checkpoint has the following columns:
+
+| Column | Description |
+| --- | --- |
+| `patient_id` | Patient identifier. |
+| `prior_summary` | The summary carried into this round, before this round's chunk was incorporated. |
+| `patient_reasoning_text` | The model's reasoning trace for this round. |
+| `patient_answer_text` | The model's summary output for this round. |
+| `finish_reason` | Generation finish reason, e.g. `"stop"` or `"error"`. |
+
+`"error"` marks a patient whose summary still failed after
+`patient.summary_quality_max_attempts` attempts; that patient is excluded from
+later rounds, including after resuming. Checkpoint files contain patient note
+text and summaries, so store them under the same controls as the input notes.

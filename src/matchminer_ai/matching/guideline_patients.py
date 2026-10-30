@@ -96,6 +96,8 @@ def embed_guideline_patients(
     """
     if type(batch_size) is not int or batch_size < 1:
         raise ValueError("batch_size must be a positive integer.")
+    from matchminer_ai.embedding.embed import embedding_model_metadata
+
     config = config or load_default_preset()
     patients = _patient_frame(patient_summaries)
     pv, pm = _embed_patients(
@@ -118,7 +120,7 @@ def embed_guideline_patients(
         vectors=vectors,
         model_metadata=pm["model_metadata"],
         encoder_identity=_encoder_identity(
-            config, pm["model_metadata"]["embedding_model"]
+            config, embedding_model_metadata(pm["model_metadata"])
         ),
     )
 
@@ -129,9 +131,10 @@ def _precomputed_patients(patients, embeddings):
         raise ValueError("patient_embeddings must come from embed_guideline_patients.")
     vectors = np.asarray(embeddings.vectors)
     colbert = vectors.dtype == object
-    contract = embeddings.model_metadata.get("embedding_model", {}).get(
-        "encoding_contract"
-    )
+    stored = embeddings.model_metadata
+    contract = (
+        stored.get("embed_for_matching") or stored.get("embedding_model") or {}
+    ).get("encoding_contract")
     count = len(embeddings.patient_ids)
     if (
         vectors.ndim != (1 if colbert else 2)
@@ -198,6 +201,7 @@ def retrieve_guideline_patients(
     and the same verified encoder used for the guideline space. None are saved.
     """
     from matchminer_ai.embedding import embed_for_matching
+    from matchminer_ai.embedding.embed import embedding_model_metadata
     from matchminer_ai.matching import generate_candidate_matches, score_match_quality
     from matchminer_ai.trials import get_guideline_considerations
 
@@ -232,11 +236,14 @@ def retrieve_guideline_patients(
         return_metadata=True,
     )
     if not _same(
-        pm["model_metadata"]["embedding_model"], sm["model_metadata"]["embedding_model"]
+        embedding_model_metadata(pm["model_metadata"]),
+        embedding_model_metadata(sm["model_metadata"]),
     ):
         raise ValueError("Patient and guideline embedding models differ.")
     if patient_embeddings is not None:
-        current = _encoder_identity(config, sm["model_metadata"]["embedding_model"])
+        current = _encoder_identity(
+            config, embedding_model_metadata(sm["model_metadata"])
+        )
         if current is None or not _same(patient_embeddings.encoder_identity, current):
             raise ValueError(
                 "Precomputed patient embeddings came from a different or unverifiable "

@@ -187,7 +187,7 @@ def score_match_quality(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
-                "match_quality_checker": model_metadata,
+                "score_match_quality": model_metadata,
             },
         }
         return output, metadata_payload
@@ -293,7 +293,7 @@ def interpret_match_quality(
     if return_metadata:
         return output, {
             "config_snapshot": config_snapshot(resolved_config),
-            "model_metadata": {"match_quality_checker": model_metadata},
+            "model_metadata": {"interpret_match_quality": model_metadata},
             "interpretability": {
                 "method": "gradient_x_input",
                 "top_k_per_source": top_k,

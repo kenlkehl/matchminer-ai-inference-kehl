@@ -35,7 +35,10 @@ next chunk's prior summary. Drafting text, repeated full sections, empty output,
 and incomplete completions trigger regeneration from the original notes and last
 accepted prior. Matching only the core cancer fields remains a review signal and
 does not force regeneration. `config.patient["summary_quality_max_attempts"]`
-defaults to 3; exhausted retries raise an error containing the attempt traces.
+defaults to 3. A patient whose summary still fails after the last attempt is
+dropped from the output and later rounds and counted in the QC report's
+`patients_failed_inference` metric; a `checkpoint_dir` records the failure so a
+resumed run does not retry it.
 Set `config.patient["summary_quality_trace_dir"]` to a local directory to retain
 every prompt, answer and separate reasoning trace, including rejected attempts.
 Debug output also includes `patient_summary_attempts`; metadata reports attempt
@@ -441,6 +444,10 @@ uv venv --python 3.12
 source .venv/bin/activate
 uv pip install matchminer-ai
 ```
+
+## Models
+
+MatchMiner-AI is **open source and uses open-weight models**. The [default configuration](https://github.com/dfci/matchminer-ai-inference/blob/main/src/matchminer_ai/presets/default.yaml) combines a large language model for summarization with models we train and release on Hugging Face. Our trained models are released in collections paired with compatible package releases. The current configuration uses [collection 0526](https://huggingface.co/collections/ksg-dfci/matchminer-ai-0526), supported since package version 0.2.0. See [Model Collections](https://dfci.github.io/matchminer-ai-inference/user-guide/patient-centric-matching/#model-collections) for more information.
 
 ## Quickstart
 See the example notebook for a full walkthrough using sample input data:

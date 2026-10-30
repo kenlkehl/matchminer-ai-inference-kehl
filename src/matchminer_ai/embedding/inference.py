@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, cast
 
+import torch
+
 from matchminer_ai.llm.backends import get_model_metadata
 
 
@@ -61,17 +63,26 @@ def _get_embedding_tokenizer(model_path: str):
     return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
+def _encode(model: Any, texts: list[str]) -> Any:
+    """Encode normalized query embeddings as one tensor."""
+    return model.encode(
+        texts,
+        prompt="query",
+        batch_size=12,
+        convert_to_tensor=True,
+        normalize_embeddings=True,
+    )
+
+
 def _encode_without_cudnn_sdpa(model: Any, texts: list[str]) -> Any:
     """Encode with CUDA SDPA implementations that do not use cuDNN."""
-    import torch
-
     backends = [
         torch.nn.attention.SDPBackend.FLASH_ATTENTION,
         torch.nn.attention.SDPBackend.EFFICIENT_ATTENTION,
         torch.nn.attention.SDPBackend.MATH,
     ]
     with torch.nn.attention.sdpa_kernel(backends):
-        return model.encode(texts, prompt="query")
+        return _encode(model, texts)
 
 
 def _is_cudnn_sdpa_plan_error(exc: RuntimeError, device: str) -> bool:
@@ -97,7 +108,7 @@ def _encode_with_cudnn_sdpa_fallback(
         return _encode_without_cudnn_sdpa(model, texts)
 
     try:
-        return model.encode(texts, prompt="query")
+        return _encode(model, texts)
     except RuntimeError as exc:
         if not _is_cudnn_sdpa_plan_error(exc, device):
             raise
@@ -125,15 +136,14 @@ def generate_embeddings(
         model_path,
         cache_dir=model_metadata_cache_dir,
     )
-    embeddings = _encode_with_cudnn_sdpa_fallback(
-        model,
-        texts,
-        model_path=model_path,
-        device=device,
-    )
-    embedding_list = (
-        embeddings.tolist() if hasattr(embeddings, "tolist") else embeddings
-    )
+    with torch.no_grad():
+        embeddings_tensor = _encode_with_cudnn_sdpa_fallback(
+            model,
+            texts,
+            model_path=model_path,
+            device=device,
+        )
+    embedding_list = embeddings_tensor.cpu().to(dtype=torch.float32).tolist()
     return cast(list[list[float]], embedding_list), model_metadata
 
 

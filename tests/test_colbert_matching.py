@@ -53,7 +53,7 @@ def test_public_embedding_uses_full_text_and_separate_roles(monkeypatch):
                            ([expected], False, 16)]
     assert np.asarray(result.embedding.iloc[0]).shape == (3, 3)
     assert np.asarray(result.query_embedding.iloc[0]).shape == (2, 3)
-    assert json.loads(result.embedding_contract.iloc[0]) == metadata['model_metadata']['embedding_model']['encoding_contract']
+    assert json.loads(result.embedding_contract.iloc[0]) == metadata['model_metadata']['embed_for_matching']['encoding_contract']
     model.calls.clear()
     cohort = pd.DataFrame([dict(cohort_trial_id='t-1', cohort_eligibility_criteria='Specific.\n\nCommon.')])
     trial_result = embed_for_matching(cohort, entity_type='trial', config=cfg)

@@ -116,7 +116,7 @@ def summarize_trials(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             **{key: value for key, value in metadata.items() if key != "model_metadata"},
-            "model_metadata": {"trial_summarizer": metadata["model_metadata"]},
+            "model_metadata": {"summarize_trials": metadata["model_metadata"]},
         }
         if return_metadata and return_qc:
             return result, metadata_payload, qc_report
@@ -158,7 +158,7 @@ def summarize_trials(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
-                "trial_summarizer": metadata["model_metadata"],
+                "summarize_trials": metadata["model_metadata"],
             },
             "trial_rejections": metadata.get("trial_rejections", {}),
         }

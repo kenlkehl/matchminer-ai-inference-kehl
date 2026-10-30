@@ -110,6 +110,7 @@ def retrieve_guideline_considerations(
     import pandas as pd
 
     from matchminer_ai.embedding import embed_for_matching
+    from matchminer_ai.embedding.embed import embedding_model_metadata
     from matchminer_ai.matching import generate_candidate_matches, score_match_quality
     from matchminer_ai.trials import load_guideline_catalog
 
@@ -143,7 +144,7 @@ def retrieve_guideline_considerations(
     patient_vectors, patient_metadata = embed_for_matching(
         patients, entity_type="patient", config=resolved, return_metadata=True
     )
-    patient_model = patient_metadata["model_metadata"]["embedding_model"]
+    patient_model = embedding_model_metadata(patient_metadata["model_metadata"])
     colbert = "query_embedding" in patient_vectors
     if not colbert:
         matrix = np.asarray(patient_vectors["embedding"].tolist(), dtype=float)
@@ -173,7 +174,7 @@ def retrieve_guideline_considerations(
             config=resolved,
             return_metadata=True,
         )
-        space_model = space_metadata["model_metadata"]["embedding_model"]
+        space_model = embedding_model_metadata(space_metadata["model_metadata"])
     if patient_model != space_model:
         raise ValueError(
             "Patient and guideline embedding model metadata differ; refusing to mix embeddings."
@@ -229,9 +230,9 @@ def retrieve_guideline_considerations(
         "package": package_metadata(),
         "config_snapshot": config_snapshot(resolved),
         "model_metadata": {
-            "embedding_model": patient_model,
-            "match_quality_checker": checker_metadata["model_metadata"][
-                "match_quality_checker"
+            "embed_for_matching": patient_model,
+            "score_match_quality": checker_metadata["model_metadata"][
+                "score_match_quality"
             ],
         },
         "catalog": catalog_metadata,

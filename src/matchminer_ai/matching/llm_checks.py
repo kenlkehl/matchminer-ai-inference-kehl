@@ -219,7 +219,7 @@ def score_match_quality_with_llm(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
-                "llm_match_quality_checker": model_metadata,
+                "score_match_quality_with_llm": model_metadata,
             },
         }
         return output, metadata_payload
@@ -334,7 +334,7 @@ def exclusion_criteria_check_with_llm(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
-                "llm_exclusion_criteria_checker": model_metadata,
+                "exclusion_criteria_check_with_llm": model_metadata,
             },
         }
         return output, metadata_payload

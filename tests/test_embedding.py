@@ -3,10 +3,12 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+import torch
 
 from matchminer_ai.config import MMAIConfig
-from matchminer_ai.embedding.embed import embed_for_matching
+from matchminer_ai.embedding import embed_for_matching, embed_texts
 from matchminer_ai.embedding import inference as embedding_inference
+from matchminer_ai.embedding.embed import embedding_model_metadata
 from matchminer_ai.embedding.inference import generate_embeddings
 
 
@@ -201,8 +203,66 @@ def test_embed_for_matching_return_metadata(monkeypatch):
     assert list(result.columns) == ["patient_id", "embedding"]
     assert metadata["config_snapshot"]["preset_name"] == "default"
     assert metadata["config_snapshot"]["embedding"]["model_path"] == "cfg-model"
-    assert metadata["model_metadata"]["embedding_model"]["model_name"] == "cfg-model"
+    assert metadata["model_metadata"]["embed_for_matching"]["model_name"] == "cfg-model"
     assert backend.last_model_metadata_cache_dir == ".mmai_cache/model_metadata"
+
+
+@pytest.mark.parametrize("texts", [["abc", "de", "abc"], []])
+def test_embed_texts_matches_dataframe_api(monkeypatch, default_config, texts):
+    """Both public APIs preserve order, metadata, and config, including empty input."""
+    backend = MockBackend()
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.embed.generate_embeddings", backend.generate_embeddings
+    )
+    default_config.embedding = {"model_path": "mock-model", "device": "cpu"}
+    default_config.model_metadata_cache_dir = ".mmai_cache/model_metadata"
+    vectors, model_metadata = embed_texts(texts, config=default_config)
+    assert backend.last_texts == texts
+    assert backend.last_embedding_config == default_config.embedding
+    assert (
+        backend.last_model_metadata_cache_dir == default_config.model_metadata_cache_dir
+    )
+    assert vectors == [[float(len(text))] for text in texts]
+    frame = pd.DataFrame(
+        {
+            "patient_id": [str(i) for i in range(len(texts))],
+            "cancer_history_summary": texts,
+        }
+    )
+    result, metadata = embed_for_matching(
+        frame, entity_type="patient", config=default_config, return_metadata=True
+    )
+    assert result["embedding"].tolist() == vectors
+    assert metadata["model_metadata"]["embed_for_matching"] == model_metadata
+
+
+def test_embed_texts_uses_default_config(monkeypatch, default_config):
+    """The list API resolves the default preset when no config is provided."""
+    backend = MockBackend()
+    default_config.embedding = {"model_path": "default-model"}
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.embed.generate_embeddings", backend.generate_embeddings
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.embedding.embed.load_default_preset", lambda: default_config
+    )
+    vectors, metadata = embed_texts(["abc"])
+    assert vectors == [[3.0]]
+    assert metadata["model_name"] == "default-model"
+
+
+def test_embed_texts_rejects_colbert_backend(default_config):
+    """ColBERT token matrices need embed_for_matching's entity-specific encoding."""
+    default_config.embedding = {"backend": "colbert", "model_path": "colbert-model"}
+    with pytest.raises(ValueError, match="sequence embedding backend"):
+        embed_texts(["abc"], config=default_config)
+
+
+@pytest.mark.parametrize("key", ["embed_for_matching", "embedding_model"])
+def test_embedding_model_metadata_accepts_saved_legacy_key(key):
+    """Metadata saved before 0.6 keyed the encoder as embedding_model."""
+    encoder = {"model_name": "encoder", "model_sha": "sha"}
+    assert embedding_model_metadata({key: encoder}) == encoder
 
 
 def test_generate_embeddings_applies_configured_max_seq_length(monkeypatch):
@@ -217,9 +277,14 @@ def test_generate_embeddings_applies_configured_max_seq_length(monkeypatch):
             self.max_seq_length = None
             loaded_models.append(self)
 
-        def encode(self, texts, prompt):
+        def encode(
+            self, texts, prompt, batch_size, convert_to_tensor, normalize_embeddings
+        ):
             assert prompt == "query"
-            return [[float(len(text))] for text in texts]
+            assert batch_size == 12
+            assert convert_to_tensor is True
+            assert normalize_embeddings is True
+            return torch.tensor([[float(len(text))] for text in texts])
 
     monkeypatch.setattr(
         "matchminer_ai.embedding.inference._load_prompt_text",
@@ -269,16 +334,21 @@ def test_generate_embeddings_retries_cudnn_plan_failure_without_cudnn(
         def __init__(self):
             self.cudnn_states = []
 
-        def encode(self, texts, prompt):
+        def encode(self, texts, prompt, **kwargs):
             assert texts == ["abc"]
             assert prompt == "query"
+            assert kwargs == {
+                "batch_size": 12,
+                "convert_to_tensor": True,
+                "normalize_embeddings": True,
+            }
             self.cudnn_states.append(torch.backends.cuda.cudnn_sdp_enabled())
             if len(self.cudnn_states) == 1:
                 raise RuntimeError(
                     "cuDNN Frontend error: [cudnn_frontend] Error: "
                     "No valid execution plans built."
                 )
-            return [[3.0]]
+            return torch.tensor([[3.0]])
 
     model = FakeModel()
     monkeypatch.setattr(
@@ -321,7 +391,7 @@ def test_generate_embeddings_does_not_mask_other_runtime_errors(monkeypatch):
     """Propagate CUDA failures that are not the known cuDNN plan error."""
 
     class FakeModel:
-        def encode(self, texts, prompt):
+        def encode(self, texts, prompt, **kwargs):
             raise RuntimeError("CUDA out of memory")
 
     monkeypatch.setattr(

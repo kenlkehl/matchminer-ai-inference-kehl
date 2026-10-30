@@ -87,7 +87,7 @@ def model_stages(monkeypatch):
                     "embedding": [vectors[s] for s in frame.space_trial_id],
                 }
             )
-        return result, {"model_metadata": {"embedding_model": model}}
+        return result, {"model_metadata": {"embed_for_matching": model}}
 
     def checker(frame, *, config, filter_low_quality, return_metadata):
         assert filter_low_quality is False
@@ -101,7 +101,7 @@ def model_stages(monkeypatch):
         result["match_quality_pass"] = result.match_quality_score >= 0.2
         return result.iloc[::-1], {
             "model_metadata": {
-                "match_quality_checker": {
+                "score_match_quality": {
                     "model_name": "synthetic-checker",
                     "model_sha": "checker-revision",
                 }
@@ -572,7 +572,7 @@ def test_different_embedding_models_are_rejected_before_scoring(
         result, metadata = embed_for_matching(frame, **kwargs)
         metadata = copy.deepcopy(metadata)
         if kwargs["entity_type"] == "trial":
-            metadata["model_metadata"]["embedding_model"]["model_sha"] = (
+            metadata["model_metadata"]["embed_for_matching"]["model_sha"] = (
                 "different-revision"
             )
         return result, metadata

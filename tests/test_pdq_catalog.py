@@ -504,7 +504,7 @@ def test_public_pdq_catalog_roundtrip_audit_lookup_and_offline_resume(
     def embed(frame, *, entity_type, **kwargs):
         key = "patient_id" if entity_type == "patient" else "space_trial_id"
         return frame[[key]].assign(embedding=[[1.0, 0.0]] * len(frame)), {
-            "model_metadata": {"embedding_model": {"model": "synthetic-same-encoder"}}
+            "model_metadata": {"embed_for_matching": {"model": "synthetic-same-encoder"}}
         }
 
     def score(frame, **kwargs):
@@ -512,7 +512,7 @@ def test_public_pdq_catalog_roundtrip_audit_lookup_and_offline_resume(
         return frame[["patient_id", "space_trial_id"]].assign(
             match_quality_score=0.9,
             match_quality_pass=True,
-        ), {"model_metadata": {"match_quality_checker": {"model": "synthetic"}}}
+        ), {"model_metadata": {"score_match_quality": {"model": "synthetic"}}}
 
     monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed)
     monkeypatch.setattr("matchminer_ai.matching.score_match_quality", score)

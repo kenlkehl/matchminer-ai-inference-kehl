@@ -5,6 +5,16 @@ from matchminer_ai.patients import check_patient_summary
 from matchminer_ai._qc.patients import patient_summary_qc_report
 
 
+_QC_ARTIFACTS = dict(
+    noninformative_summary_qc_artifact=dict(
+        metric="patients_dropped_noninformative_summary", ids=[], denominator=1
+    ),
+    failed_inference_qc_artifact=dict(
+        metric="patients_failed_inference", ids=[], denominator=1
+    ),
+)
+
+
 def cancer(kind='Lung cancer', histology='Adenocarcinoma', biomarkers='EGFR L858R',
            extent='Metastatic', treatment='2024: osimertinib; partial response'):
     return (f'Age: 62\nSex: Male\nCancer type: {kind}\nHistology: {histology}\n'
@@ -108,6 +118,6 @@ def test_qc_includes_quality_flags_without_mutating_input():
     frame = pd.DataFrame([dict(patient_id='good', patient_summary=cancer()),
                           dict(patient_id='bad', patient_summary=cancer()+'\nFinal Polish:\n'+cancer())])
     before = frame.copy(deep=True)
-    qc = patient_summary_qc_report(frame).set_index('metric')
+    qc = patient_summary_qc_report(frame, **_QC_ARTIFACTS).set_index('metric')
     assert qc.loc['patients_summary_quality_flagged', 'ids'] == ['bad']
     pd.testing.assert_frame_equal(frame, before)

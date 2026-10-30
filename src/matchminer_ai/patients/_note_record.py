@@ -16,7 +16,7 @@ def history_from_notes(source):
             if note.get("note_type") is not None
             else ""
         )
-        header = f"\n[Note {note['note_number']} | {note['note_date'] or 'date unavailable'}{kind}]\n"
+        header = f"\n[Note {note['note_number']} | {note['note_date'] or 'unknown date'}{kind}]\n"
         parts.extend([header, note["text"]])
         start = cursor + len(header)
         cursor = start + len(note["text"])

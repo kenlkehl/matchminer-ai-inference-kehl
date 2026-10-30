@@ -205,7 +205,7 @@ def test_score_match_quality_return_metadata(monkeypatch):
     assert metadata["config_snapshot"]["match_quality"]["model_name"] == (
         "ksg-dfci/TrialChecker-1225"
     )
-    assert metadata["model_metadata"]["match_quality_checker"]["model_name"] == (
+    assert metadata["model_metadata"]["score_match_quality"]["model_name"] == (
         "ksg-dfci/TrialChecker-1225"
     )
 
@@ -327,7 +327,7 @@ def test_exclusion_criteria_check_return_metadata(monkeypatch):
     assert metadata["config_snapshot"]["exclusion_criteria"]["model_name"] == (
         "ksg-dfci/BoilerPlateChecker-1225"
     )
-    assert metadata["model_metadata"]["exclusion_criteria_checker"]["model_name"] == (
+    assert metadata["model_metadata"]["exclusion_criteria_check"]["model_name"] == (
         "ksg-dfci/BoilerPlateChecker-1225"
     )
 
@@ -438,7 +438,7 @@ def test_interpret_match_quality_returns_source_relative_attributions(monkeypatc
         "method": "gradient_x_input",
         "top_k_per_source": 12,
     }
-    assert metadata["model_metadata"]["match_quality_checker"] == {
+    assert metadata["model_metadata"]["interpret_match_quality"] == {
         "model_name": "checker/trial"
     }
     prompt = captured["prompts"][0]
@@ -841,7 +841,7 @@ def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypa
     assert "metastatic lung cancer" in captured_messages[0][1]["content"]
     assert backend.last_llm_config["max_model_len"] == 50000
     assert backend.last_llm_config["sampling_params"]["max_tokens"] == 15000
-    assert metadata["model_metadata"]["llm_match_quality_checker"]["model_name"] == (
+    assert metadata["model_metadata"]["score_match_quality_with_llm"]["model_name"] == (
         model_name
     )
 
@@ -914,7 +914,11 @@ def test_exclusion_criteria_check_with_llm_builds_training_prompt_and_parses(mon
         ]
     )
 
-    result = exclusion_criteria_check_with_llm(matches, config=config)
+    result, metadata = exclusion_criteria_check_with_llm(
+        matches,
+        config=config,
+        return_metadata=True,
+    )
 
     assert result["llm_exclusion_criteria_pass"].tolist() == [True]
     assert "llm_exclusion_criteria_verdict" not in result.columns
@@ -927,6 +931,55 @@ def test_exclusion_criteria_check_with_llm_builds_training_prompt_and_parses(mon
     assert "uncontrolled brain mets" in captured_messages[0][1]["content"]
     assert backend.last_llm_config["max_model_len"] == 50000
     assert backend.last_llm_config["sampling_params"]["max_tokens"] == 20000
+    assert metadata["model_metadata"]["exclusion_criteria_check_with_llm"] == {
+        "model_name": model_name
+    }
+
+
+def test_llm_checks_report_remote_model_metadata(monkeypatch):
+    """HTTP-backed checks keep the backend's endpoint provenance."""
+
+    def fake_build_prompt_list(messages_list, *, llm_config):
+        """Return one rendered prompt per checker input."""
+        return [
+            SimpleNamespace(prompt_text="rendered", max_tokens=10)
+            for _ in messages_list
+        ]
+
+    backend = _MockLLMBackend(["Final score: 4"])
+    monkeypatch.setattr(
+        "matchminer_ai.matching.llm_checks.build_prompt_list",
+        fake_build_prompt_list,
+    )
+    monkeypatch.setattr(
+        "matchminer_ai.matching.llm_checks.get_llm_backend",
+        lambda config: backend,
+    )
+    config = _llm_config()
+    config.remote = {
+        "enabled": True,
+        "server_urls": ["http://endpoint/v1"],
+    }
+    pairs = pd.DataFrame(
+        [
+            {
+                "patient_id": "P1",
+                "space_trial_id": "T1-1",
+                "cancer_history_summary": "Patient summary",
+                "clinical_space_summary": "Trial summary",
+            }
+        ]
+    )
+
+    _result, metadata = score_match_quality_with_llm(
+        pairs,
+        config=config,
+        return_metadata=True,
+    )
+
+    assert metadata["model_metadata"] == {
+        "score_match_quality_with_llm": {"model_name": "llm/model"}
+    }
 
 
 def test_exclusion_criteria_check_with_llm_includes_debug_columns(monkeypatch):
