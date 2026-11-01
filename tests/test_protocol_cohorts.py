@@ -36,9 +36,12 @@ def test_single_cohort_protocol_requires_its_criteria(criteria):
         parse(value)
 
 
-def test_registry_schema_still_rejects_single_cohort_criteria_field():
+def test_registry_and_protocol_schemas_share_the_single_cohort_contract():
+    # Registry text now carries extracted single-cohort criteria too; only the
+    # historical v3 registry schema rejects the field.
+    assert parse_cohort_response(json.dumps(SOLE)) == SOLE
     with pytest.raises(ValueError):
-        parse_cohort_response(json.dumps(SOLE))
+        parse_cohort_response(json.dumps(SOLE), schema_version="trial-treatment-cohorts-v3")
 
 
 def test_trailing_characters_after_the_object_fail():
@@ -240,3 +243,16 @@ def test_chunked_requests_retry_failures_after_later_chunks(tmp_path, backend):
     assert ["First protocol" in s for s in sent] == [True, False, True] and "failed validation" in sent[2]
     assert [r["attempt"] for r in metadata["trial_attempts"]["T1"]] == [1, 2]
     assert result.cohort_trial_id.tolist() == ["T1-cohort-0", "T2-cohort-0", "T2-cohort-1"]
+
+
+@pytest.mark.parametrize("placeholder", ["placeholder", " Placeholder. ", "TBD", "...", "…"])
+def test_placeholder_criteria_are_rejected_for_retry(placeholder):
+    extra = {"cohort_name": "Arm 1 and Arm 2 - wait correction", "cohort_specific_eligibility_criteria": placeholder}
+    for value in ({**MULTI, "cohorts": MULTI["cohorts"] + [extra]}, {**SOLE, "eligibility_criteria": placeholder},
+                  {**MULTI, "common_eligibility_criteria": placeholder}):
+        for schema in (PROTOCOL_COHORT_SCHEMA_VERSION, "trial-registry-cohorts-v1"):
+            with pytest.raises(ValueError, match="placeholder"):
+                parse_cohort_response(json.dumps(value), schema_version=schema)
+    # Short real notes remain valid.
+    note = {"cohort_name": "Part C", "cohort_specific_eligibility_criteria": "No additional eligibility criteria."}
+    assert parse(dict(MULTI, cohorts=MULTI["cohorts"] + [note]))["cohorts"][-1] == note

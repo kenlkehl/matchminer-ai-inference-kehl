@@ -25,6 +25,8 @@ trial:
   extraction_method: cohorts
   cohorts:
     max_attempts: 3
+    # Constrain remote answers to the cohort JSON schema, as for protocols.
+    structured_outputs: true
   hierarchy:
     max_attempts: 4
     max_nodes: 4096

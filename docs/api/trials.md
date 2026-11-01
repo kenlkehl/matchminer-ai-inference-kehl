@@ -32,7 +32,7 @@ The model must return exactly one of these JSON shapes, in the indicated order:
 ```
 
 ```json
-{"cancer_treatment_trial": "yes", "multiple_cohorts": "no"}
+{"cancer_treatment_trial": "yes", "multiple_cohorts": "no", "eligibility_criteria": "Inclusion criteria: ..."}
 ```
 
 ```json
@@ -69,11 +69,24 @@ Each cohort string together with the common field must be complete and
 self-contained, preserve exceptions and AND/OR logic, and explicitly flag
 incomplete source criteria without inventing missing details.
 
-This is schema `trial-treatment-cohorts-v3`. Live responses require named objects
-and the shared field for multiple populations. Historical v1/v2 string outputs
-are readable only with explicit `schema_version="trial-treatment-cohorts-v1"`
-or `schema_version="trial-treatment-cohorts-v2"`. They are never accepted as new
-v3 responses. Different cohort names do not make duplicate criteria distinct.
+This is schema `trial-registry-cohorts-v1`, the same response contract as
+full-protocol extraction (`trial-protocol-cohorts-v2`, below), and the prompt
+applies the protocol prompt's rules to registry text: enrollment criteria only
+(no treatment, discontinuation, crossover, extension, rollover or optional
+sub-study criteria), crossover and extension phases are not cohorts,
+escalation and expansion parts with different criteria are separate cohorts,
+closed cohorts are kept, only United States versions of country-specific
+criteria and cohorts are kept, criteria are placed by content rather than by
+heading, and each criteria string uses "Inclusion criteria:" and "Exclusion
+criteria:" with one criterion per line. A single-population answer therefore
+carries that population's extracted criteria. With a remote backend and
+`trial.cohorts.structured_outputs: true` (the default), requests set a
+`response_format` with `COHORT_JSON_SCHEMA`, as for protocols. Live responses
+require named objects and the shared field for multiple populations. The
+historical named-object schema without single-population criteria is readable
+with `schema_version="trial-treatment-cohorts-v3"`, and v1/v2 string outputs
+with `schema_version="trial-treatment-cohorts-v1"` or `"trial-treatment-cohorts-v2"`;
+none is accepted as a new response. Different cohort names do not make duplicate criteria distinct.
 Prompt hashes and schema versions distinguish the generations.
 
 The returned DataFrame contains accepted cohorts only:
@@ -84,21 +97,15 @@ The returned DataFrame contains accepted cohorts only:
 | `trial_id` | Source trial identifier. |
 | `cohort_number` | Zero-based population index in source order. |
 | `cohort_name` | Source cohort/arm name or deterministic fallback from the model; null for single-population trials. Kept out of complete eligibility text and embeddings. |
-| `cohort_eligibility_criteria` | Cohort-specific plus common criteria joined in code, or the original eligibility field for one population. |
+| `cohort_eligibility_criteria` | Cohort-specific plus common criteria joined in code, or the model's extracted criteria for one population. |
 | `cohort_specific_eligibility_criteria` | The model's specific criteria string; null for single-population trials. |
 | `common_eligibility_criteria` | The model's shared criteria string, repeated in each row; null for single-population trials. |
-| `cohort_criteria_source` | `llm` for multiple populations; `eligibility_criteria` for a single population. |
+| `cohort_criteria_source` | `registry` (registry text through `summarize_trials`) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` for multiple populations and `eligibility_criteria` for a verbatim single population. |
 | `cancer_treatment_trial` | `yes` for every returned row. |
 | `multiple_cohorts` | The accepted model decision. |
 
-For a single eligibility population, the model deliberately emits no criteria.
-Code copies the original `eligibility_criteria` field verbatim, without the
-title or summary. The combined title/summary/eligibility document remains the
-input to screening and cohort detection. If an accepted single-population trial
-has missing or blank eligibility, it produces no row and records a `trial_errors`
-entry; it is not reclassified as a treatment rejection. Derived row metadata uses
-`representation_version="trial-treatment-cohorts-v4"` to distinguish the separate
-name column; the LLM JSON schema is v3. Rejected trials produce no rows. Empty/all-rejected runs retain the same
+Derived row metadata uses `representation_version="trial-treatment-cohorts-v4"` to distinguish the separate
+name column; the LLM JSON schema is `trial-registry-cohorts-v1`. Rejected trials produce no rows. Empty/all-rejected runs retain the same
 column schema. General exclusions remain in either the specific or common field
 according to applicability. The common field is not the legacy boilerplate
 extraction: it includes all shared eligibility dimensions, not just exclusions.
@@ -157,9 +164,8 @@ restating the referenced content. Closed, completed and terminated cohorts are
 extracted like open ones. Country-specific criteria use the United States
 version, and cohorts limited to countries that exclude the United States (for
 example a Japan-only cohort) are omitted; a trial enrolling in a single country
-is extracted as usual. Because a protocol has no registry
-eligibility field to fall back on, a single-cohort answer carries that
-cohort's criteria:
+is extracted as usual. As with registry text, a single-cohort answer carries
+that cohort's criteria:
 
 ```json
 {"cancer_treatment_trial": "yes", "multiple_cohorts": "no", "eligibility_criteria": "Inclusion criteria: ..."}
@@ -170,7 +176,7 @@ Multi-cohort and negative answers have the registry shapes. This is schema
 vLLM structured outputs from writing any JSON escape, so criteria lost their line
 breaks and double quotes). With a remote backend and
 `protocol_cohort_extraction.structured_outputs: true` (the default), requests
-set an OpenAI-compatible `response_format` with `PROTOCOL_COHORT_JSON_SCHEMA`,
+set an OpenAI-compatible `response_format` with `COHORT_JSON_SCHEMA`,
 so vLLM structured outputs constrain the answer; vLLM applies the grammar after
 the reasoning section when the server runs a reasoning parser. Local in-process
 generation is not grammar-constrained and relies on validation. Every answer is

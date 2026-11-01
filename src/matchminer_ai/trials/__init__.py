@@ -61,14 +61,15 @@ def summarize_trials(
         zero-based ``cohort_number``, ``cohort_name``, ``cohort_eligibility_criteria``,
         ``cohort_specific_eligibility_criteria``, ``common_eligibility_criteria``,
         ``cohort_criteria_source``, ``cancer_treatment_trial``, and
-        ``multiple_cohorts``. Accepted single-population trials retain their
-        original ``eligibility_criteria`` field verbatim; multi-population
+        ``multiple_cohorts``. A single-population trial's criteria are the
+        model's extracted ``eligibility_criteria`` (the same contract as
+        protocol extraction, so enrollment-only, United States and formatting
+        rules apply); the registry field is not copied verbatim. Multi-population
         criteria join the specific and common strings from the LLM response in
-        code, without the cohort name. Name and specific/common columns are null for single-population
-        trials. The title, summary and eligibility text remain available together
-        for screening and cohort detection. Missing/blank eligibility in an
-        accepted single-population trial is recorded as an error, with no row.
-        Rejected trials produce
+        code, without the cohort name. Name and specific/common columns are null
+        for single-population trials, and ``cohort_criteria_source`` is
+        ``"registry"``. The title, summary and eligibility text go to the model
+        together. Rejected trials produce
         no rows and remain in metadata and DataFrame attrs. Invalid responses
         are failures, not rejections. Debug mode adds ``trial_input_text``,
         ``trial_answer_text``, and ``trial_reasoning_text`` and retains all

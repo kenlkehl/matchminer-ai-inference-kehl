@@ -128,7 +128,7 @@ def test_public_cohort_retries_keep_each_endpoint_provenance(monkeypatch, tmp_pa
         return SimpleNamespace(choices=[SimpleNamespace(finish_reason='stop',
             message=SimpleNamespace(reasoning='synthetic trace', content=(
                 'malformed output' if len(calls) == 1 else
-                '```json\n{"cancer_treatment_trial":"yes","multiple_cohorts":"no"}\n```')))])
+                '```json\n{"cancer_treatment_trial":"yes","multiple_cohorts":"no","eligibility_criteria":"Inclusion criteria:\\nAdult"}\n```')))])
     monkeypatch.setattr(openai, 'OpenAI', lambda **kw: SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
     monkeypatch.setattr('matchminer_ai.llm.backends.get_endpoint_model_metadata', lambda *a, **k: {})

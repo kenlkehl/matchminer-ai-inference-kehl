@@ -13,7 +13,7 @@ from matchminer_ai.llm.prompt_rendering import build_prompt_list
 
 from .cohort_schema import (
     COHORT_PROMPT, COHORT_SCHEMA_VERSION, build_cohort_messages,
-    load_cohort_prompt, parse_cohort_response,
+    load_cohort_prompt, parse_cohort_response, structured_cohort_response_format,
 )
 from .prompt_builder import build_trial_text
 
@@ -25,6 +25,30 @@ COHORT_COLUMNS = [
     "cohort_specific_eligibility_criteria", "common_eligibility_criteria",
     "cohort_criteria_source", "cancer_treatment_trial", "multiple_cohorts",
 ]
+
+
+def decision_rows(trial_id, parsed, *, source):
+    """Cohort rows of one accepted decision; ``source`` is "registry" or "protocol"."""
+    if parsed["multiple_cohorts"] == "no":
+        return [{
+            "cohort_trial_id": f"{trial_id}-cohort-0", "trial_id": trial_id, "cohort_number": 0,
+            "cohort_name": None, "cohort_eligibility_criteria": parsed["eligibility_criteria"],
+            "cohort_specific_eligibility_criteria": None, "common_eligibility_criteria": None,
+            "cohort_criteria_source": source, "cancer_treatment_trial": "yes", "multiple_cohorts": "no",
+        }]
+    common = parsed["common_eligibility_criteria"]
+    rows = []
+    for number, cohort in enumerate(parsed["cohorts"]):
+        specific = cohort["cohort_specific_eligibility_criteria"]
+        complete = (f"Cohort-specific eligibility criteria:\n{specific}\n\n"
+                    f"Common eligibility criteria:\n{common}") if common else specific
+        rows.append({
+            "cohort_trial_id": f"{trial_id}-cohort-{number}", "trial_id": trial_id, "cohort_number": number,
+            "cohort_name": cohort["cohort_name"], "cohort_eligibility_criteria": complete,
+            "cohort_specific_eligibility_criteria": specific, "common_eligibility_criteria": common,
+            "cohort_criteria_source": source, "cancer_treatment_trial": "yes", "multiple_cohorts": "yes",
+        })
+    return rows
 
 
 def summarize_trial_cohorts(trials, config):
@@ -48,14 +72,20 @@ def summarize_trial_cohorts(trials, config):
     max_attempts = settings.get("max_attempts", 3)
     if type(max_attempts) is not int or not 1 <= max_attempts <= 10:
         raise ValueError("trial.cohorts.max_attempts must be an integer from 1 to 10")
+    structured_setting = settings.get("structured_outputs", True)
     trial_config.pop("extraction_method", None)
     trial_config.pop("hierarchy", None)
     filename = trial_config.get("prompt_files", {}).get("cohorts", COHORT_PROMPT)
     prompt = load_cohort_prompt(filename)
     runtime = build_llm_runtime_config("trial", trial_config, config=config)
+    # As for protocols, remote requests constrain the answer to the cohort JSON
+    # schema; vLLM applies it after any reasoning section. Answers are still parsed.
+    structured = bool(structured_setting) and runtime["backend_mode"] == "remote"
+    if structured:
+        runtime["remote"]["request_params"]["response_format"] = structured_cohort_response_format("trial_cohorts")
     metadata = {
         "extraction_method": "cohorts", "schema_version": COHORT_SCHEMA_VERSION,
-        "representation_version": COHORT_REPRESENTATION_VERSION,
+        "representation_version": COHORT_REPRESENTATION_VERSION, "structured_outputs": structured,
         "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
         "model_metadata": {}, "trial_decisions": {}, "trial_rejections": {},
         "trial_errors": {}, "trial_attempts": {},
@@ -128,37 +158,9 @@ def summarize_trial_cohorts(trials, config):
         parsed = metadata["trial_decisions"].get(source.trial_id)
         if parsed is None or parsed["cancer_treatment_trial"] == "no":
             continue
-        multiple = parsed["multiple_cohorts"] == "yes"
-        # Screening uses the full document, but a single population carries only
-        # the original eligibility field. Never substitute title/summary text.
-        if not multiple and (not isinstance(source.eligibility_criteria, str)
-                             or not source.eligibility_criteria.strip()):
-            metadata["trial_errors"][source.trial_id] = (
-                "Single-population trial has no original eligibility_criteria"
-            )
-            continue
-        criteria = parsed["cohorts"] if multiple else [source.eligibility_criteria]
-        common = parsed["common_eligibility_criteria"] if multiple else None
-        for number, cohort in enumerate(criteria):
-            name = cohort["cohort_name"] if multiple else None
-            text = cohort["cohort_specific_eligibility_criteria"] if multiple else cohort
-            complete = text
-            if multiple and common:
-                complete = (
-                    f"Cohort-specific eligibility criteria:\n{text}\n\n"
-                    f"Common eligibility criteria:\n{common}"
-                )
-            row = {
-                "cohort_trial_id": f"{source.trial_id}-cohort-{number}",
-                "trial_id": source.trial_id, "cohort_number": number,
-                "cohort_name": name,
-                "cohort_eligibility_criteria": complete,
-                "cohort_specific_eligibility_criteria": text if multiple else None,
-                "common_eligibility_criteria": common,
-                "cohort_criteria_source": "llm" if multiple else "eligibility_criteria",
-                "cancer_treatment_trial": "yes",
-                "multiple_cohorts": parsed["multiple_cohorts"],
-            }
+        # Single cohorts carry the model's extracted criteria, exactly as for
+        # protocols; the registry eligibility field is never copied verbatim.
+        for row in decision_rows(source.trial_id, parsed, source="registry"):
             if config.debug_mode:
                 row.update(
                     trial_input_text=source.trial_text,
@@ -174,7 +176,7 @@ def summarize_trial_cohorts(trials, config):
     # Retain decisions even when return_metadata=False, including all-rejected runs.
     result.attrs.update({key: metadata[key] for key in (
         "extraction_method", "schema_version", "representation_version", "prompt_sha256",
-        "trial_decisions", "trial_rejections", "trial_errors",
+        "structured_outputs", "trial_decisions", "trial_rejections", "trial_errors",
     )})
     qc = []
     for metric, trial_ids in (

@@ -21,10 +21,10 @@ from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
 
 from .cohort_schema import (
-    PROTOCOL_COHORT_JSON_SCHEMA, PROTOCOL_COHORT_PROMPT, PROTOCOL_COHORT_SCHEMA_VERSION,
-    build_protocol_cohort_messages, load_cohort_prompt, parse_cohort_response,
+    PROTOCOL_COHORT_PROMPT, PROTOCOL_COHORT_SCHEMA_VERSION,
+    build_protocol_cohort_messages, load_cohort_prompt, parse_cohort_response, structured_cohort_response_format,
 )
-from .cohorts import COHORT_COLUMNS, COHORT_REPRESENTATION_VERSION
+from .cohorts import COHORT_COLUMNS, COHORT_REPRESENTATION_VERSION, decision_rows
 
 ProtocolCohortProgress = Callable[[str, int, int, str], None]
 
@@ -89,10 +89,7 @@ def _runtime(settings, config):
     if structured:
         # vLLM applies the grammar after the reasoning section when the server
         # runs a reasoning parser, so thinking models keep their reasoning.
-        runtime["remote"]["request_params"]["response_format"] = {
-            "type": "json_schema",
-            "json_schema": {"name": "protocol_cohorts", "strict": True, "schema": PROTOCOL_COHORT_JSON_SCHEMA},
-        }
+        runtime["remote"]["request_params"]["response_format"] = structured_cohort_response_format("protocol_cohorts")
     return runtime, structured
 
 
@@ -103,30 +100,6 @@ def _saved_decision(trial_dir, identity):
         return None
     saved = json.loads(path.read_text(encoding="utf-8"))
     return saved if all(saved.get(key) == value for key, value in identity.items()) else None
-
-
-def _rows(trial_id, parsed):
-    if parsed["multiple_cohorts"] == "no":
-        criteria = parsed["eligibility_criteria"]
-        return [{
-            "cohort_trial_id": f"{trial_id}-cohort-0", "trial_id": trial_id, "cohort_number": 0,
-            "cohort_name": None, "cohort_eligibility_criteria": criteria,
-            "cohort_specific_eligibility_criteria": None, "common_eligibility_criteria": None,
-            "cohort_criteria_source": "protocol", "cancer_treatment_trial": "yes", "multiple_cohorts": "no",
-        }]
-    common = parsed["common_eligibility_criteria"]
-    rows = []
-    for number, cohort in enumerate(parsed["cohorts"]):
-        specific = cohort["cohort_specific_eligibility_criteria"]
-        complete = (f"Cohort-specific eligibility criteria:\n{specific}\n\n"
-                    f"Common eligibility criteria:\n{common}") if common else specific
-        rows.append({
-            "cohort_trial_id": f"{trial_id}-cohort-{number}", "trial_id": trial_id, "cohort_number": number,
-            "cohort_name": cohort["cohort_name"], "cohort_eligibility_criteria": complete,
-            "cohort_specific_eligibility_criteria": specific, "common_eligibility_criteria": common,
-            "cohort_criteria_source": "protocol", "cancer_treatment_trial": "yes", "multiple_cohorts": "yes",
-        })
-    return rows
 
 
 def extract_protocol_cohorts(
@@ -296,7 +269,7 @@ def extract_protocol_cohorts(
     for trial_id, _, _ in documents:
         parsed = metadata["trial_decisions"].get(trial_id)
         if parsed is not None and parsed["cancer_treatment_trial"] == "yes":
-            rows.extend(_rows(trial_id, parsed))
+            rows.extend(decision_rows(trial_id, parsed, source="protocol"))
     result = pd.DataFrame(rows, columns=COHORT_COLUMNS)
     result["cohort_number"] = result.cohort_number.astype("int64")
     result.attrs.update({key: metadata[key] for key in (
