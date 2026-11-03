@@ -13,6 +13,7 @@ from .eligibility import (
     TrialSpaceCriteriaProgress,
     extract_trial_space_eligibility_criteria,
 )
+from .cohort_merge import merge_equivalent_cohorts
 from .protocol_cohorts import ProtocolCohortProgress, extract_protocol_cohorts
 from .synthetic_protocols import SyntheticProtocolProgress, generate_synthetic_protocols
 from .structure import structure_trial_space
@@ -175,6 +176,7 @@ __all__ = [
     "extract_trial_space_eligibility_criteria",
     "ProtocolCohortProgress",
     "extract_protocol_cohorts",
+    "merge_equivalent_cohorts",
     "SyntheticProtocolProgress",
     "generate_synthetic_protocols",
     "structure_trial_space",

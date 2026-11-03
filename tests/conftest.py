@@ -169,6 +169,8 @@ class ScriptedCohortBackend:
             return "screen", None
         if "List the cohorts it defines" in text:
             return "list", None
+        if "Group the cohorts whose eligibility criteria are essentially the same" in text:
+            return "merge", None
         return "criteria", text.rsplit("Extract the complete eligibility criteria of this cohort only: ", 1)[1].split("\n")[0].strip()
 
     def answer(self, prompt):
@@ -199,6 +201,7 @@ class ScriptedCohortBackend:
 @pytest.fixture
 def cohort_backend(monkeypatch):
     backend = ScriptedCohortBackend()
-    for module in ("matchminer_ai.trials.cohorts", "matchminer_ai.trials.protocol_cohorts"):
+    for module in ("matchminer_ai.trials.cohorts", "matchminer_ai.trials.protocol_cohorts",
+                   "matchminer_ai.trials.cohort_merge"):
         monkeypatch.setattr(f"{module}.get_llm_backend", lambda _config: backend)
     return backend
