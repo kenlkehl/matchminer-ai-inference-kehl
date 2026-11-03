@@ -90,7 +90,7 @@ def test_criteria_prompt_keeps_the_boilerplate_and_applicability_rules():
     listing = load_prompts()["list"]
     # The list step names the trial's cohorts without comparing their criteria.
     assert "You do not need to compare the cohorts' eligibility criteria" in listing
-    assert "dose levels or dose-escalation steps within a part" in listing and "stratification factors" in listing
+    assert "stratification factors" in listing
     assert "crossover, extension, continuation, retreatment, and rollover phases" in listing
     assert not any(word in listing for word in ("identical", "combine"))
 

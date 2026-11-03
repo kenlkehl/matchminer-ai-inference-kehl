@@ -17,7 +17,7 @@ WHICH COHORTS TO LIST
 -List every cohort the document defines, including cohorts that appear only in the study design, schema, flow chart, synopsis, or an amendment, such as an expansion or backfill group, and cohorts described as closed to enrollment, fully enrolled, completed, on hold, or terminated.
 -When cohorts are nested, list the lowest-level groups. For example, two phases that each contain three parts give six cohorts, one for each phase-part combination.
 -Cohorts or enrollment groups that the document defines for a particular disease or subtype are separate cohorts. Do not invent subgroups that the document does not define.
--Do not list these as cohorts: dose levels or dose-escalation steps within a part, which differ only in the dose given; the arms to which participants are randomized after enrolling in one population (list that population once); stratification factors; crossover, extension, continuation, retreatment, and rollover phases, which only people already in the trial can enter; and optional sub-studies.
+-Do not list these as cohorts: stratification factors; crossover, extension, continuation, retreatment, and rollover phases, which only people already in the trial can enter; and optional sub-studies.
 -A cohort that enrolls only in particular countries or regions, such as a Japan-only or China-only cohort, is listed only if those countries or regions include the United States. This includes country- or region-specific cohorts described in appendices or country-specific sections; when the whole trial enrolls in one country or region, list its cohorts as usual.
 -If the trial enrolls a single group of people, return one cohort.
 

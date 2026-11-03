@@ -91,8 +91,8 @@ eligibility criteria are concatenated into one document; a protocol is sent
 whole. Each trial gets three kinds of separate LLM requests: (1) does the
 studied intervention directly treat cancer? (a "no" ends the trial); (2) the
 names of the cohorts the trial defines, at the lowest level of any hierarchy,
-without comparing their criteria (dose levels within a part and arms randomized
-from one enrolled population are not separate cohorts); (3) one request per
+without comparing their criteria (stratification factors, crossover, extension
+and rollover phases, and optional sub-studies are not cohorts); (3) one request per
 cohort name for that cohort's complete eligibility criteria. Every answer is validated against its own JSON contract (and, for
 remote backends, constrained by its JSON schema); only failed requests are
 retried. Cohorts whose extracted criteria are identical are combined.

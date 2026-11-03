@@ -35,8 +35,7 @@ full protocols (`extract_protocol_cohorts`, below;
    `{"cohorts": ["Part A, dose escalation", "Part B, dose expansion (disease X)"]}`,
    one or more distinct names in source order: the cohorts the trial defines
    (parts, phases, arms or groups that enroll participants), at the lowest level
-   of any hierarchy, without comparing their criteria. Dose levels within a
-   part, arms randomized from one enrolled population, stratification factors,
+   of any hierarchy, without comparing their criteria. Stratification factors,
    crossover, extension and rollover phases, and optional sub-studies are not
    cohorts; closed cohorts are kept, and cohorts limited to countries that
    exclude the United States are omitted. A single population is one cohort
