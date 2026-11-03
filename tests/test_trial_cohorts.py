@@ -1,19 +1,12 @@
-"""Public treatment/cohort extraction contract and failure handling."""
+"""Historical single-request cohort contract (cohort_schema.parse_cohort_response), kept for read-only audits.
 
-from copy import deepcopy
+Production extraction uses the three-step workflow (test_cohort_workflow.py, test_protocol_cohorts.py)."""
+
 import json
 
-import pandas as pd
 import pytest
 
-from matchminer_ai.config import load_default_preset
-from matchminer_ai.llm.backends import LLMGenerationResult
-from matchminer_ai.trials import summarize_trials
-from matchminer_ai.trials.cohort_schema import (
-    COHORT_JSON_SCHEMA, COHORT_SCHEMA_VERSION, LEGACY_COHORT_SCHEMA_VERSION, build_cohort_messages,
-    parse_cohort_response,
-)
-from matchminer_ai.trials.cohorts import COHORT_COLUMNS, COHORT_REPRESENTATION_VERSION
+from matchminer_ai.trials.cohort_schema import parse_cohort_response
 
 NO = {"cancer_treatment_trial": "no"}
 SINGLE = {"cancer_treatment_trial": "yes", "multiple_cohorts": "no",
@@ -23,40 +16,6 @@ MULTI = {"cancer_treatment_trial": "yes", "multiple_cohorts": "yes", "cohorts": 
     {"cohort_name": "Cohort B", "cohort_specific_eligibility_criteria": "Inclusion: untreated; GFR >= 60 mL/min."},
 ], "common_eligibility_criteria": "Inclusion: adult cancer. Exclusion: infection."}
 SPECIFIC = [c["cohort_specific_eligibility_criteria"] for c in MULTI["cohorts"]]
-
-
-def source(ids):
-    return pd.DataFrame([{
-        "trial_id": trial_id, "trial_title": f"Trial {trial_id}",
-        "brief_summary": "Fabricated {raw} trial text.",
-        "eligibility_criteria": "Inclusion:\n  Cancer.\n\nExclusion:\n  Infection.",
-    } for trial_id in ids], columns=[
-        "trial_id", "trial_title", "brief_summary", "eligibility_criteria",
-    ])
-
-
-@pytest.fixture
-def harness(monkeypatch, default_config):
-    config = deepcopy(default_config)
-    config.trial["extraction_method"] = "cohorts"
-    config.trial["cohorts"] = {"max_attempts": 2}
-    config.remote["enabled"] = True
-    calls, answers = [], []
-
-    class Backend:
-        def generate_llm_outputs(self, *, prompt_list, llm_config, **kwargs):
-            calls.append((prompt_list, deepcopy(llm_config)))
-            batch = answers.pop(0)
-            assert len(batch) == len(prompt_list)
-            return LLMGenerationResult(
-                final_outputs=[json.dumps(x) if isinstance(x, dict) else x for x, _ in batch],
-                finish_reasons=[finish for _, finish in batch],
-                reasoning_outputs=["test reasoning"] * len(batch), raw_outputs=[],
-                model_metadata={"model_sha": "test"},
-            )
-
-    monkeypatch.setattr("matchminer_ai.trials.cohorts.get_llm_backend", lambda _: Backend())
-    return config, calls, answers
 
 
 @pytest.mark.parametrize("value", [NO, SINGLE, MULTI])
@@ -138,171 +97,6 @@ def test_old_strings_require_explicit_historical_schema_selection(version):
         parse_cohort_response(text, schema_version="unknown")
 
 
-def test_combined_prompt_has_only_literal_source_and_three_shapes():
-    text = "Marker {cancer_treatment_trial}; literal <trial_text> text."
-    messages = build_cohort_messages(text)
-    assert text in messages[0]["content"]
-    prompt = messages[0]["content"]
-    assert '"cancer_treatment_trial": "no"' in prompt
-    assert '"eligibility_criteria"' in prompt and "WHEN THERE IS A SINGLE COHORT" in prompt
-    assert "pharmacokinetic" in prompt and "background therapy" in prompt
-    assert '"common_eligibility_criteria"' in prompt
-    assert "Criteria shared by only a subset" in prompt
-    assert "Do not put a conflicting default in the common field" in prompt
-
-
-def test_public_api_runs_one_combined_batch_and_keeps_sources(harness):
-    config, calls, answers = harness
-    answers.append([(NO, "stop"), (SINGLE, "stop"), (MULTI, "stop")])
-    trials = source(["T0", "T1", "T2"])
-    original = trials.copy(deep=True)
-    result, metadata, qc = summarize_trials(trials, config=config, return_metadata=True, return_qc=True)
-    assert len(calls) == 1
-    assert list(result) == COHORT_COLUMNS
-    assert result.trial_id.tolist() == ["T1", "T2", "T2"]
-    assert result.cohort_trial_id.tolist() == ["T1-cohort-0", "T2-cohort-0", "T2-cohort-1"]
-    assert result.iloc[0].cohort_eligibility_criteria == SINGLE["eligibility_criteria"]
-    assert pd.isna(result.cohort_name.iloc[0])
-    assert result.cohort_name.tolist()[1:] == ["Cohort A", "Cohort B"]
-    assert all(name not in text for name, text in zip(result.cohort_name.iloc[1:], result.cohort_eligibility_criteria.iloc[1:]))
-    assert result.cohort_criteria_source.tolist() == ["registry"] * 3
-    assert trials.iloc[1].trial_title in str(calls[0][0])
-    assert trials.iloc[1].brief_summary in str(calls[0][0])
-    assert pd.isna(result.iloc[0].cohort_specific_eligibility_criteria)
-    assert pd.isna(result.iloc[0].common_eligibility_criteria)
-    assert result.cohort_specific_eligibility_criteria.tolist()[1:] == SPECIFIC
-    assert result.common_eligibility_criteria.tolist()[1:] == [MULTI["common_eligibility_criteria"]] * 2
-    for text, specific in zip(result.cohort_eligibility_criteria.tolist()[1:], SPECIFIC):
-        assert specific in text
-        assert text.count(MULTI["common_eligibility_criteria"]) == 1
-    assert "GFR >= 60" not in result.iloc[1].cohort_eligibility_criteria
-    assert "GFR >= 40" not in result.iloc[2].cohort_eligibility_criteria
-    assert metadata["schema_version"] == COHORT_SCHEMA_VERSION == "trial-registry-cohorts-v1"
-    response_format = calls[0][1]["remote"]["request_params"]["response_format"]
-    assert response_format["json_schema"]["schema"] == COHORT_JSON_SCHEMA
-    assert metadata["structured_outputs"] is True
-    assert metadata["representation_version"] == result.attrs['representation_version'] == COHORT_REPRESENTATION_VERSION
-    assert metadata["trial_decisions"] == {"T0": NO, "T1": SINGLE, "T2": MULTI}
-    assert metadata["trial_rejections"] == {"T0": NO}
-    assert metadata["trial_errors"] == {}
-    assert result.attrs["trial_rejections"] == {"T0": NO}
-    assert qc.set_index("metric").loc["trials_failed_inference", "value"] == 0
-    pd.testing.assert_frame_equal(trials, original)
-
-
-@pytest.mark.parametrize('eligibility', [None, '', 'Different registry wording.'])
-def test_single_population_uses_extracted_criteria_not_the_registry_field(harness, eligibility):
-    config, calls, answers = harness
-    answers.append([(SINGLE, 'stop')])
-    trials = source(['single'])
-    trials['eligibility_criteria'] = eligibility
-    result, metadata = summarize_trials(trials, config=config, return_metadata=True)
-    assert len(calls) == 1 and metadata['trial_errors'] == {}
-    assert result.cohort_eligibility_criteria.tolist() == [SINGLE['eligibility_criteria']]
-    assert result.cohort_criteria_source.tolist() == ['registry']
-
-
-def test_single_population_without_criteria_is_retried_and_v3_remains_readable(harness):
-    config, calls, answers = harness
-    legacy = {"cancer_treatment_trial": "yes", "multiple_cohorts": "no"}
-    answers.extend([[(legacy, 'stop')], [(SINGLE, 'stop')]])
-    result, metadata = summarize_trials(source(['T0']), config=config, return_metadata=True)
-    assert len(calls) == 2 and "eligibility_criteria" in calls[1][0][0].messages[-1]["content"]
-    assert result.cohort_eligibility_criteria.tolist() == [SINGLE['eligibility_criteria']]
-    assert parse_cohort_response(json.dumps(legacy), schema_version=LEGACY_COHORT_SCHEMA_VERSION) == legacy
-    with pytest.raises(ValueError):
-        parse_cohort_response(json.dumps(SINGLE), schema_version=LEGACY_COHORT_SCHEMA_VERSION)
-
-
-def test_no_shared_criteria_keeps_cohort_text_without_inventing_common_rules(harness):
-    config, _, answers = harness
-    decision = {**MULTI, "common_eligibility_criteria": ""}
-    answers.append([(decision, "stop")])
-    result, metadata = summarize_trials(source(["T0"]), config=config, return_metadata=True)
-    assert result.cohort_eligibility_criteria.tolist() == SPECIFIC
-    assert result.common_eligibility_criteria.tolist() == ["", ""]
-    assert metadata["trial_decisions"]["T0"] == decision
-
-
-def test_fenced_responses_need_no_retry_and_keep_raw_debug_text(harness):
-    config, calls, answers = harness
-    config.debug_mode = True
-    values = {"T0": NO, "T1": SINGLE, "T2": MULTI}
-    raw = {tid: f"```json\n{json.dumps(value)}\n```" for tid, value in values.items()}
-    answers.append([(text, "stop") for text in raw.values()])
-    result, metadata = summarize_trials(
-        source(list(values)), config=config, return_metadata=True,
-    )
-    assert len(calls) == 1
-    assert metadata["trial_decisions"] == values
-    assert metadata["trial_errors"] == {}
-    assert result.trial_id.tolist() == ["T1", "T2", "T2"]
-    assert result.cohort_specific_eligibility_criteria.tolist()[1:] == SPECIFIC
-    for tid, text in raw.items():
-        assert metadata["trial_responses"][tid]["answer"] == text
-        assert metadata["trial_attempts"][tid][0]["answer"] == text
-        assert len(metadata["trial_attempts"][tid]) == 1
-    assert result.trial_answer_text.tolist() == [raw["T1"], raw["T2"], raw["T2"]]
-
-
-def test_retry_only_invalid_trial_preserves_sampling_and_full_source(harness):
-    config, calls, answers = harness
-    answers.extend([[(SINGLE, "stop"), (NO, "length")], [(MULTI, "stop")]])
-    result, metadata = summarize_trials(source(["T0", "T1"]), config=config, return_metadata=True)
-    assert len(result) == 3
-    assert [len(prompts) for prompts, _ in calls] == [2, 1]
-    assert calls[0][1] == calls[1][1]
-    messages = calls[1][0][0].messages
-    assert "Trial T1" in messages[0]["content"]
-    assert "Incomplete trial cohort response: length" in messages[-1]["content"]
-    assert metadata["trial_rejections"] == {} and metadata["trial_errors"] == {}
-
-
-def test_exhausted_malformed_and_truncated_results_are_failures(harness):
-    config, _, answers = harness
-    answers.extend([[("invalid", "stop"), (NO, "length")]] * 2)
-    result, metadata, qc = summarize_trials(source(["T0", "T1"]), config=config, return_metadata=True, return_qc=True)
-    assert result.empty and list(result) == COHORT_COLUMNS
-    assert set(metadata["trial_errors"]) == {"T0", "T1"}
-    assert metadata["trial_rejections"] == {}
-    assert qc.set_index("metric").loc["trials_failed_inference", "value"] == 2
-
-
-def test_all_rejected_preserves_decisions_without_optional_metadata(harness):
-    config, _, answers = harness
-    answers.append([(NO, "stop")])
-    result = summarize_trials(source(["T0"]), config=config)
-    assert result.empty and result.attrs["trial_rejections"] == {"T0": NO}
-
-
-def test_empty_input_does_not_call_backend(harness):
-    config, calls, _ = harness
-    result = summarize_trials(source([]), config=config)
-    assert result.empty and not calls and list(result) == COHORT_COLUMNS
-
-
-def test_debug_retains_rejected_and_accepted_responses(harness):
-    config, _, answers = harness
-    config.debug_mode = True
-    answers.append([(NO, "stop"), (SINGLE, "stop")])
-    result, meta = summarize_trials(source(["T0", "T1"]), config=config, return_metadata=True)
-    assert "trial_answer_text" in result
-    assert set(meta["trial_responses"]) == {"T0", "T1"}
-
-
-def test_duplicate_ids_fail_before_inference(harness):
-    config, calls, _ = harness
-    with pytest.raises(ValueError, match="unique"):
-        summarize_trials(source(["T0", "T0"]), config=config)
-    assert not calls
-
-
-def test_default_preset_uses_combined_prompt():
-    config = load_default_preset()
-    assert config.trial["extraction_method"] == "cohorts"
-    assert config.trial["prompt_files"]["cohorts"] == "trial.cohorts.user.txt"
-
-
 @pytest.mark.parametrize("cohort", [
     {}, {"cohort_name": "A"},
     {"cohort_name": " ", "cohort_specific_eligibility_criteria": "Adults."},
@@ -320,16 +114,3 @@ def test_different_names_do_not_allow_duplicate_eligibility_populations():
     duplicate = {"cohort_name": "Different arm", "cohort_specific_eligibility_criteria": "  " + SPECIFIC[0].upper() + "  "}
     with pytest.raises(ValueError, match="Duplicate cohort eligibility"):
         parse_cohort_response(json.dumps({**MULTI, "cohorts": [MULTI["cohorts"][0], duplicate]}))
-
-
-def test_prompt_examples_are_valid_json_and_do_not_embed_labels():
-    rendered = build_cohort_messages("Raw {source} text")[0]["content"]
-    starts, position = [], rendered.find('{\n  "cancer_treatment_trial"')
-    while position >= 0:
-        starts.append(position)
-        position = rendered.find('{\n  "cancer_treatment_trial"', position + 1)
-    single, example = [parse_cohort_response(rendered[s:rendered.index('\n}', s) + 2]) for s in starts]
-    assert single["multiple_cohorts"] == "no" and single["eligibility_criteria"].startswith("Inclusion criteria:")
-    assert all(set(c) == {"cohort_name", "cohort_specific_eligibility_criteria"} for c in example["cohorts"])
-    assert 'Do not prefix "cohort_specific_eligibility_criteria"' in rendered
-    assert "Raw {source} text" in rendered

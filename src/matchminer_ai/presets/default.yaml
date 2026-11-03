@@ -24,9 +24,14 @@ remote:
 trial:
   extraction_method: cohorts
   cohorts:
+    # Registry listings and protocols share the three cohort prompts
+    # (trials/cohort_workflow.py): screen, cohort names, criteria per cohort.
     max_attempts: 3
-    # Constrain remote answers to the cohort JSON schema, as for protocols.
+    # Constrain each remote answer to its step's JSON schema.
     structured_outputs: true
+    # Requests per backend call, and calls running at once.
+    chunk_size: 500
+    chunks_in_flight: 2
   hierarchy:
     max_attempts: 4
     max_nodes: 4096
@@ -57,7 +62,6 @@ trial:
       chat_template_kwargs:
         enable_thinking: true
   prompt_files:
-    cohorts: trial.cohorts.user.txt
     primer: trial.user.primer.txt
     question: trial.user.question.txt
   boilerplate_marker: Boilerplate exclusions
@@ -226,9 +230,9 @@ protocol_cohort_extraction:
   # Prompts per backend call, and calls running at once so fast endpoints stay busy.
   chunk_size: 500
   chunks_in_flight: 2
-  # Remote requests constrain the answer with the protocol cohort JSON schema.
+  # The same three cohort prompts as registry listings; each remote answer is
+  # constrained to its step's JSON schema.
   structured_outputs: true
-  prompt_file: trial.cohorts.protocol.user.txt
   sampling_profile: auto
   reasoning_effort: xhigh
   reasoning_parser: auto

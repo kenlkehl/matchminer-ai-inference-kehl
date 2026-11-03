@@ -305,7 +305,17 @@ keyword arguments. vLLM validates those keys when the engine/request is created.
 
 ### `trial.prompt_files`
 
-Prompt template filenames loaded from `matchminer_ai.prompts`.
+Prompt template filenames loaded from `matchminer_ai.prompts` for the legacy
+`one_shot` method (`primer`, `question`).
+
+### `trial.cohorts`
+
+Settings of the default `cohorts` method, the three-step workflow shared with
+`protocol_cohort_extraction`: `max_attempts` (per request, 1-10, default 3),
+`structured_outputs` (default true; each remote request is constrained by its
+step's JSON schema), `chunk_size` (requests of one step per backend call,
+default 500), `chunks_in_flight` (default 2), and optional `prompt_files`
+mapping `screen`, `list` and `criteria` to other packaged prompt files.
 
 ### `trial.reasoning_parser`
 
@@ -488,15 +498,19 @@ documents (PDF, OCR text or Markdown) and extracts their cohort eligibility crit
 
 - `max_document_characters`: hard input bound (default 800,000 characters).
   Oversized documents fail rather than being truncated.
-- `max_attempts`: total validation attempts per protocol (1-10, default 3);
-  only failed protocols are retried.
-- `chunk_size`: prompts per backend call (default 500). With `output_dir`,
-  decisions are saved as each chunk returns.
-- `chunks_in_flight`: chunks running at once (default 2, at most 16), so fast
-  endpoints are not left idle while an earlier chunk finishes.
-- `structured_outputs`: when true and the remote backend is enabled, requests
-  carry a strict JSON-schema `response_format` for the protocol cohort schema.
-- `prompt_file`: the bundled prompt, `trial.cohorts.protocol.user.txt`.
+- `max_attempts`: validation attempts per request (1-10, default 3); only
+  failed requests are retried, and a cohort that fails every attempt fails its
+  protocol.
+- `chunk_size`: requests of one step per backend call (default 500). With
+  `output_dir`, each protocol is saved as soon as it is decided.
+- `chunks_in_flight`: calls running at once (default 2, at most 16), so fast
+  endpoints are not left idle while an earlier call finishes.
+- `structured_outputs`: when true and the remote backend is enabled, each
+  request carries a strict JSON-schema `response_format` for its step.
+- `prompt_files` (optional): maps `screen`, `list` and `criteria` to other
+  packaged prompt files; by default protocols use the same three prompts as
+  registry listings (`trial.cohorts.screen.user.txt`,
+  `trial.cohorts.list.user.txt`, `trial.cohorts.criteria.user.txt`).
 
 The default model context is 262,144 tokens with up to 50,000 completion tokens,
 so that full industry protocols (often 50,000-160,000 tokens) fit with room for

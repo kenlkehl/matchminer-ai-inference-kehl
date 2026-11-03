@@ -83,14 +83,19 @@ Publisher sampling settings were verified on 2026-10-16.
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
-`summarize_trials` now defaults to one combined cancer-treatment/cohort prompt.
-It first asks whether the studied intervention directly treats cancer; a negative
-answer ends the response. Accepted trials are then checked for populations with
-different eligibility criteria. Arms and cohorts are interchangeable, and
-assignment to different treatments alone does not create separate populations.
-For multiple populations, the model returns cohort-specific descriptions in
-`cohorts` and generates shared inclusion/exclusion criteria once in
-`common_eligibility_criteria`. Code joins the two for each complete cohort row.
+`summarize_trials` (ClinicalTrials.gov listings) and `extract_protocol_cohorts`
+(full protocols) share one three-step workflow and the same three prompts
+(`trial.cohorts.screen.user.txt`, `trial.cohorts.list.user.txt`,
+`trial.cohorts.criteria.user.txt`). A listing's title, brief summary and
+eligibility criteria are concatenated into one document; a protocol is sent
+whole. Each trial gets three kinds of separate LLM requests: (1) does the
+studied intervention directly treat cancer? (a "no" ends the trial); (2) the
+names of the cohorts the trial defines, at the lowest level of any hierarchy,
+without comparing their criteria (dose levels within a part and arms randomized
+from one enrolled population are not separate cohorts); (3) one request per
+cohort name for that cohort's complete eligibility criteria. Every answer is validated against its own JSON contract (and, for
+remote backends, constrained by its JSON schema); only failed requests are
+retried. Cohorts whose extracted criteria are identical are combined.
 
 Remote OpenAI-compatible inference uses a shared adaptive endpoint pool by
 default. `remote.max_concurrent_requests` is a per-server ceiling; the
@@ -140,16 +145,13 @@ This is opt-in because the files contain original input text; use an authorized
 local directory appropriate to that data. Archiving does not add reasoning to
 normal API answers or change any model's training targets.
 
-The default result uses `cohort_trial_id`, `cohort_number`, `cohort_name`, and
-`cohort_eligibility_criteria`, plus the separate
-`cohort_specific_eligibility_criteria` and `common_eligibility_criteria` columns
-and decision/source columns. Accepted
-single-population trials retain only their original `eligibility_criteria` field,
-verbatim, without a second model call. The full title/summary/eligibility document
-still supplies screening and cohort detection. Missing single-population eligibility
-is recorded as an error rather than filled from the title or summary. Rejected trials produce no cohort rows and remain in metadata
-and DataFrame attrs; malformed/truncated responses are failures, not rejections.
-See the [cohort contract and configuration](docs/api/trials.md#combined-treatment-screening-and-cohort-extraction).
+The default result uses `cohort_trial_id`, `cohort_number`, `cohort_name`,
+`cohort_eligibility_criteria` (that cohort's complete criteria, from its own
+request) and decision/source columns; a single-population trial yields one
+named row. The registry eligibility field is never copied verbatim. Rejected
+trials produce no cohort rows and remain in metadata and DataFrame attrs;
+malformed/truncated responses are failures, not rejections.
+See the [cohort contract and configuration](docs/api/trials.md#three-step-treatment-screening-and-cohort-extraction).
 
 The default matching embedder is the single-vector `ksg-dfci/TrialSpace-0526`
 with cosine retrieval, the same release generation as the default checkers.

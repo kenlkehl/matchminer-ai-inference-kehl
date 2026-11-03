@@ -47,8 +47,9 @@ def summarize_trials(
     config : MMAIConfig, optional
         Defaults to the package preset, with ``trial.extraction_method=cohorts``.
     return_metadata : bool, optional
-        Also return package/config/model provenance, the prompt hash, validated
-        ``trial_decisions``, ``trial_rejections``, ``trial_errors``, and attempts.
+        Also return package/config/model provenance, the prompt hashes, validated
+        ``trial_decisions``, ``trial_cohort_names``, ``trial_rejections``,
+        ``trial_errors``, and attempts per step.
     return_qc : bool, optional
         Also return QC separating treatment rejections, inference failures,
         and truncated responses.
@@ -59,21 +60,18 @@ def summarize_trials(
         With the default ``cohorts`` method, one row per accepted population:
         ``cohort_trial_id`` (``<trial_id>-cohort-<number>``), ``trial_id``,
         zero-based ``cohort_number``, ``cohort_name``, ``cohort_eligibility_criteria``,
-        ``cohort_specific_eligibility_criteria``, ``common_eligibility_criteria``,
-        ``cohort_criteria_source``, ``cancer_treatment_trial``, and
-        ``multiple_cohorts``. A single-population trial's criteria are the
-        model's extracted ``eligibility_criteria`` (the same contract as
-        protocol extraction, so enrollment-only, United States and formatting
-        rules apply); the registry field is not copied verbatim. Multi-population
-        criteria join the specific and common strings from the LLM response in
-        code, without the cohort name. Name and specific/common columns are null
-        for single-population trials, and ``cohort_criteria_source`` is
-        ``"registry"``. The title, summary and eligibility text go to the model
-        together. Rejected trials produce
-        no rows and remain in metadata and DataFrame attrs. Invalid responses
-        are failures, not rejections. Debug mode adds ``trial_input_text``,
-        ``trial_answer_text``, and ``trial_reasoning_text`` and retains all
-        responses in metadata.
+        ``cohort_criteria_source`` (``"registry"``), ``cancer_treatment_trial``, and
+        ``multiple_cohorts``. Each listing's title, brief summary and eligibility
+        criteria form one document that goes through the same three steps and
+        prompts as :func:`extract_protocol_cohorts`
+        (:mod:`matchminer_ai.trials.cohort_workflow`): a cancer-treatment screen,
+        the names of its cohorts with distinct eligibility, and one request per
+        cohort for that cohort's complete criteria, which become its row's
+        ``cohort_eligibility_criteria``; the registry field is never copied
+        verbatim. Rejected trials produce no rows and remain in metadata and
+        DataFrame attrs. Invalid responses are failures, not rejections. Debug
+        mode adds ``trial_input_text`` and retains every step's responses in
+        metadata.
 
         Optional results are ``(rows, metadata)``, ``(rows, qc)`` or
         ``(rows, metadata, qc)`` according to the flags.

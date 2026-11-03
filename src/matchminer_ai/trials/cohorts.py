@@ -1,54 +1,62 @@
-"""Combined treatment screening and cohort extraction for summarize_trials."""
+"""Treatment screening and cohort extraction from registry listings for summarize_trials."""
 
 from __future__ import annotations
 
 from copy import deepcopy
-import hashlib
 
 import pandas as pd
 
 from matchminer_ai._qc.common import build_qc_artifact, qc_artifact_to_report_row
 from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
-from matchminer_ai.llm.prompt_rendering import build_prompt_list
 
-from .cohort_schema import (
-    COHORT_PROMPT, COHORT_SCHEMA_VERSION, build_cohort_messages,
-    load_cohort_prompt, parse_cohort_response, structured_cohort_response_format,
+from .cohort_workflow import (
+    COHORT_COLUMNS, REPRESENTATION_VERSION, SCHEMA_VERSION, decision_rows, load_prompts, prompt_sha256,
+    registry_trial_text, run_cohort_workflow, step_runtimes,
 )
-from .prompt_builder import build_trial_text
 
-# Named cohort objects are schema v3; derived rows now preserve names separately.
-COHORT_REPRESENTATION_VERSION = "trial-treatment-cohorts-v4"
-
-COHORT_COLUMNS = [
-    "cohort_trial_id", "trial_id", "cohort_number", "cohort_name", "cohort_eligibility_criteria",
-    "cohort_specific_eligibility_criteria", "common_eligibility_criteria",
-    "cohort_criteria_source", "cancer_treatment_trial", "multiple_cohorts",
-]
+# Kept as names for callers of the earlier single-request module.
+COHORT_REPRESENTATION_VERSION = REPRESENTATION_VERSION
+COHORT_SCHEMA_VERSION = SCHEMA_VERSION
 
 
-def decision_rows(trial_id, parsed, *, source):
-    """Cohort rows of one accepted decision; ``source`` is "registry" or "protocol"."""
-    if parsed["multiple_cohorts"] == "no":
-        return [{
-            "cohort_trial_id": f"{trial_id}-cohort-0", "trial_id": trial_id, "cohort_number": 0,
-            "cohort_name": None, "cohort_eligibility_criteria": parsed["eligibility_criteria"],
-            "cohort_specific_eligibility_criteria": None, "common_eligibility_criteria": None,
-            "cohort_criteria_source": source, "cancer_treatment_trial": "yes", "multiple_cohorts": "no",
-        }]
-    common = parsed["common_eligibility_criteria"]
-    rows = []
-    for number, cohort in enumerate(parsed["cohorts"]):
-        specific = cohort["cohort_specific_eligibility_criteria"]
-        complete = (f"Cohort-specific eligibility criteria:\n{specific}\n\n"
-                    f"Common eligibility criteria:\n{common}") if common else specific
-        rows.append({
-            "cohort_trial_id": f"{trial_id}-cohort-{number}", "trial_id": trial_id, "cohort_number": number,
-            "cohort_name": cohort["cohort_name"], "cohort_eligibility_criteria": complete,
-            "cohort_specific_eligibility_criteria": specific, "common_eligibility_criteria": common,
-            "cohort_criteria_source": source, "cancer_treatment_trial": "yes", "multiple_cohorts": "yes",
-        })
-    return rows
+def cohort_settings(settings, section):
+    """Validated attempts, chunking and structured-output settings of one config section."""
+    max_attempts = settings.get("max_attempts", 3)
+    if type(max_attempts) is not int or not 1 <= max_attempts <= 10:
+        raise ValueError(f"{section}.max_attempts must be an integer from 1 to 10")
+    chunk_size = settings.get("chunk_size", 500)
+    chunks_in_flight = settings.get("chunks_in_flight", 2)
+    if type(chunk_size) is not int or chunk_size < 1:
+        raise ValueError(f"{section}.chunk_size must be a positive integer")
+    if type(chunks_in_flight) is not int or not 1 <= chunks_in_flight <= 16:
+        raise ValueError(f"{section}.chunks_in_flight must be an integer from 1 to 16")
+    return max_attempts, chunk_size, chunks_in_flight, bool(settings.get("structured_outputs", True))
+
+
+def workflow_metadata(states, prompts, structured, extraction_method):
+    """Decisions, rejections, errors and attempts per trial, as both extraction APIs report them."""
+    hashes = prompt_sha256(prompts)
+    metadata = {
+        "extraction_method": extraction_method, "schema_version": SCHEMA_VERSION,
+        "representation_version": REPRESENTATION_VERSION, "structured_outputs": structured,
+        "prompt_sha256": hashes["combined"], "prompt_sha256_by_step": {s: hashes[s] for s in prompts},
+        "trial_decisions": {}, "trial_rejections": {}, "trial_errors": {}, "trial_attempts": {},
+        "trial_cohort_names": {}, "trial_merged_cohorts": {},
+    }
+    for trial_id, state in states.items():
+        metadata["trial_attempts"][trial_id] = state["attempts"]
+        if state["cohort_names"] is not None:
+            metadata["trial_cohort_names"][trial_id] = state["cohort_names"]
+        if state["merged_cohorts"]:
+            metadata["trial_merged_cohorts"][trial_id] = state["merged_cohorts"]
+        decision = state["decision"]
+        if decision is None:
+            metadata["trial_errors"][trial_id] = state["error"] or "No validated decision"
+            continue
+        metadata["trial_decisions"][trial_id] = decision
+        if decision["cancer_treatment_trial"] == "no":
+            metadata["trial_rejections"][trial_id] = decision
+    return metadata
 
 
 def summarize_trial_cohorts(trials, config):
@@ -63,115 +71,43 @@ def summarize_trial_cohorts(trials, config):
     for column in ("trial_title", "brief_summary", "eligibility_criteria"):
         if not frame[column].dropna().map(lambda v: isinstance(v, str)).all():
             raise ValueError(f"{column} must contain strings or missing values")
-    frame["trial_text"] = build_trial_text(frame)
-    if frame.trial_text.str.strip().eq("").any():
+    if frame[["trial_title", "brief_summary", "eligibility_criteria"]].fillna("").apply(
+            lambda column: column.str.strip()).eq("").all(axis=1).any():
         raise ValueError("Each trial must contain nonempty source text")
+    # The same document shape for every listing: title, brief summary, eligibility criteria.
+    frame["trial_text"] = [registry_trial_text(*values) for values in
+                           frame[["trial_title", "brief_summary", "eligibility_criteria"]].itertuples(index=False)]
 
     trial_config = deepcopy(config.trial)
     settings = trial_config.pop("cohorts", {})
-    max_attempts = settings.get("max_attempts", 3)
-    if type(max_attempts) is not int or not 1 <= max_attempts <= 10:
-        raise ValueError("trial.cohorts.max_attempts must be an integer from 1 to 10")
-    structured_setting = settings.get("structured_outputs", True)
+    max_attempts, chunk_size, chunks_in_flight, structured_setting = cohort_settings(settings, "trial.cohorts")
     trial_config.pop("extraction_method", None)
     trial_config.pop("hierarchy", None)
-    filename = trial_config.get("prompt_files", {}).get("cohorts", COHORT_PROMPT)
-    prompt = load_cohort_prompt(filename)
+    prompts = load_prompts(settings.get("prompt_files"))
     runtime = build_llm_runtime_config("trial", trial_config, config=config)
-    # As for protocols, remote requests constrain the answer to the cohort JSON
-    # schema; vLLM applies it after any reasoning section. Answers are still parsed.
-    structured = bool(structured_setting) and runtime["backend_mode"] == "remote"
-    if structured:
-        runtime["remote"]["request_params"]["response_format"] = structured_cohort_response_format("trial_cohorts")
-    metadata = {
-        "extraction_method": "cohorts", "schema_version": COHORT_SCHEMA_VERSION,
-        "representation_version": COHORT_REPRESENTATION_VERSION, "structured_outputs": structured,
-        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
-        "model_metadata": {}, "trial_decisions": {}, "trial_rejections": {},
-        "trial_errors": {}, "trial_attempts": {},
-    }
+    structured = structured_setting and runtime["backend_mode"] == "remote"
+    documents = list(zip(frame.trial_id, frame.trial_text))
+    backend = get_llm_backend(config) if documents else None
+    states, model_metadata = run_cohort_workflow(
+        documents, prompts=prompts, runtimes=step_runtimes(runtime, structured), backend=backend,
+        max_attempts=max_attempts, model_metadata_cache_dir=config.model_metadata_cache_dir,
+        chunk_size=chunk_size, chunks_in_flight=chunks_in_flight, debug=config.debug_mode,
+    ) if documents else ({}, {})
+    metadata = workflow_metadata(states, prompts, structured, "cohorts")
+    metadata["model_metadata"] = model_metadata
     if config.debug_mode:
-        metadata["trial_responses"] = {}
-    messages = {
-        i: build_cohort_messages(text, prompt=prompt)
-        for i, text in enumerate(frame.trial_text)
-    }
-    pending = list(messages)
-    backend = get_llm_backend(config) if pending else None
-    last_responses = {}
-    last_finishes = {}
-    for attempt in range(1, max_attempts + 1):
-        if not pending:
-            break
-        generation = backend.generate_llm_outputs(
-            prompt_list=build_prompt_list([messages[i] for i in pending], llm_config=runtime),
-            llm_config=runtime,
-            model_metadata_cache_dir=config.model_metadata_cache_dir,
-        )
-        metadata["model_metadata"] = generation.model_metadata
-        next_pending = []
-        provenance = {item['row_idx']: item for item in
-                      generation.model_metadata.get('responses', [])}
-        for response_index, (i, answer, reasoning, finish) in enumerate(zip(
-            pending, generation.final_outputs, generation.reasoning_outputs,
-            generation.finish_reasons, strict=True,
-        )):
-            trial_id = frame.at[i, "trial_id"]
-            last_responses[i] = (answer, reasoning)
-            last_finishes[i] = finish
-            record = {"attempt": attempt, "finish_reason": finish}
-            if response_index in provenance:
-                record['response_metadata'] = provenance[response_index]
-            if config.debug_mode:
-                record.update(answer=answer, reasoning=reasoning)
-            try:
-                parsed = parse_cohort_response(answer, finish)
-            except ValueError as exc:
-                record["validation_error"] = str(exc)
-                metadata["trial_errors"][trial_id] = str(exc)
-                next_pending.append(i)
-                # Keep the complete source and original instructions. Retry
-                # only this trial, without changing vendor sampling/thinking.
-                messages[i] = build_cohort_messages(frame.at[i, "trial_text"], prompt=prompt)
-                messages[i].append({
-                    "role": "user",
-                    "content": (
-                        f"The preceding attempt failed validation: {exc}. "
-                        "Return a complete replacement JSON object following the "
-                        "original instructions and full source document."
-                    ),
-                })
-            else:
-                metadata["trial_errors"].pop(trial_id, None)
-                metadata["trial_decisions"][trial_id] = parsed
-                if parsed["cancer_treatment_trial"] == "no":
-                    metadata["trial_rejections"][trial_id] = parsed
-            metadata["trial_attempts"].setdefault(trial_id, []).append(record)
-            if config.debug_mode:
-                metadata["trial_responses"][trial_id] = {
-                    "answer": answer, "reasoning": reasoning, "finish_reason": finish,
-                }
-        pending = next_pending
+        metadata["trial_responses"] = {trial_id: state["responses"] for trial_id, state in states.items()}
 
     rows = []
-    for i, source in frame.iterrows():
-        parsed = metadata["trial_decisions"].get(source.trial_id)
-        if parsed is None or parsed["cancer_treatment_trial"] == "no":
+    for source in frame.itertuples(index=False):
+        decision = metadata["trial_decisions"].get(source.trial_id)
+        if decision is None or decision["cancer_treatment_trial"] == "no":
             continue
-        # Single cohorts carry the model's extracted criteria, exactly as for
-        # protocols; the registry eligibility field is never copied verbatim.
-        for row in decision_rows(source.trial_id, parsed, source="registry"):
+        for row in decision_rows(source.trial_id, decision, source="registry"):
             if config.debug_mode:
-                row.update(
-                    trial_input_text=source.trial_text,
-                    trial_answer_text=last_responses[i][0],
-                    trial_reasoning_text=last_responses[i][1],
-                )
+                row["trial_input_text"] = source.trial_text
             rows.append(row)
-    columns = COHORT_COLUMNS + ([
-        "trial_input_text", "trial_answer_text", "trial_reasoning_text",
-    ] if config.debug_mode else [])
-    result = pd.DataFrame(rows, columns=columns)
+    result = pd.DataFrame(rows, columns=COHORT_COLUMNS + (["trial_input_text"] if config.debug_mode else []))
     result["cohort_number"] = result.cohort_number.astype("int64")
     # Retain decisions even when return_metadata=False, including all-rejected runs.
     result.attrs.update({key: metadata[key] for key in (
@@ -182,9 +118,7 @@ def summarize_trial_cohorts(trials, config):
     for metric, trial_ids in (
         ("trials_rejected_cancer_treatment", list(metadata["trial_rejections"])),
         ("trials_failed_inference", list(metadata["trial_errors"])),
-        ("trials_truncated_llm_response", [
-            frame.at[i, "trial_id"] for i, finish in last_finishes.items() if finish == "length"
-        ]),
+        ("trials_truncated_llm_response", [t for t, state in states.items() if state["truncated"]]),
     ):
         qc.append(qc_artifact_to_report_row(build_qc_artifact(
             metric=metric, ids=trial_ids, denominator=len(frame),

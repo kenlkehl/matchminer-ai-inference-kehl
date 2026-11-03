@@ -16,102 +16,99 @@
         - get_guideline_considerations
         - structure_trial_space
 
-## Combined treatment screening and cohort extraction
+## Three-step treatment screening and cohort extraction
 
 The default `trial.extraction_method` is `cohorts`. `summarize_trials` accepts
 one row per trial with `trial_id`, `trial_title`, `brief_summary`, and
-`eligibility_criteria`. IDs must be unique and nonempty. Source-field formatting
-is preserved. Each trial uses one combined prompt, with up to three validation
-attempts (`trial.cohorts.max_attempts`); only failed trials are retried, using the
-same sampling and thinking settings. Existing local and remote backends are used.
+`eligibility_criteria`; IDs must be unique and nonempty. Each listing becomes
+one document, `Title: ...`, `Brief summary:` and `Eligibility criteria:` with
+source formatting preserved, and goes through the same workflow and prompts as
+full protocols (`extract_protocol_cohorts`, below;
+`matchminer_ai.trials.cohort_workflow`). Every trial gets separate requests:
 
-The model must return exactly one of these JSON shapes, in the indicated order:
+1. **Screen** (`trial.cohorts.screen.user.txt`): `{"cancer_treatment_trial": "yes"}`
+   or `{"cancer_treatment_trial": "no"}`. Only direct anti-cancer treatment
+   strategies qualify (including PK/PD, safety, dose or surrogate-endpoint
+   studies); diagnostic, supportive-care, survivorship, primary-prevention and
+   non-cancer trials do not. A "no" ends the trial.
+2. **Cohort names** (`trial.cohorts.list.user.txt`):
+   `{"cohorts": ["Part A, dose escalation", "Part B, dose expansion (disease X)"]}`,
+   one or more distinct names in source order: the cohorts the trial defines
+   (parts, phases, arms or groups that enroll participants), at the lowest level
+   of any hierarchy, without comparing their criteria. Dose levels within a
+   part, arms randomized from one enrolled population, stratification factors,
+   crossover, extension and rollover phases, and optional sub-studies are not
+   cohorts; closed cohorts are kept, and cohorts limited to countries that
+   exclude the United States are omitted. A single population is one cohort
+   (for example "All participants").
+3. **Criteria, one request per cohort** (`trial.cohorts.criteria.user.txt`):
+   `{"eligibility_criteria": "Inclusion criteria:\n...\nExclusion criteria:\n..."}`,
+   the complete criteria of the named cohort: criteria stated for every
+   participant, for a part or group containing it, or for a disease it can
+   include, and no criterion that applies only to other cohorts. The request
+   lists every cohort name and ends with the target name.
 
-```json
-{"cancer_treatment_trial": "no"}
-```
+The criteria prompt keeps enrollment criteria only and omits boilerplate:
+consent, compliance with visits or procedures, catch-all investigator-judgment
+exclusions, sponsor or site staff exclusions, and every criterion about
+contraception, pregnancy or lactation unless the trial specifically recruits
+people who are pregnant or lactating (other hormone therapy, such as hormone
+replacement therapy, is not boilerplate). A criterion mixing boilerplate with a
+substantive requirement keeps the substantive part. Only United States versions
+of country-specific criteria are kept, references are resolved by restating
+their content, applicability lead-ins and mentions of other cohorts are removed
+once a criterion's placement is decided, qualifiers are never deleted, and gaps
+or damaged source text are flagged with a "Source limitation:" statement.
 
-```json
-{"cancer_treatment_trial": "yes", "multiple_cohorts": "no", "eligibility_criteria": "Inclusion criteria: ..."}
-```
+Every prompt starts with the same preamble and document, and the criteria
+prompt puts the cohort list and target name last, so a server's prefix cache
+reuses a trial's document across its requests. Each answer is validated by its
+own contract (`parse_screen`, `parse_cohort_list`, `parse_criteria`): exactly
+the one field, lowercase "yes"/"no", distinct nonempty names, nonempty criteria
+that are not placeholders, a `stop` finish. One complete outer Markdown fence
+is accepted; duplicate keys, extra fields, surrounding prose and truncation
+fail validation and never become negative decisions. With a remote backend and
+`trial.cohorts.structured_outputs: true` (the default), each request sets a
+`response_format` with its step's schema (`JSON_SCHEMAS`). Only failed
+requests are retried, with the full document, the original instructions and
+the validation error, up to `trial.cohorts.max_attempts`; a cohort that fails
+every attempt fails its trial. Requests of one step go to the backend in
+chunks of `trial.cohorts.chunk_size`, `chunks_in_flight` at once. Cohorts whose
+extracted criteria are identical are combined into one row with both names.
+
+A trial's decision (schema `trial-cohorts-stepwise-v1`) is
 
 ```json
 {
   "cancer_treatment_trial": "yes",
   "multiple_cohorts": "yes",
   "cohorts": [
-    {"cohort_name": "Arm A", "cohort_specific_eligibility_criteria": "Criteria specific to the first cohort"},
-    {"cohort_name": "Arm B", "cohort_specific_eligibility_criteria": "Criteria specific to the second cohort"}
-  ],
-  "common_eligibility_criteria": "Inclusion and exclusion criteria shared by every population"
+    {"cohort_name": "Part A", "eligibility_criteria": "Inclusion criteria: ..."},
+    {"cohort_name": "Part B", "eligibility_criteria": "Inclusion criteria: ..."}
+  ]
 }
 ```
 
-Values are lowercase strings, not booleans. A negative treatment decision stops
-before cohort assessment. Diagnostic-only, supportive-care and primary-prevention
-studies do not qualify merely because participants have cancer or receive
-background cancer therapy. Direct treatment studies qualify even with only
-PK/PD, safety, dose, or surrogate endpoints. The combined prompt owns these rules;
-the training screen imports it rather than maintaining another screening prompt.
-
-Arms/cohorts count separately only when eligibility differs. Equivalent groups
-are combined. Each object contains exactly two nonempty strings: `cohort_name`
-and `cohort_specific_eligibility_criteria`. The name retains the source arm/cohort
-label (or `Cohort 1`, `Cohort 2`, etc. when unnamed); the criteria field starts
-directly with eligibility requirements, without a cohort-name heading.
-Each criteria field contains only that population's specific
-inclusion/exclusion criteria. `common_eligibility_criteria` is one string containing
-criteria that apply identically to every population, or `""` when none are
-established. Criteria shared by only some populations are repeated in their
-respective strings. If a rule differs by cohort, each string carries its complete
-applicable version; the common field must not introduce a conflicting default.
-Each cohort string together with the common field must be complete and
-self-contained, preserve exceptions and AND/OR logic, and explicitly flag
-incomplete source criteria without inventing missing details.
-
-This is schema `trial-registry-cohorts-v1`, the same response contract as
-full-protocol extraction (`trial-protocol-cohorts-v2`, below), and the prompt
-applies the protocol prompt's rules to registry text: enrollment criteria only
-(no treatment, discontinuation, crossover, extension, rollover or optional
-sub-study criteria), crossover and extension phases are not cohorts,
-escalation and expansion parts with different criteria are separate cohorts,
-closed cohorts are kept, only United States versions of country-specific
-criteria and cohorts are kept, criteria are placed by content rather than by
-heading, and each criteria string uses "Inclusion criteria:" and "Exclusion
-criteria:" with one criterion per line. A single-population answer therefore
-carries that population's extracted criteria. With a remote backend and
-`trial.cohorts.structured_outputs: true` (the default), requests set a
-`response_format` with `COHORT_JSON_SCHEMA`, as for protocols. Live responses
-require named objects and the shared field for multiple populations. The
-historical named-object schema without single-population criteria is readable
-with `schema_version="trial-treatment-cohorts-v3"`, and v1/v2 string outputs
-with `schema_version="trial-treatment-cohorts-v1"` or `"trial-treatment-cohorts-v2"`;
-none is accepted as a new response. Different cohort names do not make duplicate criteria distinct.
-Prompt hashes and schema versions distinguish the generations.
-
-The returned DataFrame contains accepted cohorts only:
+or `{"cancer_treatment_trial": "no"}`; `multiple_cohorts` is derived from the
+number of cohorts. The returned DataFrame contains accepted cohorts only:
 
 | Column | Meaning |
 | --- | --- |
 | `cohort_trial_id` | `<trial_id>-cohort-<zero-based number>`; distinct from legacy space IDs. |
 | `trial_id` | Source trial identifier. |
 | `cohort_number` | Zero-based population index in source order. |
-| `cohort_name` | Source cohort/arm name or deterministic fallback from the model; null for single-population trials. Kept out of complete eligibility text and embeddings. |
-| `cohort_eligibility_criteria` | Cohort-specific plus common criteria joined in code, or the model's extracted criteria for one population. |
-| `cohort_specific_eligibility_criteria` | The model's specific criteria string; null for single-population trials. |
-| `common_eligibility_criteria` | The model's shared criteria string, repeated in each row; null for single-population trials. |
-| `cohort_criteria_source` | `registry` (registry text through `summarize_trials`) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` for multiple populations and `eligibility_criteria` for a verbatim single population. |
+| `cohort_name` | The cohort's name from step 2, also for a single population. Kept out of eligibility text and embeddings. |
+| `cohort_eligibility_criteria` | That cohort's complete criteria from its own request. |
+| `cohort_criteria_source` | `registry` (`summarize_trials`) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` and `eligibility_criteria`. |
 | `cancer_treatment_trial` | `yes` for every returned row. |
-| `multiple_cohorts` | The accepted model decision. |
+| `multiple_cohorts` | `yes` when the trial has more than one cohort. |
 
-Derived row metadata uses `representation_version="trial-treatment-cohorts-v4"` to distinguish the separate
-name column; the LLM JSON schema is `trial-registry-cohorts-v1`. Rejected trials produce no rows. Empty/all-rejected runs retain the same
-column schema. General exclusions remain in either the specific or common field
-according to applicability. The common field is not the legacy boilerplate
-extraction: it includes all shared eligibility dimensions, not just exclusions.
-Raw model JSON in metadata keeps the common field only once per trial; the
-complete row text adds headings and concatenates the two strings without another
-model call. When the common string is empty, the specific string is used as-is.
+Rows use `representation_version="trial-treatment-cohorts-v5"`. Earlier
+generations (single-request schemas `trial-registry-cohorts-v1` and
+`trial-protocol-cohorts-v2`, rows v4 with `cohort_specific_eligibility_criteria`
+and `common_eligibility_criteria`) remain readable with
+`cohort_schema.parse_cohort_response` for audits, but are not produced. Rejected
+trials produce no rows; empty and all-rejected runs keep the column schema.
 
 ```python
 from matchminer_ai.trials import summarize_trials
@@ -120,77 +117,45 @@ cohorts, metadata, qc = summarize_trials(
     trials, config=config, return_metadata=True, return_qc=True
 )
 print(metadata["trial_decisions"])
-print(metadata["trial_rejections"])
+print(metadata["trial_cohort_names"])
 print(metadata["trial_errors"])
 ```
 
-Decision, rejection, error, schema-version and prompt-hash metadata also appear
-in `cohorts.attrs` when optional metadata is not requested. Returned metadata
-includes per-trial attempts and model/config provenance. Debug mode additionally
-retains input, final answer and reasoning for accepted rows, and all final
-responses/attempts in metadata. QC separates treatment rejections from exhausted
-inference errors and truncated responses. Duplicate keys, extra/missing fields,
-wrong order/types, empty/duplicate cohort descriptions, surrounding prose, and
-non-`stop` finishes fail validation; they never become negative decisions.
-One complete outer Markdown fence is accepted when it is unlabeled or labeled
-`json` (case-insensitive), with only whitespace outside it. The enclosed JSON
-still undergoes all schema and completion checks. Debug responses retain the
-original fenced answer; accepting this presentation wrapper avoids unnecessary
-model retries without changing the extracted criteria.
+Decisions, rejections, errors, schema and representation versions, and the
+prompt-set hash (`prompt_sha256`, with `prompt_sha256_by_step`) also appear in
+`cohorts.attrs`. Returned metadata includes each trial's attempts per step (with
+serving endpoints), cohort names, combined cohorts and model provenance. Debug
+mode adds every step's answer and reasoning and each row's input document. QC
+separates treatment rejections, exhausted inference errors and truncated
+responses.
 
-This changes the default schema and text semantics. Do not rename these columns
-to legacy space columns or reuse saved space embeddings as if the representations
-were interchangeable. Existing matching/structuring consumers require adaptation
-and evaluation. `hierarchical` and `one_shot` remain explicit legacy modes with
-their previous space schema; the current Space applications opt into that mode.
-Saved trial-space artifacts remain unchanged.
+Do not rename these columns to legacy space columns or reuse saved space
+embeddings as if the representations were interchangeable. `hierarchical` and
+`one_shot` remain explicit legacy modes with their previous space schema; the
+current Space applications opt into that mode.
 
 ## Cohort extraction from full protocol documents
 
-`extract_protocol_cohorts` applies the same treatment and cohort decisions to
-complete protocol documents instead of registry text. It accepts one row per
-trial with a unique `trial_id` and a `protocol_path` to a PDF or a UTF-8 text
-file (`.txt` or `.md`). PDFs are converted locally with `ocr_pdf`; pass `text_output_dir` to keep
-the converted text, which is otherwise written to a temporary directory and
-removed. Each document is sent whole with `trial.cohorts.protocol.user.txt`;
-documents longer than `protocol_cohort_extraction.max_document_characters`
-fail rather than being truncated.
+`extract_protocol_cohorts` runs the same three steps and prompts on complete
+protocol documents. It accepts one row per trial with a unique `trial_id` and a
+`protocol_path` to a PDF or a UTF-8 text file (`.txt` or `.md`). PDFs are
+converted locally with `ocr_pdf`; pass `text_output_dir` to keep the converted
+text, which is otherwise written to a temporary directory and removed. Each
+document is sent whole; documents longer than
+`protocol_cohort_extraction.max_document_characters` fail rather than being
+truncated. The prompts cover protocol-specific sources: eligibility anywhere in
+the document (study design, part or module sections, appendices), body text
+over abbreviated synopsis criteria, current text over superseded amendment
+text, and PDF-conversion damage.
 
-The prompt locates eligibility anywhere in the document (study design, part or
-module sections, appendices), prefers body text over abbreviated synopsis
-criteria and current text over superseded amendment text, excludes crossover,
-rollover and optional sub-study criteria, and resolves cross-references by
-restating the referenced content. Closed, completed and terminated cohorts are
-extracted like open ones. Country-specific criteria use the United States
-version, and cohorts limited to countries that exclude the United States (for
-example a Japan-only cohort) are omitted; a trial enrolling in a single country
-is extracted as usual. As with registry text, a single-cohort answer carries
-that cohort's criteria:
-
-```json
-{"cancer_treatment_trial": "yes", "multiple_cohorts": "no", "eligibility_criteria": "Inclusion criteria: ..."}
-```
-
-Multi-cohort and negative answers have the registry shapes. This is schema
-`trial-protocol-cohorts-v2` (v1 had the same shape, but its `minLength` strings kept
-vLLM structured outputs from writing any JSON escape, so criteria lost their line
-breaks and double quotes). With a remote backend and
-`protocol_cohort_extraction.structured_outputs: true` (the default), requests
-set an OpenAI-compatible `response_format` with `COHORT_JSON_SCHEMA`,
-so vLLM structured outputs constrain the answer; vLLM applies the grammar after
-the reasoning section when the server runs a reasoning parser. Local in-process
-generation is not grammar-constrained and relies on validation. Every answer is
-checked strictly, and only failed trials are retried with the complete document
-and the validation error, up to `max_attempts`.
-
-Requests go through the backend in chunks of
-`protocol_cohort_extraction.chunk_size`, with `chunks_in_flight` chunks running
-at once; remote runs use the shared endpoint pool, so adaptive concurrency and
-endpoint registries apply. With `output_dir`, each accepted decision is saved
-as its chunk returns to `<output_dir>/<trial_id>/extraction.json` (raw answer,
-parsed decision, every attempt with its serving endpoint, prompt hash, schema
-version and source-document SHA-256) with `reasoning.txt`. A rerun with the
-same `output_dir` reuses a saved decision only when the prompt, schema and
+Settings come from `protocol_cohort_extraction` (`max_attempts`, `chunk_size`,
+`chunks_in_flight`, `structured_outputs`, and optional `prompt_files` mapping
+`screen`/`list`/`criteria` to other packaged prompt files). With `output_dir`,
+each decided trial is saved as soon as it is decided to
+`<output_dir>/<trial_id>/extraction.json` (decision, cohort names, combined
+cohorts, every attempt per step with its serving endpoint, prompt hashes,
+schema version and source-document SHA-256) with `reasoning.json`. A rerun with
+the same `output_dir` reuses a saved decision only when the prompts, schema and
 document bytes are unchanged, and sends the rest.
 
 The result has the `summarize_trials` cohort columns, with

@@ -143,3 +143,62 @@ def expected_flattened_spaces(mock_summarized_data: pd.DataFrame) -> pd.DataFram
     for_embed["clinical_space_number"] = [0, 1, 2, 0]
 
     return for_embed.reset_index(drop=True)
+
+
+def prompt_text(prompt):
+    """All message text of a rendered prompt (the original request plus any retry note)."""
+    messages = getattr(prompt, "messages", None)
+    return "\n".join(m["content"] for m in messages) if messages else prompt.prompt_text
+
+
+class ScriptedCohortBackend:
+    """Fake LLM backend for the three-step cohort workflow.
+
+    ``script`` maps a text that identifies a trial's document to its answers by
+    step: ``{"screen": [...], "list": [...], "criteria": {cohort_name: [...]}}``.
+    Answers are consumed in order (the last one repeats); a dict is sent as JSON
+    and an ``(answer, finish_reason)`` pair sets the finish reason.
+    """
+
+    def __init__(self):
+        self.script, self.calls = {}, []
+
+    @staticmethod
+    def step_of(text):
+        if "Decide whether this trial evaluates a cancer treatment" in text:
+            return "screen", None
+        if "List the cohorts it defines" in text:
+            return "list", None
+        return "criteria", text.rsplit("Extract the complete eligibility criteria of this cohort only: ", 1)[1].split("\n")[0].strip()
+
+    def answer(self, prompt):
+        import json
+        text = prompt_text(prompt)
+        step, target = self.step_of(text)
+        marker = next(m for m in self.script if m in text)
+        queue = self.script[marker][step]
+        if step == "criteria":
+            queue = queue[target]
+        value = queue.pop(0) if len(queue) > 1 else queue[0]
+        answer, finish = value if isinstance(value, tuple) else (value, "stop")
+        return json.dumps(answer) if isinstance(answer, dict) else answer, finish
+
+    def generate_llm_outputs(self, *, prompt_list, llm_config, **kwargs):
+        from copy import deepcopy
+        from matchminer_ai.llm.backends import LLMGenerationResult
+        self.calls.append((prompt_list, deepcopy(llm_config)))
+        answers = [self.answer(prompt) for prompt in prompt_list]
+        return LLMGenerationResult(
+            final_outputs=[a for a, _ in answers], finish_reasons=[f for _, f in answers],
+            reasoning_outputs=["test reasoning"] * len(answers), raw_outputs=[],
+            model_metadata={"model_sha": "test", "responses": [
+                {"row_idx": i, "endpoint": "http://fake/v1"} for i in range(len(answers))]},
+        )
+
+
+@pytest.fixture
+def cohort_backend(monkeypatch):
+    backend = ScriptedCohortBackend()
+    for module in ("matchminer_ai.trials.cohorts", "matchminer_ai.trials.protocol_cohorts"):
+        monkeypatch.setattr(f"{module}.get_llm_backend", lambda _config: backend)
+    return backend

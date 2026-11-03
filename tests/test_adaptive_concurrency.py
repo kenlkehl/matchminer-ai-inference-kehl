@@ -125,10 +125,17 @@ def test_public_cohort_retries_keep_each_endpoint_provenance(monkeypatch, tmp_pa
     calls = []
     def create(**request):
         calls.append(request)
+        text = ' '.join(str(m.get('content')) for m in request['messages'])
+        if len(calls) == 1:
+            content = 'malformed output'
+        elif 'Decide whether this trial evaluates a cancer treatment' in text:
+            content = '```json\n{"cancer_treatment_trial":"yes"}\n```'
+        elif 'List the cohorts it defines' in text:
+            content = '{"cohorts":["All participants"]}'
+        else:
+            content = '{"eligibility_criteria":"Inclusion criteria:\\nAdult"}'
         return SimpleNamespace(choices=[SimpleNamespace(finish_reason='stop',
-            message=SimpleNamespace(reasoning='synthetic trace', content=(
-                'malformed output' if len(calls) == 1 else
-                '```json\n{"cancer_treatment_trial":"yes","multiple_cohorts":"no","eligibility_criteria":"Inclusion criteria:\\nAdult"}\n```')))])
+            message=SimpleNamespace(reasoning='synthetic trace', content=content))])
     monkeypatch.setattr(openai, 'OpenAI', lambda **kw: SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
     monkeypatch.setattr('matchminer_ai.llm.backends.get_endpoint_model_metadata', lambda *a, **k: {})
@@ -137,8 +144,9 @@ def test_public_cohort_retries_keep_each_endpoint_provenance(monkeypatch, tmp_pa
     frame = pd.DataFrame([dict(trial_id='synthetic', trial_title='Synthetic trial',
                                brief_summary='Cancer treatment', eligibility_criteria='Adult')])
     rows, meta = summarize_trials(frame, config=config, return_metadata=True)
-    assert len(rows) == 1 and len(calls) == 2
-    provenance = [item['response_metadata'] for item in meta['trial_attempts']['synthetic']]
+    # Screen (malformed, then retried on the other server), cohort names, criteria.
+    assert len(rows) == 1 and len(calls) == 4
+    provenance = [item['response_metadata'] for item in meta['trial_attempts']['synthetic']['screen']]
     assert [item['model_root'] for item in provenance] == ['quantization-0', 'quantization-1']
     assert [item['request_model'] for item in provenance] == ['alias-0', 'alias-1']
     assert not meta['trial_errors']
