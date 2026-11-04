@@ -83,7 +83,9 @@ def test_saved_groupings_are_reused_only_for_unchanged_cohorts(tmp_path, config,
     frame = pd.DataFrame(rows("T1", ["Trial one adults.", "Trial one adults, reworded."]))
     cohort_backend.script["Trial one"] = {"merge": [{"groups": [[1, 2]]}]}
     first = merge_equivalent_cohorts(frame, config=config, output_dir=tmp_path)
-    assert json.loads((tmp_path / "T1/merge.json").read_text())["groups"] == [[0, 1]] and len(first) == 1
+    saved = json.loads((tmp_path / "T1/merge.json").read_text())
+    assert saved["groups"] == [[0, 1]] and len(first) == 1
+    assert saved["attempts"][0]["reasoning"] == "test reasoning" and json.loads(saved["attempts"][0]["answer"]) == {"groups": [[1, 2]]}
     again, metadata = merge_equivalent_cohorts(frame, config=config, output_dir=tmp_path, return_metadata=True)
     assert len(cohort_backend.calls) == 1 and metadata["skipped_completed"] == 1 and len(again) == 1
     frame.loc[1, "cohort_eligibility_criteria"] = "Trial one children."

@@ -112,8 +112,10 @@ def merge_equivalent_cohorts(
     with ``cohort_name`` set to the merged names joined by "; ", ``cohort_number`` and
     ``cohort_trial_id`` renumbered, ``multiple_cohorts`` recomputed, and ``merged_from``
     listing the original cohort numbers (JSON). The criteria are the first cohort's, unchanged.
+    Every attempt in the metadata's ``trial_attempts`` keeps the model's answer and reasoning.
     With ``output_dir``, each trial's grouping is saved to ``<output_dir>/<trial_id>/merge.json``
-    and reused when the prompt and the trial's cohort names and criteria are unchanged.
+    (with its attempts) and reused when the prompt and the trial's cohort names and criteria are
+    unchanged.
     """
     resolved = config or load_default_preset()
     frame = cohorts.copy()
@@ -164,9 +166,10 @@ def merge_equivalent_cohorts(
             pending = []
             for chunk, generation in results:
                 provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
-                for position, ((trial_id, attempt, _, original), answer, finish) in enumerate(zip(
-                        chunk, generation.final_outputs, generation.finish_reasons, strict=True)):
-                    entry = {"attempt": attempt, "finish_reason": finish}
+                for position, ((trial_id, attempt, _, original), answer, reasoning, finish) in enumerate(zip(
+                        chunk, generation.final_outputs, generation.reasoning_outputs, generation.finish_reasons,
+                        strict=True)):
+                    entry = {"attempt": attempt, "finish_reason": finish, "answer": answer, "reasoning": reasoning}
                     if position in provenance:
                         entry["response_metadata"] = provenance[position]
                     metadata["trial_attempts"].setdefault(trial_id, []).append(entry)
