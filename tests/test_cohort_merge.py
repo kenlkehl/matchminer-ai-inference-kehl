@@ -33,7 +33,8 @@ def test_prompt_lists_numbered_cohorts_literally_and_asks_only_for_groups():
     content = build_merge_messages(["Arm {1}", "Arm 2"], ["Adults {x}.", "Children."], prompt)[0]["content"]
     assert "### Cohort 1: Arm {1}\nAdults {x}.\n\n### Cohort 2: Arm 2\nChildren." in content
     assert "do not rewrite, summarize, or repeat any criteria" in content
-    assert "When you are unsure whether a difference changes who is eligible, keep the cohorts apart" in content
+    assert "When you are unsure whether cohorts define different populations, keep them apart" in content
+    assert "Ignore differences of extraction" in content and "unless it concerns what defines a cohort's population" in content
     assert parse_merge_groups('{"groups": [[1, 3], [2], [4, 5]]}', "stop", 5) == [[0, 2], [1], [3, 4]]
     assert list(MERGE_JSON_SCHEMA["properties"]) == ["groups"] and "minLength" not in json.dumps(MERGE_JSON_SCHEMA)
 
