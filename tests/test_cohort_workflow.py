@@ -83,7 +83,9 @@ def test_criteria_prompt_keeps_the_boilerplate_and_applicability_rules():
                  "unless the trial specifically recruits people who are pregnant or lactating",
                  "Other hormone therapy, such as hormone replacement therapy, is not covered by this rule",
                  "Conditions that a criterion excludes outright are substantive even when a catch-all clause follows them",
-                 "Requirements to have tumor tissue available or to undergo a biopsy are not boilerplate",
+                 "to have tumor tissue available or tumor amenable to biopsy, or to undergo a biopsy",
+                 "A biomarker or other test result that a criterion requires is substantive",
+                 "measurable or evaluable disease or lesions", "an exclusion for having received or planning to receive a live",
                  "only the version that applies in the United States",
                  "Never delete a qualifier", "even when its name also says so"):
         assert rule in criteria
