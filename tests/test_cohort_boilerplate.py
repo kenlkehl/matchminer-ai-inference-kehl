@@ -65,6 +65,8 @@ def test_prompt_shows_the_numbered_cohort_and_ends_with_the_item():
                  "Washout periods: requirements or exclusions that no radiation, systemic therapy",
                  "within a set period of 30 days or less before enrollment",
                  "A criterion about whether a person has ever received a treatment, or about a period longer than 30 days, is not boilerplate",
+                 "Criteria about recent major surgery and recovery from it",
+                 "Whether a person has had surgery for their cancer, such as a required or excluded resection of the tumor, is not boilerplate",
                  "Every criterion about contraception, pregnancy, or lactation",
                  "central to what the trial studies or whom it targets", "a hemoglobin requirement in a trial for anemia",
                  "brain metastasis criteria in a trial for primary brain tumors",

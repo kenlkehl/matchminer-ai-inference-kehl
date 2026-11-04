@@ -4,10 +4,10 @@ Cohort extraction (cohort_workflow) copies every eligibility criterion that appl
 verbatim, including boilerplate that most cancer trials share: consent, compliance, sample and
 biopsy requirements, measurable disease, prognosis, performance status, organ function, brain
 metastases, toxicities of earlier treatment, washout periods of 30 days or less from radiation,
-systemic or trial therapy, non-cancer conditions, unrelated other cancers,
-participation in another trial at the same time, contraception, pregnancy and lactation, vaccine
-restrictions, study-staff and catch-all exclusions (each unless it is central to what the trial
-studies). :func:`remove_boilerplate_criteria` splits each cohort's criteria into
+systemic or trial therapy, recovery from recent major surgery, non-cancer conditions, unrelated
+other cancers, participation in another trial at the same time, contraception, pregnancy and
+lactation, vaccine restrictions, study-staff and catch-all exclusions (each unless it is central
+to what the trial studies). :func:`remove_boilerplate_criteria` splits each cohort's criteria into
 items, one per line (:func:`split_criteria`), and asks ``trial.cohorts.deboilerplate.user.txt``
 whether each item is boilerplate, one request per item showing the cohort's numbered criteria
 without the trial document. Code then sorts the unchanged items into the criteria that are not
