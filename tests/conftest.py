@@ -155,7 +155,8 @@ class ScriptedCohortBackend:
     """Fake LLM backend for the three-step cohort workflow.
 
     ``script`` maps a text that identifies a trial's document to its answers by
-    step: ``{"screen": [...], "list": [...], "criteria": {cohort_name: [...]}}``.
+    step: ``{"screen": [...], "list": [...], "criteria": {cohort_name: [...]}}``, and the
+    boilerplate step by item text: ``{"deboilerplate": {item: [...]}}``.
     Answers are consumed in order (the last one repeats); a dict is sent as JSON
     and an ``(answer, finish_reason)`` pair sets the finish reason.
     """
@@ -171,8 +172,8 @@ class ScriptedCohortBackend:
             return "list", None
         if "Group the cohorts whose eligibility criteria are essentially the same" in text:
             return "merge", None
-        if "Separate this cohort's boilerplate criteria from the rest of its eligibility criteria" in text:
-            return "deboilerplate", None
+        if "is a boilerplate criterion. Boilerplate criteria are general requirements" in text:
+            return "deboilerplate", text.rsplit("ITEM TO CLASSIFY\n", 1)[1].split("] ", 1)[1].split("\n")[0].strip()
         return "criteria", text.rsplit("Extract the complete eligibility criteria of this cohort only: ", 1)[1].split("\n")[0].strip()
 
     def answer(self, prompt):
@@ -183,6 +184,8 @@ class ScriptedCohortBackend:
         queue = self.script[marker][step]
         if step == "criteria":
             queue = queue[target]
+        elif step == "deboilerplate":  # answers by item; an item not listed is not boilerplate
+            queue = queue.get(target, [{"boilerplate": False}])
         value = queue.pop(0) if len(queue) > 1 else queue[0]
         answer, finish = value if isinstance(value, tuple) else (value, "stop")
         return json.dumps(answer) if isinstance(answer, dict) else answer, finish
