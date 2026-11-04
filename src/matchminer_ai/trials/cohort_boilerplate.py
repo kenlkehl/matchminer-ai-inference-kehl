@@ -65,7 +65,8 @@ def remove_boilerplate_criteria(
     rows have it, otherwise ``<trial_id>-cohort-<cohort_number>``).
 
     Returns the rows in their original order with ``cohort_eligibility_criteria`` replaced.
-    Every attempt in the metadata's ``cohort_attempts`` keeps the model's answer and reasoning.
+    Every attempt in the metadata's ``cohort_attempts`` keeps the model's answer and reasoning,
+    and ``trial_cohorts`` holds each trial's results as ``deboilerplate.json`` stores them.
     With ``output_dir``, each trial's results are saved to
     ``<output_dir>/<trial_id>/deboilerplate.json`` (with their attempts) and a cohort's result is
     reused when the prompt and that cohort's name and criteria are unchanged.
@@ -108,7 +109,7 @@ def remove_boilerplate_criteria(
         messages = build_deboilerplate_messages(names[row], frame.cohort_eligibility_criteria.iloc[row], prompt)
         pending.append((row, 1, messages, messages))
 
-    def save(trial_id):
+    def entries_of(trial_id):
         entries = []
         for r in rows_of[trial_id]:
             entry = {"cohort_number": int(frame.cohort_number.iloc[r]), "cohort_name": names[r], "input_sha256": inputs[r]}
@@ -123,9 +124,12 @@ def remove_boilerplate_criteria(
             elif inputs[r] in saved[trial_id]:
                 entry["attempts"] = saved[trial_id][inputs[r]].get("attempts", [])
             entries.append(entry)
+        return entries
+
+    def save(trial_id):
         atomic_json(root / str(trial_id) / "deboilerplate.json", {
             "trial_id": trial_id, "schema_version": DEBOILERPLATE_SCHEMA_VERSION, "prompt_sha256": prompt_sha,
-            "cohorts": entries, "completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+            "cohorts": entries_of(trial_id), "completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
 
     if pending:
         runtime, settings = _section(resolved, section, "trial_cohorts_deboilerplate", DEBOILERPLATE_JSON_SCHEMA)
@@ -166,6 +170,7 @@ def remove_boilerplate_criteria(
     result = frame.copy()
     result["cohort_eligibility_criteria"] = [results.get(r, text) for r, text in enumerate(frame.cohort_eligibility_criteria)]
     metadata["cohorts"] = len(frame)
+    metadata["trial_cohorts"] = {trial_id: entries_of(trial_id) for trial_id in rows_of}
     return (result, metadata) if return_metadata else result
 
 

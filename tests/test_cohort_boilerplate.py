@@ -59,6 +59,7 @@ def test_each_cohort_gets_its_criteria_without_boilerplate(config, cohort_backen
     assert result.cohort_eligibility_criteria.tolist() == ["Trial one adults.", "Trial one children."]
     assert result.drop(columns="cohort_eligibility_criteria").equals(frame.drop(columns="cohort_eligibility_criteria"))
     assert metadata["cohort_attempts"]["T1-cohort-0"][0]["reasoning"] == "test reasoning"
+    assert [e["eligibility_criteria"] for e in metadata["trial_cohorts"]["T1"]] == ["Trial one adults.", "Trial one children."]
 
 
 def test_a_cohort_that_never_validates_keeps_its_criteria(config, cohort_backend):

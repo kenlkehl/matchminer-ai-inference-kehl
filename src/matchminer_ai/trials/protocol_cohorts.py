@@ -108,6 +108,12 @@ def extract_protocol_cohorts(
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     """Screen full protocol documents and extract their cohort eligibility criteria.
 
+    Each cohort's criteria are copied verbatim, boilerplate included. Two optional steps take the
+    returned rows, as for registry listings (:func:`~matchminer_ai.trials.summarize_trials`):
+    :func:`~matchminer_ai.trials.merge_equivalent_cohorts` and
+    :func:`~matchminer_ai.trials.remove_boilerplate_criteria`, both with
+    ``section="protocol_cohort_extraction"`` (training uses both, in that order).
+
     ``protocols`` has one row per trial with a unique ``trial_id`` and a
     ``protocol_path`` to a PDF or UTF-8 text file (``.txt`` or ``.md``). PDFs are converted locally
     with :func:`matchminer_ai.ocr_pdf`; pass ``text_output_dir`` to keep the

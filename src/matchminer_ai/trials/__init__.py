@@ -41,6 +41,11 @@ def summarize_trials(
     """
     Screen for cancer treatment and extract distinct eligibility populations.
 
+    Each cohort's criteria are copied verbatim, boilerplate included. Two optional steps take the
+    returned rows, as for full protocols (:func:`extract_protocol_cohorts`):
+    :func:`merge_equivalent_cohorts` and :func:`remove_boilerplate_criteria`, both with the default
+    ``section="trial"`` (training uses both, in that order).
+
     Parameters
     ----------
     trials : pd.DataFrame
