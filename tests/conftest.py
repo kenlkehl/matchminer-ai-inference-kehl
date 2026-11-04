@@ -171,7 +171,7 @@ class ScriptedCohortBackend:
             return "list", None
         if "Group the cohorts whose eligibility criteria are essentially the same" in text:
             return "merge", None
-        if "Remove the boilerplate criteria from this cohort's eligibility criteria" in text:
+        if "Separate this cohort's boilerplate criteria from the rest of its eligibility criteria" in text:
             return "deboilerplate", None
         return "criteria", text.rsplit("Extract the complete eligibility criteria of this cohort only: ", 1)[1].split("\n")[0].strip()
 

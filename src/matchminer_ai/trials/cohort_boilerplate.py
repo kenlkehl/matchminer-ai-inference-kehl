@@ -1,13 +1,14 @@
-"""Remove the boilerplate criteria from extracted cohorts.
+"""Separate the boilerplate criteria of extracted cohorts from the rest of their criteria.
 
 Cohort extraction (cohort_workflow) copies every eligibility criterion that applies to a cohort
 verbatim, including boilerplate that most cancer trials share: consent, compliance, sample and
-biopsy requirements, measurable disease, contraception, pregnancy and lactation, vaccine
-restrictions, study-staff and catch-all exclusions. :func:`remove_boilerplate_criteria` sends
-each cohort's criteria, without the trial document, to ``trial.cohorts.deboilerplate.user.txt``
-and keeps the answer: the same criteria with the boilerplate removed. It is optional at inference;
-training uses it for the cohorts that seed synthetic patients, after
-:func:`~matchminer_ai.trials.merge_equivalent_cohorts`.
+biopsy requirements, measurable disease, prognosis, performance status, organ function, brain
+metastases, toxicities of earlier treatment, non-cancer conditions, contraception, pregnancy and
+lactation, vaccine restrictions, study-staff and catch-all exclusions (each unless it is central to
+what the trial studies). :func:`remove_boilerplate_criteria` sends each cohort's criteria, without
+the trial document, to ``trial.cohorts.deboilerplate.user.txt``; the answer holds the criteria that
+are not boilerplate and, separately, the boilerplate criteria, both verbatim. It is optional at
+inference; training uses it after :func:`~matchminer_ai.trials.merge_equivalent_cohorts`.
 """
 
 from __future__ import annotations
@@ -28,11 +29,17 @@ from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
 
 from .cohort_merge import _section
-from .cohort_workflow import JSON_SCHEMAS, parse_criteria
+from .cohort_schema import _PLACEHOLDER
+from .cohort_workflow import _load_object
 
 DEBOILERPLATE_PROMPT = "trial.cohorts.deboilerplate.user.txt"
-DEBOILERPLATE_SCHEMA_VERSION = "trial-cohorts-deboilerplate-v1"
-DEBOILERPLATE_JSON_SCHEMA = JSON_SCHEMAS["criteria"]
+DEBOILERPLATE_SCHEMA_VERSION = "trial-cohorts-deboilerplate-v2"
+# No minLength (see cohort_workflow); the parser rejects empty remaining criteria.
+DEBOILERPLATE_JSON_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["eligibility_criteria", "boilerplate_criteria"],
+    "properties": {"eligibility_criteria": {"type": "string"}, "boilerplate_criteria": {"type": "string"}},
+}
+BOILERPLATE_COLUMN = "cohort_boilerplate_criteria"
 
 
 def build_deboilerplate_messages(name: str, criteria: str, prompt: str) -> list[dict[str, str]]:
@@ -40,9 +47,17 @@ def build_deboilerplate_messages(name: str, criteria: str, prompt: str) -> list[
     return [{"role": "user", "content": prompt.format(cohort_name=name, eligibility_criteria=criteria)}]
 
 
-def parse_deboilerplated(text: str, finish_reason: str = "stop") -> str:
-    """The cohort's criteria without boilerplate: the criteria step's contract."""
-    return parse_criteria(text, finish_reason)
+def parse_deboilerplated(text: str, finish_reason: str = "stop") -> tuple[str, str]:
+    """(criteria that are not boilerplate, boilerplate criteria); the first must be nonempty, the second may be empty."""
+    result = _load_object(text, finish_reason, ["eligibility_criteria", "boilerplate_criteria"])
+    criteria, boilerplate = result["eligibility_criteria"], result["boilerplate_criteria"]
+    if not isinstance(criteria, str) or not criteria.strip():
+        raise ValueError("eligibility_criteria must be a nonempty string")
+    if _PLACEHOLDER.fullmatch(criteria):
+        raise ValueError("eligibility_criteria is a placeholder, not eligibility criteria")
+    if not isinstance(boilerplate, str):
+        raise ValueError("boilerplate_criteria must be a string")
+    return criteria.strip(), boilerplate.strip()
 
 
 def remove_boilerplate_criteria(
@@ -53,18 +68,21 @@ def remove_boilerplate_criteria(
     output_dir: str | Path | None = None,
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
-    """Each cohort's eligibility criteria with the boilerplate criteria removed.
+    """Each cohort's eligibility criteria separated into boilerplate and the rest.
 
     ``cohorts`` holds cohort rows (``trial_id``, ``cohort_number``, ``cohort_name``,
     ``cohort_eligibility_criteria``; other columns are kept), extracted or merged. Each row gets
     one LLM request with ``trial.cohorts.deboilerplate.user.txt`` and the LLM settings of
     ``section`` ("trial" for registry listings, "protocol_cohort_extraction" for protocols); the
-    answer is validated like an extracted cohort's criteria and retried on failure up to that
-    section's ``max_attempts``. A cohort whose answer never validates keeps its criteria unchanged
-    and is reported in the metadata's ``deboilerplate_errors`` (by ``cohort_trial_id`` when the
-    rows have it, otherwise ``<trial_id>-cohort-<cohort_number>``).
+    answer (``eligibility_criteria``, nonempty, and ``boilerplate_criteria``, possibly empty) is
+    validated and retried on failure up to that section's ``max_attempts``. A cohort whose answer
+    never validates keeps its criteria unchanged, with no boilerplate criteria, and is reported in
+    the metadata's ``deboilerplate_errors`` (by ``cohort_trial_id`` when the rows have it,
+    otherwise ``<trial_id>-cohort-<cohort_number>``).
 
-    Returns the rows in their original order with ``cohort_eligibility_criteria`` replaced.
+    Returns the rows in their original order with ``cohort_eligibility_criteria`` replaced by the
+    criteria that are not boilerplate and a ``cohort_boilerplate_criteria`` column holding the
+    boilerplate criteria (None for a cohort whose answer never validated).
     Every attempt in the metadata's ``cohort_attempts`` keeps the model's answer and reasoning,
     and ``trial_cohorts`` holds each trial's results as ``deboilerplate.json`` stores them.
     With ``output_dir``, each trial's results are saved to
@@ -86,7 +104,7 @@ def remove_boilerplate_criteria(
               for name, text in zip(names, frame.cohort_eligibility_criteria)]
     metadata = {"schema_version": DEBOILERPLATE_SCHEMA_VERSION, "prompt_sha256": prompt_sha,
                 "deboilerplate_errors": {}, "cohort_attempts": {}, "skipped_completed": 0}
-    results: dict[int, str] = {}
+    results: dict[int, tuple[str, str]] = {}
     rows_of: dict[Any, list[int]] = {}
     for row, trial_id in enumerate(frame.trial_id):
         rows_of.setdefault(trial_id, []).append(row)
@@ -99,11 +117,12 @@ def remove_boilerplate_criteria(
                    and record.get("prompt_sha256") == prompt_sha)
         saved[trial_id] = {e["input_sha256"]: e for e in record.get("cohorts", []) if current and "eligibility_criteria" in e}
 
+
     pending = []
     for row, trial_id in enumerate(frame.trial_id):
         entry = saved[trial_id].get(inputs[row])
         if entry is not None:
-            results[row] = entry["eligibility_criteria"]
+            results[row] = (entry["eligibility_criteria"], entry["boilerplate_criteria"])
             metadata["skipped_completed"] += 1
             continue
         messages = build_deboilerplate_messages(names[row], frame.cohort_eligibility_criteria.iloc[row], prompt)
@@ -114,7 +133,7 @@ def remove_boilerplate_criteria(
         for r in rows_of[trial_id]:
             entry = {"cohort_number": int(frame.cohort_number.iloc[r]), "cohort_name": names[r], "input_sha256": inputs[r]}
             if r in results:
-                entry["eligibility_criteria"] = results[r]
+                entry["eligibility_criteria"], entry["boilerplate_criteria"] = results[r]
             elif keys[r] in metadata["deboilerplate_errors"]:
                 entry["error"] = metadata["deboilerplate_errors"][keys[r]]
             else:
@@ -168,11 +187,13 @@ def remove_boilerplate_criteria(
                             save(trial_id)
 
     result = frame.copy()
-    result["cohort_eligibility_criteria"] = [results.get(r, text) for r, text in enumerate(frame.cohort_eligibility_criteria)]
+    result["cohort_eligibility_criteria"] = [results[r][0] if r in results else text
+                                             for r, text in enumerate(frame.cohort_eligibility_criteria)]
+    result[BOILERPLATE_COLUMN] = [results[r][1] if r in results else None for r in range(len(frame))]
     metadata["cohorts"] = len(frame)
     metadata["trial_cohorts"] = {trial_id: entries_of(trial_id) for trial_id in rows_of}
     return (result, metadata) if return_metadata else result
 
 
-__all__ = ["DEBOILERPLATE_JSON_SCHEMA", "DEBOILERPLATE_PROMPT", "DEBOILERPLATE_SCHEMA_VERSION",
+__all__ = ["BOILERPLATE_COLUMN", "DEBOILERPLATE_JSON_SCHEMA", "DEBOILERPLATE_PROMPT", "DEBOILERPLATE_SCHEMA_VERSION",
            "build_deboilerplate_messages", "parse_deboilerplated", "remove_boilerplate_criteria"]

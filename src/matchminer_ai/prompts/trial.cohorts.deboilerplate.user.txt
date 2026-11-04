@@ -9,27 +9,37 @@ Below are the complete eligibility criteria of one cohort of a cancer clinical t
 </eligibility_criteria>
 
 TASK
-Remove the boilerplate criteria from this cohort's eligibility criteria and return every other criterion unchanged. Boilerplate criteria would apply to most if not all candidates to any cancer clinical trial, so they do not distinguish this cohort's population. They are:
--requirements to give informed consent, personally or through a legally authorized representative;
--requirements to be willing and able to comply with study procedures, visits, follow-up, or the requirements of a drug safety or distribution program;
--requirements to provide blood, tumor tissue, or other samples, to have tumor tissue available or tumor amenable to biopsy, or to undergo a biopsy;
--requirements to have measurable or evaluable disease or lesions, by RECIST or similar criteria;
--legal or administrative requirements, such as health insurance coverage or not being under legal guardianship or deprived of liberty;
--vaccine restrictions, whether an agreement not to receive prohibited vaccines or an exclusion for having received or planning to receive a live or other vaccine within a set period;
--catch-all exclusions of any condition that in the investigator's opinion would make a person a poor candidate or interfere with participation, including examples given only to illustrate what the investigator might judge;
--exclusions of sponsor or study-site staff and their relatives;
--every criterion about contraception, pregnancy, or lactation, such as requirements to use contraception or to abstain, not to donate sperm or eggs, or to have a pregnancy test, and exclusion of people who are pregnant, breastfeeding or recently breastfeeding, planning a pregnancy, using hormonal contraception, or diagnosed during a pregnancy, unless the trial specifically recruits people who are pregnant or lactating. Other hormone therapy, such as hormone replacement therapy, is not covered by this rule.
+Separate this cohort's boilerplate criteria from the rest of its eligibility criteria. Boilerplate criteria are general requirements that most cancer treatment trials share, so they do not define what distinguishes this cohort's population. Return the criteria that are not boilerplate and, separately, the boilerplate criteria, both copied word for word.
 
-KEEPING EVERY OTHER CRITERION
--Keep every criterion that is not boilerplate exactly as written. Do not rewrite, summarize, shorten, reorder, combine, or add criteria, and do not change wording, numbers, units, operators, or negation. Keep the "Inclusion criteria:" and "Exclusion criteria:" labels, line breaks, sub-items, notes, and Source limitation statements of the criteria you keep.
--A biomarker or other test result that a criterion requires is not boilerplate, even when the test uses those samples or that tissue: keep the required result and drop only the requirement to provide the samples or tissue.
--When a criterion combines boilerplate with substantive requirements, keep the criterion with every substantive item and drop only the boilerplate wording.
--Conditions that a criterion excludes outright are substantive even when a catch-all clause follows them: a list of named illnesses or conditions that ends with "or any condition that would limit compliance" or "that in the investigator's opinion would interfere" keeps every named illness and condition, including the last one named, and drops the catch-all clause; for example, an exclusion of "hormonal contraception or hormone replacement therapy" keeps the hormone replacement therapy exclusion.
--Keep specific medical criteria even when they rely on the investigator's judgment, such as a named condition that the investigator judges clinically significant.
--When you are unsure whether a criterion is boilerplate, keep it.
--When no criterion remains under the "Inclusion criteria:" or "Exclusion criteria:" label, leave that label out.
+BOILERPLATE CRITERIA
+-Requirements to give informed consent, personally or through a legally authorized representative.
+-Requirements to be willing and able to comply with study procedures, visits, follow-up, or the requirements of a drug safety or distribution program.
+-Requirements to provide blood, tumor tissue, or other samples, to have tumor tissue available or tumor amenable to biopsy, or to undergo a biopsy.
+-Requirements to have measurable or evaluable disease or lesions, by RECIST or similar criteria.
+-Life expectancy or prognosis requirements, such as a life expectancy of at least 12 weeks.
+-Performance status requirements, such as ECOG, Karnofsky, or Lansky performance status.
+-Requirements for adequate organ or bone marrow function and exclusions for organ dysfunction: thresholds for blood counts (such as hemoglobin, neutrophils, or platelets), kidney function (such as creatinine or creatinine clearance), liver function (such as bilirubin, AST, or ALT), coagulation, and cardiac function (such as ejection fraction or QTc).
+-Criteria about brain or other central nervous system metastases, including leptomeningeal disease, such as whether they are allowed or must be treated, stable, or asymptomatic, and about their treatment, such as radiation, surgery, or corticosteroids for them.
+-Criteria about toxicities of earlier treatment, such as recovery from adverse events of prior therapy to grade 1 or baseline, or exclusion for severe or immune-related adverse events on prior therapy. A requirement or exclusion of the earlier therapy itself is not boilerplate.
+-Criteria about medical conditions other than cancer: cardiovascular, pulmonary (such as interstitial lung disease or pneumonitis), autoimmune, infectious (such as HIV, hepatitis B or C, tuberculosis, or active infection), gastrointestinal, neurologic, psychiatric, endocrine, and other illnesses, solid organ transplants, and allergy or hypersensitivity to the study drugs or their components.
+-Legal or administrative requirements, such as health insurance coverage or not being under legal guardianship or deprived of liberty.
+-Vaccine restrictions, whether an agreement not to receive prohibited vaccines or an exclusion for having received or planning to receive a live or other vaccine within a set period.
+-Catch-all exclusions of any condition that in the investigator's opinion would make a person a poor candidate or interfere with participation, including examples given only to illustrate what the investigator might judge.
+-Exclusions of sponsor or study-site staff and their relatives.
+-Every criterion about contraception, pregnancy, or lactation, such as requirements to use contraception or to abstain, not to donate sperm or eggs, or to have a pregnancy test, and exclusion of people who are pregnant, breastfeeding or recently breastfeeding, planning a pregnancy, using hormonal contraception, or diagnosed during a pregnancy.
+
+WHAT IS NOT BOILERPLATE
+-A criterion in one of these categories is not boilerplate when it is central to what the trial studies or whom it targets: for example, a hemoglobin requirement in a trial for anemia, a kidney-function range in a trial for people with kidney impairment, a performance status range in a trial for people with poor performance status, HIV infection in a trial for HIV-associated cancers, brain metastasis criteria in a trial for primary brain tumors or for people with brain or central nervous system metastases, and pregnancy or lactation criteria in a trial that recruits people who are pregnant or lactating.
+-Everything outside these categories is not boilerplate, for example the cancer's type, histology, stage, extent, and biomarkers; prior or current cancer treatment that is required or excluded, lines of therapy, and the time since earlier treatment; age and sex; other cancers; and restrictions on drugs that interact with the study drugs. Other hormone therapy, such as hormone replacement therapy, is not covered by the contraception rule.
+-A biomarker or other test result that a criterion requires is not boilerplate, even when the test uses samples or tissue: it stays with the criteria that are not boilerplate, and only the requirement to provide the samples or tissue is boilerplate.
+-When you are unsure whether a criterion is boilerplate, treat it as not boilerplate.
+
+SEPARATING THE CRITERIA
+-Every criterion appears in exactly one of the two lists, copied word for word: do not rewrite, summarize, shorten, reorder, combine, or add criteria, and do not change wording, numbers, units, operators, or negation. Keep sub-items, notes, and Source limitation statements with the criterion they belong to.
+-When a criterion combines boilerplate with other requirements, put the part that is not boilerplate in the first list and the boilerplate part in the boilerplate list, each in its original wording. A list of named conditions that ends with a catch-all clause puts each named condition in the list its category belongs to and the catch-all clause in the boilerplate list.
+-Start each list's inclusion criteria with the label "Inclusion criteria:" and its exclusion criteria with "Exclusion criteria:", and leave out a label with nothing under it.
 
 OUTPUT FORMAT
-Return only one JSON object with exactly one field, "eligibility_criteria": a nonempty string with the cohort's criteria minus the boilerplate, for example {{"eligibility_criteria": "Inclusion criteria:\n...\nExclusion criteria:\n..."}}, with the illustrative text replaced by the actual criteria. Use double quotes, and escape any quotation marks, backslashes, or line breaks inside the string. Add no other fields, text, or Markdown fences, and end the response with the object's closing brace.
+Return only one JSON object with exactly two fields: "eligibility_criteria", a nonempty string with the criteria that are not boilerplate, and "boilerplate_criteria", a string with the boilerplate criteria (an empty string when there are none), for example {{"eligibility_criteria": "Inclusion criteria:\n...\nExclusion criteria:\n...", "boilerplate_criteria": "Inclusion criteria:\n...\nExclusion criteria:\n..."}}, with the illustrative text replaced by the actual criteria. Use double quotes, and escape any quotation marks, backslashes, or line breaks inside the strings. Add no other fields, text, or Markdown fences, and end the response with the object's closing brace.
 
-Before returning, check that no boilerplate criterion or boilerplate wording remains, that every other criterion and condition is present, and that every criterion you kept is word for word as given.
+Before returning, check that every criterion and condition of the cohort appears in exactly one of the two lists, word for word; that no boilerplate criterion or wording remains in the first list; and that nothing in the boilerplate list is central to what the trial studies or whom it targets.
