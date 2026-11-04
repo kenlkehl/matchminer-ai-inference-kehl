@@ -67,7 +67,8 @@ def parse_merge_groups(text: str, finish_reason: str, cohort_count: int) -> list
     return sorted((sorted(n - 1 for n in g) for g in groups), key=lambda g: g[0])
 
 
-def _section(config: MMAIConfig, section: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def _section(config: MMAIConfig, section: str, response_name: str = "trial_cohorts_merge",
+             response_schema: dict[str, Any] = MERGE_JSON_SCHEMA) -> tuple[dict[str, Any], dict[str, Any]]:
     """(runtime, settings) of the trial or protocol_cohort_extraction section, as their extraction uses them."""
     from .cohorts import cohort_settings
     if section == "trial":
@@ -85,7 +86,7 @@ def _section(config: MMAIConfig, section: str) -> tuple[dict[str, Any], dict[str
     runtime = build_llm_runtime_config(section, llm, config=config)
     if structured and runtime["backend_mode"] == "remote":
         runtime["remote"]["request_params"]["response_format"] = {
-            "type": "json_schema", "json_schema": {"name": "trial_cohorts_merge", "strict": True, "schema": MERGE_JSON_SCHEMA}}
+            "type": "json_schema", "json_schema": {"name": response_name, "strict": True, "schema": response_schema}}
     return runtime, dict(max_attempts=max_attempts, chunk_size=chunk_size, chunks_in_flight=chunks_in_flight,
                          structured=structured and runtime["backend_mode"] == "remote")
 

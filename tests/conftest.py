@@ -171,6 +171,8 @@ class ScriptedCohortBackend:
             return "list", None
         if "Group the cohorts whose eligibility criteria are essentially the same" in text:
             return "merge", None
+        if "Remove the boilerplate criteria from this cohort's eligibility criteria" in text:
+            return "deboilerplate", None
         return "criteria", text.rsplit("Extract the complete eligibility criteria of this cohort only: ", 1)[1].split("\n")[0].strip()
 
     def answer(self, prompt):
@@ -202,6 +204,6 @@ class ScriptedCohortBackend:
 def cohort_backend(monkeypatch):
     backend = ScriptedCohortBackend()
     for module in ("matchminer_ai.trials.cohorts", "matchminer_ai.trials.protocol_cohorts",
-                   "matchminer_ai.trials.cohort_merge"):
+                   "matchminer_ai.trials.cohort_merge", "matchminer_ai.trials.cohort_boilerplate"):
         monkeypatch.setattr(f"{module}.get_llm_backend", lambda _config: backend)
     return backend

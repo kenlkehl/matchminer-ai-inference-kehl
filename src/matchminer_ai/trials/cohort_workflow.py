@@ -7,7 +7,11 @@ eligibility criteria, or a full protocol) goes through the same three prompts:
 2. ``list``: the names of the cohorts the trial defines (``trial.cohorts.list.user.txt``), without
    comparing their criteria.
 3. ``criteria``: one request per cohort name for that cohort's complete
-   eligibility criteria (``trial.cohorts.criteria.user.txt``).
+   eligibility criteria, copied verbatim and including boilerplate
+   (``trial.cohorts.criteria.user.txt``).
+
+Two optional steps follow, used by training: ``merge_equivalent_cohorts``
+(cohort_merge) and ``remove_boilerplate_criteria`` (cohort_boilerplate).
 
 Every prompt starts with the same preamble and document, and the criteria prompt
 puts the cohort list and target name after its instructions, so a server's prefix

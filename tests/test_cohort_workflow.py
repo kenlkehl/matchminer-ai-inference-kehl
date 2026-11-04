@@ -77,18 +77,15 @@ def test_prompt_examples_parse_with_their_step_contracts():
     assert parse_criteria(example).startswith("Inclusion criteria:\n")
 
 
-def test_criteria_prompt_keeps_the_boilerplate_and_applicability_rules():
+def test_criteria_prompt_extracts_every_criterion_verbatim_with_the_applicability_rules():
     criteria = load_prompts()["criteria"]
-    for rule in ("every criterion about contraception, pregnancy, or lactation",
-                 "unless the trial specifically recruits people who are pregnant or lactating",
-                 "Other hormone therapy, such as hormone replacement therapy, is not covered by this rule",
-                 "Conditions that a criterion excludes outright are substantive even when a catch-all clause follows them",
-                 "to have tumor tissue available or tumor amenable to biopsy, or to undergo a biopsy",
-                 "A biomarker or other test result that a criterion requires is substantive",
-                 "measurable or evaluable disease or lesions", "an exclusion for having received or planning to receive a live",
+    # Boilerplate is kept here and removed by a separate, optional step (cohort_boilerplate).
+    for rule in ("Never leave out a criterion because it is common or administrative",
+                 "Copy each criterion verbatim from the document", "Do not paraphrase, summarize, shorten",
                  "only the version that applies in the United States",
                  "Never delete a qualifier", "even when its name also says so"):
         assert rule in criteria
+    assert "boilerplate" not in criteria.lower()
     listing = load_prompts()["list"]
     # The list step names the trial's cohorts without comparing their criteria.
     assert "You do not need to compare the cohorts' eligibility criteria" in listing
