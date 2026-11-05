@@ -207,6 +207,7 @@ class ScriptedCohortBackend:
 def cohort_backend(monkeypatch):
     backend = ScriptedCohortBackend()
     for module in ("matchminer_ai.trials.cohorts", "matchminer_ai.trials.protocol_cohorts",
-                   "matchminer_ai.trials.cohort_merge", "matchminer_ai.trials.cohort_boilerplate"):
+                   "matchminer_ai.trials.cohort_merge", "matchminer_ai.trials.cohort_boilerplate",
+                   "matchminer_ai.trials.cohort_screen"):
         monkeypatch.setattr(f"{module}.get_llm_backend", lambda _config: backend)
     return backend

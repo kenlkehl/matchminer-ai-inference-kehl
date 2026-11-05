@@ -15,6 +15,7 @@ from .eligibility import (
 )
 from .cohort_merge import merge_equivalent_cohorts
 from .cohort_boilerplate import remove_boilerplate_criteria
+from .cohort_screen import screen_trials
 from .protocol_cohorts import ProtocolCohortProgress, extract_protocol_cohorts
 from .synthetic_protocols import SyntheticProtocolProgress, generate_synthetic_protocols
 from .structure import structure_trial_space
@@ -184,6 +185,7 @@ __all__ = [
     "extract_protocol_cohorts",
     "merge_equivalent_cohorts",
     "remove_boilerplate_criteria",
+    "screen_trials",
     "SyntheticProtocolProgress",
     "generate_synthetic_protocols",
     "structure_trial_space",
