@@ -18,9 +18,9 @@ Cohorts from `summarize_trials` need the boilerplate step
 (`trials.remove_boilerplate_criteria`) before this stage; see
 [key and boilerplate criteria](trials.md#key-and-boilerplate-criteria).
 
-`exclusion_score` is the BoilerplateChecker's probability that the patient is
-excluded (its POSITIVE class), not the probability of its predicted label;
-`exclusion_criteria_pass` is `exclusion_score < 0.5`. Inputs are truncated at
+BoilerplateChecker is a two-class model (NEGATIVE/POSITIVE): `exclusion_score`
+is the probability of its predicted label, and `exclusion_criteria_pass` is
+True when that label is NEGATIVE. Inputs are truncated at
 `exclusion_criteria.max_length` (8192) and padded to the longest input of each
 batch (`exclusion_criteria.batch_size`, default 8). `interpret_exclusion_criteria`
 token offsets refer to the `patient_boilerplate_summary` and

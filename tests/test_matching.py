@@ -268,8 +268,7 @@ def test_exclusion_criteria_check_maps_outputs_and_filters(monkeypatch):
         "exclusion_criteria_pass",
     ]
     assert unfiltered["exclusion_criteria_pass"].tolist() == [True, False]
-    # exclusion_score is P(excluded), whichever label the model predicted.
-    assert unfiltered["exclusion_score"].tolist() == pytest.approx([0.19, 0.66])
+    assert unfiltered["exclusion_score"].tolist() == [0.81, 0.66]
     assert (
         backend.last_checker_config["model_name"] == "ksg-dfci/BoilerPlateChecker-1225"
     )

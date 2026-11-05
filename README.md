@@ -200,8 +200,9 @@ yes/no questions, each with an evidence status and reason, combined by
 `matching.match_labels.match_score` into `llm_match_quality_score` (0–6: 0 unless
 reasonable, else 1 plus 1 each for cancer type, burden and treatment history and
 2 for biomarker; -1 when the answer fails the contract), plus `llm_<label>`
-booleans. BoilerplateChecker's `exclusion_score` is P(excluded), and a pair
-passes when it is below 0.5. The LLM exclusion prompt asks whether the patient
+booleans. BoilerplateChecker stays a two-class model: `exclusion_score` is the
+probability of its predicted label, and a pair passes when that label is
+NEGATIVE. The LLM exclusion prompt asks whether the patient
 clearly fails any of the cohort's boilerplate criteria, inclusion requirements
 as well as exclusions; missing information and waitable washouts are not
 failures. Both checkers truncate at 8192 tokens and pad to the longest input of

@@ -66,21 +66,6 @@ def _build_exclusion_criteria_prompts_with_ranges(
     return prompts, ranges
 
 
-def _excluded_probabilities(predictions: list) -> list[float]:
-    """P(excluded): the POSITIVE (LABEL_1) class probability of each pair."""
-    result = []
-    for prediction in predictions:
-        scores = {str(item["label"]).strip().upper(): float(item["score"])
-                  for item in (prediction if isinstance(prediction, list) else [prediction])}
-        if "POSITIVE" in scores or "LABEL_1" in scores:
-            result.append(scores.get("POSITIVE", scores.get("LABEL_1")))
-        elif "NEGATIVE" in scores or "LABEL_0" in scores:
-            result.append(1.0 - scores.get("NEGATIVE", scores.get("LABEL_0")))
-        else:
-            raise ValueError(f"Unexpected BoilerplateChecker labels {sorted(scores)}")
-    return result
-
-
 def exclusion_criteria_check(
     matches: pd.DataFrame,
     *,
@@ -133,9 +118,10 @@ def exclusion_criteria_check(
         cohort_trial_id, space_trial_id or trial_id : str
             The input's trial identifier.
         exclusion_score : float
-            Probability that the patient clearly fails a boilerplate criterion.
+            Model-generated confidence score associated with the exclusion-check label.
         exclusion_criteria_pass : bool
-            True when that probability is below 0.5.
+            True when the patient is predicted to pass the boilerplate criteria (label
+            NEGATIVE); False otherwise.
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus metadata.
     """
@@ -154,7 +140,6 @@ def exclusion_criteria_check(
         prompts,
         checker_config=checker_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-        return_all_scores=True,
     )
 
     if len(predictions) != len(matches):
@@ -164,9 +149,13 @@ def exclusion_criteria_check(
 
     # Convert model outputs into a compact, derived result table.
     output = matches[["patient_id", trial_id]].copy()
-    excluded = _excluded_probabilities(predictions)
-    output["exclusion_score"] = excluded
-    output["exclusion_criteria_pass"] = [probability < 0.5 for probability in excluded]
+    output["exclusion_score"] = [
+        float(prediction["score"]) for prediction in predictions
+    ]
+    output["exclusion_criteria_pass"] = [
+        str(prediction["label"]).strip().upper() == "NEGATIVE"
+        for prediction in predictions
+    ]
 
     # Optionally keep only rows that passed exclusion criteria.
     if filter_excluded:
@@ -237,30 +226,30 @@ def interpret_exclusion_criteria(
         prompts,
         checker_config=checker_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-        return_all_scores=True,
     )
     if len(predictions) != len(matches):
         raise ValueError(
             "Checker returned a different number of predictions than input rows."
         )
 
-    excluded = _excluded_probabilities(predictions)
-    passes = [probability < 0.5 for probability in excluded]
-    # The predicted class's own label (NEGATIVE/POSITIVE or LABEL_0/LABEL_1) selects its logit.
-    labels = [max(prediction if isinstance(prediction, list) else [prediction], key=lambda item: item["score"])["label"]
-              for prediction in predictions]
+    passes = [
+        str(prediction["label"]).strip().upper() == "NEGATIVE"
+        for prediction in predictions
+    ]
     explanations = attribute_checker_tokens(
         prompts,
         component_ranges=component_ranges,
         checker_config=checker_config,
-        target_labels=labels,
+        target_labels=[str(prediction.get("label", "")) for prediction in predictions],
         target_directions=[-1.0 if passed else 1.0 for passed in passes],
         top_k=top_k,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
     )
 
     output = matches[["patient_id", trial_id]].copy()
-    output["exclusion_score"] = excluded
+    output["exclusion_score"] = [
+        float(prediction["score"]) for prediction in predictions
+    ]
     output["exclusion_criteria_pass"] = passes
     output["attribution_method"] = [item["method"] for item in explanations]
     output["attribution_target"] = [
