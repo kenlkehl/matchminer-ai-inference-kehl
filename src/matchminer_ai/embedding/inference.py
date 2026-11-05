@@ -30,12 +30,17 @@ def _load_prompt_text(filename: str) -> str:
 def _resolve_embedding_runtime(
     embedding_config: Dict[str, Any],
 ) -> tuple[str, str, str, int]:
-    """Resolve embedding model path, device, query prompt text, and length."""
+    """Resolve embedding model path, device, fallback query prompt text, and length.
+
+    The prompt file is the query prompt only for a model that saved none. It is prepended
+    exactly as written (only the file's final newline is removed), as sentence-transformers
+    prepends a model's saved prompts: whitespace inside or at the end is part of the prompt.
+    """
     model_path = str(embedding_config.get("model_path", "")).strip()
     device = str(embedding_config.get("device", "cpu")).strip() or "cpu"
     prompt_filename = str(embedding_config.get("prompt_file", "")).strip()
     max_seq_length = int(embedding_config["max_seq_length"])
-    query_prompt = _load_prompt_text(prompt_filename).strip()
+    query_prompt = _load_prompt_text(prompt_filename).removesuffix("\n")
     return model_path, device, query_prompt, max_seq_length
 
 
@@ -48,15 +53,15 @@ def _get_embedding_model(
 ):
     """Load and cache a SentenceTransformer embedding model.
 
-    A model that saves its own patient and cohort prompts (TrialSpace trained by
-    matchminer-ai-training) keeps them; otherwise ``prompt`` (the configured
-    prompt file) is the query prompt for both sides, as TrialSpace-0526 expects.
+    The model's saved prompts are the ones it was trained with and are never replaced:
+    TrialSpace-0526's ``query`` prompt, or a TrialSpace from matchminer-ai-training's
+    patient and cohort prompts. ``prompt`` (the configured prompt file) only fills in a
+    missing ``query`` prompt, as the training evaluation scripts do.
     """
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_path, device=device)
-    if not _has_side_prompts(model):
-        model.prompts["query"] = prompt
+    model.prompts.setdefault("query", prompt)
     # SentenceTransformer uses this as the truncation cutoff during encode().
     model.max_seq_length = max_seq_length
     return model
@@ -70,32 +75,44 @@ def _get_embedding_tokenizer(model_path: str):
     return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
-def _has_side_prompts(model: Any) -> bool:
-    prompts = getattr(model, "prompts", None) or {}
+def _has_side_prompts(prompts: dict) -> bool:
     return PATIENT_PROMPT in prompts and COHORT_PROMPT in prompts
 
 
-def _prompt_name(model: Any, entity_type: str | None) -> str:
+def _prompt_name(prompts: dict, entity_type: str | None) -> str:
     """The model's prompt for one side, or the shared query prompt."""
     if entity_type is not None and entity_type not in ("patient", "trial"):
         raise ValueError("entity_type must be 'patient', 'trial' or None")
-    if entity_type is None or not _has_side_prompts(model):
+    if entity_type is None or not _has_side_prompts(prompts):
         return "query"
     return PATIENT_PROMPT if entity_type == "patient" else COHORT_PROMPT
 
 
-def _encode(model: Any, texts: list[str], prompt_name: str = "query") -> Any:
-    """Encode normalized embeddings as one tensor.
+@lru_cache(maxsize=8)
+def _saved_prompts(model_path: str) -> dict:
+    """The prompts a sentence-transformers model saved with its weights, without loading it.
 
-    A model with side prompts uses the named prompt. Other models (TrialSpace-0526)
-    have always been encoded with ``prompt="query"``, which prepends the literal
-    text "query" rather than the configured prompt; that is kept so embeddings
-    stored by earlier releases stay comparable.
+    Reads config_sentence_transformers.json from a local directory or the Hugging Face
+    cache (downloading only that file); empty when it cannot be read.
     """
-    prompt = dict(prompt_name=prompt_name) if _has_side_prompts(model) else dict(prompt="query")
+    path = Path(model_path) / "config_sentence_transformers.json"
+    try:
+        if not path.is_file():
+            from huggingface_hub import hf_hub_download, try_to_load_from_cache
+
+            cached = try_to_load_from_cache(model_path, "config_sentence_transformers.json")
+            path = Path(cached if isinstance(cached, str) else
+                        hf_hub_download(model_path, "config_sentence_transformers.json"))
+        return dict(json.loads(path.read_text(encoding="utf-8")).get("prompts") or {})
+    except Exception:  # noqa: BLE001 - token counting then uses the configured prompt
+        return {}
+
+
+def _encode(model: Any, texts: list[str], prompt_name: str = "query") -> Any:
+    """Encode normalized embeddings as one tensor, prepending the named prompt exactly."""
     return model.encode(
         texts,
-        **prompt,
+        prompt_name=prompt_name,
         batch_size=12,
         convert_to_tensor=True,
         normalize_embeddings=True,
@@ -176,7 +193,7 @@ def generate_embeddings(
             texts,
             model_path=model_path,
             device=device,
-            prompt_name=_prompt_name(model, entity_type),
+            prompt_name=_prompt_name(getattr(model, "prompts", None) or {}, entity_type),
         )
     embedding_list = embeddings_tensor.cpu().to(dtype=torch.float32).tolist()
     return cast(list[list[float]], embedding_list), model_metadata
@@ -188,19 +205,15 @@ def count_embedding_tokens(
     embedding_config: Dict[str, Any],
     entity_type: str | None = None,
 ) -> list[int]:
-    """Count embedding-model input tokens after applying the side's prompt."""
-    model_path, device, query_prompt, max_seq_length = _resolve_embedding_runtime(
+    """Count embedding-model input tokens of exactly the text the encoder sees: the side's
+    prompt (as :func:`generate_embeddings` resolves it) followed directly by the text."""
+    model_path, _device, query_prompt, _max_seq_length = _resolve_embedding_runtime(
         embedding_config
     )
     tokenizer = _get_embedding_tokenizer(model_path)
-    if entity_type is not None:
-        model = _get_embedding_model(model_path, device, query_prompt, max_seq_length)
-        if _has_side_prompts(model):
-            prefix = model.prompts[_prompt_name(model, entity_type)]
-            encoded = tokenizer([prefix + text for text in texts], add_special_tokens=True, truncation=False)
-            input_ids = encoded["input_ids"] if isinstance(encoded, dict) else encoded.input_ids
-            return [len(ids) for ids in input_ids]
-    prepared = [f"{query_prompt} {text}".strip() for text in texts]
+    prompts = {"query": query_prompt, **_saved_prompts(model_path)}
+    prompt = prompts[_prompt_name(prompts, entity_type)]
+    prepared = [prompt + text for text in texts]
     encoded = tokenizer(prepared, add_special_tokens=True, truncation=False)
     input_ids = encoded["input_ids"] if isinstance(encoded, dict) else encoded.input_ids
     return [len(ids) for ids in input_ids]

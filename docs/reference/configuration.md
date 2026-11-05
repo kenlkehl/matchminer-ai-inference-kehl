@@ -593,11 +593,13 @@ Other runtime errors are not retried.
 
 ### `embedding.prompt_file`
 
-Prompt filename loaded from `matchminer_ai.prompts` and registered as the
-model's shared `query` prompt when the model does not save its own patient and
-cohort prompts (TrialSpace-0526, whose legacy encoding is unchanged). A
-TrialSpace model that saves prompts named `patient_summary` and `this_space`
-encodes each side with its own prompt instead.
+Prompt filename loaded from `matchminer_ai.prompts` and used as the `query`
+prompt only for a model that saved none; a model's saved prompts are never
+replaced. The file is prepended exactly as written (only its final newline is
+removed). The default, `embedding.txt`, is byte-identical to TrialSpace-0526's
+saved `query` prompt, including its trailing space. A TrialSpace model that
+saves prompts named `patient_summary` and `this_space` encodes each side with
+its own prompt.
 
 ### `embedding.max_seq_length`
 

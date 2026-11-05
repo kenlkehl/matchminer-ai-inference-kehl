@@ -16,9 +16,13 @@ A TrialSpace model trained by `matchminer-ai-training` saves one prompt per
 side, named `patient_summary` (patients) and `this_space` (cohorts), and the
 runtime encodes each side with its own prompt. `embedding.trialspace_contract`
 holds these names (`PATIENT_PROMPT`, `COHORT_PROMPT`) and the retrieval
-`INSTRUCTION` and `DIRECTIONS` shared with training. A model without those
-prompts, such as TrialSpace-0526, keeps its legacy encoding, so embeddings
-stored by earlier releases stay comparable. `embed_texts(texts,
+`INSTRUCTION` and `DIRECTIONS` shared with training. A model without side
+prompts, such as TrialSpace-0526, encodes both sides with its saved `query`
+instruction. Prompts are applied by name and prepended exactly, as in training
+and its evaluation scripts, and token counts (`count_embedding_tokens`) count
+that same text. Releases before November 2026 prepended the literal word
+"query" instead of 0526's instruction, so embeddings they stored are not
+comparable with current ones; regenerate them. `embed_texts(texts,
 entity_type="patient" | "trial")` selects a side's prompt for plain strings;
 without `entity_type` the shared query prompt is used.
 

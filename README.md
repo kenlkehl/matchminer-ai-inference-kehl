@@ -180,11 +180,13 @@ and `exclusion_criteria_check_with_llm` read boilerplate text:
 `space_trial_id` pairs (exclusion checks also `trial_id`).
 
 Retrieval is TrialSpace only: one normalized vector per patient or cohort,
-ranked by cosine similarity in either direction. The default
-`ksg-dfci/TrialSpace-0526` keeps its legacy encoding; a TrialSpace model trained
-by `matchminer-ai-training` saves prompts named `patient_summary` and
-`this_space`, and each side is encoded with its own prompt (`embed_texts` takes
-`entity_type`). `embedding.max_seq_length` defaults to 4096. See
+ranked by cosine similarity in either direction. Every text is encoded with
+the model's own saved prompt, applied by name and prepended exactly, as in
+training: the default `ksg-dfci/TrialSpace-0526` uses its `query` instruction
+for both sides, and a TrialSpace model trained by `matchminer-ai-training` saves
+prompts named `patient_summary` and `this_space`, one per side (`embed_texts`
+takes `entity_type`). Releases before November 2026 prepended the literal word
+"query" instead of 0526's instruction; regenerate embeddings they stored. `embedding.max_seq_length` defaults to 4096. See
 [embedding and bidirectional retrieval](docs/api/embedding.md).
 
 TrialChecker (`score_match_quality`) supports a multi-head model with one

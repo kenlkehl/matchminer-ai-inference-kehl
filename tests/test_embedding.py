@@ -285,9 +285,9 @@ def test_generate_embeddings_applies_configured_max_seq_length(monkeypatch):
             loaded_models.append(self)
 
         def encode(
-            self, texts, prompt, batch_size, convert_to_tensor, normalize_embeddings
+            self, texts, prompt_name, batch_size, convert_to_tensor, normalize_embeddings
         ):
-            assert prompt == "query"
+            assert prompt_name == "query"
             assert batch_size == 12
             assert convert_to_tensor is True
             assert normalize_embeddings is True
@@ -341,9 +341,9 @@ def test_generate_embeddings_retries_cudnn_plan_failure_without_cudnn(
         def __init__(self):
             self.cudnn_states = []
 
-        def encode(self, texts, prompt, **kwargs):
+        def encode(self, texts, prompt_name, **kwargs):
             assert texts == ["abc"]
-            assert prompt == "query"
+            assert prompt_name == "query"
             assert kwargs == {
                 "batch_size": 12,
                 "convert_to_tensor": True,
@@ -398,7 +398,7 @@ def test_generate_embeddings_does_not_mask_other_runtime_errors(monkeypatch):
     """Propagate CUDA failures that are not the known cuDNN plan error."""
 
     class FakeModel:
-        def encode(self, texts, prompt, **kwargs):
+        def encode(self, texts, prompt_name, **kwargs):
             raise RuntimeError("CUDA out of memory")
 
     monkeypatch.setattr(
@@ -434,7 +434,7 @@ def test_count_embedding_tokens_uses_tokenizer_without_loading_model(monkeypatch
 
     class FakeTokenizer:
         def __call__(self, texts, add_special_tokens=True, truncation=False):
-            assert texts == ["query prompt abc", "query prompt de"]
+            assert texts == ["query promptabc", "query promptde"]  # prepended exactly, as encoding does
             assert add_special_tokens is True
             assert truncation is False
             return {"input_ids": [[1, 2, 3], [1, 2]]}
@@ -453,6 +453,7 @@ def test_count_embedding_tokens_uses_tokenizer_without_loading_model(monkeypatch
         "matchminer_ai.embedding.inference._load_prompt_text",
         lambda filename: "query prompt",
     )
+    monkeypatch.setattr("matchminer_ai.embedding.inference._saved_prompts", lambda _path: {})
     monkeypatch.setitem(
         sys.modules,
         "transformers",
@@ -476,3 +477,44 @@ def test_count_embedding_tokens_uses_tokenizer_without_loading_model(monkeypatch
 
     assert counts == [3, 2]
     assert loaded_tokenizers == [("embedder/model", True)]
+
+
+def test_a_models_saved_prompt_is_applied_by_name_and_never_replaced(monkeypatch):
+    """TrialSpace-0526's saved instruction (with its trailing space) prefixes every text exactly."""
+    saved = "Instruct: Given a cancer patient summary, retrieve trials. "
+    seen = []
+
+    class SentenceTransformerWithSavedPrompt:
+        def __init__(self, model_path, device):
+            self.prompts = {"query": saved, "document": ""}
+            self.max_seq_length = None
+
+        def encode(self, texts, prompt_name, **kwargs):  # as sentence-transformers applies a named prompt
+            seen.extend(self.prompts[prompt_name] + text for text in texts)
+            return torch.tensor([[1.0] for _ in texts])
+
+    embedding_inference._get_embedding_model.cache_clear()
+    embedding_inference._saved_prompts.cache_clear()
+    monkeypatch.setitem(sys.modules, "sentence_transformers",
+                        SimpleNamespace(SentenceTransformer=SentenceTransformerWithSavedPrompt))
+    monkeypatch.setattr("matchminer_ai.embedding.inference.get_model_metadata",
+                        lambda model_name, cache_dir=None: {"model_name": model_name})
+    config = {"model_path": "trialspace/0526", "device": "cpu", "prompt_file": "embedding.txt", "max_seq_length": 4096}
+    generate_embeddings(["Age: 64."], embedding_config=config, entity_type="patient")
+    assert seen == [saved + "Age: 64."]
+    # The packaged fallback prompt is byte-identical to TrialSpace-0526's saved query prompt.
+    assert embedding_inference._load_prompt_text("embedding.txt") == (
+        "Instruct: Given a cancer patient summary, retrieve clinical trial options that are reasonable for that "
+        "patient; or, given a clinical trial option, retrieve cancer patients who are reasonable candidates for "
+        "that trial. ")
+
+    class Tokenizer:
+        def __call__(self, texts, add_special_tokens=True, truncation=False):
+            seen.extend(texts)
+            return {"input_ids": [[0] * len(text) for text in texts]}
+
+    monkeypatch.setattr("matchminer_ai.embedding.inference._get_embedding_tokenizer", lambda _path: Tokenizer())
+    monkeypatch.setattr("matchminer_ai.embedding.inference._saved_prompts", lambda _path: {"query": saved})
+    seen.clear()
+    assert embedding_inference.count_embedding_tokens(["Age: 64."], embedding_config=config) == [len(saved) + 8]
+    assert seen == [saved + "Age: 64."]  # token counts see exactly what is encoded
