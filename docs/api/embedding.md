@@ -5,7 +5,12 @@ holds the input identifier and one normalized `embedding` vector, and
 `generate_candidate_matches` ranks by cosine similarity. The default model is
 `ksg-dfci/TrialSpace-0526` with `embedding.max_seq_length: 4096`.
 
-Retrieval reads **key text only**, never boilerplate:
+Retrieval reads **key text** when it is there. Trial processing is kept in separate steps that
+callers may run or skip, so the cohort text depends on which ran: after `remove_boilerplate_criteria`
+it is the key criteria; without that step, the complete criteria, boilerplate included. TrialSpace
+models trained by `matchminer-ai-training` learn from merged cohorts' key criteria
+(`merge_equivalent_cohorts`, then `remove_boilerplate_criteria`) and patients' key sections, so
+inputs prepared the same way match their training:
 
 | Side | Identifier | Text embedded (first column present) |
 | --- | --- | --- |
