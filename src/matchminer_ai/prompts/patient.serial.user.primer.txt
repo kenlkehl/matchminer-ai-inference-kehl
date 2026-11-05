@@ -31,7 +31,7 @@ toxicities of earlier cancer treatment, of any kind (eg immune-related adverse e
 medical conditions other than cancer: cardiovascular (eg congestive heart failure, myocardial infarction, arrhythmia), pulmonary (eg interstitial lung disease), autoimmune, infectious (eg HIV, hepatitis B or C, tuberculosis, active infection), gastrointestinal, neurologic (eg seizures), psychiatric, endocrine (eg diabetes, thyroid disease), kidney and liver disease, solid organ transplant, and allergies or hypersensitivity reactions to drugs;
 recent major surgery other than surgery for the cancer, and recovery from it;
 prior unrelated cancer diagnoses, and inactive cancers (see below);
-current or prior enrollment in clinical trials, with the study treatment if documented;
+current or prior participation in any clinical trial, whatever treatment it studied or whether it studied a treatment at all (this summary is not written for any particular trial, so record every trial the record mentions), with the trial's name, treatment and dates if documented;
 enrollment in hospice, or a documented decision not to pursue further anti-cancer therapy.
 Omit items the record does not document.)
 
