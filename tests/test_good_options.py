@@ -2499,7 +2499,7 @@ def test_intervention_screen_accepts_active_entities_explicit_in_description() -
     output["0"]["active_entity_names"] = ["Invented Agent"]
     error = catalog_module._role_output_validation_error(interventions, output)
     assert error is not None
-    assert "registry name, aliases, or descriptions" in error
+    assert "ctgov name, aliases, or descriptions" in error
 
     study["protocolSection"]["armsInterventionsModule"]["interventions"] = [
         {

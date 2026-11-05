@@ -673,8 +673,7 @@ def build_intervention_screening_messages(
         "interventions": [
             {
                 "index": index,
-                # The model-facing key keeps its original name, so catalog prompts are unchanged.
-                "registry_name": item.ctgov_name,
+                "ctgov_name": item.ctgov_name,
                 "intervention_type": item.intervention_type,
                 "description": item.description,
                 "aliases": list(item.aliases),
@@ -2594,7 +2593,7 @@ def _role_output_validation_error(
                 ]
                 return (
                     f"intervention {index} has no active entity name supported by "
-                    "its registry name, aliases, or descriptions: "  # model-facing retry feedback, unchanged
+                    "its ctgov name, aliases, or descriptions: "
                     f"{returned_names!r}"
                 )
         elif category == "none":
