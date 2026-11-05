@@ -60,7 +60,7 @@ def test_trial_qc_report_metrics(monkeypatch):
     }
     monkeypatch.setattr(
         "matchminer_ai._qc.trials.count_embedding_tokens",
-        lambda texts, *, embedding_config: [120, 10, 3400],
+        lambda texts, *, embedding_config, entity_type=None: [120, 10, 3400],
     )
     config = MMAIConfig(
         preset_name="default",
@@ -125,7 +125,7 @@ def test_trial_qc_uses_embedding_max_seq_length(monkeypatch):
     )
     monkeypatch.setattr(
         "matchminer_ai._qc.trials.count_embedding_tokens",
-        lambda texts, *, embedding_config: [1999, 2001],
+        lambda texts, *, embedding_config, entity_type=None: [1999, 2001],
     )
     config = MMAIConfig(
         preset_name="default",

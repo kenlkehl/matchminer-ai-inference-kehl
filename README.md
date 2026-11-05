@@ -2,21 +2,21 @@
 
 ## Overview
 
-Patient summarization now returns one `patient_summary` text field. It retains
-age, sex, cancer type, histology, current extent, biomarkers and chronological
-treatment history, followed by `Other relevant history:` on its own line and
-the former boilerplate evidence on the next line. Relevant comorbidities,
-performance status, laboratory findings and inactive cancers stay in that same
-text. Missing history is marked undocumented, not assumed negative. Serial
-updates and existing-summary inputs use this complete text; QC and embedding
-accept it directly. Training imports the same prompt and text normalizer.
-
-The older split-summary checkers and demo interfaces still expect
-`cancer_history_summary` and `general_exclusion_criteria_evidence`. Callers of
-those interfaces must explicitly set `config.patient["output_format"] =
-"legacy_split"`; the default is `"combined"`. This does not migrate previously
-saved summaries or embeddings. Reasoning remains in debug/trace artifacts,
-separate from the patient-summary training text.
+Patient summarization returns the complete `patient_summary` and its two
+sections. The summary retains age, sex, cancer type, histology, current extent,
+biomarkers and chronological treatment history, followed by
+`Other relevant history:` on its own line and the boilerplate evidence on the
+next line: relevant comorbidities, performance status, laboratory findings and
+inactive cancers. Missing history is marked undocumented, not assumed negative.
+`cancer_history_summary` is the **key** section (the text before
+`Other relevant history:`), read by TrialSpace retrieval and TrialChecker;
+`general_exclusion_criteria_evidence` is the **boilerplate** section
+(`Not documented.` when absent), read by BoilerplateChecker. Serial updates and
+existing-summary inputs use the complete text; embedding and the checkers also
+accept it and take the section they need (`patients.postprocess.split_patient_summary`,
+`add_summary_sections`). Training imports the same prompt and text normalizer.
+This does not migrate previously saved summaries or embeddings. Reasoning
+remains in debug/trace artifacts, separate from the patient-summary training text.
 
 `patients.check_patient_summary(text)` provides read-only quality checks for
 self-editing language (such as "I should" or "Wait,"), prompt/formatting
@@ -47,12 +47,14 @@ and rejection counts. These checks do not establish clinical completeness.
 Population workup workflows are available through
 `matching.retrieve_guideline_patients` and `matchminer_ai.population`. Supply
 patient summaries and source notes, select a finalized guideline space, retrieve
-and TrialChecker-score candidates, then explicitly compress (optional), encode,
-and review the active cohort with ColBERT. Results preserve patient-level findings,
-applicability, failures, source evidence and aggregate denominators. Explicit ZIP
-save/load includes original notes, compression, indexes and completed assessments;
-no sample population or sampling policy is built into the package. See the
-[population guide](docs/user-guide/population-workup.md).
+and TrialChecker-score candidates, optionally compress the notes, then call
+`population.review_population_workup`, which reviews each patient's selected
+notes in full, chunk by chunk, with `patients.review_patient_workup`. Results
+preserve patient-level findings, applicability, per-item error rows, source
+evidence and aggregate denominators. Explicit ZIP save/load includes original
+notes, compression and completed assessments; archives with ColBERT indexes from
+earlier releases are rejected. No sample population or sampling policy is built
+into the package. See the [population guide](docs/user-guide/population-workup.md).
 
 LLM stages with `sampling_profile: auto` recognize Qwen 3.5 model names, including
 `Qwen/Qwen3.5-4B`, and apply Alibaba's
@@ -146,49 +148,79 @@ local directory appropriate to that data. Archiving does not add reasoning to
 normal API answers or change any model's training targets.
 
 The default result uses `cohort_trial_id`, `cohort_number`, `cohort_name`,
-`cohort_eligibility_criteria` (that cohort's complete criteria, from its own
-request) and decision/source columns; a single-population trial yields one
-named row. The registry eligibility field is never copied verbatim. Rejected
-trials produce no cohort rows and remain in metadata and DataFrame attrs;
-malformed/truncated responses are failures, not rejections.
+`cohort_eligibility_criteria` (that cohort's complete criteria, boilerplate
+included, from its own request) and decision/source columns; a single-population
+trial yields one named row. The registry eligibility field is never copied
+verbatim. Rejected trials produce no cohort rows and remain in metadata and
+DataFrame attrs; malformed/truncated responses are failures, not rejections.
 See the [cohort contract and configuration](docs/api/trials.md#three-step-treatment-screening-and-cohort-extraction).
 
-The default matching embedder is the single-vector `ksg-dfci/TrialSpace-0526`
-with cosine retrieval, the same release generation as the default checkers.
-Native ColBERT token embeddings over full cohort criteria and unified patient
-summaries are an explicit opt-in (`config.embedding["backend"] = "colbert"`).
-Runtime and training share that encoder, directional retrieval instruction, and
-fast resident-token batched mean-MaxSim scorer. Its base checkpoint is
-`lightonai/GTE-ModernColBERT-v1`; select a trained TrialSpace ColBERT checkpoint
-explicitly. See [embedding and bidirectional retrieval](docs/api/embedding.md)
-for both configurations, the ColBERT schema, 8192-token limits, and batching.
-ColBERT inference encoding automatically halves a batch after a CUDA out-of-memory
-error, preserving complete texts and row order. A single text that still cannot
-fit raises an error; this does not change differentiable training batches.
-The shared encoder groups texts by length to reduce padding while preserving
-complete inputs, query/document roles, and output order. Differentiable training
-scores candidate documents with batched mean-MaxSim using the same token masks
-and scoring rule; the scalar reference scorer remains available for validation.
-The shared encoder can also prepare several query groups on CPU and encode them
-together. Training enables a bounded RAM token cache and reuses these prepared
-inputs for gradient replay; learned vectors are always recomputed. Integer token
-indices are prepared on CPU to avoid per-text CUDA boolean compaction. Inference
-retains no token cache by default; complete text, roles and output order are
-preserved in both paths.
+Two optional steps take those rows. `trials.merge_equivalent_cohorts` combines a
+trial's cohorts whose criteria are essentially the same, and
+`trials.remove_boilerplate_criteria` classifies each criteria line as
+boilerplate or not, one request per line, and sorts the unchanged lines in code.
+It keeps `cohort_eligibility_criteria` unchanged and adds `cohort_key_criteria`
+(the **key criteria**: those that are not boilerplate, or all the criteria when
+the cohort is in `deboilerplate_errors`) and `cohort_boilerplate_criteria`;
+`deboilerplate.json` stores `key_criteria` and `boilerplate_criteria` per cohort.
+`trials.screen_trials` runs only the cancer-treatment screen on listings or
+documents, appending every attempt's answer and reasoning to
+`<output_dir>/screen.jsonl` and reusing saved decisions; training draws its trial
+sample from the trials it accepts. See
+[key and boilerplate criteria](docs/api/trials.md#key-and-boilerplate-criteria).
+
+Each matching stage reads one kind of text. TrialSpace retrieval
+(`embed_for_matching`) and TrialChecker read key text: patients'
+`cancer_history_summary` (or the key section of a complete `patient_summary`) and
+cohorts' `cohort_key_criteria` (else `cohort_eligibility_criteria` when the
+boilerplate step did not run, else `clinical_space_summary`). BoilerplateChecker
+and `exclusion_criteria_check_with_llm` read boilerplate text:
+`general_exclusion_criteria_evidence` and `cohort_boilerplate_criteria` (or
+`general_exclusion_criteria`). Checkers accept `cohort_trial_id` or
+`space_trial_id` pairs (exclusion checks also `trial_id`).
+
+Retrieval is TrialSpace only: one normalized vector per patient or cohort,
+ranked by cosine similarity in either direction. The default
+`ksg-dfci/TrialSpace-0526` keeps its legacy encoding; a TrialSpace model trained
+by `matchminer-ai-training` saves prompts named `patient_summary` and
+`this_space`, and each side is encoded with its own prompt (`embed_texts` takes
+`entity_type`). `embedding.max_seq_length` defaults to 4096. See
+[embedding and bidirectional retrieval](docs/api/embedding.md).
+
+TrialChecker (`score_match_quality`) supports a multi-head model with one
+sigmoid head per match label (`reasonableness`, `cancer_type`, `burden`,
+`treatment_history`, `biomarker`). It returns `match_quality_<label>`
+probabilities and `match_quality_score` = P(reasonable) × (1 + P(cancer_type) +
+P(burden) + P(treatment_history) + 2·P(biomarker)) / 6; a single-output model
+such as `TrialChecker-0526` keeps `sigmoid(logit)`. `score_match_quality_with_llm`
+uses the training teacher's prompt, `match_quality.labels.system.txt`: five
+yes/no questions, each with an evidence status and reason, combined by
+`matching.match_labels.match_score` into `llm_match_quality_score` (0–6: 0 unless
+reasonable, else 1 plus 1 each for cancer type, burden and treatment history and
+2 for biomarker; -1 when the answer fails the contract), plus `llm_<label>`
+booleans. BoilerplateChecker's `exclusion_score` is P(excluded), and a pair
+passes when it is below 0.5. The LLM exclusion prompt asks whether the patient
+clearly fails any of the cohort's boilerplate criteria, inclusion requirements
+as well as exclusions; missing information and waitable washouts are not
+failures. Both checkers truncate at 8192 tokens and pad to the longest input of
+each batch (`batch_size`, default 8). See [match quality](docs/api/match-quality.md)
+and [exclusion criteria](docs/api/exclusion-criteria.md).
 
 This is a new input representation, not a migration of saved trial spaces or
-embeddings. Existing TrialSpace/TrialChecker/BoilerplateChecker workflows must
-explicitly select `config.trial["extraction_method"] = "hierarchical"` (or the
-legacy `one_shot` method) until adapted and evaluated for complete cohort criteria.
-Both existing Spaces explicitly retain hierarchical extraction for their current
-matching models. The hierarchy's field prompts and seven-field space output
-remain available; see [legacy hierarchical extraction](docs/api/trials.md#hierarchical-extraction).
+embeddings. The `0526` TrialSpace, TrialChecker and BoilerplateChecker models
+were trained on historical clinical-space summaries and separate general
+exclusions; they accept cohort key and boilerplate criteria but have not been
+evaluated on them. The established workflow explicitly selects
+`config.trial["extraction_method"] = "hierarchical"` (or the legacy `one_shot`
+method). Both existing Spaces explicitly retain hierarchical extraction for their
+current matching models. The hierarchy's field prompts and seven-field space
+output remain available; see [legacy hierarchical extraction](docs/api/trials.md#hierarchical-extraction).
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
 TrialChecker or LLM probes to estimate how many leading patients should proceed
 to both full checker stages. Its default pass thresholds are 0.20 on
-TrialChecker's 0-1 sigmoid scale and 1 on the LLM checker's 0-6 scale. This is a
+TrialChecker's 0-1 scale and 1 on the LLM checker's 0-6 scale. This is a
 compute-allocation heuristic, not an eligibility threshold.
 The first probe defaults to 50% down the ranking and can be moved with
 `initial_cutoff_proportion` when the expected qualifying fraction is known to
@@ -202,8 +234,9 @@ path.
 
 For a specific TrialChecker or BoilerplateChecker prediction,
 `interpret_match_quality` and `interpret_exclusion_criteria` provide on-demand
-gradient-times-input token attribution mapped back to the original patient and
-trial fields. These local sensitivity scores are intended for model debugging
+gradient-times-input token attribution mapped back to the original key or
+boilerplate text each checker reads (`interpret_match_quality(head=...)` selects
+a multi-head model's label, `"reasonableness"` by default). These local sensitivity scores are intended for model debugging
 and human review. They are not a clinical rationale, eligibility evidence, or
 proof that a highlighted token caused the prediction.
 
@@ -343,15 +376,6 @@ these follow-ups, including a separate twelve-call budget per item; set
 Full-note review and patient summarization remain available. See the
 [note-search REPL guide](docs/user-guide/note-search-qa.md).
 
-`patients.encode_patient_notes_colbert` batches token-level encoding across a
-cohort and returns separate patient indexes. `review_patient_workup_with_colbert`
-adds an opt-in third workup reviewer: GTE-ModernColBERT-v1 retrieves each question's
-top 20 patient chunks (64 tokens each by default), then the configured LLM answers
-from those excerpts. Indexes remain in memory unless callers explicitly use the
-package's save/load APIs. Source dates/spans, model compatibility, and explicit
-answer-model backups are retained. This reviews retrieved excerpts and may miss
-relevant documentation. See the [ColBERT workup guide](docs/user-guide/colbert-workup.md).
-
 Full-note `review_patient_workup` also asks for findings without model-written
 quotes or citation IDs. It retains every reviewed original note fragment and its
 date/type in code, including across serial updates and backup switches. Both
@@ -471,9 +495,10 @@ python llm_trial_check.py http://localhost:8000/v1
 ```
 
 The command discovers the endpoint's model through `/v1/models`, then prompts
-for a multiline patient summary and trial space. End each paste with a line
-containing only `.done`. It prints the endpoint's complete separate reasoning
-trace, complete final answer, and the parsed 0-6 MatchMiner-AI score. If the
+for a multiline patient summary (its key section) and trial space or cohort key
+criteria. End each paste with a line containing only `.done`. It prints the
+endpoint's complete separate reasoning trace, complete final answer (the five
+match-label answers), and the 0-6 MatchMiner-AI score computed from them. If the
 server requires an API key, set `OPENAI_API_KEY` before running the command.
 The patient summary is sent to the specified endpoint, so use only an endpoint
 authorized for the sensitivity of the input data.

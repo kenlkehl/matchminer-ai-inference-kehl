@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from importlib import resources
 from typing import TYPE_CHECKING, Any
 
@@ -21,9 +20,7 @@ if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
 
-_TRIAL_CHECK_SCORE_PATTERN = re.compile(r"[Ff]inal\s+[Ss]core\s*:\s*(\d)")
-# Highest llm_match_quality.user.txt score: gate 1, cancer type 1, burden 1,
-# prior treatment 1, and biomarker 2.
+# Highest match score: reasonableness 1, cancer type 1, burden 1, treatment history 1, biomarker 2.
 MAX_MATCH_QUALITY_SCORE = 6
 
 
@@ -40,24 +37,6 @@ def _build_messages(user_content: str) -> list[dict[str, str]]:
         {"role": "system", "content": ""},
         {"role": "user", "content": user_content},
     ]
-
-
-def _parse_match_quality_score(response_text: str) -> tuple[int, str]:
-    """Parse an LLM match-quality answer into a score and parse status."""
-    tail = response_text[-60:].replace("*", "").replace("\u202f", " ")
-    match = _TRIAL_CHECK_SCORE_PATTERN.search(tail)
-    if match:
-        score = min(int(match.group(1)), MAX_MATCH_QUALITY_SCORE)
-        return score, "parsed"
-
-    tail_upper = tail.upper()
-    fallback = re.search(r"SCORE\s*[:\-=]\s*(\d)", tail_upper)
-    if fallback:
-        score = min(int(fallback.group(1)), MAX_MATCH_QUALITY_SCORE)
-        return score, "parsed_fallback"
-    if "NOT REASONABLE" in tail_upper or "NOT A REASONABLE" in tail_upper:
-        return 0, "parsed_fallback"
-    return -1, "parse_failed"
 
 
 def _parse_exclusion_result(response_text: str) -> tuple[bool | None, str]:
@@ -90,9 +69,10 @@ def _run_llm_check(
         llm_config,
         config=config,
     )
-    system_content = reasoning_system_prompt(runtime_config.get("model_name"))
+    # A check's own system instructions follow the model family's reasoning header, if any.
     messages_list = [
-        [{"role": "system", "content": system_content}, *messages[1:]]
+        [{"role": "system", "content": reasoning_system_prompt(runtime_config.get("model_name"),
+                                                               messages[0]["content"])}, *messages[1:]]
         for messages in messages_list
     ]
     prompt_list = build_prompt_list(messages_list, llm_config=runtime_config)
@@ -118,100 +98,74 @@ def score_match_quality_with_llm(
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    Score candidate patient-trial matches with the configured LLM prompt.
+    Label candidate patient–cohort pairs with the five match labels, in one LLM prompt per pair.
+
+    The prompt (``llm_match_quality.prompt_file``, by default the training teacher's
+    ``match_quality.labels.system.txt``) asks whether the patient is a reasonable candidate on the
+    cohort's key criteria and whether the cohort specifically requires, and the patient documentedly
+    satisfies, its cancer type, burden, treatment history and biomarker requirements
+    (:mod:`matchminer_ai.matching.match_labels`). Only key text is read: boilerplate is
+    ``exclusion_criteria_check_with_llm``'s.
 
     Parameters
     ----------
     candidate_pairs : pd.DataFrame
-        DataFrame of candidate patient-trial pairs.
-
-        Expected columns
-        ----------------
-        patient_id : str
-            Patient identifier.
-        space_trial_id : str
-            Trial-space identifier.
-        cancer_history_summary : str
-            Patient summary text.
-        clinical_space_summary : str
-            Trial clinical-space summary text.
-
+        One row per candidate pair: ``patient_id``; ``cohort_trial_id`` (or historical
+        ``space_trial_id``); the patient's key section, ``cancer_history_summary`` (or a complete
+        ``patient_summary``, whose key section is taken); and the cohort's key criteria,
+        ``cohort_key_criteria`` (else ``cohort_eligibility_criteria``, else ``clinical_space_summary``).
     config : MMAIConfig, optional
-        MMAI configuration containing LLM match-quality checker settings.
-        Uses default preset when omitted.
+        MMAI configuration with ``llm_match_quality`` settings; default preset when omitted.
     return_metadata : bool, default False
-        When True, also return a metadata dict containing the config snapshot
-        and model metadata for this run.
+        When True, also return a metadata dict with the config snapshot and model metadata.
 
     Returns
     -------
     pd.DataFrame
-        Derived output table containing:
-
-        Columns
-        -------
-        patient_id : str
-            Patient identifier.
-        space_trial_id : str
-            Trial-space identifier.
-        llm_match_quality_score : int
-            Parsed LLM score from 0 to 6, or -1 when parsing failed.
-        Debug Columns
-        -------------
-        llm_match_quality_answer_text : str
-            Text the package treated as the LLM answer and used for parsing.
-            Included only when debug_mode is true.
-        llm_match_quality_reasoning_text : str
-            Optional separate reasoning trace returned by the backend or
-            extracted by the configured reasoning parser. Included only when
-            debug_mode is true.
-        llm_match_quality_parse_status : str
-            Whether the package could parse the answer text. Values are
-            ``parsed``, ``parsed_fallback``, or ``parse_failed``. Included only
-            when debug_mode is true.
+        ``patient_id``, the trial identifier, ``llm_match_quality_score`` (0–6 from
+        :func:`~matchminer_ai.matching.match_labels.match_score`, or -1 when the answer fails the
+        contract) and one boolean ``llm_<label>`` column per label (None when unparsed). With
+        debug_mode: ``llm_match_quality_answer_text``, ``llm_match_quality_reasoning_text`` and
+        ``llm_match_quality_parse_status`` (``parsed`` or the validation error).
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus metadata.
     """
-    required = [
-        "patient_id",
-        "space_trial_id",
-        "cancer_history_summary",
-        "clinical_space_summary",
-    ]
-    missing = [col for col in required if col not in candidate_pairs.columns]
-    if missing:
-        raise ValueError(
-            f"candidate_pairs is missing required columns: {', '.join(missing)}"
-        )
+    from matchminer_ai._texts import patient_key_texts, trial_id_column, trial_key_texts
+    from .match_labels import LABELS, build_match_label_messages, match_score, parse_match_labels
+
+    if "patient_id" not in candidate_pairs.columns:
+        raise ValueError("candidate_pairs is missing required columns: patient_id")
+    trial_id = trial_id_column(candidate_pairs)
+    patients, cohorts = patient_key_texts(candidate_pairs), trial_key_texts(candidate_pairs)
 
     resolved_config = config or load_default_preset()
     llm_config = dict(resolved_config.llm_match_quality)
-    prompt_template = _load_prompt_template(str(llm_config["prompt_file"]).strip())
-    messages_list = [
-        _build_messages(
-            prompt_template.format(
-                trial_summary=str(row["clinical_space_summary"]),
-                patient_summary=str(row["cancer_history_summary"]),
-            )
-        )
-        for _, row in candidate_pairs.iterrows()
-    ]
+    prompt = _load_prompt_template(str(llm_config["prompt_file"]).strip())
+    messages_list = [build_match_label_messages(patient, cohort, prompt) for patient, cohort in zip(patients, cohorts)]
     responses, reasonings, model_metadata = _run_llm_check(
         candidate_pairs,
         config=resolved_config,
         section_name="llm_match_quality",
         messages_list=messages_list,
     )
-    parsed = [_parse_match_quality_score(response) for response in responses]
+    parsed, statuses = [], []
+    for response in responses:
+        try:
+            parsed.append(parse_match_labels(response))
+            statuses.append("parsed")
+        except ValueError as exc:
+            parsed.append(None)
+            statuses.append(f"parse_failed: {exc}")
 
-    output = candidate_pairs[["patient_id", "space_trial_id"]].copy()
-    output["llm_match_quality_score"] = [score for score, _ in parsed]
+    output = candidate_pairs[["patient_id", trial_id]].copy()
+    output["llm_match_quality_score"] = [match_score(p) if p else -1 for p in parsed]
+    for label in LABELS:
+        output[f"llm_{label}"] = pd.Series([p[label]["answer"] == "yes" if p else None for p in parsed],
+                                           index=output.index, dtype=object)
     if resolved_config.debug_mode:
         output["llm_match_quality_answer_text"] = responses
         output["llm_match_quality_reasoning_text"] = reasonings
-        output["llm_match_quality_parse_status"] = [
-            parse_status for _, parse_status in parsed
-        ]
+        output["llm_match_quality_parse_status"] = statuses
     output = output.reset_index(drop=True)
 
     if return_metadata:
@@ -233,24 +187,28 @@ def exclusion_criteria_check_with_llm(
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    Evaluate trial-level exclusion criteria with the configured LLM prompt.
+    Evaluate a cohort's boilerplate criteria with the configured LLM prompt.
+
+    The prompt (``llm_exclusion_criteria.prompt_file``; the training teacher's BoilerplateChecker
+    prompt) asks whether the patient clearly fails any of the cohort's boilerplate criteria,
+    inclusion requirements as well as exclusions, from the patient summary's boilerplate section.
 
     Parameters
     ----------
     matches : pd.DataFrame
-        DataFrame of candidate patient-trial pairs to evaluate for exclusion
-        checks.
+        DataFrame of candidate patient–cohort pairs.
 
         Expected columns
         ----------------
         patient_id : str
             Patient identifier.
-        trial_id : str
-            Trial identifier.
-        general_exclusion_criteria : str
-            Trial-level exclusion criteria text.
+        cohort_trial_id : str
+            Cohort identifier (historical ``space_trial_id`` or ``trial_id`` is accepted).
+        cohort_boilerplate_criteria : str
+            The cohort's boilerplate criteria (historical ``general_exclusion_criteria`` is accepted).
         general_exclusion_criteria_evidence : str
-            Patient-level evidence related to exclusion criteria.
+            The patient summary's boilerplate section (or a complete ``patient_summary``, whose
+            boilerplate section is taken).
 
     config : MMAIConfig, optional
         MMAI configuration containing LLM exclusion checker settings.
@@ -268,8 +226,8 @@ def exclusion_criteria_check_with_llm(
         -------
         patient_id : str
             Patient identifier.
-        trial_id : str
-            Trial identifier.
+        cohort_trial_id, space_trial_id or trial_id : str
+            The input's trial identifier.
         llm_exclusion_criteria_pass : bool | None
             Whether the LLM judged that the patient passes exclusion criteria,
             or None when parsing failed.
@@ -289,27 +247,15 @@ def exclusion_criteria_check_with_llm(
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus metadata.
     """
-    required = [
-        "patient_id",
-        "trial_id",
-        "general_exclusion_criteria",
-        "general_exclusion_criteria_evidence",
-    ]
-    missing = [col for col in required if col not in matches.columns]
-    if missing:
-        raise ValueError(f"matches is missing required columns: {', '.join(missing)}")
+    from .exclusion_check import _pair_inputs
 
+    trial_id, evidence, criteria = _pair_inputs(matches)
     resolved_config = config or load_default_preset()
     llm_config = dict(resolved_config.llm_exclusion_criteria)
     prompt_template = _load_prompt_template(str(llm_config["prompt_file"]).strip())
     messages_list = [
-        _build_messages(
-            prompt_template.format(
-                patient_boilerplate=str(row["general_exclusion_criteria_evidence"]),
-                trial_boilerplate=str(row["general_exclusion_criteria"]),
-            )
-        )
-        for _, row in matches.iterrows()
+        _build_messages(prompt_template.format(patient_boilerplate=patient, trial_boilerplate=cohort))
+        for patient, cohort in zip(evidence, criteria, strict=True)
     ]
     responses, reasonings, model_metadata = _run_llm_check(
         matches,
@@ -319,7 +265,7 @@ def exclusion_criteria_check_with_llm(
     )
     parsed = [_parse_exclusion_result(response) for response in responses]
 
-    output = matches[["patient_id", "trial_id"]].copy()
+    output = matches[["patient_id", trial_id]].copy()
     output["llm_exclusion_criteria_pass"] = [passed for passed, _ in parsed]
     if resolved_config.debug_mode:
         output["llm_exclusion_criteria_answer_text"] = responses

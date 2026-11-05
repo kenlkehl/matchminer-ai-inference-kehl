@@ -25,8 +25,7 @@ _PATIENT_COLUMNS = ["patient_id", "cancer_history_summary"]
 _TRIAL_COLUMNS = ["space_trial_id", "clinical_space_summary"]
 _MEMBERSHIP_COLUMNS = ["space_trial_id", "paradigm_id"]
 _CATALOG_COLUMNS = ["paradigm_id", "paradigm_label"]
-_NON_SEMANTIC_EMBEDDING_KEYS = {"batch_size", "device", "pair_batch_size",
-    "retrieval_query_batch_size", "retrieval_document_batch_size", "device_cache_gb", "cache_dir"}
+_NON_SEMANTIC_EMBEDDING_KEYS = {"batch_size", "device"}
 _PATIENT_BEARING_TRIAL_COLUMNS = {
     "cancer_history_summary",
     "general_exclusion_criteria_evidence",
@@ -243,9 +242,7 @@ def _prepare_trial_embeddings(
         ["space_trial_id", "embedding"],
         "trial_embeddings",
     )
-    columns = ["space_trial_id", "embedding"] + [c for c in
-        ("query_embedding", "embedding_contract") if c in trial_embeddings]
-    embeddings = trial_embeddings[columns].copy()
+    embeddings = trial_embeddings[["space_trial_id", "embedding"]].copy()
     _normalize_string_column(
         embeddings,
         "space_trial_id",
@@ -509,7 +506,6 @@ def rank_patient_space_paradigms(
         patient_embeddings,
         resolved_trial_embeddings,
         k=retrieval_count,
-        **({'config': resolved_config} if 'query_embedding' in patient_embeddings else {}),
     ).rename(columns={"rank": "trialspace_rank"})
     patient_order = {
         patient_id: index for index, patient_id in enumerate(patients["patient_id"])

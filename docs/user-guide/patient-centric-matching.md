@@ -44,7 +44,7 @@ Table 1: MatchMiner-AI Steps and Models. <br>
 MatchMiner-AI combines an open-source large language model, used with specific prompts and parameters, with three families of trained models which have been released on HuggingFace at [huggingface.co/ksg-dfci](https://huggingface.co/ksg-dfci):
 - TrialSpace finds candidate trials for a patient.<br>
 - TrialChecker judges whether the patient meets a trial’s eligibility criteria.<br>
-- BoilerplateChecker checks the common exclusion criteria most trials share.<br>
+- BoilerplateChecker checks the general (boilerplate) eligibility criteria most trials share, inclusion requirements as well as exclusions.<br>
 
 The trained models can be found on HuggingFace. The prompts and parameters used for the open-source large language model summaries are found in this matchminer-ai-inference repository. When a new collection is released, the version of the package will change and will be documented with the new collection. Please see the table below for package and model collection compatibility.
 

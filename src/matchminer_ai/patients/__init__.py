@@ -17,15 +17,6 @@ from .compression import (
     compress_patient_note,
     compress_patient_notes,
 )
-from .colbert import (
-    ColBERTConfig,
-    ColBERTPatientIndex,
-    colbert_notes_fingerprint,
-    encode_patient_notes_colbert,
-    load_colbert_patient_index,
-    retrieve_patient_chunks_colbert,
-    save_colbert_patient_index,
-)
 from .full_screen import (
     FullPatientScreenError,
     FullPatientScreenProgress,
@@ -51,10 +42,6 @@ from .structure import structure_patient_summaries, structure_patient_summary
 from .summary_quality import check_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
-from .workup_colbert import (
-    review_patient_workup_with_colbert,
-    review_patients_workup_with_colbert,
-)
 from .workup_search import review_patient_workup_with_note_search
 from .workup_search_review import WorkupSearchReviewConfig
 
@@ -139,8 +126,14 @@ def summarize_patients(
         patient_summary : str
             Cancer history followed by ``Other relevant history:`` and a
             newline containing relevant comorbidities, performance status,
-            inactive cancers and other eligibility evidence. Legacy consumers
-            may explicitly set patient.output_format to ``legacy_split``.
+            inactive cancers and other eligibility evidence.
+        cancer_history_summary : str
+            The summary's key section: the cancer history before ``Other
+            relevant history:``. TrialSpace retrieval and TrialChecker read it.
+        general_exclusion_criteria_evidence : str
+            The summary's boilerplate section: the text after ``Other relevant
+            history:`` (``Not documented.`` when absent). BoilerplateChecker
+            reads it.
 
         Debug Columns
         (Available only if pipeline initialized with debug_mode=True)
@@ -240,15 +233,6 @@ def summarize_patients(
 
 
 __all__ = [
-    "ColBERTConfig",
-    "ColBERTPatientIndex",
-    "colbert_notes_fingerprint",
-    "encode_patient_notes_colbert",
-    "load_colbert_patient_index",
-    "retrieve_patient_chunks_colbert",
-    "save_colbert_patient_index",
-    "review_patient_workup_with_colbert",
-    "review_patients_workup_with_colbert",
     "FullPatientScreenError",
     "FullPatientScreenProgress",
     "NoteCompressionError",

@@ -27,21 +27,24 @@ def _load_exclusion_criteria_template(filename: str) -> str:
         return handle.read().strip()
 
 
+def _pair_inputs(matches: pd.DataFrame) -> tuple[str, list[str], list[str]]:
+    """The trial identifier column, the patients' boilerplate sections and the cohorts' boilerplate criteria."""
+    from matchminer_ai._texts import patient_boilerplate_texts, trial_boilerplate_texts
+    if "patient_id" not in matches.columns:
+        raise ValueError("matches is missing required columns: patient_id")
+    trial_id = next((c for c in ("cohort_trial_id", "space_trial_id", "trial_id") if c in matches.columns), None)
+    if trial_id is None:
+        raise ValueError("matches needs cohort_trial_id, space_trial_id or trial_id")
+    return trial_id, patient_boilerplate_texts(matches), trial_boilerplate_texts(matches)
+
+
 def _build_exclusion_criteria_prompts(
     matches: pd.DataFrame,
     *,
     template: str,
 ) -> list[str]:
-    patient_evidence = (
-        matches["general_exclusion_criteria_evidence"].fillna("").astype(str).tolist()
-    )
-    trial_exclusions = (
-        matches["general_exclusion_criteria"].fillna("").astype(str).tolist()
-    )
-    return [
-        template.format(evidence, criteria)
-        for evidence, criteria in zip(patient_evidence, trial_exclusions, strict=False)
-    ]
+    _, evidence, criteria = _pair_inputs(matches)
+    return [template.format(e, c) for e, c in zip(evidence, criteria, strict=True)]
 
 
 def _build_exclusion_criteria_prompts_with_ranges(
@@ -52,26 +55,30 @@ def _build_exclusion_criteria_prompts_with_ranges(
     """Build prompts plus source ranges used for token attribution."""
     prompts: list[str] = []
     ranges: list[dict[str, tuple[int, int]]] = []
-    patient_evidence = (
-        matches["general_exclusion_criteria_evidence"]
-        .fillna("")
-        .astype(str)
-        .tolist()
-    )
-    trial_exclusions = (
-        matches["general_exclusion_criteria"].fillna("").astype(str).tolist()
-    )
-    for evidence, criteria in zip(patient_evidence, trial_exclusions, strict=True):
+    _, evidence, criteria = _pair_inputs(matches)
+    for patient, cohort in zip(evidence, criteria, strict=True):
         prompt, component_ranges = format_checker_prompt_with_ranges(
             template,
-            [
-                ("general_exclusion_criteria_evidence", evidence),
-                ("general_exclusion_criteria", criteria),
-            ],
+            [("patient_boilerplate_summary", patient), ("cohort_boilerplate_criteria", cohort)],
         )
         prompts.append(prompt)
         ranges.append(component_ranges)
     return prompts, ranges
+
+
+def _excluded_probabilities(predictions: list) -> list[float]:
+    """P(excluded): the POSITIVE (LABEL_1) class probability of each pair."""
+    result = []
+    for prediction in predictions:
+        scores = {str(item["label"]).strip().upper(): float(item["score"])
+                  for item in (prediction if isinstance(prediction, list) else [prediction])}
+        if "POSITIVE" in scores or "LABEL_1" in scores:
+            result.append(scores.get("POSITIVE", scores.get("LABEL_1")))
+        elif "NEGATIVE" in scores or "LABEL_0" in scores:
+            result.append(1.0 - scores.get("NEGATIVE", scores.get("LABEL_0")))
+        else:
+            raise ValueError(f"Unexpected BoilerplateChecker labels {sorted(scores)}")
+    return result
 
 
 def exclusion_criteria_check(
@@ -82,23 +89,28 @@ def exclusion_criteria_check(
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    Evaluate whether each candidate patient-trial pair passes exclusion criteria.
+    Evaluate with BoilerplateChecker whether each candidate pair passes the boilerplate criteria.
+
+    BoilerplateChecker reads only boilerplate text: the patient summary's boilerplate section and
+    the cohort's boilerplate criteria (the general requirements most trials share, inclusion as well
+    as exclusion; TrialChecker handles the key criteria).
 
     Parameters
     ----------
     matches : pd.DataFrame
-        DataFrame of candidate patient-trial pairs to evaluate for exclusion checks.
+        DataFrame of candidate patient–cohort pairs.
 
         Expected columns
         ----------------
         patient_id : str
             Patient identifier.
-        trial_id : str
-            Trial identifier.
-        general_exclusion_criteria : str
-            Trial-level exclusion criteria text.
+        cohort_trial_id : str
+            Cohort identifier (historical ``space_trial_id`` or ``trial_id`` is accepted).
+        cohort_boilerplate_criteria : str
+            The cohort's boilerplate criteria (historical ``general_exclusion_criteria`` is accepted).
         general_exclusion_criteria_evidence : str
-            Patient-level evidence related to exclusion criteria.
+            The patient summary's boilerplate section (or a complete ``patient_summary``, whose
+            boilerplate section is taken).
 
     config : MMAIConfig, optional
         MMAI configuration containing exclusion checker settings.
@@ -118,26 +130,16 @@ def exclusion_criteria_check(
         -------
         patient_id : str
             Patient identifier.
-        trial_id : str
-            Trial identifier.
+        cohort_trial_id, space_trial_id or trial_id : str
+            The input's trial identifier.
         exclusion_score : float
-            Model-generated confidence score associated with exclusion-check label.
+            Probability that the patient clearly fails a boilerplate criterion.
         exclusion_criteria_pass : bool
-            True when the patient is predicted to pass exclusion criteria for
-            this trial; False otherwise.
+            True when that probability is below 0.5.
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus metadata.
     """
-    # Validate that rows contain the text + ids needed for exclusion checker prompts.
-    required = [
-        "patient_id",
-        "trial_id",
-        "general_exclusion_criteria",
-        "general_exclusion_criteria_evidence",
-    ]
-    missing = [col for col in required if col not in matches.columns]
-    if missing:
-        raise ValueError(f"matches is missing required columns: {', '.join(missing)}")
+    trial_id, _, _ = _pair_inputs(matches)
 
     # Resolve run config and build checker prompts from the configured template.
     resolved_config = config or load_default_preset()
@@ -152,6 +154,7 @@ def exclusion_criteria_check(
         prompts,
         checker_config=checker_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+        return_all_scores=True,
     )
 
     if len(predictions) != len(matches):
@@ -160,14 +163,10 @@ def exclusion_criteria_check(
         )
 
     # Convert model outputs into a compact, derived result table.
-    output = matches[["patient_id", "trial_id"]].copy()
-    output["exclusion_score"] = [
-        float(prediction["score"]) for prediction in predictions
-    ]
-    output["exclusion_criteria_pass"] = [
-        str(prediction["label"]).strip().upper() == "NEGATIVE"
-        for prediction in predictions
-    ]
+    output = matches[["patient_id", trial_id]].copy()
+    excluded = _excluded_probabilities(predictions)
+    output["exclusion_score"] = excluded
+    output["exclusion_criteria_pass"] = [probability < 0.5 for probability in excluded]
 
     # Optionally keep only rows that passed exclusion criteria.
     if filter_excluded:
@@ -224,15 +223,7 @@ def interpret_exclusion_criteria(
     tuple[pd.DataFrame, dict]
         Result and reproducibility metadata when ``return_metadata`` is True.
     """
-    required = [
-        "patient_id",
-        "trial_id",
-        "general_exclusion_criteria",
-        "general_exclusion_criteria_evidence",
-    ]
-    missing = [col for col in required if col not in matches.columns]
-    if missing:
-        raise ValueError(f"matches is missing required columns: {', '.join(missing)}")
+    trial_id, _, _ = _pair_inputs(matches)
 
     resolved_config = config or load_default_preset()
     checker_config = dict(resolved_config.raw.get("exclusion_criteria", {}))
@@ -246,30 +237,30 @@ def interpret_exclusion_criteria(
         prompts,
         checker_config=checker_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+        return_all_scores=True,
     )
     if len(predictions) != len(matches):
         raise ValueError(
             "Checker returned a different number of predictions than input rows."
         )
 
-    passes = [
-        str(prediction["label"]).strip().upper() == "NEGATIVE"
-        for prediction in predictions
-    ]
+    excluded = _excluded_probabilities(predictions)
+    passes = [probability < 0.5 for probability in excluded]
+    # The predicted class's own label (NEGATIVE/POSITIVE or LABEL_0/LABEL_1) selects its logit.
+    labels = [max(prediction if isinstance(prediction, list) else [prediction], key=lambda item: item["score"])["label"]
+              for prediction in predictions]
     explanations = attribute_checker_tokens(
         prompts,
         component_ranges=component_ranges,
         checker_config=checker_config,
-        target_labels=[str(prediction.get("label", "")) for prediction in predictions],
+        target_labels=labels,
         target_directions=[-1.0 if passed else 1.0 for passed in passes],
         top_k=top_k,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
     )
 
-    output = matches[["patient_id", "trial_id"]].copy()
-    output["exclusion_score"] = [
-        float(prediction["score"]) for prediction in predictions
-    ]
+    output = matches[["patient_id", trial_id]].copy()
+    output["exclusion_score"] = excluded
     output["exclusion_criteria_pass"] = passes
     output["attribution_method"] = [item["method"] for item in explanations]
     output["attribution_target"] = [

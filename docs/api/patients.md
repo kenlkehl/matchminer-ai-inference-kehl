@@ -1,18 +1,32 @@
 # Patients
 
-`summarize_patients` returns `patient_id` and a single `patient_summary`. The
-text contains all cancer-history sections and ends with:
+`summarize_patients` returns `patient_id`, the complete `patient_summary`, and
+its two sections. The complete text contains all cancer-history sections and
+ends with:
 
 ```text
 Other relevant history:
 ECOG 1. Chronic kidney disease. Remote inactive prostate cancer.
 ```
 
-The header is followed by a newline; this evidence is not emitted as a second
-summary field. Historical boilerplate headings are normalized on output.
-`config.patient["output_format"] = "legacy_split"` explicitly adapts results for
-older split-summary consumers; new cohort/ColBERT workflows use the default
-`"combined"` output. Raw answers and reasoning remain separate debug/trace data.
+| Column | Content | Read by |
+| --- | --- | --- |
+| `patient_summary` | The complete summary. | Serial updates, summary-quality checks |
+| `cancer_history_summary` | The **key** section: the text before `Other relevant history:`. | TrialSpace retrieval, TrialChecker |
+| `general_exclusion_criteria_evidence` | The **boilerplate** section: the text after the header (`Not documented.` when absent). | BoilerplateChecker |
+
+Historical boilerplate headings are normalized on output. `embed_for_matching`
+and the match-quality and exclusion checkers also accept a complete
+`patient_summary` in place of a section column and take the section they need. `patients.postprocess.split_patient_summary`
+returns the two sections of one text, and `add_summary_sections` adds both
+columns to a table with `patient_summary`. Raw answers and reasoning remain
+separate debug/trace data.
+
+::: matchminer_ai.patients.postprocess
+    options:
+      members:
+        - split_patient_summary
+        - add_summary_sections
 
 ::: matchminer_ai.patients
     options:

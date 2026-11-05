@@ -19,8 +19,9 @@ class MockBackend:
         self.last_model_metadata_cache_dir = None
 
     def generate_embeddings(
-        self, texts, *, embedding_config, model_metadata_cache_dir=None
+        self, texts, *, embedding_config, model_metadata_cache_dir=None, entity_type=None
     ):
+        self.last_entity_type = entity_type
         self.last_texts = texts
         self.last_embedding_config = embedding_config
         self.last_model_metadata_cache_dir = model_metadata_cache_dir
@@ -62,10 +63,13 @@ def test_embed_for_matching_patient(monkeypatch):
     assert backend.last_texts == ["abc"]
     assert backend.last_embedding_config["model_path"] == "mock-model"
 
+    assert backend.last_entity_type == "patient"
+
+    # A complete summary is embedded by its key section only, never its boilerplate.
     full = 'abc\n\nOther relevant history:\nDialysis.'
     unified = pd.DataFrame([dict(patient_id='P1', patient_summary=full)])
     embed_for_matching(unified, entity_type='patient', config=config)
-    assert backend.last_texts == [full]
+    assert backend.last_texts == ['abc']
 
 
 def test_embed_for_matching_trial(monkeypatch):
@@ -103,6 +107,16 @@ def test_embed_for_matching_trial(monkeypatch):
 
     assert result.loc[0, "embedding"] == [4.0]
     assert result.loc[0, "space_trial_id"] == "T1_1"
+    assert backend.last_entity_type == "trial"
+
+    # Cohorts are embedded by their key criteria, never their boilerplate criteria.
+    cohorts = pd.DataFrame([dict(cohort_trial_id="T1-cohort-1", cohort_eligibility_criteria="Key.\nConsent.",
+                                 cohort_key_criteria="Key.", cohort_boilerplate_criteria="Consent.")])
+    embed_for_matching(cohorts, entity_type="trial", config=config)
+    assert backend.last_texts == ["Key."]
+    embed_for_matching(cohorts.drop(columns=["cohort_key_criteria", "cohort_boilerplate_criteria"]),
+                       entity_type="trial", config=config)
+    assert backend.last_texts == ["Key.\nConsent."]  # without the boilerplate step
 
 
 def test_embed_for_matching_missing_column(monkeypatch):
@@ -128,7 +142,7 @@ def test_embed_for_matching_missing_column(monkeypatch):
         },
     )
 
-    with pytest.raises(ValueError, match="missing required column"):
+    with pytest.raises(ValueError, match="needs one of the columns"):
         embed_for_matching(
             pd.DataFrame([{"foo": "bar"}]),
             entity_type="trial",
@@ -249,13 +263,6 @@ def test_embed_texts_uses_default_config(monkeypatch, default_config):
     vectors, metadata = embed_texts(["abc"])
     assert vectors == [[3.0]]
     assert metadata["model_name"] == "default-model"
-
-
-def test_embed_texts_rejects_colbert_backend(default_config):
-    """ColBERT token matrices need embed_for_matching's entity-specific encoding."""
-    default_config.embedding = {"backend": "colbert", "model_path": "colbert-model"}
-    with pytest.raises(ValueError, match="sequence embedding backend"):
-        embed_texts(["abc"], config=default_config)
 
 
 @pytest.mark.parametrize("key", ["embed_for_matching", "embedding_model"])

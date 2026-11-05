@@ -13,6 +13,7 @@ from typing import Any, Dict, cast
 import torch
 
 from matchminer_ai.llm.backends import get_model_metadata
+from .trialspace_contract import COHORT_PROMPT, PATIENT_PROMPT
 
 
 logger = logging.getLogger(__name__)
@@ -45,11 +46,17 @@ def _get_embedding_model(
     prompt: str,
     max_seq_length: int,
 ):
-    """Load and cache a SentenceTransformer embedding model."""
+    """Load and cache a SentenceTransformer embedding model.
+
+    A model that saves its own patient and cohort prompts (TrialSpace trained by
+    matchminer-ai-training) keeps them; otherwise ``prompt`` (the configured
+    prompt file) is the query prompt for both sides, as TrialSpace-0526 expects.
+    """
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_path, device=device)
-    model.prompts["query"] = prompt
+    if not _has_side_prompts(model):
+        model.prompts["query"] = prompt
     # SentenceTransformer uses this as the truncation cutoff during encode().
     model.max_seq_length = max_seq_length
     return model
@@ -63,18 +70,39 @@ def _get_embedding_tokenizer(model_path: str):
     return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
-def _encode(model: Any, texts: list[str]) -> Any:
-    """Encode normalized query embeddings as one tensor."""
+def _has_side_prompts(model: Any) -> bool:
+    prompts = getattr(model, "prompts", None) or {}
+    return PATIENT_PROMPT in prompts and COHORT_PROMPT in prompts
+
+
+def _prompt_name(model: Any, entity_type: str | None) -> str:
+    """The model's prompt for one side, or the shared query prompt."""
+    if entity_type is not None and entity_type not in ("patient", "trial"):
+        raise ValueError("entity_type must be 'patient', 'trial' or None")
+    if entity_type is None or not _has_side_prompts(model):
+        return "query"
+    return PATIENT_PROMPT if entity_type == "patient" else COHORT_PROMPT
+
+
+def _encode(model: Any, texts: list[str], prompt_name: str = "query") -> Any:
+    """Encode normalized embeddings as one tensor.
+
+    A model with side prompts uses the named prompt. Other models (TrialSpace-0526)
+    have always been encoded with ``prompt="query"``, which prepends the literal
+    text "query" rather than the configured prompt; that is kept so embeddings
+    stored by earlier releases stay comparable.
+    """
+    prompt = dict(prompt_name=prompt_name) if _has_side_prompts(model) else dict(prompt="query")
     return model.encode(
         texts,
-        prompt="query",
+        **prompt,
         batch_size=12,
         convert_to_tensor=True,
         normalize_embeddings=True,
     )
 
 
-def _encode_without_cudnn_sdpa(model: Any, texts: list[str]) -> Any:
+def _encode_without_cudnn_sdpa(model: Any, texts: list[str], prompt_name: str = "query") -> Any:
     """Encode with CUDA SDPA implementations that do not use cuDNN."""
     backends = [
         torch.nn.attention.SDPBackend.FLASH_ATTENTION,
@@ -82,7 +110,7 @@ def _encode_without_cudnn_sdpa(model: Any, texts: list[str]) -> Any:
         torch.nn.attention.SDPBackend.MATH,
     ]
     with torch.nn.attention.sdpa_kernel(backends):
-        return _encode(model, texts)
+        return _encode(model, texts, prompt_name)
 
 
 def _is_cudnn_sdpa_plan_error(exc: RuntimeError, device: str) -> bool:
@@ -101,14 +129,15 @@ def _encode_with_cudnn_sdpa_fallback(
     *,
     model_path: str,
     device: str,
+    prompt_name: str = "query",
 ) -> Any:
     """Prefer the default attention dispatcher, then remember a safe fallback."""
     fallback_key = (model_path, device)
     if fallback_key in _CUDNN_SDPA_FALLBACK_MODELS:
-        return _encode_without_cudnn_sdpa(model, texts)
+        return _encode_without_cudnn_sdpa(model, texts, prompt_name)
 
     try:
-        return _encode(model, texts)
+        return _encode(model, texts, prompt_name)
     except RuntimeError as exc:
         if not _is_cudnn_sdpa_plan_error(exc, device):
             raise
@@ -118,7 +147,7 @@ def _encode_with_cudnn_sdpa_fallback(
             f"{model_path} on {device}; retrying with non-cuDNN CUDA attention "
             "backends.",
         )
-        return _encode_without_cudnn_sdpa(model, texts)
+        return _encode_without_cudnn_sdpa(model, texts, prompt_name)
 
 
 def generate_embeddings(
@@ -126,8 +155,13 @@ def generate_embeddings(
     *,
     embedding_config: Dict[str, Any],
     model_metadata_cache_dir: str | None = None,
+    entity_type: str | None = None,
 ) -> tuple[list[list[float]], Dict[str, Any]]:
-    """Generate sentence-transformer embeddings and model metadata."""
+    """Generate sentence-transformer embeddings and model metadata.
+
+    ``entity_type`` ("patient" or "trial") selects the model's prompt for that
+    side when the model has one; otherwise the shared query prompt is used.
+    """
     model_path, device, query_prompt, max_seq_length = _resolve_embedding_runtime(
         embedding_config
     )
@@ -142,6 +176,7 @@ def generate_embeddings(
             texts,
             model_path=model_path,
             device=device,
+            prompt_name=_prompt_name(model, entity_type),
         )
     embedding_list = embeddings_tensor.cpu().to(dtype=torch.float32).tolist()
     return cast(list[list[float]], embedding_list), model_metadata
@@ -151,19 +186,20 @@ def count_embedding_tokens(
     texts: list[str],
     *,
     embedding_config: Dict[str, Any],
+    entity_type: str | None = None,
 ) -> list[int]:
-    """Count embedding-model input tokens after applying the query prompt."""
-    if embedding_config.get("backend") == "colbert":
-        from .colbert_contract import regression_query
-        tokenizer = _get_embedding_tokenizer(str(embedding_config["model_path"]))
-        direction = embedding_config.get("query_direction", "patient_to_cohort")
-        encoded = tokenizer([regression_query(direction, text) for text in texts],
-                            add_special_tokens=True, truncation=False)
-        return [len(ids) + 1 for ids in encoded["input_ids"]]  # Trained Q marker.
-    model_path, _device, query_prompt, _max_seq_length = _resolve_embedding_runtime(
+    """Count embedding-model input tokens after applying the side's prompt."""
+    model_path, device, query_prompt, max_seq_length = _resolve_embedding_runtime(
         embedding_config
     )
     tokenizer = _get_embedding_tokenizer(model_path)
+    if entity_type is not None:
+        model = _get_embedding_model(model_path, device, query_prompt, max_seq_length)
+        if _has_side_prompts(model):
+            prefix = model.prompts[_prompt_name(model, entity_type)]
+            encoded = tokenizer([prefix + text for text in texts], add_special_tokens=True, truncation=False)
+            input_ids = encoded["input_ids"] if isinstance(encoded, dict) else encoded.input_ids
+            return [len(ids) for ids in input_ids]
     prepared = [f"{query_prompt} {text}".strip() for text in texts]
     encoded = tokenizer(prepared, add_special_tokens=True, truncation=False)
     input_ids = encoded["input_ids"] if isinstance(encoded, dict) else encoded.input_ids
@@ -220,6 +256,7 @@ def _embedding_cache_identity(embedding_config, model_metadata):
         "tokenizer_sha256": digest(tokenization),
         "special_tokens": tokenizer.special_tokens_map,
         "prompt": prompt,
+        "model_prompts": dict(getattr(model, "prompts", None) or {}),
         "max_seq_length": length,
         "modules": [
             {"class": type(module).__name__, "config": module.get_config_dict()}

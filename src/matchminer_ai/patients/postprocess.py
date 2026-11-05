@@ -42,34 +42,30 @@ def normalize_patient_summary(text: str, other_history: str | None = None) -> st
     return cancer + "\n\n" + OTHER_HISTORY_HEADING + "\n" + (history or "Not documented.")
 
 
-def _split_boilerplate_section(text: str, boilerplate_marker: str) -> tuple[str, str]:
-    """Split generated text at the line containing the boilerplate marker."""
-    lines = text.splitlines()
-    split_idx = next(
-        (idx for idx, line in enumerate(lines) if boilerplate_marker in line),
-        -1,
-    )
-    if split_idx == -1:
-        cleaned = text.strip()
-        return cleaned, cleaned or "None"
+def split_patient_summary(text: str) -> tuple[str, str]:
+    """Return a summary's key section and its boilerplate section.
 
-    main_part = "\n".join(lines[:split_idx]).strip()
-    boilerplate_part = "\n".join(lines[split_idx + 1 :]).strip() or "None"
-    return main_part, boilerplate_part
+    The key section is the cancer history (cancer type, histology, extent,
+    treatment, biomarkers) that TrialSpace retrieval and TrialChecker read; the
+    boilerplate section is the text after ``Other relevant history:``
+    (comorbidities, performance status, organ function, other cancers and other
+    general-eligibility evidence) that BoilerplateChecker reads. Historical
+    headings are accepted, and a missing section is ``Not documented.``.
+    """
+    value = normalize_patient_summary(text if isinstance(text, str) else "")
+    if not value or value.startswith("ERROR:"):
+        return value, value
+    key, _, boilerplate = value.partition("\n\n" + OTHER_HISTORY_HEADING + "\n")
+    return key.strip(), boilerplate.strip() or "Not documented."
 
 
-def parse_boilerplate(df: pd.DataFrame, boilerplate_marker: str) -> pd.DataFrame:
-    """Split final patient summary output into summary and boilerplate portions."""
+def add_summary_sections(df: pd.DataFrame, column: str = "patient_summary") -> pd.DataFrame:
+    """Add ``cancer_history_summary`` (key) and ``general_exclusion_criteria_evidence``
+    (boilerplate) columns split from a complete ``patient_summary`` column."""
     df = df.copy()
-    summary_source = df["patient_answer_text"].fillna("").astype(str)
-    cleaned_summary = summary_source.str.strip()
-    split_parts = cleaned_summary.apply(
-        lambda text: _split_boilerplate_section(str(text), boilerplate_marker)
-    )
-    df["cancer_history_summary"] = split_parts.apply(lambda parts: parts[0])
-    df["general_exclusion_criteria_evidence"] = split_parts.apply(
-        lambda parts: parts[1]
-    )
+    sections = [split_patient_summary(text) for text in df[column].fillna("").astype(str)]
+    df["cancer_history_summary"] = [key for key, _ in sections]
+    df["general_exclusion_criteria_evidence"] = [boilerplate for _, boilerplate in sections]
     return df
 
 
@@ -99,23 +95,12 @@ def postprocess_patient_summaries(
     df: pd.DataFrame,
     config: MMAIConfig,
 ) -> tuple[pd.DataFrame, set[str]]:
-    """Parse patient summaries, remove non-informative rows, and return their IDs."""
-    patient_config = dict(config.patient)
-    output_format = patient_config.get("output_format", "combined")
-    if output_format == "combined":
-        cleaned = df.copy()
-        cleaned["patient_summary"] = cleaned["patient_answer_text"].fillna("").map(normalize_patient_summary)
-        cleaned = cleaned.drop(columns=["cancer_history_summary", "general_exclusion_criteria_evidence"], errors="ignore")
-    elif output_format == "legacy_split":
-        normalized = df.copy()
-        normalized["patient_answer_text"] = normalized["patient_answer_text"].fillna("").map(normalize_patient_summary)
-        cleaned = parse_boilerplate(normalized, OTHER_HISTORY_HEADING)
-    else:
-        raise ValueError("patient.output_format must be combined or legacy_split")
-    summary_column = (
-        "patient_summary" if output_format == "combined" else "cancer_history_summary"
-    )
-    cleaned, removed_patient_ids = clean_bad_data(cleaned, summary_column=summary_column)
+    """Normalize patient summaries, add their key and boilerplate sections, and
+    remove non-informative rows, returning the removed patient IDs."""
+    cleaned = df.copy()
+    cleaned["patient_summary"] = cleaned["patient_answer_text"].fillna("").map(normalize_patient_summary)
+    cleaned = add_summary_sections(cleaned)
+    cleaned, removed_patient_ids = clean_bad_data(cleaned, summary_column="cancer_history_summary")
     if not config.debug_mode:
         cleaned = cleaned.drop(columns=["patient_answer_text"], errors="ignore")
     cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")

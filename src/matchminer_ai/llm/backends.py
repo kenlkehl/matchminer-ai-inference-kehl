@@ -54,6 +54,30 @@ def create_model_metadata(model_name: str) -> Dict[str, Any]:
     }
 
 
+def local_model_metadata(path: str) -> Dict[str, Any]:
+    """Identify a local model directory by its files' sizes and modification times.
+
+    A local checkpoint (a newly trained TrialSpace or checker, before publication) can change
+    in place, so it is never cached; its weights are not read or hashed.
+    """
+    import hashlib
+    from pathlib import Path
+
+    root = Path(path).resolve()
+    files = {str(f.relative_to(root)): [f.stat().st_size, int(f.stat().st_mtime)]
+             for f in sorted(root.rglob("*")) if f.is_file()}
+    modified = max((mtime for _, mtime in files.values()), default=0)
+    from datetime import datetime, timezone
+
+    return {
+        "model_name": str(root),
+        "model_sha": hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest(),
+        "created_at": None,
+        "last_modified": datetime.fromtimestamp(modified, timezone.utc).isoformat(),
+        "local_directory": True,
+    }
+
+
 def get_model_metadata(
     model_name: str,
     *,
@@ -63,8 +87,11 @@ def get_model_metadata(
     Load model metadata from cache, fetching it if needed.
 
     Metadata is stored by model name so summarization and embedding outputs can
-    include model provenance without repeated Hugging Face Hub calls.
+    include model provenance without repeated Hugging Face Hub calls. A local model
+    directory is identified from its files instead (:func:`local_model_metadata`).
     """
+    if os.path.isdir(model_name):
+        return local_model_metadata(model_name)
     cache_dir = cache_dir or _default_metadata_cache_dir()
     os.makedirs(cache_dir, exist_ok=True)
     cache_file = os.path.join(cache_dir, f"{model_name.replace('/', '_')}.json")

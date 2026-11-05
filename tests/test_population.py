@@ -5,7 +5,6 @@ import json
 import zipfile
 from dataclasses import replace
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -15,18 +14,11 @@ from matchminer_ai.cancellation import (
     InferenceCancelled,
     cancellation_scope,
 )
-from matchminer_ai.patients import (
-    ColBERTConfig,
-    ColBERTPatientIndex,
-    colbert_notes_fingerprint,
-)
-from matchminer_ai.patients.workup import _notes
 from matchminer_ai.population import (
     create_patient_cohort,
     subset_patient_cohort,
     compress_patient_cohort,
-    encode_patient_cohort,
-    review_population_workup_with_colbert,
+    review_population_workup,
     aggregate_population_workup,
     population_results_table,
     save_patient_cohort,
@@ -81,23 +73,6 @@ def cohort():
     )
 
 
-def fake_encode(notes, *, config, **kw):
-    result = {}
-    for pid, frame in notes.groupby("patient_id", sort=False):
-        source = _notes(frame)
-        chunks = tuple({**n, "start": 0, "end": len(n["text"])} for n in source)
-        result[pid] = ColBERTPatientIndex(
-            pid,
-            config,
-            {"model": "fabricated"},
-            tuple(source),
-            chunks,
-            tuple(np.array([[1.0, 0.0]], dtype=np.float32) for _ in chunks),
-            colbert_notes_fingerprint(frame),
-        )
-    return result
-
-
 def finding(rec, number, status="completed", applies="applies"):
     return dict(
         recommendation=copy.deepcopy(rec),
@@ -109,14 +84,6 @@ def finding(rec, number, status="completed", applies="applies"):
         evidence=[],
         limitations=[],
     )
-
-
-@pytest.fixture
-def encoded(cohort, monkeypatch):
-    monkeypatch.setattr(
-        "matchminer_ai.patients.encode_patient_notes_colbert", fake_encode
-    )
-    return encode_patient_cohort(cohort, config=ColBERTConfig(device="cpu"))
 
 
 def test_validation_and_stable_source_dates(cohort):
@@ -138,16 +105,14 @@ def test_validation_and_stable_source_dates(cohort):
         create_patient_cohort(pd.concat([cohort.summaries] * 2), cohort.notes)
 
 
-def test_empty_selection_valid_but_cannot_encode(cohort):
+def test_empty_selection_valid_but_cannot_review(cohort):
     selected = subset_patient_cohort(cohort, [])
     assert selected.summaries.empty and selected.notes.empty
     with pytest.raises(ValueError, match="nonempty"):
-        encode_patient_cohort(selected, config=ColBERTConfig())
+        review_population_workup(selected, config=load_default_preset())
 
 
-def test_compression_keeps_originals_and_invalidates_compressed_index(
-    encoded, monkeypatch
-):
+def test_compression_keeps_originals_and_invalidates_the_report(cohort, monkeypatch):
     def compress(frame, **kwargs):
         assert kwargs["max_concurrent_requests"] == 8
         return frame.assign(
@@ -155,67 +120,42 @@ def test_compression_keeps_originals_and_invalidates_compressed_index(
         )
 
     monkeypatch.setattr("matchminer_ai.patients.compress_patient_notes", compress)
-    c = compress_patient_cohort(encoded, config=load_default_preset())
-    pd.testing.assert_frame_equal(c.notes, encoded.notes)
-    assert c.indexes and c.index_source == "original"
-    c = encode_patient_cohort(c, config=ColBERTConfig(), note_source="compressed")
-    c = compress_patient_cohort(c, config=load_default_preset())
-    assert (
-        c.indexes == {}
-        and c.index_source is None
-        and not c.compression["losslessness_verified"]
-    )
+    c = compress_patient_cohort(replace(cohort, report={"stale": True}), config=load_default_preset())
+    pd.testing.assert_frame_equal(c.notes, cohort.notes)
+    assert c.report is None and not c.compression["losslessness_verified"]
+    assert c.selected_notes("compressed").note_text.str.contains("plan").any()
 
 
-def test_review_isolation_failure_counts_and_csv(encoded, monkeypatch):
+def test_review_isolation_failure_counts_and_csv(cohort, monkeypatch):
     calls = []
 
-    def review(index, recommendations, **kwargs):
-        calls.append((index.patient_id, kwargs))
-        assert (
-            all("Separate" not in n["text"] for n in index.notes)
-            if index.patient_id == "a"
-            else len(index.notes) == 1
-        )
+    def review(notes, recommendations, **kwargs):
+        pid = notes.patient_id.iloc[0] if "patient_id" in notes else None
+        texts = notes.note_text.tolist()
+        calls.append((texts, kwargs))
+        if any("Separate" in text for text in texts):
+            raise RuntimeError("fabricated endpoint failure")
+        assert pid is None and len(texts) == 2
         return {
-            "assessments": [
-                finding(
-                    r,
-                    n,
-                    status="error" if index.patient_id == "b" else "completed",
-                    applies="uncertain"
-                    if index.patient_id == "b"
-                    else "applies"
-                    if n == 0
-                    else "not_applicable",
-                )
-                for n, r in enumerate(recommendations)
-            ],
-            "metadata": {"method": "colbert"},
+            "assessments": [finding(r, n, applies="applies" if n == 0 else "not_applicable")
+                            for n, r in enumerate(recommendations)],
+            "metadata": {"method": "full_notes"},
             "notice": "Fabricated",
         }
 
-    monkeypatch.setattr(
-        "matchminer_ai.patients.review_patients_workup_with_colbert",
-        lambda indexes, recommendations, **kw: {
-            pid: review(index, recommendations, **kw) for pid, index in indexes.items()
-        },
-    )
-    result = review_population_workup_with_colbert(
-        encoded, config=load_default_preset(), top_n=7
-    )
-    assert [p for p, _ in calls] == ["b", "a"]
-    assert all(
-        kwargs["top_n"] == 7 and "patient_summary" not in kwargs for _, kwargs in calls
-    )
-    assert len(population_results_table(result)) == 4
+    monkeypatch.setattr("matchminer_ai.patients.review_patient_workup", review)
+    result = review_population_workup(cohort, config=load_default_preset(), max_concurrent_patients=1)
+    assert [len(texts) for texts, _ in calls] == [1, 2]
+    assert all(kwargs["population_context"] == "Fabricated population" for _, kwargs in calls)
+    table = population_results_table(result)
+    assert len(table) == 4 and set(table.method) == {"full_notes"}
     row = result.report["aggregate"][0]
     assert row["statuses"]["error"] == 1
     assert row["completed_applicable"] == row["applicable_assessed"] == 1
     assert row["documented_completion_fraction"] == 1
     assert result.report["aggregate"][1]["documented_completion_fraction"] is None
-    assert "Never expose" not in json.dumps(result.report)
-    assert encoded.report is None
+    assert "RuntimeError" in json.dumps(result.report) and "fabricated endpoint failure" not in json.dumps(result.report)
+    assert cohort.report is None
 
 
 def test_denominators_distinguish_applicability_and_errors(cohort):
@@ -237,65 +177,34 @@ def test_denominators_distinguish_applicability_and_errors(cohort):
     assert row["documented_completion_fraction"] == 0.5
 
 
-def test_cancellation_does_not_publish_partial_report(encoded, monkeypatch):
+def test_cancellation_does_not_publish_partial_report(cohort, monkeypatch):
     token = CancellationToken()
 
     def review(*args, **kwargs):
         token.cancel()
         token.check()
 
-    monkeypatch.setattr(
-        "matchminer_ai.patients.review_patients_workup_with_colbert",
-        lambda indexes, recommendations, **kw: {
-            pid: review(index, recommendations, **kw) for pid, index in indexes.items()
-        },
-    )
+    monkeypatch.setattr("matchminer_ai.patients.review_patient_workup", review)
     with cancellation_scope(token), pytest.raises(InferenceCancelled):
-        review_population_workup_with_colbert(encoded, config=load_default_preset())
-    assert encoded.report is None
+        review_population_workup(cohort, config=load_default_preset())
+    assert cohort.report is None
 
 
-def test_wrong_index_source_or_chunking_rejected_before_review(encoded, monkeypatch):
-    monkeypatch.setattr(
-        "matchminer_ai.patients.review_patients_workup_with_colbert",
-        lambda *a, **kw: pytest.fail("Must not review"),
-    )
-    with pytest.raises(ValueError, match="stale"):
-        review_population_workup_with_colbert(
-            encoded,
-            config=load_default_preset(),
-            retrieval_config=ColBERTConfig(chunk_size=128),
-        )
-    wrong = replace(
-        encoded, indexes={"a": encoded.indexes["b"], "b": encoded.indexes["a"]}
-    )
-    with pytest.raises(ValueError, match="stale"):
-        review_population_workup_with_colbert(wrong, config=load_default_preset())
-
-
-def test_archive_roundtrip_full_cohort_with_compression_and_vectors(
-    encoded, monkeypatch, tmp_path
-):
+def test_archive_roundtrip_full_cohort_with_compression(cohort, monkeypatch, tmp_path):
     monkeypatch.setattr(
         "matchminer_ai.patients.compress_patient_notes",
         lambda frame, **kw: frame.assign(
             compressed_note_text="Compact fabricated note"
         ),
     )
-    c = compress_patient_cohort(encoded, config=load_default_preset())
-    c = encode_patient_cohort(c, config=ColBERTConfig(), note_source="compressed")
+    c = compress_patient_cohort(cohort, config=load_default_preset())
     path = save_patient_cohort(c, tmp_path / "cohort.zip")
     loaded = load_patient_cohort(path)
     pd.testing.assert_frame_equal(loaded.notes, c.notes)
     pd.testing.assert_frame_equal(loaded.summaries, c.summaries)
     pd.testing.assert_frame_equal(loaded.compressed_notes, c.compressed_notes)
-    assert loaded.index_source == "compressed" and loaded.space == c.space
+    assert loaded.space == c.space
     assert path.stat().st_mode & 0o777 == 0o600
-    for pid in c.indexes:
-        assert loaded.indexes[pid].source_sha256 == c.indexes[pid].source_sha256
-        np.testing.assert_array_equal(
-            loaded.indexes[pid].embeddings[0], c.indexes[pid].embeddings[0]
-        )
     with pytest.raises(ValueError, match="oversized"):
         load_patient_cohort(path, max_uncompressed_bytes=1)
     with zipfile.ZipFile(path) as z:

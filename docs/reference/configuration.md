@@ -390,11 +390,6 @@ tokenizer used for patient chunk truncation and prompt sizing before sending
 requests to the remote endpoint. For self-hosted vLLM this is usually the same
 as `patient.remote.model_name`.
 
-### `patient.boilerplate_marker`
-
-Line marker used by patient postprocessing to identify the boilerplate
-conditions section heading.
-
 ### `patient.text_token_threshold`
 
 Maximum token count used by local truncation before patient summarization.
@@ -578,7 +573,9 @@ selection harness. Complete ontology contents remain local.
 
 ## `embedding`
 
-Configuration for summary embedding.
+Configuration for TrialSpace embedding. Retrieval embeds key text only: patient
+key sections (`cancer_history_summary`) and cohort key criteria
+(`cohort_key_criteria`); see the [embedding API](../api/embedding.md).
 
 ### `embedding.model_path`
 
@@ -596,15 +593,19 @@ Other runtime errors are not retried.
 
 ### `embedding.prompt_file`
 
-Prompt filename loaded from `matchminer_ai.prompts` and used as the embedding
-query prompt.
+Prompt filename loaded from `matchminer_ai.prompts` and registered as the
+model's shared `query` prompt when the model does not save its own patient and
+cohort prompts (TrialSpace-0526, whose legacy encoding is unchanged). A
+TrialSpace model that saves prompts named `patient_summary` and `this_space`
+encodes each side with its own prompt instead.
 
 ### `embedding.max_seq_length`
 
-Runtime truncation cutoff for embedding inputs. `SentenceTransformer`
+Runtime truncation cutoff for embedding inputs (default 4096). `SentenceTransformer`
 uses this value during `encode()`, so inputs longer than this limit are
-truncated before embedding generation. QC reports use the same value when
-flagging summaries that exceed the embedding input limit.
+truncated before embedding generation. QC reports use the same value, counting
+tokens with each side's prompt, when flagging key text that exceeds the
+embedding input limit.
 
 This value should match the `model_path` configured alongside it — it is
 specific to the embedding model in use, not a general-purpose default.
@@ -616,7 +617,9 @@ produce for longer inputs.
 
 ## `match_quality`
 
-Configuration for the match-quality checker model.
+Configuration for the TrialChecker match-quality model, which reads the
+cohort's key criteria and the patient's key section; see the
+[match-quality API](../api/match-quality.md).
 
 ### `match_quality.model_name`
 
@@ -633,16 +636,25 @@ Prompt template filename loaded from `matchminer_ai.prompts`.
 
 ### `match_quality.max_length`
 
-Maximum token length passed to the text-classification checker pipeline.
+Maximum token length passed to the text-classification checker pipeline
+(default 8192). Inputs are padded to the longest input of each batch, not to
+this length.
+
+### `match_quality.batch_size`
+
+Prompts per checker pipeline batch (default 8).
 
 ### `match_quality.score_cutoff`
 
-Minimum sigmoid-transformed checker score required for
-`match_quality_pass == true`.
+Minimum `match_quality_score` required for `match_quality_pass == true`
+(default 0.2). The score is `sigmoid(logit)` for a single-output model and the
+expected match score fraction for a multi-head model.
 
 ## `exclusion_criteria`
 
-Configuration for the exclusion-criteria checker model.
+Configuration for the BoilerplateChecker model, which reads the cohort's
+boilerplate criteria and the patient's boilerplate section; see the
+[exclusion-criteria API](../api/exclusion-criteria.md).
 
 ### `exclusion_criteria.model_name`
 
@@ -659,7 +671,13 @@ Prompt template filename loaded from `matchminer_ai.prompts`.
 
 ### `exclusion_criteria.max_length`
 
-Maximum token length passed to the text-classification checker pipeline.
+Maximum token length passed to the text-classification checker pipeline
+(default 8192). Inputs are padded to the longest input of each batch, not to
+this length.
+
+### `exclusion_criteria.batch_size`
+
+Prompts per checker pipeline batch (default 8).
 
 ## `llm_match_quality`
 
@@ -671,7 +689,9 @@ Local in-process vLLM runtime settings. See `trial.local`.
 
 ### `llm_match_quality.prompt_file`
 
-Prompt template filename loaded from `matchminer_ai.prompts`.
+System prompt filename loaded from `matchminer_ai.prompts`. The default,
+`match_quality.labels.system.txt`, is the training teacher's five-label prompt;
+a replacement must return the same JSON contract.
 
 ### `llm_match_quality.reasoning_parser`
 
@@ -693,7 +713,9 @@ Local in-process vLLM runtime settings. See `trial.local`.
 
 ### `llm_exclusion_criteria.prompt_file`
 
-Prompt template filename loaded from `matchminer_ai.prompts`.
+Prompt template filename loaded from `matchminer_ai.prompts`. The default,
+`llm_exclusion_criteria.user.txt`, asks whether the patient clearly fails any
+of the cohort's boilerplate criteria.
 
 ### `llm_exclusion_criteria.reasoning_parser`
 

@@ -1,4 +1,4 @@
-"""Separate the boilerplate criteria of extracted cohorts from the rest of their criteria.
+"""Separate each cohort's key criteria from its boilerplate criteria.
 
 Cohort extraction (cohort_workflow) copies every eligibility criterion that applies to a cohort
 verbatim, including boilerplate that most cancer trials share: consent, compliance, sample and
@@ -10,9 +10,11 @@ lactation, vaccine restrictions, study-staff and catch-all exclusions (each unle
 to what the trial studies). :func:`remove_boilerplate_criteria` splits each cohort's criteria into
 items, one per line (:func:`split_criteria`), and asks ``trial.cohorts.deboilerplate.user.txt``
 whether each item is boilerplate, one request per item showing the cohort's numbered criteria
-without the trial document. Code then sorts the unchanged items into the criteria that are not
-boilerplate and the boilerplate criteria (:func:`gather_criteria`); the model never copies the
-criteria, so none can be lost or reworded. It is optional at inference; training uses it after
+without the trial document. Code then sorts the unchanged items into the key criteria (those that
+are not boilerplate: what distinguishes the cohort's population) and the boilerplate criteria
+(:func:`gather_criteria`); the model never copies the criteria, so none can be lost or reworded.
+TrialSpace retrieval and TrialChecker read the key criteria; BoilerplateChecker reads the
+boilerplate criteria. It is optional at inference; training uses it after
 :func:`~matchminer_ai.trials.merge_equivalent_cohorts`.
 """
 
@@ -43,6 +45,7 @@ DEBOILERPLATE_JSON_SCHEMA = {
     "type": "object", "additionalProperties": False, "required": ["boilerplate"],
     "properties": {"boilerplate": {"type": "boolean"}},
 }
+KEY_COLUMN = "cohort_key_criteria"
 BOILERPLATE_COLUMN = "cohort_boilerplate_criteria"
 _LABEL = re.compile(r"\s*(inclusion|exclusion)\s+criteria\s*:?\s*", re.IGNORECASE)
 
@@ -103,7 +106,7 @@ def remove_boilerplate_criteria(
     output_dir: str | Path | None = None,
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
-    """Each cohort's eligibility criteria separated into boilerplate and the rest.
+    """Each cohort's eligibility criteria separated into key and boilerplate criteria.
 
     ``cohorts`` holds cohort rows (``trial_id``, ``cohort_number``, ``cohort_name``,
     ``cohort_eligibility_criteria``; other columns are kept), extracted or merged. Each row's
@@ -117,9 +120,11 @@ def remove_boilerplate_criteria(
     reported in ``deboilerplate_errors``. Both are keyed by ``cohort_trial_id`` when the rows have
     it, otherwise ``<trial_id>-cohort-<cohort_number>``.
 
-    Returns the rows in their original order with ``cohort_eligibility_criteria`` replaced by the
-    criteria that are not boilerplate and a ``cohort_boilerplate_criteria`` column holding the
-    boilerplate criteria (None for a cohort in ``deboilerplate_errors``). Every item's attempts in
+    Returns the rows in their original order, ``cohort_eligibility_criteria`` unchanged (all the
+    criteria), with a ``cohort_key_criteria`` column holding the key criteria (the criteria that are
+    not boilerplate; all the criteria for a cohort in ``deboilerplate_errors``) and a
+    ``cohort_boilerplate_criteria`` column holding the boilerplate criteria (None for a cohort in
+    ``deboilerplate_errors``). Every item's attempts in
     the metadata's ``trial_cohorts`` (each trial's results as ``deboilerplate.json`` stores them)
     keep the model's answer and reasoning. With ``output_dir``, each trial's results are saved to
     ``<output_dir>/<trial_id>/deboilerplate.json`` as its requests return, and an item's
@@ -193,7 +198,7 @@ def remove_boilerplate_criteria(
             entry = {"cohort_number": int(frame.cohort_number.iloc[r]), "cohort_name": names[r], "input_sha256": inputs[r]}
             if outcome is not None:
                 if outcome[2] is None:
-                    entry["eligibility_criteria"], entry["boilerplate_criteria"] = outcome[0], outcome[1]
+                    entry["key_criteria"], entry["boilerplate_criteria"] = outcome[0], outcome[1]
                 else:
                     entry["error"] = outcome[2]
                 if any((r, n) in failed for n in range(1, len(items[r]) + 1)):
@@ -250,7 +255,7 @@ def remove_boilerplate_criteria(
         if unclassified:
             metadata["unclassified_items"][keys[r]] = {n: failed[r, n] for n in unclassified}
     result_frame = frame.copy()
-    result_frame["cohort_eligibility_criteria"] = [criteria for criteria, _, _ in outcomes]
+    result_frame[KEY_COLUMN] = [criteria for criteria, _, _ in outcomes]
     result_frame[BOILERPLATE_COLUMN] = pd.Series([boilerplate for _, boilerplate, _ in outcomes], dtype=object)
     metadata["cohorts"] = len(frame)
     metadata["trial_cohorts"] = {trial_id: entries_of(trial_id) for trial_id in rows_of}
@@ -261,6 +266,6 @@ def remove_boilerplate_criteria(
     return (result_frame, metadata) if return_metadata else result_frame
 
 
-__all__ = ["BOILERPLATE_COLUMN", "DEBOILERPLATE_JSON_SCHEMA", "DEBOILERPLATE_PROMPT", "DEBOILERPLATE_SCHEMA_VERSION",
+__all__ = ["BOILERPLATE_COLUMN", "KEY_COLUMN", "DEBOILERPLATE_JSON_SCHEMA", "DEBOILERPLATE_PROMPT", "DEBOILERPLATE_SCHEMA_VERSION",
            "build_deboilerplate_messages", "gather_criteria", "parse_deboilerplated", "remove_boilerplate_criteria",
            "split_criteria"]

@@ -23,9 +23,9 @@ from matchminer_ai.matching.guidelines import _patient_frame
 from matchminer_ai.patients.workup import STATUSES, APPLICABILITY, NOTICE
 
 POPULATION_NOTICE = (
-    NOTICE + " Only ColBERT-retrieved excerpts were reviewed. Missing documentation "
-    "means not located in those excerpts. TrialChecker scores are ranking signals. "
-    "Research use only; confirm applicability, timing and findings with a clinician."
+    NOTICE + " Each patient's selected notes were reviewed chunk by chunk. Missing "
+    "documentation means not located in those notes. TrialChecker scores are ranking "
+    "signals. Research use only; confirm applicability, timing and findings with a clinician."
 )
 
 
@@ -48,8 +48,6 @@ class PatientCohort:
     provenance: dict = field(default_factory=dict)
     compressed_notes: pd.DataFrame | None = None
     compression: dict | None = None
-    indexes: dict = field(default_factory=dict)
-    index_source: str | None = None
     space: dict | None = None
     matches: list[dict] = field(default_factory=list)
     report: dict | None = None
@@ -158,32 +156,8 @@ def compress_patient_cohort(cohort, *, config, thinking="off", progress_callback
         "output_characters": int(compressed.compressed_note_text.str.len().sum()),
         "note_count": len(compressed),
     }
-    # Recompression makes compressed vectors and prior results stale.
-    return replace(
-        cohort,
-        compressed_notes=compressed,
-        compression=metadata,
-        indexes={} if cohort.index_source == "compressed" else cohort.indexes,
-        index_source=None
-        if cohort.index_source == "compressed"
-        else cohort.index_source,
-        report=None,
-    )
-
-
-def encode_patient_cohort(
-    cohort, *, config, note_source="original", progress_callback=None
-):
-    from matchminer_ai.patients import encode_patient_notes_colbert
-
-    notes = cohort.selected_notes(note_source)
-    if notes.empty:
-        raise ValueError("Select a nonempty cohort first.")
-    indexes = encode_patient_notes_colbert(
-        notes, config=config, progress_callback=progress_callback
-    )
-    check_cancelled()
-    return replace(cohort, indexes=indexes, index_source=note_source, report=None)
+    # Recompression makes prior results stale.
+    return replace(cohort, compressed_notes=compressed, compression=metadata, report=None)
 
 
 def aggregate_population_workup(reviews, recommendations):
@@ -229,76 +203,93 @@ def aggregate_population_workup(reviews, recommendations):
     return rows
 
 
-def review_population_workup_with_colbert(
+def review_population_workup(
     cohort,
     *,
     config,
-    top_n=20,
-    retrieval_config=None,
+    note_source="original",
     backup_config=None,
     max_consecutive_failures=3,
-    max_concurrent_requests=8,
+    max_concurrent_patients=4,
     progress_callback=None,
 ):
-    """Review every selected patient × workup item, preserving isolated evidence.
+    """Review every selected patient × workup item over each patient's full notes.
 
-    Patient–question requests share one bounded concurrent queue. All expected pairs
-    remain in the result, including errors; cancellation propagates and never
-    publishes a partial run as complete. No implicit compression or encoding.
+    Each patient's selected notes go to ``review_patient_workup``; patients share a
+    bounded pool of ``max_concurrent_patients``. All expected pairs remain in the
+    result: a patient whose review fails keeps one error row per item. Cancellation
+    propagates and never publishes a partial run as complete. No implicit compression.
     """
-    from matchminer_ai.patients import review_patients_workup_with_colbert
+    from concurrent.futures import ThreadPoolExecutor
 
-    if type(top_n) is not int or not 1 <= top_n <= 100:
-        raise ValueError("top_n must be from 1 to 100.")
+    from matchminer_ai.patients import review_patient_workup
+
+    if type(max_concurrent_patients) is not int or not 1 <= max_concurrent_patients <= 64:
+        raise ValueError("max_concurrent_patients must be from 1 to 64.")
     ids = cohort.summaries.patient_id.tolist()
-    if not ids or set(cohort.indexes) != set(ids):
-        raise ValueError("Encode every active patient's notes with ColBERT first.")
+    if not ids:
+        raise ValueError("Select a nonempty cohort first.")
     recommendations = (cohort.space or {}).get("diagnostic_workup", [])
     if not recommendations:
         raise ValueError("Select a guideline space with workup recommendations.")
-    notes = cohort.selected_notes(cohort.index_source)
+    notes = cohort.selected_notes(note_source)
     grouped = dict(tuple(notes.groupby("patient_id", sort=False)))
-    for pid in ids:
-        index = cohort.indexes[pid]
-        if index.patient_id != pid or not index.matches(grouped[pid], retrieval_config):
-            raise ValueError(
-                "A patient index is stale or incompatible; encode this cohort again."
+    progress = progress_callback or (lambda _: None)
+
+    def review(pid):
+        check_cancelled()
+        try:
+            return review_patient_workup(
+                grouped[pid].drop(columns="patient_id"),
+                recommendations,
+                config=config,
+                backup_config=backup_config,
+                max_consecutive_failures=max_consecutive_failures,
+                population_context=cohort.space.get("clinical_space_summary"),
             )
-    results = review_patients_workup_with_colbert(
-        {pid: cohort.indexes[pid] for pid in ids},
-        recommendations,
-        config=config,
-        top_n=top_n,
-        retrieval_config=retrieval_config,
-        backup_config=backup_config,
-        max_consecutive_failures=max_consecutive_failures,
-        max_concurrent_requests=max_concurrent_requests,
-        population_context=cohort.space.get("clinical_space_summary"),
-        progress_callback=progress_callback,
-    )
+        except Exception as exc:  # one patient's failure keeps its error rows (cancellation is a BaseException);
+            # only the exception type is kept: provider messages can echo patient text.
+            return {
+                "assessments": [
+                    dict(
+                        recommendation_index=number,
+                        recommendation=copy.deepcopy(item),
+                        name=item["name"],
+                        status="error",
+                        applicability="uncertain",
+                        evidence=[],
+                        bottom_line="No validated documentation assessment is available.",
+                        limitations=[f"The review failed ({type(exc).__name__})."],
+                        metadata={},
+                    )
+                    for number, item in enumerate(recommendations)
+                ],
+                "notice": NOTICE,
+                "metadata": {"method": "full_notes", "error": type(exc).__name__},
+            }
+
     reviews = []
-    for pid in ids:
-        result = results[pid]
-        result["metadata"].update(note_source=cohort.index_source)
-        if cohort.index_source == "compressed":
-            result["metadata"].update(
-                scope="retrieved_compressed_excerpts",
-                evidence_source="llm_compressed_notes",
-                compression=copy.deepcopy(cohort.compression),
-            )
-            result["notice"] += (
-                " Compressed-note excerpts may differ from originals; losslessness is unverified."
-            )
-        reviews.append({"patient_id": pid, "review": result})
+    with ThreadPoolExecutor(max_workers=max_concurrent_patients) as pool:
+        for done, (pid, result) in enumerate(zip(ids, pool.map(review, ids)), start=1):
+            result["metadata"].update(note_source=note_source)
+            if note_source == "compressed":
+                result["metadata"].update(
+                    evidence_source="llm_compressed_notes",
+                    compression=copy.deepcopy(cohort.compression),
+                )
+                result["notice"] += (
+                    " Compressed-note excerpts may differ from originals; losslessness is unverified."
+                )
+            reviews.append({"patient_id": pid, "review": result})
+            progress(f"Reviewed {done}/{len(ids)} patients")
     check_cancelled()
     return replace(
         cohort,
         report={
-            "version": 1,
-            "method": "colbert",
-            "note_source": cohort.index_source,
-            "top_n": top_n,
-            "max_concurrent_requests": max_concurrent_requests,
+            "version": 2,
+            "method": "full_notes",
+            "note_source": note_source,
+            "max_concurrent_patients": max_concurrent_patients,
             "patient_count": len(ids),
             "space": copy.deepcopy(cohort.space),
             "aggregate": aggregate_population_workup(reviews, recommendations),
@@ -330,7 +321,7 @@ def population_results_table(cohort):
                     bottom_line=item["bottom_line"],
                     match_quality_score=matches.get(pid, {}).get("match_quality_score"),
                     note_source=cohort.report["note_source"],
-                    method="colbert",
+                    method=cohort.report["method"],
                     evidence_json=json.dumps(
                         item.get("evidence", []), ensure_ascii=False
                     ),
@@ -343,12 +334,9 @@ def population_results_table(cohort):
 
 
 def save_patient_cohort(cohort, path):
-    """Explicit atomic ZIP export: source notes, summaries, compression, NPZ indexes,
-    selected guideline sources, match provenance, and any completed assessments.
-    Index filenames are generated numbers, never patient IDs. No pickle is used.
+    """Explicit atomic ZIP export: source notes, summaries, compression, selected
+    guideline sources, match provenance, and any completed assessments. No pickle is used.
     """
-    from matchminer_ai.patients import save_colbert_patient_index
-
     path = Path(path)
     payload = dict(
         version=1,
@@ -359,24 +347,15 @@ def save_patient_cohort(cohort, path):
         if cohort.compressed_notes is None
         else _records(cohort.compressed_notes),
         compression=cohort.compression,
-        index_source=cohort.index_source,
         space=cohort.space,
         matches=cohort.matches,
         report=cohort.report,
-        indexes={},
     )
     with tempfile.TemporaryDirectory(prefix=".cohort-", dir=path.parent) as tmp:
         archive = Path(tmp) / "cohort.zip"
         hashes = {}
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as out:
-            for i, (pid, index) in enumerate(cohort.indexes.items()):
-                check_cancelled()
-                name = f"indexes/{i:06}.npz"
-                file = save_colbert_patient_index(index, Path(tmp) / "index.npz")
-                data = file.read_bytes()
-                hashes[name] = hashlib.sha256(data).hexdigest()
-                out.writestr(name, data, compress_type=zipfile.ZIP_STORED)
-                payload["indexes"][pid] = name
+            check_cancelled()
             data = _json(payload)
             out.writestr("cohort.json", data)
             hashes["cohort.json"] = hashlib.sha256(data).hexdigest()
@@ -395,12 +374,9 @@ def save_patient_cohort(cohort, path):
 def load_patient_cohort(path, *, max_uncompressed_bytes=16 * 1024**3):
     """Restore an explicitly supplied archive, with bounded sizes and checksum checks.
 
-    No archive paths are extracted. Indexes are loaded with pickle disabled,
-    expected source fingerprints, and exact patient IDs; retrieval subsequently
-    validates the actual model signature. Checksums detect corruption, not trust.
+    No archive paths are extracted. Checksums detect corruption, not trust.
+    Archives written with ColBERT patient indexes are no longer supported.
     """
-    from matchminer_ai.patients import load_colbert_patient_index
-
     with zipfile.ZipFile(path) as archive:
         entries = archive.infolist()
         names = [e.filename for e in entries]
@@ -460,34 +436,9 @@ def load_patient_cohort(path, *, max_uncompressed_bytes=16 * 1024**3):
             space=payload.get("space"),
             matches=payload.get("matches", []),
             report=payload.get("report"),
-            index_source=payload.get("index_source"),
         )
-        indexes = {}
-        expected = payload.get("indexes", {})
-        if expected and set(expected) != set(cohort.summaries.patient_id):
-            raise ValueError("Cohort index membership mismatch.")
-        if expected and cohort.index_source not in {"original", "compressed"}:
-            raise ValueError("Invalid index note source.")
-        if set(hashes) != {"cohort.json", *expected.values()} or len(
-            set(expected.values())
-        ) != len(expected):
-            raise ValueError("Unexpected cohort index entries.")
-        expanded_index_bytes = 0
-        for pid, name in expected.items():
-            data = read(name)
-            # Bound the nested NPZ expansion as well as the outer ZIP.
-            import io
-
-            with zipfile.ZipFile(io.BytesIO(data)) as inner:
-                expanded_index_bytes += sum(e.file_size for e in inner.infolist())
-                if expanded_index_bytes > max_uncompressed_bytes:
-                    raise ValueError("Oversized patient index.")
-            notes = cohort.selected_notes(cohort.index_source)
-            indexes[pid] = load_colbert_patient_index(
-                io.BytesIO(data),
-                patient_id=pid,
-                expected_notes=notes.loc[notes.patient_id == pid],
-            )
+        if payload.get("indexes") or set(hashes) != {"cohort.json"}:
+            raise ValueError("Archives with ColBERT patient indexes are no longer supported.")
         if cohort.report is not None:
             patients = cohort.report["patients"]
             if [
@@ -498,4 +449,4 @@ def load_patient_cohort(path, *, max_uncompressed_bytes=16 * 1024**3):
                 patients, cohort.space["diagnostic_workup"]
             )
             cohort = replace(cohort, report={**cohort.report, "aggregate": aggregate})
-    return replace(cohort, indexes=indexes)
+    return cohort

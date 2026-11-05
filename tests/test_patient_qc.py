@@ -14,7 +14,7 @@ _QC_ARTIFACTS = dict(
 )
 
 
-def test_unified_summary_qc_includes_other_history_in_token_budget(monkeypatch):
+def test_summary_qc_counts_the_embedded_key_section_tokens(monkeypatch):
     full = 'Cancer type: Lung\n\nOther relevant history:\nDialysis.'
     seen = []
     def count(texts, **kwargs):
@@ -24,7 +24,7 @@ def test_unified_summary_qc_includes_other_history_in_token_budget(monkeypatch):
     from matchminer_ai.config import load_default_preset
     report = patient_summary_qc_report(pd.DataFrame([dict(patient_id='p', patient_summary=full)]),
                                       config=load_default_preset(), **_QC_ARTIFACTS).set_index('metric')
-    assert seen == [full]
+    assert seen == ['Cancer type: Lung']  # TrialSpace embeds only the key section
     assert report.loc['patients_exclusion_criteria_not_extracted', 'value'] == 0
 
 
@@ -51,7 +51,7 @@ def test_patient_summary_qc_report_metrics(monkeypatch):
     )
     monkeypatch.setattr(
         "matchminer_ai._qc.patients.count_embedding_tokens",
-        lambda texts, *, embedding_config: [100, 3001, 50],
+        lambda texts, *, embedding_config, entity_type=None: [100, 3001, 50],
     )
     config = MMAIConfig(
         preset_name="default",
@@ -116,7 +116,7 @@ def test_patient_summary_qc_uses_embedding_max_seq_length(monkeypatch):
     )
     monkeypatch.setattr(
         "matchminer_ai._qc.patients.count_embedding_tokens",
-        lambda texts, *, embedding_config: [1500, 2100],
+        lambda texts, *, embedding_config, entity_type=None: [1500, 2100],
     )
     config = MMAIConfig(
         preset_name="default",

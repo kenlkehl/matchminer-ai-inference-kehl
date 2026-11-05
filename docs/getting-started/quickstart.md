@@ -34,12 +34,19 @@ print(cohorts[["cohort_trial_id", "cohort_eligibility_criteria"]])
 print(metadata["trial_rejections"])
 ```
 
-See the [trial API](../api/trials.md) for the cohort schema, and the
-[embedding API](../api/embedding.md) for opt-in ColBERT bidirectional cohort
-retrieval. The default TrialSpace embedder, historical checker models and example notebook use clinical-space summaries and separate
-general exclusions. To run that workflow, select its legacy extraction mode
-explicitly; full cohort criteria are not a drop-in replacement for its model
-inputs:
+Cohort criteria include boilerplate. The optional
+`trials.remove_boilerplate_criteria` step adds each cohort's key criteria
+(`cohort_key_criteria`, read by TrialSpace retrieval and TrialChecker) and
+boilerplate criteria (`cohort_boilerplate_criteria`, read by
+BoilerplateChecker); patient summaries carry the matching key and boilerplate
+sections. See the [trial API](../api/trials.md#key-and-boilerplate-criteria)
+and the [embedding API](../api/embedding.md).
+
+The default `0526` TrialSpace and checker models were trained on clinical-space
+summaries and separate general exclusions, which the example notebook also
+uses. They accept cohort key and boilerplate criteria but have not been
+evaluated on them. To run the established workflow, select its legacy
+extraction mode explicitly:
 
 ```python
 config = load_preset("default")

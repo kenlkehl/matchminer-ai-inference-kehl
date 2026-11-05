@@ -14,11 +14,13 @@ if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
 
-def _resolve_text_column(entity_type: Literal["patient", "trial"]) -> str:
+def _resolve_texts(df: pd.DataFrame, entity_type: Literal["patient", "trial"]) -> list[str]:
+    """Retrieval reads only key text: a patient summary's key section and a cohort's key criteria."""
+    from matchminer_ai._texts import patient_key_texts, trial_key_texts
     if entity_type == "patient":
-        return "cancer_history_summary"
+        return patient_key_texts(df)
     if entity_type == "trial":
-        return "clinical_space_summary"
+        return trial_key_texts(df)
     raise ValueError("entity_type must be one of: 'patient', 'trial'")
 
 
@@ -34,24 +36,22 @@ def embed_texts(
     texts: list[str],
     *,
     config: MMAIConfig | None = None,
+    entity_type: Literal["patient", "trial"] | None = None,
 ) -> tuple[list[list[float]], dict]:
     """Embed summary strings in input order and return vectors plus model metadata.
 
     Accepts patient or trial text without identifiers or DataFrames. Uses the
     default preset when config is omitted and reuses the cached inference model.
-    Model metadata includes model_name and model_sha.
+    ``entity_type`` selects the TrialSpace model's patient or cohort prompt when
+    it has them. Model metadata includes model_name and model_sha.
     """
     resolved_config = config or load_default_preset()
     embedding_config = dict(getattr(resolved_config, "embedding", {}))
-    if embedding_config.get("backend", "sequence") != "sequence":
-        raise ValueError(
-            "embed_texts supports only the sequence embedding backend; "
-            "use embed_for_matching for ColBERT token matrices."
-        )
     return generate_embeddings(
         texts,
         embedding_config=embedding_config,
         model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
+        entity_type=entity_type,
     )
 
 
@@ -72,31 +72,24 @@ def embed_for_matching(
     config: MMAIConfig | None = None,
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
-    """Encode full patient/cohort text for bidirectional retrieval.
+    """Encode key patient/cohort text with TrialSpace for bidirectional retrieval.
 
-    Patient rows require ``patient_id`` and ``patient_summary``; historical
-    ``cancer_history_summary`` plus exclusion history is also accepted. Trial
-    rows require ``cohort_trial_id`` and complete ``cohort_eligibility_criteria``;
-    historical ``space_trial_id`` / ``clinical_space_summary`` remains accepted.
+    Retrieval reads key text only, never boilerplate. Patient rows require
+    ``patient_id`` and the summary's key section, ``cancer_history_summary``
+    (when only a complete ``patient_summary`` is given, its key section is taken:
+    the text before ``Other relevant history:``). Trial rows require
+    ``cohort_trial_id`` and ``cohort_key_criteria`` (the cohort's criteria without
+    its boilerplate, from ``remove_boilerplate_criteria``); without the boilerplate
+    step, ``cohort_eligibility_criteria`` is embedded, and historical
+    ``space_trial_id`` / ``clinical_space_summary`` remains accepted.
 
-    The default sequence (TrialSpace) backend returns the historical identifier
-    and one embedding vector. The opt-in ColBERT backend returns the identifier,
-    ``embedding`` (document token matrix), ``query_embedding`` (instruction plus
-    text with query marker), and ``embedding_contract`` (JSON provenance). Retain
-    all columns when saving. ColBERT encoding is batched and never silently
-    truncates text.
-
-    ``config.embedding`` selects the checkpoint, backend, device, context and
-    batch sizes. With ``return_metadata=True``, also return the configuration and
-    model fingerprint. See docs/api/embedding.md for configuration examples.
+    Returns the identifier and one embedding vector per row. ``config.embedding``
+    selects the checkpoint, device and context. A TrialSpace model that saves
+    patient and cohort prompts gets them for each side. With
+    ``return_metadata=True``, also return the configuration and model fingerprint.
+    See docs/api/embedding.md.
     """
-    text_col = _resolve_text_column(entity_type)
-    if entity_type == "patient" and "patient_summary" in df.columns:
-        text_col = "patient_summary"
-    if entity_type == "trial" and "cohort_eligibility_criteria" in df.columns:
-        text_col = "cohort_eligibility_criteria"
-    if text_col not in df.columns:
-        raise ValueError(f"df is missing required column for {entity_type}: {text_col}")
+    summaries = _resolve_texts(df, entity_type)
 
     id_cols = _resolve_id_columns(entity_type)
     if entity_type == "trial" and "cohort_trial_id" in df.columns:
@@ -106,36 +99,10 @@ def embed_for_matching(
         raise ValueError(f"df is missing required columns for {entity_type}: {missing}")
 
     resolved_config = config or load_default_preset()
-    embedding_config = dict(getattr(resolved_config, "embedding", {}))
-
     output = df.copy()
-
-    summaries = output[text_col].fillna("").astype(str).tolist()
-    backend = embedding_config.get("backend", "sequence")
-    if backend == "colbert":
-        from .late_interaction import encode_matching, token_series
-        if output[id_cols[0]].isna().any() or output[id_cols[0]].duplicated().any():
-            raise ValueError("ColBERT input identifiers must be present and unique")
-        if any(not text.strip() for text in summaries):
-            raise ValueError("ColBERT requires nonempty complete input text")
-        if entity_type == "patient":
-            from matchminer_ai.patients.postprocess import normalize_patient_summary
-            other_col = next((c for c in ("other_relevant_history",
-                "general_exclusion_criteria_evidence", "patient_boilerplate_text") if c in output), None)
-            other = output[other_col].fillna("").astype(str).tolist() if other_col else [""] * len(output)
-            summaries = [normalize_patient_summary(text, history) for text, history in zip(summaries, other)]
-        queries, documents, signature, model_metadata = encode_matching(
-            summaries, entity_type=entity_type, settings=embedding_config)
-        output["query_embedding"] = token_series(queries, output.index)
-        output["embedding"] = token_series(documents, output.index)
-        output["embedding_contract"] = signature
-        result = output[id_cols + ["embedding", "query_embedding", "embedding_contract"]].copy()
-    elif backend == "sequence":
-        embeddings, model_metadata = embed_texts(summaries, config=resolved_config)
-        output["embedding"] = embeddings
-        result = output[id_cols + ["embedding"]].copy()
-    else:
-        raise ValueError("embedding.backend must be 'colbert' or 'sequence'")
+    embeddings, model_metadata = embed_texts(summaries, config=resolved_config, entity_type=entity_type)
+    output["embedding"] = embeddings
+    result = output[id_cols + ["embedding"]].copy()
     if return_metadata:
         metadata_payload = {
             "package": package_metadata(),

@@ -96,8 +96,6 @@ patient:
   prompt_files:
     primer: patient.serial.user.primer.txt
     question: patient.serial.user.question.txt
-  output_format: combined
-  boilerplate_marker: Other relevant history
   text_token_threshold: 95000
 raw_patient_note_qa:
   embedding_model_name: Qwen/Qwen3-Embedding-0.6B
@@ -367,23 +365,26 @@ trial_space_structuring:
       chat_template_kwargs:
         enable_thinking: true
 embedding:
-  # Single-vector (sequence) TrialSpace. ColBERT token retrieval is opt-in with
-  # backend: colbert; see docs/api/embedding.md.
+  # TrialSpace embeds key text only: cohort key criteria and patient key sections.
   model_path: "ksg-dfci/TrialSpace-0526"
   device: cuda
   prompt_file: embedding.txt
-  max_seq_length: 2500
+  max_seq_length: 4096
 match_quality:
   model_name: "ksg-dfci/TrialChecker-0526"
   device: cuda
   prompt_file: match_quality_checker_template.txt
-  max_length: 4096
+  # Cohort key criteria plus the patient's key section; ModernBERT's full context.
+  max_length: 8192
+  batch_size: 8
   score_cutoff: 0.2
 exclusion_criteria:
   model_name: "ksg-dfci/BoilerplateChecker-0526"
   device: cuda
   prompt_file: exclusion_criteria_checker_template.txt
-  max_length: 3192
+  # Verbatim boilerplate criteria often exceed 4,096 tokens with the patient's section.
+  max_length: 8192
+  batch_size: 8
 llm_match_quality:
   sampling_profile: auto
   reasoning_effort: xhigh
@@ -408,7 +409,7 @@ llm_match_quality:
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
-  prompt_file: llm_match_quality.user.txt
+  prompt_file: match_quality.labels.system.txt
 llm_exclusion_criteria:
   sampling_profile: auto
   reasoning_effort: xhigh

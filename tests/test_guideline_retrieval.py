@@ -648,30 +648,6 @@ def cached_stages(model_stages, monkeypatch):
     return model_stages, revision, tokens
 
 
-def test_colbert_guidelines_use_token_cache_and_fast_matcher(catalog_frame, patients, model_stages, monkeypatch, tmp_path):
-    from matchminer_ai.config import load_default_preset
-    from matchminer_ai.embedding.embed import embed_for_matching
-    from matchminer_ai.embedding import late_interaction
-    from test_colbert_matching import Encoder
-
-    encoder = Encoder()
-    monkeypatch.setattr(late_interaction, '_model', lambda *args: encoder)
-    monkeypatch.setattr('matchminer_ai.embedding.embed_for_matching', embed_for_matching)
-    config = load_default_preset()
-    config.embedding = dict(backend='colbert', model_path='lightonai/GTE-ModernColBERT-v1',
-                            device='cpu')
-    first, metadata = cached_retrieve(patients, catalog_frame, tmp_path / 'tokens', config=config)
-    assert metadata['guideline_embedding_cache']['embedded_texts'] == 3
-    encoder.calls.clear()
-    second, metadata = cached_retrieve(patients, catalog_frame, tmp_path / 'tokens', config=config)
-    assert metadata['guideline_embedding_cache']['cached_spaces'] == 3
-    assert len(encoder.calls) == 2  # Patient query and document roles only.
-    pd.testing.assert_frame_equal(first, second)
-    Path(metadata['guideline_embedding_cache']['path']).write_bytes(b'corrupted')
-    _, metadata = cached_retrieve(patients, catalog_frame, tmp_path / 'tokens', config=config)
-    assert metadata['guideline_embedding_cache']['embedded_texts'] == 3
-
-
 def cached_retrieve(patients, catalog, directory, **kwargs):
     return retrieve_guideline_considerations(
         patients,

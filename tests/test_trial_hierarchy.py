@@ -604,7 +604,7 @@ def test_public_summarization_retains_rejection_reasons_separately_from_failures
     assert metadata["trial_rejections"]["R1"]["evidence"] == "healthy volunteers"
     assert "R1" not in str(failures)
     monkeypatch.setattr("matchminer_ai._qc.trials.count_embedding_tokens",
-                        lambda texts, embedding_config: [1] * len(texts))
+                        lambda texts, embedding_config, entity_type=None: [1] * len(texts))
     spaces, public_metadata = summarize_trials(trials, config=config, return_metadata=True)
     assert spaces.empty
     assert public_metadata["trial_rejections"] == metadata["trial_rejections"]
@@ -664,7 +664,7 @@ def test_explicit_hierarchy_preserves_output_schema(monkeypatch):
     )
     monkeypatch.setattr(
         "matchminer_ai._qc.trials.count_embedding_tokens",
-        lambda texts, embedding_config: [1] * len(texts),
+        lambda texts, embedding_config, entity_type=None: [1] * len(texts),
     )
     trials = pd.DataFrame(
         [

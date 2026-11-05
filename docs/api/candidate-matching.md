@@ -1,22 +1,14 @@
 # Candidate Matching
 
-ColBERT tables from `embed_for_matching` select the shared batched mean-MaxSim
-path automatically. `config.embedding` controls its device and batching:
-`pair_batch_size=512`, `retrieval_query_batch_size=64`,
-`retrieval_document_batch_size=256`, and `device_cache_gb=8`. Pass the same config
-to both embedding and retrieval when overriding these settings.
-
-Ragged corpus tokens are packed and transferred once per retrieval call when
-they fit the cache budget. Larger corpora are streamed in bounded subsets with
-the same scoring and top-k merge. Setting the budget to zero disables whole-corpus
-residency. Retrieval scores the entire supplied corpus; production training
-mining separately uses recorded lexical/random proposal pools for exploration.
-No full query-by-corpus token-similarity tensor is allocated. Both directions use
-query-role tokens against document-role tokens. Returned pairs retain native
-`cohort_trial_id` IDs, and `result.attrs["retrieval"]` records execution settings.
-
-Historical vector tables retain cosine retrieval. They cannot be mixed with
-ColBERT tables, and changing models requires regenerating both sides.
+`generate_candidate_matches` ranks TrialSpace vectors from `embed_for_matching`
+by cosine similarity over the entire supplied corpus. Each table needs exactly
+one identifier column (`patient_id`, `cohort_trial_id` or `space_trial_id`) and
+an `embedding` vector column. Pass patients first for patient-centric retrieval
+and cohorts first for trial-centric retrieval; `k=None` returns the full
+ranking. Results keep both identifiers, `similarity_score` and one-based `rank`.
+`config` is accepted for call compatibility and unused. Vectors from different
+TrialSpace models cannot be mixed; changing models requires regenerating both
+sides.
 
 ::: matchminer_ai.matching.match
     options:

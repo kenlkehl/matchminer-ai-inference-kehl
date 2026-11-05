@@ -70,12 +70,10 @@ def patient_summary_qc_report(
     expected_keywords = expected_keywords or _as_list(DEFAULT_KEYWORDS)
 
     summaries = patient_summaries.copy()
-    combined = "patient_summary" in summaries
-    if combined:
-        summaries["cancer_history_summary"] = summaries["patient_summary"].fillna("")
-        summaries["general_exclusion_criteria_evidence"] = (
-            summaries["patient_summary"].fillna("").str.partition("Other relevant history:")[2].str.strip()
-        )
+    if "patient_summary" in summaries and "cancer_history_summary" not in summaries:
+        from matchminer_ai.patients.postprocess import add_summary_sections
+
+        summaries = add_summary_sections(summaries)
     required = [
         "patient_id",
         "cancer_history_summary",
@@ -98,9 +96,13 @@ def patient_summary_qc_report(
     metrics.append(qc_artifact_to_report_row(noninformative_summary_qc_artifact))
     metrics.append(qc_artifact_to_report_row(failed_inference_qc_artifact))
 
-    quality_text = summaries["cancer_history_summary"]
-    if not combined:
-        quality_text = quality_text + "\n\n" + summaries["general_exclusion_criteria_evidence"]
+    if "patient_summary" in summaries:
+        quality_text = summaries["patient_summary"].fillna("").astype(str)
+    else:
+        from matchminer_ai.patients.postprocess import normalize_patient_summary
+
+        quality_text = pd.Series([normalize_patient_summary(key, boilerplate) for key, boilerplate in zip(
+            summaries["cancer_history_summary"], summaries["general_exclusion_criteria_evidence"])])
     checks = [check_patient_summary(value) for value in quality_text]
     quality_codes = sorted({f["code"] for check in checks for f in check["findings"]})
     for code in [None, *quality_codes]:
@@ -114,11 +116,12 @@ def patient_summary_qc_report(
     # QC metric for summaries that exceed embedding model token limit
     if config is not None and config.embedding:
         embedding_config = dict(config.embedding)
-        embedding_token_limit = int(embedding_config.get("query_length", embedding_config.get("max_seq_length", 8192)))
+        embedding_token_limit = int(embedding_config.get("max_seq_length", 8192))
         token_series = pd.Series(
             count_embedding_tokens(
                 summaries["cancer_history_summary"].fillna("").astype(str).tolist(),
                 embedding_config=embedding_config,
+                entity_type="patient",
             ),
             index=summaries["patient_id"].astype(str).tolist(),
         )
@@ -135,9 +138,9 @@ def patient_summary_qc_report(
         )
 
     # QC metric for patients whose exclusion criteria info was not extracted
-    missing_history = (summaries["general_exclusion_criteria_evidence"].str.strip().isin(["", "Not documented."])
-                       if combined else summaries["cancer_history_summary"].str.strip()
-                       == summaries["general_exclusion_criteria_evidence"].str.strip())
+    boilerplate = summaries["general_exclusion_criteria_evidence"].str.strip()
+    missing_history = boilerplate.isin(["", "Not documented."]) | (
+        summaries["cancer_history_summary"].str.strip() == boilerplate)
     same_text = summaries.loc[missing_history, "patient_id"]
     metrics.append(
         qc_artifact_to_report_row(

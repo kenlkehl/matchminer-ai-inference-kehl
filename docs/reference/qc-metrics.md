@@ -20,11 +20,16 @@ Returned by `summarize_patients(..., return_qc=True)`.
 - `patients_failed_inference`: patients removed because LLM inference failed
   or the summary was still rejected after
   `patient.summary_quality_max_attempts` attempts.
-- `patients_exclusion_criteria_not_extracted`: exclusion criteria not successfully extracted.
-- `patients_missing_keyword:<keyword>`: summaries missing an expected keyword.
-- `patients_exceed_embedding_token_limit`: summaries whose embedding-tokenized
-  length exceeds `embedding.max_seq_length`, the configured truncation cutoff
-  used during embedding generation.
+- `patients_exclusion_criteria_not_extracted`: summaries whose boilerplate
+  section (`general_exclusion_criteria_evidence`, the text after
+  `Other relevant history:`) is empty, `Not documented.`, or identical to the
+  key section.
+- `patients_missing_keyword:<keyword>`: key sections (`cancer_history_summary`)
+  missing an expected keyword.
+- `patients_exceed_embedding_token_limit`: key sections whose
+  embedding-tokenized length, with the TrialSpace patient prompt, exceeds
+  `embedding.max_seq_length`, the configured truncation cutoff used during
+  embedding generation.
 
 ## Trial summarization QC
 

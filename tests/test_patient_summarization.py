@@ -15,7 +15,7 @@ from matchminer_ai.patients.checkpoints import (
     save_prepared_chunks,
     save_round_checkpoint,
 )
-from matchminer_ai.patients.postprocess import clean_bad_data, parse_boilerplate
+from matchminer_ai.patients.postprocess import clean_bad_data, split_patient_summary
 from matchminer_ai.patients.postprocess import normalize_patient_summary, postprocess_patient_summaries
 from matchminer_ai.patients.prepare import prepare_patient_notes
 from matchminer_ai.patients.prompt_builder import (
@@ -189,27 +189,14 @@ def test_patient_checkpoint_helpers_round_trip_dataframes(tmp_path):
     pd.testing.assert_frame_equal(loaded_rounds[0], round_results)
 
 
-def test_parse_boilerplate_splits_summary_and_exclusions():
-    """Split patient summaries into cancer history vs exclusion evidence."""
-    df = pd.DataFrame(
-        [
-            {
-                "patient_answer_text": (
-                    "Cancer history here.\nBoilerplate conditions:\nNo CNS mets."
-                )
-            },
-            {"patient_answer_text": "Cancer only."},
-        ]
-    )
-
-    parsed = parse_boilerplate(
-        df,
-        boilerplate_marker="Boilerplate conditions",
-    )
-
-    assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
-    assert parsed.loc[0, "general_exclusion_criteria_evidence"] == "No CNS mets."
-    assert parsed.loc[1, "general_exclusion_criteria_evidence"] == "Cancer only."
+def test_summary_sections_split_the_key_section_from_the_boilerplate():
+    """The key section (cancer history) and boilerplate section (other relevant history)."""
+    assert split_patient_summary("Cancer history here.\nBoilerplate conditions:\nNo CNS mets.") == (
+        "Cancer history here.", "No CNS mets.")
+    assert split_patient_summary("Cancer history here.\n\nBoilerplate conditions:\nRemote inactive prostate cancer.") == (
+        "Cancer history here.", "Remote inactive prostate cancer.")
+    assert split_patient_summary("Cancer only.") == ("Cancer only.", "Not documented.")
+    assert split_patient_summary("") == ("", "")
 
 
 @pytest.mark.parametrize('heading', ['Other relevant history:', 'Boilerplate conditions:', 'BOILERPLATE:', '**Other relevant history:**'])
@@ -220,52 +207,21 @@ def test_complete_patient_summary_normalizes_headings_without_dropping_history(h
     assert normalize_patient_summary(expected) == expected
 
 
-def test_default_patient_output_is_one_complete_field_and_preserves_reasoning():
+def test_patient_output_has_the_complete_summary_and_its_key_and_boilerplate_sections():
     frame = pd.DataFrame([dict(patient_id='p', patient_answer_text='Cancer.\nBoilerplate conditions:\nDialysis.',
                                patient_reasoning_text='Recorded reasoning.', finish_reason='stop')])
     result, removed = postprocess_patient_summaries(frame, _config(debug_mode=True))
     assert removed == set()
     assert result.patient_summary.tolist() == ['Cancer.\n\nOther relevant history:\nDialysis.']
     assert result.patient_reasoning_text.tolist() == ['Recorded reasoning.']
-    assert 'cancer_history_summary' not in result and 'general_exclusion_criteria_evidence' not in result
-    config = _config()
-    config.patient['output_format'] = 'legacy_split'
-    legacy, _ = postprocess_patient_summaries(frame, config)
-    assert legacy.cancer_history_summary.tolist() == ['Cancer.']
-    assert legacy.general_exclusion_criteria_evidence.tolist() == ['Dialysis.']
+    assert result.cancer_history_summary.tolist() == ['Cancer.']
+    assert result.general_exclusion_criteria_evidence.tolist() == ['Dialysis.']
 
 
 def test_missing_history_is_not_inferred_negative_and_empty_summary_stays_empty():
     assert normalize_patient_summary('Cancer.') == 'Cancer.\n\nOther relevant history:\nNot documented.'
     assert normalize_patient_summary('') == ''
     assert normalize_patient_summary('ERROR: failed') == 'ERROR: failed'
-
-
-def test_parse_boilerplate_accepts_final_only_v22_output():
-    """Parsed final content should not need a reasoning marker."""
-    df = pd.DataFrame(
-        [
-            {
-                "patient_answer_text": (
-                    "Cancer history here.\n"
-                    "\n"
-                    "Boilerplate conditions:\n"
-                    "Remote inactive prostate cancer."
-                )
-            }
-        ]
-    )
-
-    parsed = parse_boilerplate(
-        df,
-        boilerplate_marker="Boilerplate conditions",
-    )
-
-    assert parsed.loc[0, "cancer_history_summary"] == "Cancer history here."
-    assert (
-        parsed.loc[0, "general_exclusion_criteria_evidence"]
-        == "Remote inactive prostate cancer."
-    )
 
 
 def test_prepare_patient_notes_labels_missing_pdf_date_as_unknown():
@@ -899,6 +855,8 @@ def test_summarize_patients_retains_existing_without_usable_notes(
         {
             "patient_id": "P1",
             "patient_summary": "History\n\nOther relevant history:\nEvidence",
+            "cancer_history_summary": "History",
+            "general_exclusion_criteria_evidence": "Evidence",
         }
     ]
     backend.generate_llm_outputs.assert_not_called()

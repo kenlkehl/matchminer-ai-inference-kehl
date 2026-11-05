@@ -507,7 +507,7 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
     )
     monkeypatch.setattr(
         "matchminer_ai._qc.trials.count_embedding_tokens",
-        lambda texts, embedding_config: [1 for _text in texts],
+        lambda texts, embedding_config, entity_type=None: [1 for _text in texts],
     )
 
     trials = pd.DataFrame(

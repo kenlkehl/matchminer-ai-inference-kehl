@@ -7,6 +7,9 @@
         - extract_protocol_cohorts
         - generate_synthetic_protocols
         - summarize_trials
+        - merge_equivalent_cohorts
+        - remove_boilerplate_criteria
+        - screen_trials
         - list_guidelines
         - summarize_guidelines
         - prepare_pdq_library
@@ -47,13 +50,14 @@ full protocols (`extract_protocol_cohorts`, below;
    include, and no criterion that applies only to other cohorts. The request
    lists every cohort name and ends with the target name.
 
-The criteria prompt keeps enrollment criteria only and omits boilerplate:
-consent, compliance with visits or procedures, catch-all investigator-judgment
-exclusions, sponsor or site staff exclusions, and every criterion about
-contraception, pregnancy or lactation unless the trial specifically recruits
-people who are pregnant or lactating (other hormone therapy, such as hormone
-replacement therapy, is not boilerplate). A criterion mixing boilerplate with a
-substantive requirement keeps the substantive part. Only United States versions
+The criteria prompt keeps enrollment criteria only and copies every criterion
+that applies to the cohort verbatim, boilerplate included: consent, compliance,
+samples or biopsies, measurable disease, contraception, pregnancy and
+lactation, vaccine restrictions, study-staff and catch-all investigator-judgment
+exclusions are never left out. The optional boilerplate step
+([below](#key-and-boilerplate-criteria)) separates them afterwards. Criteria
+that apply only to people already in the study (crossover, retreatment,
+rollover) or to optional sub-studies are omitted. Only United States versions
 of country-specific criteria are kept, references are resolved by restating
 their content, applicability lead-ins and mentions of other cohorts are removed
 once a criterion's placement is decided, qualifiers are never deleted, and gaps
@@ -164,6 +168,67 @@ counts, and the config snapshot. The whole document reaches the configured LLM
 endpoint, so use only documents without patient data unless that endpoint is
 authorized for their sensitivity. Outputs are research abstractions for human
 review, not eligibility determinations.
+
+## Merging equivalent cohorts
+
+`merge_equivalent_cohorts` takes cohort rows from either extractor and asks the
+LLM once per trial with more than one cohort (`trial.cohorts.merge.user.txt`)
+which cohorts have essentially the same criteria, such as arms that differ only
+in treatment or dose. The model returns only a grouping of cohort numbers; each
+group becomes its first cohort's row, with the merged names joined by "; ",
+renumbered `cohort_number` and `cohort_trial_id`, and `merged_from`. Criteria
+are never regenerated. A trial whose answer never validates keeps its cohorts
+unmerged (`merge_errors`). With `output_dir`, each grouping is saved to
+`<output_dir>/<trial_id>/merge.json` and reused while the prompt and the
+trial's cohorts are unchanged.
+
+## Key and boilerplate criteria
+
+`remove_boilerplate_criteria` separates each cohort's **key criteria**, the
+criteria that define its population, from its **boilerplate criteria**, the
+general requirements most cancer trials share: consent, compliance, samples and
+biopsies, measurable disease, prognosis, performance status, organ function,
+brain metastases, toxicities of earlier treatment, washout periods of 30 days
+or less, recovery from recent major surgery, non-cancer conditions, unrelated
+other cancers, simultaneous participation in another trial, contraception,
+pregnancy and lactation, vaccines, and study-staff and catch-all exclusions,
+each unless it is central to what the trial studies. Each cohort's criteria are
+split into one item per line, and each item gets its own request
+(`trial.cohorts.deboilerplate.user.txt`) asking only whether it is boilerplate.
+Code sorts the unchanged items, so no criterion is lost or reworded.
+
+The result keeps `cohort_eligibility_criteria` unchanged (all the criteria) and
+adds:
+
+| Column | Meaning |
+| --- | --- |
+| `cohort_key_criteria` | The criteria that are not boilerplate; all the criteria for a cohort in `deboilerplate_errors`. Read by TrialSpace retrieval and TrialChecker. |
+| `cohort_boilerplate_criteria` | The boilerplate criteria; None for a cohort in `deboilerplate_errors`. Read by BoilerplateChecker. |
+
+A cohort without items, or whose items are all classified as boilerplate, is
+reported in `deboilerplate_errors`; an item whose answer never validates counts
+as key and is reported in `unclassified_items`. With `output_dir`, each trial's
+results are saved to `<output_dir>/<trial_id>/deboilerplate.json`: per cohort,
+`key_criteria` and `boilerplate_criteria` (or `error`) and every item's attempts
+with their answers and reasoning. Classifications are reused while the prompt
+and the cohort's name and criteria are unchanged.
+
+Both steps are optional at inference. They take `section="trial"` (registry
+listings) or `"protocol_cohort_extraction"` (protocols) for their LLM settings;
+training runs the merge first, then the boilerplate step.
+
+## Cancer-treatment screen only
+
+`screen_trials` runs only the workflow's first step
+(`trial.cohorts.screen.user.txt`, with the same settings and response contract)
+on listings (`title` or `trial_title`, `brief_summary`, `eligibility_criteria`)
+or full documents (`trial_text`). It returns `trial_id`,
+`cancer_treatment_trial` ("yes", "no", or None when no answer validated) and
+`screen_error`; a trial whose answer never validates is reported, not rejected.
+With `output_dir`, every attempt's answer and reasoning is appended to
+`<output_dir>/screen.jsonl` as requests return, and saved decisions are reused
+while the prompt and the trial's document are unchanged. Training draws its
+trial sample from the trials this screen accepts.
 
 ## Synthetic protocols seeded by registry records
 

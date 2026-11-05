@@ -35,7 +35,7 @@ def _get_checker_pipeline(
         model_name,
         tokenizer=tokenizer,
         truncation=True,
-        padding="max_length",
+        padding=True,  # to the longest input of each batch, not to max_length
         max_length=max_length,
         device=device,
     )
@@ -76,6 +76,7 @@ def run_checker(
         cache_dir=model_metadata_cache_dir,
     )
     pipeline_kwargs = {"top_k": None} if return_all_scores else {}
+    pipeline_kwargs["batch_size"] = int(checker_config.get("batch_size", 8))
     outputs = cast(list[Any], checker_pipeline(prompts, **pipeline_kwargs))
     return outputs, model_metadata
 
@@ -241,7 +242,9 @@ def attribute_checker_tokens(
     Attribution requires a fast tokenizer with offset mappings. For a
     single-logit model, ``target_directions`` controls whether the positive or
     negative decision is interpreted. For a multi-class model, ``target_labels``
-    selects the prediction logit.
+    selects the prediction logit. A multi-label model's heads are independent
+    sigmoids: ``target_labels`` selects the head and ``target_directions`` its
+    yes or no decision.
     """
     if len(prompts) != len(component_ranges):
         raise ValueError("component_ranges must contain one mapping per prompt.")
@@ -320,7 +323,9 @@ def attribute_checker_tokens(
                     else 1.0
                 )
                 target_logit = logits[0, target_index]
-                if logits.shape[-1] == 1:
+                independent = getattr(getattr(model, "config", None), "problem_type",
+                                      None) == "multi_label_classification"
+                if logits.shape[-1] == 1 or independent:
                     target_logit = target_logit * direction
                 else:
                     competing_logits = torch.cat(

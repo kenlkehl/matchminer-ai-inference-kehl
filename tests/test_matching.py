@@ -1,3 +1,4 @@
+import json
 import sys
 from types import SimpleNamespace
 
@@ -81,7 +82,7 @@ class _MockCheckerBackend:
         self.last_checker_config = None
         self.last_model_metadata_cache_dir = None
 
-    def run_checker(self, prompts, *, checker_config, model_metadata_cache_dir=None):
+    def run_checker(self, prompts, *, checker_config, model_metadata_cache_dir=None, return_all_scores=False):
         """Record checker inputs and return configured predictions."""
         self.last_prompts = prompts
         self.last_checker_config = checker_config
@@ -267,7 +268,8 @@ def test_exclusion_criteria_check_maps_outputs_and_filters(monkeypatch):
         "exclusion_criteria_pass",
     ]
     assert unfiltered["exclusion_criteria_pass"].tolist() == [True, False]
-    assert unfiltered["exclusion_score"].tolist() == [0.81, 0.66]
+    # exclusion_score is P(excluded), whichever label the model predicted.
+    assert unfiltered["exclusion_score"].tolist() == pytest.approx([0.19, 0.66])
     assert (
         backend.last_checker_config["model_name"] == "ksg-dfci/BoilerPlateChecker-1225"
     )
@@ -364,7 +366,7 @@ def test_interpret_match_quality_returns_source_relative_attributions(monkeypatc
     )
     captured = {}
 
-    def fake_checker(prompts, *, checker_config, model_metadata_cache_dir=None):
+    def fake_checker(prompts, *, checker_config, model_metadata_cache_dir=None, return_all_scores=False):
         del model_metadata_cache_dir
         captured["prompts"] = prompts
         captured["checker_config"] = checker_config
@@ -432,7 +434,7 @@ def test_interpret_match_quality_returns_source_relative_attributions(monkeypatc
         "start"
     ] == 0
     assert captured["directions"] == [-1.0]
-    assert captured["labels"] == ["LABEL_0"]
+    assert captured["labels"] == [""]  # a single-output model has one logit to interpret
     assert captured["top_k"] == 12
     assert metadata["interpretability"] == {
         "method": "gradient_x_input",
@@ -442,10 +444,8 @@ def test_interpret_match_quality_returns_source_relative_attributions(monkeypatc
         "model_name": "checker/trial"
     }
     prompt = captured["prompts"][0]
-    patient_start, patient_end = captured["ranges"][0][
-        "cancer_history_summary"
-    ]
-    trial_start, trial_end = captured["ranges"][0]["clinical_space_summary"]
+    patient_start, patient_end = captured["ranges"][0]["patient_key_summary"]
+    trial_start, trial_end = captured["ranges"][0]["cohort_key_criteria"]
     assert prompt[patient_start:patient_end] == "EGFR-mutant lung cancer"
     assert prompt[trial_start:trial_end] == "EGFR-mutant lung cancer trial"
 
@@ -517,8 +517,8 @@ def test_interpret_exclusion_criteria_targets_reported_label(monkeypatch):
     assert captured["target_labels"] == ["POSITIVE"]
     assert captured["target_directions"] == [1.0]
     assert set(captured["component_ranges"][0]) == {
-        "general_exclusion_criteria_evidence",
-        "general_exclusion_criteria",
+        "patient_boilerplate_summary",
+        "cohort_boilerplate_criteria",
     }
 
 
@@ -610,7 +610,7 @@ def test_run_checker_reuses_cached_pipeline(monkeypatch):
             """Initialize prompt batch capture."""
             self.prompt_batches = []
 
-        def __call__(self, prompts):
+        def __call__(self, prompts, **_kwargs):
             """Return deterministic positive-label outputs for each prompt."""
             self.prompt_batches.append(list(prompts))
             return [
@@ -689,7 +689,7 @@ def test_clear_checker_pipeline_cache_forces_reload(monkeypatch):
     def fake_pipeline(*args, **kwargs):
         """Record checker pipeline construction and return fixed outputs."""
         pipeline_calls.append((args, kwargs))
-        return lambda prompts: [{"label": "NEGATIVE", "score": 0.5} for _ in prompts]
+        return lambda prompts, **_kwargs: [{"label": "NEGATIVE", "score": 0.5} for _ in prompts]
 
     monkeypatch.setitem(
         sys.modules,
@@ -768,7 +768,7 @@ def _llm_config(*, debug_mode: bool = False) -> MMAIConfig:
                 "request_params": {"max_tokens": 15000},
                 "extra_body": {},
             },
-            "prompt_file": "llm_match_quality.user.txt",
+            "prompt_file": "match_quality.labels.system.txt",
         },
         llm_exclusion_criteria={
             "reasoning_parser": "auto",
@@ -792,6 +792,11 @@ def _llm_config(*, debug_mode: bool = False) -> MMAIConfig:
     )
 
 
+_LABELS_ANSWER = json.dumps({label: {"answer": "yes" if label in ("reasonableness", "cancer_type", "biomarker") else "no",
+                                     "evidence_status": "supported", "reason": "Fabricated reason."}
+                             for label in ("reasonableness", "cancer_type", "burden", "treatment_history", "biomarker")})
+
+
 @pytest.mark.parametrize("model_name,expects_header", [("llm/model", False), ("google/gemma-4-31B-it", False), ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4", False), ("openai/gpt-oss-120b", True)])
 def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypatch, model_name, expects_header):
     """Run LLM match scoring through package backend config and score parser."""
@@ -804,7 +809,7 @@ def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypa
         captured_messages.extend(messages_list)
         return [SimpleNamespace(prompt_text="rendered", max_tokens=15000)]
 
-    backend = _MockLLMBackend(["After review.\nFinal score: 4"])
+    backend = _MockLLMBackend([_LABELS_ANSWER])
     monkeypatch.setattr(
         "matchminer_ai.matching.llm_checks.build_prompt_list",
         fake_build_prompt_list,
@@ -817,9 +822,10 @@ def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypa
         [
             {
                 "patient_id": "P1",
-                "space_trial_id": "T1-1",
-                "cancer_history_summary": "Patient has metastatic lung cancer.",
-                "clinical_space_summary": "Trial for metastatic lung cancer.",
+                "cohort_trial_id": "T1-cohort-1",
+                "patient_summary": "Patient has metastatic lung cancer.\n\nOther relevant history:\nDialysis.",
+                "cohort_key_criteria": "Trial for metastatic lung cancer.",
+                "cohort_boilerplate_criteria": "No dialysis.",
             }
         ]
     )
@@ -830,15 +836,20 @@ def test_score_match_quality_with_llm_builds_training_prompt_and_parses(monkeypa
         return_metadata=True,
     )
 
+    # Reasonable (1) + cancer type (1) + biomarker (2); each label is also returned.
     assert result["llm_match_quality_score"].tolist() == [4]
+    assert result["llm_reasonableness"].tolist() == [True] and result["llm_burden"].tolist() == [False]
     assert "llm_match_quality_verdict" not in result.columns
     assert "llm_match_quality_response" not in result.columns
     assert "llm_match_quality_reasoning" not in result.columns
     assert "llm_match_quality_answer_text" not in result.columns
     assert "llm_match_quality_reasoning_text" not in result.columns
     assert "llm_match_quality_parse_status" not in result.columns
-    assert captured_messages[0][0] == {"role": "system", "content": "Reasoning: high" if expects_header else ""}
-    assert "metastatic lung cancer" in captured_messages[0][1]["content"]
+    system = captured_messages[0][0]["content"]
+    assert system.startswith("Reasoning: high\n\n") == expects_header and "reasonableness" in system
+    user = captured_messages[0][1]["content"]
+    assert "metastatic lung cancer" in user and "COHORT KEY ELIGIBILITY CRITERIA" in user
+    assert "Dialysis" not in user and "No dialysis" not in user  # key text only
     assert backend.last_llm_config["max_model_len"] == 50000
     assert backend.last_llm_config["sampling_params"]["max_tokens"] == 15000
     assert metadata["model_metadata"]["score_match_quality_with_llm"]["model_name"] == (
@@ -853,7 +864,7 @@ def test_score_match_quality_with_llm_includes_debug_columns(monkeypatch):
         """Return one rendered prompt for match-quality debug output tests."""
         return [SimpleNamespace(prompt_text="rendered", max_tokens=15000)]
 
-    backend = _MockLLMBackend(["After review.\nFinal score: 4"])
+    backend = _MockLLMBackend([_LABELS_ANSWER])
     monkeypatch.setattr(
         "matchminer_ai.matching.llm_checks.build_prompt_list",
         fake_build_prompt_list,
@@ -875,9 +886,7 @@ def test_score_match_quality_with_llm_includes_debug_columns(monkeypatch):
 
     result = score_match_quality_with_llm(pairs, config=_llm_config(debug_mode=True))
 
-    assert result["llm_match_quality_answer_text"].tolist() == [
-        "After review.\nFinal score: 4"
-    ]
+    assert result["llm_match_quality_answer_text"].tolist() == [_LABELS_ANSWER]
     assert result["llm_match_quality_reasoning_text"].tolist() == ["reasoning 0"]
     assert result["llm_match_quality_parse_status"].tolist() == ["parsed"]
 

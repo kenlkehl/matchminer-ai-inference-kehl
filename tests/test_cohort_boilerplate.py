@@ -10,7 +10,7 @@ from matchminer_ai.config import load_default_preset
 from matchminer_ai.llm.prompts import load_prompt_text
 from matchminer_ai.trials import remove_boilerplate_criteria
 from matchminer_ai.trials.cohort_boilerplate import (
-    BOILERPLATE_COLUMN, DEBOILERPLATE_JSON_SCHEMA, DEBOILERPLATE_PROMPT, build_deboilerplate_messages, gather_criteria,
+    BOILERPLATE_COLUMN, DEBOILERPLATE_JSON_SCHEMA, KEY_COLUMN, DEBOILERPLATE_PROMPT, build_deboilerplate_messages, gather_criteria,
     parse_deboilerplated, split_criteria,
 )
 
@@ -94,13 +94,12 @@ def test_each_item_is_classified_and_the_criteria_are_sorted_in_code(config, coh
     assert len(cohort_backend.calls) == 1 and len(cohort_backend.calls[0][0]) == 8  # one request per item
     request = cohort_backend.calls[0][1]["remote"]["request_params"]["response_format"]["json_schema"]["schema"]
     assert request == DEBOILERPLATE_JSON_SCHEMA
-    assert result.cohort_eligibility_criteria.tolist() == [
+    assert result[KEY_COLUMN].tolist() == [
         "Inclusion criteria:\nTrial one adults with {x} cancer.\n  a. Prior platinum therapy.\n"
         "Exclusion criteria:\nAny of the following:\n  - Prior anti-PD-1 therapy.", "Inclusion criteria:\nTrial one children."]
     assert result[BOILERPLATE_COLUMN].tolist() == ["Inclusion criteria:\nECOG 0-1.\nExclusion criteria:\n  - Active hepatitis B.",
                                                    "Inclusion criteria:\nConsent."]
-    assert result.drop(columns=["cohort_eligibility_criteria", BOILERPLATE_COLUMN]).equals(
-        frame.drop(columns="cohort_eligibility_criteria"))
+    assert result.drop(columns=[KEY_COLUMN, BOILERPLATE_COLUMN]).equals(frame)  # all the criteria stay
     saved = metadata["trial_cohorts"]["T1"][0]
     assert [(i["number"], i["text"], i["boilerplate"]) for i in saved["items"]][2] == (3, "ECOG 0-1.", True)
     assert saved["items"][0]["attempts"][0]["reasoning"] == "test reasoning"
@@ -115,7 +114,7 @@ def test_unclassified_items_stay_and_an_all_boilerplate_cohort_keeps_its_criteri
                                                                   "Consent.": [{"boilerplate": True}]}}
     result, metadata = remove_boilerplate_criteria(frame, config=config, return_metadata=True)
     assert len(cohort_backend.calls) == 2 and "failed validation" in prompt_text(cohort_backend.calls[1][0][0])
-    assert result.cohort_eligibility_criteria.tolist() == ["Trial one adults.\nECOG 0-1.", "Trial one: ECOG 0-1.\nConsent."]
+    assert result[KEY_COLUMN].tolist() == ["Trial one adults.\nECOG 0-1.", "Trial one: ECOG 0-1.\nConsent."]
     assert result[BOILERPLATE_COLUMN].tolist() == ["Consent.", None]
     assert list(metadata["unclassified_items"]["T1-cohort-0"]) == [2]
     assert list(metadata["deboilerplate_errors"]) == ["T1-cohort-1"]
@@ -126,7 +125,7 @@ def test_saved_classifications_are_reused_only_for_unchanged_cohorts(tmp_path, c
     cohort_backend.script["Trial one"] = {"deboilerplate": {"Consent.": [{"boilerplate": True}]}}
     remove_boilerplate_criteria(frame, config=config, output_dir=tmp_path)
     saved = json.loads((tmp_path / "T1/deboilerplate.json").read_text())
-    assert [(c["eligibility_criteria"], c["boilerplate_criteria"]) for c in saved["cohorts"]] == [
+    assert [(c["key_criteria"], c["boilerplate_criteria"]) for c in saved["cohorts"]] == [
         ("Trial one adults.", "Consent."), ("Trial one children.", "Consent.")]
     assert saved["cohorts"][0]["items"][1]["attempts"][0]["reasoning"] == "test reasoning"
     again, metadata = remove_boilerplate_criteria(frame, config=config, output_dir=tmp_path, return_metadata=True)
@@ -135,4 +134,4 @@ def test_saved_classifications_are_reused_only_for_unchanged_cohorts(tmp_path, c
     frame.loc[1, "cohort_eligibility_criteria"] = "Trial one children over 12.\nConsent."
     changed, metadata = remove_boilerplate_criteria(frame, config=config, output_dir=tmp_path, return_metadata=True)
     assert len(cohort_backend.calls) == 2 and len(cohort_backend.calls[1][0]) == 2 and metadata["skipped_completed"] == 1
-    assert changed.cohort_eligibility_criteria.tolist() == ["Trial one adults.", "Trial one children over 12."]
+    assert changed[KEY_COLUMN].tolist() == ["Trial one adults.", "Trial one children over 12."]

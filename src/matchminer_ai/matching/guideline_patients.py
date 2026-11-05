@@ -18,9 +18,7 @@ from .guidelines import _patient_frame
 class PatientEmbeddings:
     """Reusable TrialSpace vectors; row i of ``vectors`` belongs to ``patient_ids[i]``.
 
-    ``vectors`` is an (N, D) float array for single-vector encoders, or for ColBERT
-    a length-N object array of float16 document-role token matrices (patients are
-    always the retrieval corpus). ``summary_sha256`` binds each row to its exact
+    ``vectors`` is an (N, D) float array. ``summary_sha256`` binds each row to its exact
     summary text and ``encoder_identity`` to the loaded encoder, so retrieval
     rejects stale or mixed vectors. Vectors derive from patient summaries: store
     them as privately as the summaries themselves.
@@ -45,10 +43,7 @@ def _summary_digests(patients):
 
 
 def _encoder_identity(config, embedding_model):
-    # A ColBERT contract hashes the loaded weights, so it is verified even for a
-    # local checkpoint directory; vector encoders need a verified Hub revision.
-    if embedding_model.get("encoding_contract"):
-        return embedding_model["encoding_contract"]
+    # Vector encoders need a verified Hub revision (or loaded-weight digest).
     from matchminer_ai.embedding.inference import _embedding_cache_identity
 
     return _embedding_cache_identity(config.embedding, embedding_model)
@@ -91,8 +86,7 @@ def embed_guideline_patients(
     result records each summary's SHA-256 and the verified encoder identity;
     ``encoder_identity`` is None when a single-vector encoder's revision cannot be
     verified (for example a mutable local model directory), and retrieval then
-    refuses to reuse the vectors. ColBERT embeddings use their encoding contract,
-    which hashes the loaded checkpoint. Nothing is written to disk here.
+    refuses to reuse the vectors. Nothing is written to disk here.
     """
     if type(batch_size) is not int or batch_size < 1:
         raise ValueError("batch_size must be a positive integer.")
@@ -103,17 +97,9 @@ def embed_guideline_patients(
     pv, pm = _embed_patients(
         patients, config, progress_callback or (lambda _: None), batch_size
     )
-    if "query_embedding" in pv:
-        from .late_interaction import _contract, _vectors
-
-        _contract(pv)
-        vectors = np.empty(len(pv), dtype=object)
-        for row, tokens in enumerate(_vectors(pv.embedding)):
-            vectors[row] = tokens.numpy()
-    else:
-        vectors = np.asarray(pv.embedding.tolist(), dtype=np.float32)
-        if vectors.ndim != 2 or not vectors.size or not np.isfinite(vectors).all():
-            raise ValueError("TrialSpace returned invalid embeddings.")
+    vectors = np.asarray(pv.embedding.tolist(), dtype=np.float32)
+    if vectors.ndim != 2 or not vectors.size or not np.isfinite(vectors).all():
+        raise ValueError("TrialSpace returned invalid embeddings.")
     return PatientEmbeddings(
         patient_ids=tuple(patients.patient_id),
         summary_sha256=_summary_digests(patients),
@@ -130,15 +116,10 @@ def _precomputed_patients(patients, embeddings):
     if not isinstance(embeddings, PatientEmbeddings):
         raise ValueError("patient_embeddings must come from embed_guideline_patients.")
     vectors = np.asarray(embeddings.vectors)
-    colbert = vectors.dtype == object
-    stored = embeddings.model_metadata
-    contract = (
-        stored.get("embed_for_matching") or stored.get("embedding_model") or {}
-    ).get("encoding_contract")
     count = len(embeddings.patient_ids)
     if (
-        vectors.ndim != (1 if colbert else 2)
-        or colbert != bool(contract)
+        vectors.ndim != 2
+        or vectors.dtype == object
         or vectors.shape[0] != count
         or len(embeddings.summary_sha256) != count
         or len(set(embeddings.patient_ids)) != count
@@ -159,23 +140,11 @@ def _precomputed_patients(patients, embeddings):
             "Patient summaries changed after their embeddings were made; rebuild them."
         )
     selected = vectors[rows]
-    if not (
-        all(
-            isinstance(tokens, np.ndarray)
-            and tokens.ndim == 2
-            and tokens.size
-            and np.isfinite(tokens).all()
-            for tokens in selected
-        )
-        if colbert
-        else np.isfinite(selected).all()
-    ):
+    if not np.isfinite(selected).all():
         raise ValueError("Precomputed patient embeddings are invalid.")
     pv = pd.DataFrame(
         {"patient_id": patients.patient_id.to_numpy(), "embedding": list(selected)}
     )
-    if colbert:
-        pv["embedding_contract"] = json.dumps(contract, sort_keys=True)
     return pv, {"model_metadata": embeddings.model_metadata}
 
 
@@ -249,21 +218,12 @@ def retrieve_guideline_patients(
                 "Precomputed patient embeddings came from a different or unverifiable "
                 "TrialSpace encoder; rebuild them."
             )
-    colbert = "query_embedding" in sv
     for frame in (pv, sv):
-        if colbert:
-            from .late_interaction import _contract, _vectors
-
-            _contract(frame)
-            _vectors(frame.embedding)
-            continue
         matrix = np.asarray(frame.embedding.tolist(), dtype=float)
         if matrix.ndim != 2 or not matrix.size or not np.isfinite(matrix).all():
             raise ValueError("TrialSpace returned invalid embeddings.")
     # Query is the trial space; the corpus is the full patient population.
-    candidates = generate_candidate_matches(
-        sv, pv, k=candidate_k, **({"config": config} if colbert else {})
-    ).rename(columns={"rank": "retrieval_rank"})
+    candidates = generate_candidate_matches(sv, pv, k=candidate_k).rename(columns={"rank": "retrieval_rank"})
     pairs = candidates.merge(patients, on="patient_id", validate="one_to_one").merge(
         spaces[["space_trial_id", "clinical_space_summary"]],
         on="space_trial_id",
