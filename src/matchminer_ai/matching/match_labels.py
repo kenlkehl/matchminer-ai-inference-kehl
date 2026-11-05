@@ -8,7 +8,7 @@ patient's key summary section and one cohort's key criteria:
   specifically requires that dimension and the patient documentedly satisfies it.
 
 Every answer carries an ``evidence_status`` and a ``reason``. The training teacher labels pairs
-with this contract, the multi-head TrialChecker learns one head per label, and
+with this contract, the decision model learns one yes/no question per label, and
 ``score_match_quality_with_llm`` uses the same prompt. :func:`match_score` combines the answers
 into the 0–6 match score: 0 unless reasonable, else 1 plus 1 each for cancer type, burden and
 treatment history and 2 for biomarker.

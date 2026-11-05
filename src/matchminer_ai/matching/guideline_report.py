@@ -88,7 +88,7 @@ def write_guideline_considerations_report(
     lines = [
         "# Patient-specific guideline catalog retrieval",
         "",
-        "Research review only. TrialSpace retrieves candidate populations; TrialChecker ranks their fit. "
+        "Research review only. TrialSpace retrieves candidate populations; the decision model's match-quality score ranks their fit. "
         "Scores are prioritization signals, not probabilities or treatment recommendations. "
         "The menus below are copied from the stored catalog, with their conditions and uncertainties. "
         "They have not been individually adjudicated for this patient. Source and clinician review are required.",
@@ -101,8 +101,8 @@ def write_guideline_considerations_report(
             "",
             f"- Catalog spaces: {metadata.get('catalog', {}).get('catalog_spaces', 'unavailable')}",
             f"- TrialSpace candidates per patient: {retrieval.get('candidate_k') or 'all catalog spaces'}",
-            f"- Requested top N by TrialChecker: {retrieval.get('top_n', 'unavailable')}",
-            f"- TrialChecker cutoff flag: {retrieval.get('score_cutoff', 'unavailable')}; no candidates removed by that cutoff.",
+            f"- Requested top N by match-quality score: {retrieval.get('top_n', 'unavailable')}",
+            f"- Match-quality cutoff flag: {retrieval.get('score_cutoff', 'unavailable')}; no candidates removed by that cutoff.",
             f"- Catalog fingerprint: `{metadata.get('catalog', {}).get('catalog_sha256', 'unavailable')}`",
         ]
         for role, model in metadata.get("model_metadata", {}).items():
@@ -141,7 +141,7 @@ def write_guideline_considerations_report(
             "",
             "### Ranked catalog spaces",
             "",
-            "| Rank | Catalog population | TrialChecker score | Cutoff flag | TrialSpace cosine | Retrieval rank |",
+            "| Rank | Catalog population | Match-quality score | Cutoff flag | TrialSpace cosine | Retrieval rank |",
             "| --- | --- | ---: | --- | ---: | ---: |",
         ]
         for row in ranked.to_dict("records"):

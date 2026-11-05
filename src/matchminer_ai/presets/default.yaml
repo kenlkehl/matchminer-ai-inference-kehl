@@ -370,21 +370,33 @@ embedding:
   device: cuda
   prompt_file: embedding.txt
   max_seq_length: 4096
-match_quality:
-  model_name: "ksg-dfci/TrialChecker-0526"
+# The decision model answers the match, boilerplate and per-criterion yes/no questions
+# (matching/decision_model.py). Base LiquidAI/d1-2B (LFM Open License v1.0) at a pinned commit, or a
+# fine-tuned checkpoint directory from the training repository's train_decision_model.py. Its own
+# model code runs (trust_remote_code), so a Hub model must pin its revision.
+decision_model:
+  model_name: "LiquidAI/d1-2B"
+  revision: "652f920e544ea37f81e4b0ce89b81d4ed0da90b1"
+  backend: transformers
   device: cuda
-  prompt_file: match_quality_checker_template.txt
-  # Cohort key criteria plus the patient's key section; ModernBERT's full context.
-  max_length: 8192
-  batch_size: 8
+  dtype: bfloat16
+  # The fine-tuning length; longer requests still run (no truncation) and are counted.
+  max_length: 10000
+  # Questions read together after one state; null = the model's trained size (16).
+  set_size: null
+  # Padded tokens per forward pass, and requests per call.
+  token_budget: 65536
+  batch_size: 256
+  compile: false
+match_quality:
+  # match_quality_score (the expected 0-6 match score / 6) at or above this passes.
   score_cutoff: 0.2
 exclusion_criteria:
-  model_name: "ksg-dfci/BoilerplateChecker-0526"
-  device: cuda
-  prompt_file: exclusion_criteria_checker_template.txt
-  # Verbatim boilerplate criteria often exceed 4,096 tokens with the patient's section.
-  max_length: 8192
-  batch_size: 8
+  # P(potentially eligible on the boilerplate criteria) at or above this passes.
+  pass_cutoff: 0.5
+criteria_check:
+  # A criterion line whose P(yes = not clearly failing) is below this is flagged as clearly failed.
+  fail_cutoff: 0.5
 llm_match_quality:
   sampling_profile: auto
   reasoning_effort: xhigh

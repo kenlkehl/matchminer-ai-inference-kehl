@@ -189,7 +189,7 @@ def exclusion_criteria_check_with_llm(
     """
     Evaluate a cohort's boilerplate criteria with the configured LLM prompt.
 
-    The prompt (``llm_exclusion_criteria.prompt_file``; the training teacher's BoilerplateChecker
+    The prompt (``llm_exclusion_criteria.prompt_file``; the training teacher's boilerplate-label
     prompt) asks whether the patient clearly fails any of the cohort's boilerplate criteria,
     inclusion requirements as well as exclusions, from the patient summary's boilerplate section.
 

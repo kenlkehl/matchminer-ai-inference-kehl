@@ -1,30 +1,20 @@
-"""Match quality scoring helpers."""
+"""Match quality scoring with the decision model's five match questions."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from importlib import resources
 
 import pandas as pd
-import torch
 
 from matchminer_ai._metadata import package_metadata
 from matchminer_ai.config import config_snapshot, load_default_preset
-from .inference import (
-    TOKEN_ATTRIBUTION_CAVEAT,
-    attribute_checker_tokens,
-    format_checker_prompt_with_ranges,
-    run_checker,
+from .decision_model import (
+    attribute_decision, match_questions, match_state, match_state_with_ranges, oriented, run_decisions,
 )
+from .inference import TOKEN_ATTRIBUTION_CAVEAT
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
-
-
-def _load_match_quality_template(filename: str) -> str:
-    prompt_path = resources.files("matchminer_ai.prompts").joinpath(filename)
-    with prompt_path.open("r", encoding="utf-8") as handle:
-        return handle.read().strip()
 
 
 def _pair_inputs(candidate_pairs: pd.DataFrame) -> tuple[str, list[str], list[str]]:
@@ -35,50 +25,24 @@ def _pair_inputs(candidate_pairs: pd.DataFrame) -> tuple[str, list[str], list[st
     return trial_id_column(candidate_pairs), trial_key_texts(candidate_pairs), patient_key_texts(candidate_pairs)
 
 
-def _build_match_quality_prompts(
-    candidate_pairs: pd.DataFrame,
-    *,
-    template: str,
-) -> list[str]:
-    _, cohorts, patients = _pair_inputs(candidate_pairs)
-    return [template.format(cohort, patient) for cohort, patient in zip(cohorts, patients, strict=True)]
+def _scores(answers: list[dict[str, float]]) -> tuple[list[float], dict[str, list[float]]]:
+    """The 0-1 match score per pair and each match label's P(yes).
 
-
-def _build_match_quality_prompts_with_ranges(
-    candidate_pairs: pd.DataFrame,
-    *,
-    template: str,
-) -> tuple[list[str], list[dict[str, tuple[int, int]]]]:
-    """Build prompts plus source ranges used for token attribution."""
-    prompts: list[str] = []
-    ranges: list[dict[str, tuple[int, int]]] = []
-    _, cohorts, patients = _pair_inputs(candidate_pairs)
-    for cohort, patient in zip(cohorts, patients, strict=True):
-        prompt, component_ranges = format_checker_prompt_with_ranges(
-            template,
-            [("cohort_key_criteria", cohort), ("patient_key_summary", patient)],
-        )
-        prompts.append(prompt)
-        ranges.append(component_ranges)
-    return prompts, ranges
-
-
-def _scores(predictions: list) -> tuple[list[float], dict[str, list[float]] | None]:
-    """The 0–1 match score per pair and, for a multi-head TrialChecker, each head's probability.
-
-    A multi-head model has one sigmoid head per match label; its score is the expected match
-    score fraction, P(reasonable) × (1 + P(cancer type) + P(burden) + P(treatment history)
-    + 2 P(biomarker)) / 6. A single-output (regression) model's score is the sigmoid of its logit.
+    The score is the expected match score fraction, P(reasonable) x (1 + P(cancer type) + P(burden)
+    + P(treatment history) + 2 P(biomarker)) / 6 (:func:`~matchminer_ai.matching.match_labels.match_score`).
     """
     from .match_labels import LABELS, MAX_SCORE, POINTS
-    rows = [{item.get("label", "LABEL_0"): float(item["score"]) for item in (p if isinstance(p, list) else [p])}
-            for p in predictions]
-    if rows and all(set(LABELS) <= set(row) for row in rows):
-        heads = {label: [row[label] for row in rows] for label in LABELS}
-        scores = [row["reasonableness"] * (POINTS["reasonableness"] + sum(
-            POINTS[label] * row[label] for label in LABELS if label != "reasonableness")) / MAX_SCORE for row in rows]
-        return scores, heads
-    return [float(torch.sigmoid(torch.tensor(next(iter(row.values())))).item()) for row in rows], None
+    heads = {label: [row[label] for row in answers] for label in LABELS}
+    scores = [row["reasonableness"] * (POINTS["reasonableness"] + sum(
+        POINTS[label] * row[label] for label in LABELS if label != "reasonableness")) / MAX_SCORE for row in answers]
+    return scores, heads
+
+
+def _decide(candidate_pairs: pd.DataFrame, config: MMAIConfig) -> tuple[list[dict[str, float]], dict]:
+    _, cohorts, patients = _pair_inputs(candidate_pairs)
+    questions = match_questions()
+    requests = [(match_state(patient, cohort), questions) for cohort, patient in zip(cohorts, patients, strict=True)]
+    return run_decisions(requests, config=config)
 
 
 def score_match_quality(
@@ -89,12 +53,14 @@ def score_match_quality(
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    Evaluate the clinical match quality of each candidate patient–cohort pair with TrialChecker.
+    Evaluate the clinical match quality of each candidate patient–cohort pair with the decision model.
 
-    TrialChecker reads key text only: the cohort's key criteria and the patient summary's key
-    section (BoilerplateChecker handles the boilerplate). A multi-head TrialChecker has one head
-    per match label (:mod:`matchminer_ai.matching.match_labels`): reasonableness and the cancer
-    type, burden, treatment history and biomarker specificity answers.
+    The decision model (:mod:`matchminer_ai.matching.decision_model`, configured by
+    ``decision_model``) answers the five match questions about one state: the cohort's key criteria
+    and the patient summary's key section (:func:`exclusion_criteria_check` handles the boilerplate).
+    The questions are the match labels of :mod:`matchminer_ai.matching.match_labels`:
+    ``reasonableness`` (yes: potentially eligible after review of these texts; no: clearly
+    ineligible) and the cancer type, burden, treatment history and biomarker specificity answers.
 
     Parameters
     ----------
@@ -115,7 +81,7 @@ def score_match_quality(
             ``clinical_space_summary``).
 
     config : MMAIConfig, optional
-        MMAI configuration containing match quality checker settings.
+        MMAI configuration: ``decision_model`` (the model) and ``match_quality.score_cutoff``.
         Uses default preset when omitted.
     filter_low_quality : bool, default True
         If True, only return rows where ``match_quality_pass`` evaluates to True.
@@ -135,49 +101,29 @@ def score_match_quality(
         cohort_trial_id or space_trial_id : str
             The input's trial identifier.
         match_quality_score : float
-            0–1 match score: for a multi-head model the expected match score fraction,
-            P(reasonable) × (1 + P(cancer type) + P(burden) + P(treatment history)
-            + 2 P(biomarker)) / 6; for a single-output model the sigmoid of its logit.
+            0–1 match score, the expected match score fraction: P(reasonable) × (1 +
+            P(cancer type) + P(burden) + P(treatment history) + 2 P(biomarker)) / 6.
         match_quality_pass : bool
             Whether the match quality score meets the configured cutoff.
         match_quality_<label> : float
-            Multi-head models only: each head's probability, for reasonableness, cancer_type,
-            burden, treatment_history and biomarker.
+            Each match question's P(yes), for reasonableness, cancer_type, burden,
+            treatment_history and biomarker.
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus a metadata dict.
     """
     trial_id, _, _ = _pair_inputs(candidate_pairs)
-
-    # Resolve run config and build checker prompts from the configured template.
     resolved_config = config or load_default_preset()
-    checker_config = dict(resolved_config.raw.get("match_quality", {}))
-    prompt_file = str(checker_config["prompt_file"]).strip()
-    score_cutoff = float(checker_config.get("score_cutoff", 0.2))
+    score_cutoff = float(resolved_config.raw.get("match_quality", {}).get("score_cutoff", 0.2))
+    answers, model_metadata = _decide(candidate_pairs, resolved_config)
 
-    template = _load_match_quality_template(prompt_file)
-    prompts = _build_match_quality_prompts(candidate_pairs, template=template)
-
-    # Run the backend text-classification model over all prompts.
-    predictions, model_metadata = run_checker(
-        prompts,
-        checker_config=checker_config,
-        model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-        return_all_scores=True,
-    )
-
-    if len(predictions) != len(candidate_pairs):
-        raise ValueError(
-            "Checker returned a different number of predictions than input rows."
-        )
-
-    # Convert model outputs into a compact, derived result table.
+    # Convert the answers into a compact, derived result table.
     output = candidate_pairs[["patient_id", trial_id]].copy()
-    confidence_scores, heads = _scores(predictions)
+    confidence_scores, heads = _scores(answers)
     output["match_quality_score"] = confidence_scores
     output["match_quality_pass"] = [
         score >= score_cutoff for score in confidence_scores
     ]
-    for label, values in (heads or {}).items():
+    for label, values in heads.items():
         output[f"match_quality_{label}"] = values
 
     # Optionally keep only matches that pass the quality threshold.
@@ -207,16 +153,15 @@ def interpret_match_quality(
     head: str = "reasonableness",
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
-    """Interpret specific TrialChecker predictions with token attributions.
+    """Interpret one match question's decision for specific pairs with token attributions.
 
-    This function reruns TrialChecker for each supplied patient–cohort pair and
-    performs one gradient-enabled forward pass per row. The returned token
-    offsets are relative to the original cohort key criteria
-    (``cohort_key_criteria`` source) and patient key section
-    (``patient_key_summary`` source). Positive normalized scores support the
-    interpreted prediction; negative scores oppose it. A single-output model's
-    pass/fail prediction is interpreted; for a multi-head model, ``head`` names
-    the match label whose yes/no prediction is interpreted.
+    Scores each pair as :func:`score_match_quality` does, then, for the match question ``head``
+    (default ``reasonableness``), runs one gradient-enabled forward pass per pair over the same
+    packed sequence: gradient times input embedding for the question's yes-minus-no logit at its
+    answer slot. Token offsets are relative to the cohort key criteria (``cohort_key_criteria``
+    source) and the patient key section (``patient_key_summary`` source). Positive normalized scores
+    support the interpreted decision (``head`` yes when P(yes) >= 0.5, else no); negative scores
+    oppose it.
 
     Parameters
     ----------
@@ -224,73 +169,49 @@ def interpret_match_quality(
         One or more specific pairs with the same required input columns as
         :func:`score_match_quality`.
     config : MMAIConfig, optional
-        Checker configuration. Uses the default preset when omitted.
+        Configuration. Uses the default preset when omitted.
     top_k : int or None, default 30
         Retain the most important tokens per source field. Use ``None`` to
         return every retained input token.
+    head : str, default "reasonableness"
+        The match question to interpret.
     return_metadata : bool, default False
         Return the config snapshot and model metadata with the result.
 
     Returns
     -------
     pd.DataFrame
-        One row per input pair with the TrialChecker prediction,
-        ``token_attributions``, input ``attribution_coverage``, and caveat.
+        One row per input pair with the scores, ``token_attributions``, input
+        ``attribution_coverage``, and caveat.
     tuple[pd.DataFrame, dict]
         Result and reproducibility metadata when ``return_metadata`` is True.
     """
-    trial_id, _, _ = _pair_inputs(candidate_pairs)
-
+    from .match_labels import LABELS
+    if head not in LABELS:
+        raise ValueError(f"head must be one of {list(LABELS)}")
+    trial_id, cohorts, patients = _pair_inputs(candidate_pairs)
     resolved_config = config or load_default_preset()
-    checker_config = dict(resolved_config.raw.get("match_quality", {}))
-    prompt_file = str(checker_config["prompt_file"]).strip()
-    score_cutoff = float(checker_config.get("score_cutoff", 0.2))
-    template = _load_match_quality_template(prompt_file)
-    prompts, component_ranges = _build_match_quality_prompts_with_ranges(
-        candidate_pairs,
-        template=template,
-    )
-    predictions, model_metadata = run_checker(
-        prompts,
-        checker_config=checker_config,
-        model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-        return_all_scores=True,
-    )
-    if len(predictions) != len(candidate_pairs):
-        raise ValueError(
-            "Checker returned a different number of predictions than input rows."
-        )
-
-    confidence_scores, heads = _scores(predictions)
-    passes = [score >= score_cutoff for score in confidence_scores]
-    if heads is not None:
-        if head not in heads:
-            raise ValueError(f"head must be one of {list(heads)}")
-        decisions = [value >= 0.5 for value in heads[head]]
-        labels, targets = [head] * len(decisions), [f"{head}_{'yes' if d else 'no'}" for d in decisions]
-    else:
-        decisions, labels = passes, [""] * len(passes)
-        targets = ["match_quality_pass" if passed else "match_quality_fail" for passed in passes]
-    explanations = attribute_checker_tokens(
-        prompts,
-        component_ranges=component_ranges,
-        checker_config=checker_config,
-        target_labels=labels,
-        target_directions=[1.0 if decision else -1.0 for decision in decisions],
-        top_k=top_k,
-        model_metadata_cache_dir=resolved_config.model_metadata_cache_dir,
-    )
+    score_cutoff = float(resolved_config.raw.get("match_quality", {}).get("score_cutoff", 0.2))
+    answers, model_metadata = _decide(candidate_pairs, resolved_config)
+    confidence_scores, heads = _scores(answers)
+    questions = match_questions()
+    explanations, targets = [], []
+    for cohort, patient, probability in zip(cohorts, patients, heads[head], strict=True):
+        state, ranges = match_state_with_ranges(patient, cohort)
+        ranges = {"cohort_key_criteria": ranges["cohort_key_criteria"], "patient_key_summary": ranges["patient_key_summary"]}
+        decision = probability >= 0.5
+        explanations.append(oriented(attribute_decision(state, questions, head, ranges, config=resolved_config,
+                                                        top_k=top_k), decision))
+        targets.append(f"{head}_{'yes' if decision else 'no'}")
 
     output = candidate_pairs[["patient_id", trial_id]].copy()
     output["match_quality_score"] = confidence_scores
-    output["match_quality_pass"] = passes
-    for label, values in (heads or {}).items():
+    output["match_quality_pass"] = [score >= score_cutoff for score in confidence_scores]
+    for label, values in heads.items():
         output[f"match_quality_{label}"] = values
     output["attribution_method"] = [item["method"] for item in explanations]
     output["attribution_target"] = targets
-    output["token_attributions"] = [
-        item["token_attributions"] for item in explanations
-    ]
+    output["token_attributions"] = [item["token_attributions"] for item in explanations]
     output["attribution_coverage"] = [item["coverage"] for item in explanations]
     output["attribution_caveat"] = TOKEN_ATTRIBUTION_CAVEAT
     output = output.reset_index(drop=True)
@@ -299,10 +220,7 @@ def interpret_match_quality(
         return output, {
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {"interpret_match_quality": model_metadata},
-            "interpretability": {
-                "method": "gradient_x_input",
-                "top_k_per_source": top_k,
-            },
+            "interpretability": {"method": "gradient_x_input", "top_k_per_source": top_k, "head": head},
         }
     return output
 

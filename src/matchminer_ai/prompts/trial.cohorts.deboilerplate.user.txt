@@ -9,7 +9,7 @@ Below are the complete eligibility criteria of one cohort of a cancer clinical t
 </eligibility_criteria>
 
 TASK
-Decide whether one item of this cohort's eligibility criteria, named at the end, is a boilerplate criterion. Boilerplate criteria are general requirements that most cancer treatment trials share, so they do not define what distinguishes this cohort's population. Each item is classified in a separate request.
+Classify one item of this cohort's eligibility criteria, named at the end, in two ways: whether it is an inclusion or an exclusion criterion, and whether it is a boilerplate criterion. Boilerplate criteria are general requirements that most cancer treatment trials share, so they do not define what distinguishes this cohort's population. Each item is classified in a separate request.
 
 BOILERPLATE CRITERIA
 -Requirements to give informed consent, personally or through a legally authorized representative.
@@ -37,15 +37,23 @@ WHAT IS NOT BOILERPLATE
 -Everything outside these categories is not boilerplate, for example the cancer's type, histology, stage, extent, and biomarkers; prior or current cancer treatment that is required or excluded, including whether a person has ever received a treatment, lines of therapy, and periods since earlier treatment longer than 30 days; age and sex; and restrictions on drugs that interact with the study drugs. Other hormone therapy, such as hormone replacement therapy, is not covered by the contraception rule.
 -A biomarker or other test result that a criterion requires is not boilerplate, even when the test uses samples or tissue; only a requirement to provide the samples or tissue is boilerplate.
 
-CLASSIFYING THE ITEM
+CLASSIFYING THE ITEM AS BOILERPLATE OR NOT
 -An item is one line of the criteria. Read it in the context of the items around it: it may be a whole criterion, a sub-item, note, or continuation of the criterion above it, or a line that introduces the items below it.
 -An item that combines boilerplate with any requirement that is not boilerplate is not boilerplate.
 -A sub-item, note, definition, exception, continuation, or Source limitation statement is classified by what it says in the context of the criterion it belongs to: for example, a note on how lesions are measured under a measurable-disease criterion is boilerplate, and a sub-item naming a required biomarker or prior therapy is not.
 -An item that only introduces the items below it, such as "Patients with any of the following are excluded:", is boilerplate only when every item it introduces is boilerplate.
 -When you are unsure whether the item is boilerplate, treat it as not boilerplate.
 
+INCLUSION OR EXCLUSION
+-"inclusion": the item states a requirement a person must meet to take part, or belongs to one.
+-"exclusion": the item states a condition that keeps a person from taking part, or belongs to one.
+-An item listed under an "Inclusion criteria:" or "Exclusion criteria:" heading takes that heading's type, even when it is worded negatively: for example, "No prior chemotherapy" under "Inclusion criteria:" is an inclusion criterion, and "Prior chemotherapy" under "Exclusion criteria:" is an exclusion criterion.
+-An item under no such heading takes the type its wording and the items around it give: for example, "Must have histologically confirmed disease" is an inclusion criterion, and "Patients with active infection are not eligible" is an exclusion criterion.
+-A sub-item, note, definition, exception, or continuation takes the type of the criterion it belongs to, and an item that only introduces the items below it takes their type.
+-The inclusion or exclusion type is independent of whether the item is boilerplate.
+
 OUTPUT FORMAT
-Return only one JSON object with exactly one field, "boilerplate": true when the item is a boilerplate criterion and false when it is not, for example {{"boilerplate": false}}. Add no other fields, text, or Markdown fences, and end the response with the object's closing brace.
+Return only one JSON object with exactly two fields: "criterion_type", "inclusion" or "exclusion" as described above, and "boilerplate", true when the item is a boilerplate criterion and false when it is not; for example {{"criterion_type": "exclusion", "boilerplate": false}}. Add no other fields, text, or Markdown fences, and end the response with the object's closing brace.
 
 ITEM TO CLASSIFY
 [{item_number}] {item}

@@ -70,7 +70,7 @@ stability = assess_trial_centric_cutoff_stability(
 print(stability.cutoff_runs)
 ```
 
-This diagnostic scores the complete ranking once with TrialChecker and reuses
+This diagnostic scores the complete ranking once with `score_match_quality` and reuses
 those scores for every start. `selected_cutoff_spread` measures allocation
 sensitivity; `reasonable_consideration_count_spread` measures how many
 threshold-passing patients that sensitivity adds or omits. These are research

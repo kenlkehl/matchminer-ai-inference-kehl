@@ -508,14 +508,14 @@ This composes the existing public functions in order:
    disk cache described below.
 2. `generate_candidate_matches` retrieves `candidate_k` spaces by cosine similarity.
    Set `candidate_k=None` to send all catalog spaces to the checker.
-3. `score_match_quality` scores the retrieved patient-space pairs with TrialChecker.
+3. `score_match_quality` scores the retrieved patient-space pairs with the decision model's match questions.
 4. The highest `top_n` spaces per patient are returned with their stored diagnostic
-   and treatment considerations. `rank` is TrialChecker order; `retrieval_rank`
+   and treatment considerations. `rank` is match-quality order; `retrieval_rank`
    retains the earlier TrialSpace order. Ties use cosine similarity, then space ID.
 
 The unit of ranking is a **space**, so multiple populations from one guideline can
 appear in the results. No disease-level/trial-ID deduplication occurs. `candidate_k`
-must be at least `top_n`; a smaller catalog returns all available spaces. TrialChecker
+must be at least `top_n`; a smaller catalog returns all available spaces. Match-quality
 cutoff flags are retained but do not remove candidates from the top-N result. Scores
 use the existing package's `match_quality_score` semantics and are not calibrated
 probabilities of patient-specific applicability.
@@ -553,7 +553,7 @@ loaded revision bypasses persistent caching. Corrupt vector entries are rebuilt;
 an unavailable cache falls back to fresh computation. Metadata records cache
 hits, newly embedded texts, and the cache identity under
 `guideline_embedding_cache`; progress callbacks report reuse. Patient embedding
-and TrialChecker scoring still run for every request, and model weights must
+and match-quality scoring still run for every request, and model weights must
 still load on the first request after restarting the process.
 
 The source-checkout example `examples/retrieve_guideline_considerations.py` reads

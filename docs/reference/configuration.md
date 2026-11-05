@@ -617,69 +617,75 @@ its `sentence_bert_config.json`) can silently truncate inputs at the wrong
 point, producing different embeddings than the model would otherwise
 produce for longer inputs.
 
+## `decision_model`
+
+The decision model that answers the match, boilerplate and per-criterion yes/no
+questions (`matchminer_ai.matching.decision_model`; see the
+[match-quality](../api/match-quality.md#decision-model),
+[exclusion-criteria](../api/exclusion-criteria.md) and
+[criteria-check](../api/criteria-check.md) APIs). It runs in-process with
+Transformers and the checkpoint's own System One code (`trust_remote_code`).
+
+### `decision_model.model_name`
+
+A Hugging Face model id or a local checkpoint directory (default
+`LiquidAI/d1-2B`). A checkpoint fine-tuned by the training repository's
+`train_decision_model.py` is a local directory holding the weights, the d1 code
+and `decision_contract.json`, whose fingerprint is reported as `model_sha`.
+
+### `decision_model.revision`
+
+The commit of a Hub model (default `652f920e544ea37f81e4b0ce89b81d4ed0da90b1`,
+d1-2B's main on 2026-11-05). Required for every Hub model, because its code
+runs; ignored for a local directory.
+
+### `decision_model.backend`
+
+`transformers` (the only backend).
+
+### `decision_model.device` / `decision_model.dtype`
+
+Where the model runs (default `cuda`) and its weight type (default `bfloat16`).
+
+### `decision_model.max_length`
+
+The fine-tuning request length (default 10000 tokens). Longer requests still
+run, without truncation, and are counted in the metadata's `over_max_length`.
+
+### `decision_model.set_size`
+
+Questions read together after one state (null, the default, uses the model's
+trained size, 16). Larger is faster and departs from training.
+
+### `decision_model.token_budget` / `decision_model.batch_size`
+
+Padded tokens per forward pass (default 65536) and requests per
+`system_one_batch` call (default 256).
+
+### `decision_model.compile`
+
+`torch.compile` the model before use (default false).
+
 ## `match_quality`
-
-Configuration for the TrialChecker match-quality model, which reads the
-cohort's key criteria and the patient's key section; see the
-[match-quality API](../api/match-quality.md).
-
-### `match_quality.model_name`
-
-Text-classification model identifier used by the checker pipeline and model
-metadata lookup.
-
-### `match_quality.device`
-
-Device passed to the checker pipeline.
-
-### `match_quality.prompt_file`
-
-Prompt template filename loaded from `matchminer_ai.prompts`.
-
-### `match_quality.max_length`
-
-Maximum token length passed to the text-classification checker pipeline
-(default 8192). Inputs are padded to the longest input of each batch, not to
-this length.
-
-### `match_quality.batch_size`
-
-Prompts per checker pipeline batch (default 8).
 
 ### `match_quality.score_cutoff`
 
-Minimum `match_quality_score` required for `match_quality_pass == true`
-(default 0.2). The score is `sigmoid(logit)` for a single-output model and the
-expected match score fraction for a multi-head model.
+Minimum `match_quality_score`, the expected match score fraction of the five
+match questions, required for `match_quality_pass == true` (default 0.2).
 
 ## `exclusion_criteria`
 
-Configuration for the BoilerplateChecker model, which reads the cohort's
-boilerplate criteria and the patient's boilerplate section; see the
-[exclusion-criteria API](../api/exclusion-criteria.md).
+### `exclusion_criteria.pass_cutoff`
 
-### `exclusion_criteria.model_name`
+Minimum P(yes) of the boilerplate question (yes = potentially eligible) for
+`exclusion_criteria_pass == true` (default 0.5).
 
-Text-classification model identifier used by the checker pipeline and model
-metadata lookup.
+## `criteria_check`
 
-### `exclusion_criteria.device`
+### `criteria_check.fail_cutoff`
 
-Device passed to the checker pipeline.
-
-### `exclusion_criteria.prompt_file`
-
-Prompt template filename loaded from `matchminer_ai.prompts`.
-
-### `exclusion_criteria.max_length`
-
-Maximum token length passed to the text-classification checker pipeline
-(default 8192). Inputs are padded to the longest input of each batch, not to
-this length.
-
-### `exclusion_criteria.batch_size`
-
-Prompts per checker pipeline batch (default 8).
+A criteria line whose P(yes) (yes = the patient does not clearly fail the line)
+is below this is flagged `criterion_clearly_fails` (default 0.5).
 
 ## `llm_match_quality`
 

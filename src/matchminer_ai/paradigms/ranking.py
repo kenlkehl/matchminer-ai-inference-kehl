@@ -1,4 +1,4 @@
-"""Roll TrialSpace/TrialChecker patient matches up to space paradigms."""
+"""Roll TrialSpace/match-quality patient matches up to space paradigms."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ _RESERVED_CATALOG_COLUMNS = {
 class PatientParadigmRankingResult:
     """Outputs from patient-summary-to-space-paradigm matching.
 
-    ``space_matches`` contains the TrialChecker-reranked leading trial spaces.
+    ``space_matches`` contains the match-quality-reranked leading trial spaces.
     ``space_paradigm_matches`` preserves every exact membership, including a
     one-to-many mapping from one trial space to several paradigms.
     ``paradigm_matches`` collapses repeated support for the same paradigm and
@@ -398,8 +398,8 @@ def rank_patient_space_paradigms(
     """Match patient summaries to trial spaces and roll them up to paradigms.
 
     TrialSpace first retrieves ``retrieval_k`` candidate spaces for each
-    patient. TrialChecker scores that wider pool, and the leading
-    ``top_space_count`` spaces after TrialChecker reranking are joined to the
+    patient. The match-quality check scores that wider pool, and the leading
+    ``top_space_count`` spaces after match-quality reranking are joined to the
     exact space-to-paradigm membership graph. A broad or disjunctive space can
     therefore support more than one paradigm.
 
@@ -417,15 +417,15 @@ def rank_patient_space_paradigms(
         One row per paradigm with ``paradigm_id``, the one-line
         ``paradigm_label``, and any optional status, ontology, or report fields.
     config : MMAIConfig, optional
-        TrialSpace and TrialChecker configuration. Uses the default preset when
+        TrialSpace and decision-model configuration. Uses the default preset when
         omitted.
     retrieval_k : int, default 100
-        TrialSpace candidates to send to TrialChecker per patient.
+        TrialSpace candidates to send to the match-quality check per patient.
     top_space_count : int, default 10
-        TrialChecker-reranked spaces retained per patient before roll-up.
+        match-quality-reranked spaces retained per patient before roll-up.
     require_match_quality_pass : bool, default True
         When True, retain up to ``top_space_count`` spaces that meet the
-        configured TrialChecker cutoff. This can yield fewer than the requested
+        configured match-quality cutoff. This can yield fewer than the requested
         count, including zero. Set False only when below-cutoff rows are useful
         for research diagnostics.
     trial_embeddings : pandas.DataFrame, optional
@@ -443,7 +443,7 @@ def rank_patient_space_paradigms(
 
     Notes
     -----
-    The paradigm rank is ordered by the best supporting TrialChecker-reranked
+    The paradigm rank is ordered by the best supporting match-quality-reranked
     space, then by the number of retained spaces supporting the paradigm. It is
     not a calibrated paradigm-level probability or eligibility judgment.
     """
@@ -554,7 +554,7 @@ def rank_patient_space_paradigms(
         )
         if scored[["match_quality_score", "match_quality_pass"]].isna().any().any():
             raise ValueError(
-                "TrialChecker did not return one score for every candidate."
+                "The match-quality check did not return one score for every candidate."
             )
         scored_candidate_count = len(scored)
         passing_candidate_count = int(scored["match_quality_pass"].sum())
@@ -662,7 +662,7 @@ def rank_patient_space_paradigms(
         "schema_version": "1.0",
         "research_use_notice": RESEARCH_USE_NOTICE,
         "ranking_method": (
-            "TrialSpace top-k retrieval; TrialChecker descending rerank; "
+            "TrialSpace top-k retrieval; decision-model match-quality descending rerank; "
             "paradigm rank by best supporting space then supporting-space count"
         ),
         "retrieval_k": retrieval_count,

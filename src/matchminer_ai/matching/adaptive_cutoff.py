@@ -76,7 +76,7 @@ class TrialCentricCutoffResult:
 class TrialCentricCutoffStabilityResult:
     """Starting-position QA for an adaptive trial-centric cutoff search.
 
-    TrialChecker scores are computed once for the complete ranking, then reused
+    Match-quality scores are computed once for the complete ranking, then reused
     for every requested initial cutoff proportion. ``cutoff_runs`` compares the
     selected prefix and the number of threshold-passing patients inside that
     prefix. These are model-screening diagnostics, not eligibility results.
@@ -389,11 +389,11 @@ def find_trial_centric_cutoff(
         Required columns are ``patient_id``, ``space_trial_id``, ``rank``,
         ``cancer_history_summary``, and ``clinical_space_summary``.
     check_method : {"trial_checker", "llm"}, default "trial_checker"
-        Use TrialChecker's 0-1 sigmoid score or the LLM checker's 0-6 score for
+        Use the decision model's 0-1 match-quality score or the LLM checker's 0-6 score for
         the boundary probes.
     score_threshold : float, optional
         Score at or above which a probe patient passes. Defaults to 0.20 for
-        TrialChecker and 1 for the LLM checker.
+        the decision model and 1 for the LLM checker.
     patients_per_side : int, default 10
         Number of patients to probe on each side of a proposed cutoff. Windows
         are clipped at the top and bottom of the ranking.
@@ -487,18 +487,18 @@ def _score_complete_ranking_for_stability(
     missing = [column for column in required if column not in checker_output.columns]
     if missing:
         raise ValueError(
-            "TrialChecker stability output is missing required columns: "
+            "Match-quality stability output is missing required columns: "
             + ", ".join(missing)
         )
     if len(checker_output) != len(ranked):
         raise ValueError(
-            "TrialChecker returned a different number of rows than the complete "
+            "The match-quality check returned a different number of rows than the complete "
             "stability ranking."
         )
 
     key_columns = ["patient_id", "space_trial_id"]
     if checker_output.duplicated(key_columns).any():
-        raise ValueError("TrialChecker stability output contains duplicate pairs.")
+        raise ValueError("Match-quality stability output contains duplicate pairs.")
     scored = ranked[key_columns + ["rank"]].merge(
         checker_output[required],
         on=key_columns,
@@ -509,7 +509,7 @@ def _score_complete_ranking_for_stability(
     )
     if (scored["_merge"] != "both").any():
         raise ValueError(
-            "TrialChecker stability output does not match the complete ranking."
+            "Match-quality stability output does not match the complete ranking."
         )
     scored = scored.drop(columns="_merge")
     scored["match_quality_score"] = pd.to_numeric(
@@ -536,7 +536,7 @@ def assess_trial_centric_cutoff_stability(
 ) -> TrialCentricCutoffStabilityResult:
     """Assess adaptive-cutoff sensitivity to its first boundary position.
 
-    This QA helper runs TrialChecker over the complete ranked corpus exactly
+    This QA helper runs the match-quality check over the complete ranked corpus exactly
     once, then replays the adaptive search against those cached scores for each
     requested starting proportion. It reports both the selected cutoff and the
     number of threshold-passing patients within the selected prefix. A stable
@@ -556,12 +556,12 @@ def assess_trial_centric_cutoff_stability(
         Unique first-probe positions between 0 and 1. Defaults to 10%, 25%,
         50%, 75%, and 90% of the complete ranking.
     score_threshold : float, optional
-        TrialChecker score at or above which a patient passes for this QA run.
+        match-quality score at or above which a patient passes for this QA run.
         Defaults to 0.20 on the 0-1 sigmoid scale.
     patients_per_side : int, default 10
         Number of patients on each side of every replayed boundary probe.
     config : MMAIConfig, optional
-        Package configuration used for the one complete TrialChecker pass.
+        Package configuration used for the one complete match-quality pass.
     progress_callback : callable, optional
         Called after each starting-position replay as
         ``(completed, total_starts, message)``.
@@ -569,7 +569,7 @@ def assess_trial_centric_cutoff_stability(
     Returns
     -------
     TrialCentricCutoffStabilityResult
-        Per-start diagnostics, one complete table of cached TrialChecker scores,
+        Per-start diagnostics, one complete table of cached match-quality scores,
         and the cutoff and passing-count spreads.
     """
     proportions = _validate_stability_proportions(initial_cutoff_proportions)

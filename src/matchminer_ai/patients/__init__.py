@@ -129,10 +129,10 @@ def summarize_patients(
             inactive cancers and other eligibility evidence.
         cancer_history_summary : str
             The summary's key section: the cancer history before ``Other
-            relevant history:``. TrialSpace retrieval and TrialChecker read it.
+            relevant history:``. TrialSpace retrieval and the decision model's match questions read it.
         general_exclusion_criteria_evidence : str
             The summary's boilerplate section: the text after ``Other relevant
-            history:`` (``Not documented.`` when absent). BoilerplateChecker
+            history:`` (``Not documented.`` when absent). The decision model's boilerplate question
             reads it.
 
         Debug Columns

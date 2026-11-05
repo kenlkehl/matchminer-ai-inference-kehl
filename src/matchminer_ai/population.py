@@ -24,7 +24,7 @@ from matchminer_ai.patients.workup import STATUSES, APPLICABILITY, NOTICE
 
 POPULATION_NOTICE = (
     NOTICE + " Each patient's selected notes were reviewed chunk by chunk. Missing "
-    "documentation means not located in those notes. TrialChecker scores are ranking "
+    "documentation means not located in those notes. Match-quality scores are ranking "
     "signals. Research use only; confirm applicability, timing and findings with a clinician."
 )
 

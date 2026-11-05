@@ -8,14 +8,13 @@ Determining the type of GPUs needed to run an AI pipeline can be complicated.  T
 4. [Our experience](#our-experience).
 
 ## Models Used In Our Pipeline
-MatchMiner-AI is a pipeline which uses 4 different models:
+MatchMiner-AI is a pipeline which uses 3 different models:
 
 - An LLM for patient summarization and trial 'space' extraction. We currently use variants of Google's Gemma-4-31B-IT model.
 - 'TrialSpace' - an embedding model [https://huggingface.co/ksg-dfci/TrialSpace-0526](https://huggingface.co/ksg-dfci/TrialSpace-0526) , fine-tuned from Qwen 3 0.6B Embedding [https://huggingface.co/Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B).
-- 'TrialChecker' - a text classifier [https://huggingface.co/ksg-dfci/TrialChecker-0526](https://huggingface.co/ksg-dfci/TrialChecker-0526) , fine-tuned from ModernBERT-large [https://huggingface.co/answerdotai/ModernBERT-large](https://huggingface.co/answerdotai/ModernBERT-large).
-- 'BoilerplateChecker' - another text classifier [https://huggingface.co/ksg-dfci/BoilerplateChecker-0526](https://huggingface.co/ksg-dfci/BoilerplateChecker-0526) , fine-tuned from ModernBERT-large.
+- The decision model - a 1.9B-parameter System One model that answers the match, boilerplate and per-criterion yes/no questions: [https://huggingface.co/LiquidAI/d1-2B](https://huggingface.co/LiquidAI/d1-2B) by default (LFM Open License v1.0), or a checkpoint fine-tuned from it by the training repository. In bfloat16 it needs a few GB of GPU memory plus activations for `decision_model.token_budget` (65,536) tokens per forward pass.
 
-For any given model, minimum compute/GPU requirements could be determined from others' experiences either with the model itself (e.g. Gemma-4-31B-IT) or with the base (pre-trained) models (Qwen 3 0.6B Embedding, ModernBERT-large).
+For any given model, minimum compute/GPU requirements could be determined from others' experiences either with the model itself (e.g. Gemma-4-31B-IT) or with the base (pre-trained) models (Qwen 3 0.6B Embedding, d1-2B).
 
 ## Minimum GPU Memory
 Nvidia provides some guidance and a short-hand metric for determining how much GPU VRAM is required to run a given LLM. (See [GPU Memory Essentials for AI Performance](https://developer.nvidia.com/blog/gpu-memory-essentials-for-ai-performance/)).  Specifically, it recommends having at least Parameter * Precision * 2 VRAM. Where Parameter is the number of parameters in the model and Precision is the bytes per parameter for the model's precision format -- FP32, FP16, FP8 or FP4.  (See conversion table below.)

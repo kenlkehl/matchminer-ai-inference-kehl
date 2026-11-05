@@ -210,20 +210,29 @@ other cancers, simultaneous participation in another trial, contraception,
 pregnancy and lactation, vaccines, and study-staff and catch-all exclusions,
 each unless it is central to what the trial studies. Each cohort's criteria are
 split into one item per line, and each item gets its own request
-(`trial.cohorts.deboilerplate.user.txt`) asking only whether it is boilerplate.
-Code sorts the unchanged items, so no criterion is lost or reworded.
+(`trial.cohorts.deboilerplate.user.txt`, schema `trial-cohorts-deboilerplate-v4`)
+showing the cohort's numbered criteria and asking two things, answered as
+`{"criterion_type": "inclusion" | "exclusion", "boilerplate": true | false}`:
+whether the item is an inclusion or an exclusion criterion (an item under an
+"Inclusion criteria:" or "Exclusion criteria:" heading takes that heading's type
+even when worded negatively; sub-items, notes and introductory lines take the
+type of the criterion they belong to), and whether it is boilerplate. Code sorts
+the unchanged items, so no criterion is lost or reworded.
 
 The result keeps `cohort_eligibility_criteria` unchanged (all the criteria) and
 adds:
 
 | Column | Meaning |
 | --- | --- |
-| `cohort_key_criteria` | The criteria that are not boilerplate; all the criteria for a cohort in `deboilerplate_errors`. Read by TrialSpace retrieval and TrialChecker. |
-| `cohort_boilerplate_criteria` | The boilerplate criteria; None for a cohort in `deboilerplate_errors`. Read by BoilerplateChecker. |
+| `cohort_key_criteria` | The criteria that are not boilerplate; all the criteria for a cohort in `deboilerplate_errors`. Read by TrialSpace retrieval and the decision model's match questions. |
+| `cohort_boilerplate_criteria` | The boilerplate criteria; None for a cohort in `deboilerplate_errors`. Read by the decision model's boilerplate question. |
+| `cohort_criteria_items` | Every item with its tags, as a JSON string: a list of `{"number", "heading", "text", "criterion_type", "boilerplate"}` in the original order (`criterion_type` null for an item whose answer never validated). Read by [`check_eligibility_criteria`](criteria-check.md). |
 
 A cohort without items, or whose items are all classified as boilerplate, is
 reported in `deboilerplate_errors`; an item whose answer never validates counts
-as key and is reported in `unclassified_items`. With `output_dir`, each trial's
+as key, has no criterion type, and is reported in `unclassified_items`. The
+metadata's `criterion_type_heading_disagreements` counts items whose type differs
+from the heading above them. With `output_dir`, each trial's
 results are saved to `<output_dir>/<trial_id>/deboilerplate.json`: per cohort,
 `key_criteria` and `boilerplate_criteria` (or `error`) and every item's attempts
 with their answers and reasoning. Classifications are reused while the prompt
@@ -480,7 +489,7 @@ and `Biomarker requirements`. Treatment and biomarker fields each retain both
 positive and negative conditions. Extraction postprocessing, QC, contextualization,
 and training's 0c sampling accept these seven fields as well as saved legacy
 nine-field spaces; they do not rewrite saved text or mix extraction checkpoints.
-TrialChecker and synthetic-patient prompts preserve clause polarity and AND/OR
+Match-label and synthetic-patient prompts preserve clause polarity and AND/OR
 logic. The structured ontology API and PDQ catalog retain their separate JSON
 required/excluded fields, with explicit prompt adapters for the combined input.
 Existing trained models can consume the new text, but their quality on this prompt

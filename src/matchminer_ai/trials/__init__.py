@@ -4,7 +4,8 @@ Each trial step is its own function, so callers can run some and skip others:
 :func:`extract_cohorts` (ctgov listings) or :func:`extract_protocol_cohorts` (full
 protocols) screen for cancer treatment and extract each cohort's complete criteria;
 :func:`merge_equivalent_cohorts` combines a trial's cohorts with essentially the same
-criteria; :func:`remove_boilerplate_criteria` separates key from boilerplate criteria.
+criteria; :func:`remove_boilerplate_criteria` tags every criteria line inclusion or exclusion and
+boilerplate or not, and separates key from boilerplate criteria.
 :func:`process_trials` runs all of them, on ctgov listings or protocols, in that order.
 """
 
@@ -218,8 +219,9 @@ def process_trials(
 
     Each extractor runs a cancer-treatment screen, then the cohort names and each cohort's
     complete criteria; :func:`merge_equivalent_cohorts` makes a trial's cohorts with
-    essentially the same criteria one row; :func:`remove_boilerplate_criteria` classifies each
-    criteria line as boilerplate or not. Call the functions separately to run only some of them.
+    essentially the same criteria one row; :func:`remove_boilerplate_criteria` tags each criteria
+    line as an inclusion or exclusion criterion and as boilerplate or not. Call the functions
+    separately to run only some of them.
 
     Parameters
     ----------
@@ -247,8 +249,10 @@ def process_trials(
     pd.DataFrame or tuple
         One row per merged cohort of each accepted trial: the extractor's columns
         (``cohort_eligibility_criteria`` keeps the complete criteria), ``merged_from``, and
-        the criteria split into ``cohort_key_criteria`` (read by TrialSpace retrieval and
-        TrialChecker) and ``cohort_boilerplate_criteria`` (read by BoilerplateChecker).
+        the criteria split into ``cohort_key_criteria`` (read by TrialSpace retrieval and the
+        decision model's match questions) and ``cohort_boilerplate_criteria`` (read by its
+        boilerplate question), and ``cohort_criteria_items``, every line with its tags (read by
+        :func:`~matchminer_ai.matching.check_eligibility_criteria`).
         Rejected trials have no rows; their decisions are in the metadata and DataFrame attrs,
         as for the extractors. ``(rows, metadata)`` with ``return_metadata``.
     """

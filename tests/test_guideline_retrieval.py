@@ -513,7 +513,7 @@ def test_trialchecker_orders_top_n_spaces_without_guideline_deduplication(
     assert metadata["retrieval"]["scored_pairs"] == 6
     assert "cancer_history_summary" not in result
     assert result.iloc[0].diagnostic_workup == catalog_frame.iloc[1].diagnostic_workup
-    assert any("TrialChecker" in p for p in progress)
+    assert any("match questions" in p for p in progress)
 
 
 def test_candidate_limit_applies_before_checker_and_low_scores_are_preserved(

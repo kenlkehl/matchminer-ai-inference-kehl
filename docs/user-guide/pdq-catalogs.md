@@ -136,7 +136,7 @@ review = review_patient_workup(
 )
 ```
 
-The retrieval API uses local TrialSpace and TrialChecker. Workup review sends raw
+The retrieval API uses local TrialSpace and the decision model. Workup review sends raw
 notes to the configured patient LLM. It checks documentation and applicability
 of the stored PDQ considerations, retaining their conditions and source evidence.
 It does not imply that all alternative tests were required or establish NCCN

@@ -10,8 +10,8 @@
 ordinary trial-space matching stages. It:
 
 1. retrieves a configurable TrialSpace pool (100 spaces per patient by default);
-2. scores that pool with TrialChecker;
-3. retains up to 10 leading TrialChecker-passing spaces by default;
+2. scores that pool with the decision model's match questions (`score_match_quality`);
+3. retains up to 10 leading match-quality-passing spaces by default;
 4. joins their exact `space_trial_id` values to a caller-supplied membership
    graph; and
 5. collapses repeated support for the same paradigm while preserving
@@ -42,7 +42,7 @@ must supply:
 - one row per `paradigm_id`, including its one-line `paradigm_label`, in
   `paradigm_catalog`.
 
-The paradigm rank follows the best supporting TrialChecker-reranked space, then
+The paradigm rank follows the best supporting match-quality-reranked space, then
 the number of retained spaces supporting that paradigm. It is deliberately not
 reported as a new calibrated paradigm probability. Keep `document_status` or
 equivalent caveat metadata in the catalog so downstream consumers do not treat

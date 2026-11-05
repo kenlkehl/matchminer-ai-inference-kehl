@@ -9,9 +9,10 @@ biomarkers and chronological treatment history, followed by
 next line: relevant comorbidities, performance status, laboratory findings and
 inactive cancers. Missing history is marked undocumented, not assumed negative.
 `cancer_history_summary` is the **key** section (the text before
-`Other relevant history:`), read by TrialSpace retrieval and TrialChecker;
-`general_exclusion_criteria_evidence` is the **boilerplate** section
-(`Not documented.` when absent), read by BoilerplateChecker. Serial updates and
+`Other relevant history:`), read by TrialSpace retrieval and the decision model's
+match questions; `general_exclusion_criteria_evidence` is the **boilerplate** section
+(`Not documented.` when absent), read by its boilerplate question; its
+per-criterion question reads the complete summary. Serial updates and
 existing-summary inputs use the complete text; embedding and the checkers also
 accept it and take the section they need (`patients.postprocess.split_patient_summary`,
 `add_summary_sections`). Training imports the same prompt and text normalizer.
@@ -47,7 +48,7 @@ and rejection counts. These checks do not establish clinical completeness.
 Population workup workflows are available through
 `matching.retrieve_guideline_patients` and `matchminer_ai.population`. Supply
 patient summaries and source notes, select a finalized guideline space, retrieve
-and TrialChecker-score candidates, optionally compress the notes, then call
+and score candidates with the decision model, optionally compress the notes, then call
 `population.review_population_workup`, which reviews each patient's selected
 notes in full, chunk by chunk, with `patients.review_patient_workup`. Results
 preserve patient-level findings, applicability, per-item error rows, source
@@ -174,14 +175,16 @@ sample from the trials it accepts. See
 [key and boilerplate criteria](docs/api/trials.md#key-and-boilerplate-criteria).
 
 Each matching stage reads one kind of text. TrialSpace retrieval
-(`embed_for_matching`) and TrialChecker read key text: patients'
-`cancer_history_summary` (or the key section of a complete `patient_summary`) and
-cohorts' `cohort_key_criteria` (else `cohort_eligibility_criteria` when the
-boilerplate step did not run, else `clinical_space_summary`). BoilerplateChecker
-and `exclusion_criteria_check_with_llm` read boilerplate text:
+(`embed_for_matching`) and the decision model's match questions read key text:
+patients' `cancer_history_summary` (or the key section of a complete
+`patient_summary`) and cohorts' `cohort_key_criteria` (else
+`cohort_eligibility_criteria` when the boilerplate step did not run, else
+`clinical_space_summary`). Its boilerplate question and
+`exclusion_criteria_check_with_llm` read boilerplate text:
 `general_exclusion_criteria_evidence` and `cohort_boilerplate_criteria` (or
-`general_exclusion_criteria`). Checkers accept `cohort_trial_id` or
-`space_trial_id` pairs (exclusion checks also `trial_id`).
+`general_exclusion_criteria`). Its per-criterion question reads the complete
+summary and the cohort's tagged lines (`cohort_criteria_items`). Checks accept
+`cohort_trial_id` or `space_trial_id` pairs (exclusion checks also `trial_id`).
 
 Retrieval is TrialSpace only: one normalized vector per patient or cohort,
 ranked by cosine similarity in either direction. Every text is encoded with
@@ -193,31 +196,63 @@ takes `entity_type`). Releases before November 2026 prepended the literal word
 "query" instead of 0526's instruction; regenerate embeddings they stored. `embedding.max_seq_length` defaults to 4096. See
 [embedding and bidirectional retrieval](docs/api/embedding.md).
 
-TrialChecker (`score_match_quality`) supports a multi-head model with one
-sigmoid head per match label (`reasonableness`, `cancer_type`, `burden`,
-`treatment_history`, `biomarker`). It returns `match_quality_<label>`
-probabilities and `match_quality_score` = P(reasonable) × (1 + P(cancer_type) +
-P(burden) + P(treatment_history) + 2·P(biomarker)) / 6; a single-output model
-such as `TrialChecker-0526` keeps `sigmoid(logit)`. `score_match_quality_with_llm`
-uses the training teacher's prompt, `match_quality.labels.system.txt`: five
-yes/no questions, each with an evidence status and reason, combined by
-`matching.match_labels.match_score` into `llm_match_quality_score` (0–6: 0 unless
-reasonable, else 1 plus 1 each for cancer type, burden and treatment history and
-2 for biomarker; -1 when the answer fails the contract), plus `llm_<label>`
-booleans. BoilerplateChecker stays a two-class model: `exclusion_score` is the
-probability of its predicted label, and a pair passes when that label is
-NEGATIVE. The LLM exclusion prompt asks whether the patient
-clearly fails any of the cohort's boilerplate criteria, inclusion requirements
-as well as exclusions; missing information and waitable washouts are not
-failures. Both checkers truncate at 8192 tokens and pad to the longest input of
-each batch (`batch_size`, default 8). See [match quality](docs/api/match-quality.md)
-and [exclusion criteria](docs/api/exclusion-criteria.md).
+The match, boilerplate and per-criterion checks use one **decision model**
+(`matching.decision_model`; the `decision_model` configuration section): a
+System One model that answers yes/no (`noul`) questions about a state in one
+forward pass, returning P(yes) without generating text. The default is the
+pinned base [`LiquidAI/d1-2B`](https://huggingface.co/LiquidAI/d1-2B) (LFM Open
+License v1.0, which limits commercial use above a revenue threshold); point
+`decision_model.model_name` at a checkpoint fine-tuned by the training
+repository's `train_decision_model.py` to use it instead. The model's own code
+runs (`trust_remote_code`), so a Hub model must pin `decision_model.revision`.
+It runs in-process with Transformers; vLLM 0.33 does not support d1-2B's
+architecture or its `set` attention.
+
+- `score_match_quality` asks the five match questions (`reasonableness`,
+  `cancer_type`, `burden`, `treatment_history`, `biomarker`) about one state,
+  the patient's key section and the cohort's key criteria. `reasonableness`
+  yes means the patient is potentially eligible after review of these texts and
+  no means clearly ineligible; the others are yes when the cohort specifically
+  requires that dimension and the patient documentedly satisfies it. It returns
+  each P(yes) as `match_quality_<label>` and `match_quality_score` =
+  P(reasonable) × (1 + P(cancer_type) + P(burden) + P(treatment_history) +
+  2·P(biomarker)) / 6, passing at `match_quality.score_cutoff` (0.2).
+- `exclusion_criteria_check` asks the boilerplate question about the patient's
+  boilerplate section and the cohort's boilerplate criteria. Yes means
+  potentially eligible; no means the patient clearly fails at least one
+  boilerplate criterion. `exclusion_criteria_pass_probability` is P(yes), a pair
+  passes at `exclusion_criteria.pass_cutoff` (0.5), and `exclusion_score` is the
+  probability of the predicted outcome.
+- `check_eligibility_criteria` asks one question per tagged criteria line about
+  the complete summary and the cohort's complete numbered criteria; the question
+  restates the line's number, inclusion/exclusion type and text. **Yes
+  (`criterion_pass_probability`) means the patient does not clearly fail the
+  line; no means the patient clearly fails it: an inclusion line clearly not
+  met, or an exclusion line clearly met.** `criterion_clearly_fails` flags lines
+  below `criteria_check.fail_cutoff` (0.5).
+
+A state's questions are read together (`decision_model.set_size`, the model's
+trained 16 by default). Fine-tuning uses 10,000-token requests; longer ones still
+run without truncation and are counted in the metadata's `over_max_length`.
+`score_match_quality_with_llm` uses the training teacher's prompt,
+`match_quality.labels.system.txt`: five yes/no questions, each with an evidence
+status and reason, combined by `matching.match_labels.match_score` into
+`llm_match_quality_score` (0–6: 0 unless reasonable, else 1 plus 1 each for
+cancer type, burden and treatment history and 2 for biomarker; -1 when the answer
+fails the contract), plus `llm_<label>` booleans. The LLM exclusion prompt asks
+whether the patient clearly fails any of the cohort's boilerplate criteria,
+inclusion requirements as well as exclusions; missing information and waitable
+washouts are not failures. See [match quality](docs/api/match-quality.md),
+[exclusion criteria](docs/api/exclusion-criteria.md) and
+[criteria check](docs/api/criteria-check.md).
 
 This is a new input representation, not a migration of saved trial spaces or
-embeddings. The `0526` TrialSpace, TrialChecker and BoilerplateChecker models
-were trained on historical clinical-space summaries and separate general
-exclusions; they accept cohort key and boilerplate criteria but have not been
-evaluated on them. The established workflow explicitly selects
+embeddings. The `0526` TrialSpace model was trained on historical
+clinical-space summaries; it accepts cohort key criteria but has not been
+evaluated on them. The base d1-2B decision model is zero-shot: its 2026-11-05
+feasibility check against teacher labels (AUROC 0.76–0.88 by question) is below
+what a fine-tuned checker should reach, so treat its scores as provisional and
+retune the cutoffs after fine-tuning. The established workflow explicitly selects
 `config.trial["extraction_method"] = "hierarchical"` (or the legacy `one_shot`
 method). Both existing Spaces explicitly retain hierarchical extraction for their
 current matching models. The hierarchy's field prompts and seven-field space
@@ -225,25 +260,26 @@ output remain available; see [legacy hierarchical extraction](docs/api/trials.md
 
 For trial-centric matching, `find_trial_centric_cutoff` can start from a
 complete TrialSpace-ranked patient list and use cached, boundary-centered
-TrialChecker or LLM probes to estimate how many leading patients should proceed
-to both full checker stages. Its default pass thresholds are 0.20 on
-TrialChecker's 0-1 scale and 1 on the LLM checker's 0-6 scale. This is a
+decision-model (`score_match_quality`) or LLM probes to estimate how many leading
+patients should proceed to both full checker stages. Its default pass thresholds
+are 0.20 on the 0-1 match-quality scale and 1 on the LLM checker's 0-6 scale. This is a
 compute-allocation heuristic, not an eligibility threshold.
 The first probe defaults to 50% down the ranking and can be moved with
 `initial_cutoff_proportion` when the expected qualifying fraction is known to
 be much smaller or larger.
 For offline QA, `assess_trial_centric_cutoff_stability` scores a complete
-authorized ranking once with TrialChecker and replays the cutoff search from
+authorized ranking once with `score_match_quality` and replays the cutoff search from
 10%, 25%, 50%, 75%, and 90%. It reports the spread in selected cutoffs and in
 threshold-passing patients retained by those cutoffs. The full-corpus scoring
 cost makes this a stability diagnostic rather than the production allocation
 path.
 
-For a specific TrialChecker or BoilerplateChecker prediction,
-`interpret_match_quality` and `interpret_exclusion_criteria` provide on-demand
-gradient-times-input token attribution mapped back to the original key or
-boilerplate text each checker reads (`interpret_match_quality(head=...)` selects
-a multi-head model's label, `"reasonableness"` by default). These local sensitivity scores are intended for model debugging
+For a specific match or boilerplate decision, `interpret_match_quality` and
+`interpret_exclusion_criteria` provide on-demand gradient-times-input token
+attribution of the question's yes-minus-no logit at its answer slot, mapped back
+to the original key or boilerplate text the question reads
+(`interpret_match_quality(head=...)` selects the match question,
+`"reasonableness"` by default). These local sensitivity scores are intended for model debugging
 and human review. They are not a clinical rationale, eligibility evidence, or
 proof that a highlighted token caused the prediction.
 
@@ -270,7 +306,7 @@ Optional source-grounded extensions can also:
   OncoTree coding, and locally searched NCIt drug normalization;
 - transform a clinical-space summary into JSON while preserving age, sex,
   disease burden, treatment, response, and biomarker requirements;
-- roll a patient summary's TrialSpace/TrialChecker-ranked spaces up through an
+- roll a patient summary's TrialSpace/match-quality-ranked spaces up through an
   exact caller-supplied space-to-paradigm membership graph, while preserving
   one-to-many mappings and paradigm caveat metadata;
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
@@ -328,7 +364,7 @@ The resulting catalogs work with the existing retrieval and raw-note workup-revi
 Existing catalogs can also be queried by exact space using
 `trials.get_guideline_considerations`, or ranked for patient summaries using
 `matching.retrieve_guideline_considerations` (TrialSpace retrieval followed by
-TrialChecker ranking). These APIs return the stored diagnostic and treatment
+match-quality ranking). These APIs return the stored diagnostic and treatment
 menus with their conditions, citations, and uncertainties.
 Pass `embedding_cache_dir` to the retrieval API to persist and reuse compatible
 guideline embeddings across requests and restarts; patient vectors are not cached.

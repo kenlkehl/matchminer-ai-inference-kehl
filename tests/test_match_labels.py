@@ -1,4 +1,4 @@
-"""The five match labels asked in one prompt, their score, and the multi-head TrialChecker."""
+"""The five match labels asked in one prompt, their score, and the decision model's match questions."""
 
 import json
 
@@ -48,15 +48,15 @@ def test_answers_are_parsed_strictly_and_scored_zero_to_six():
         parse_match_labels(json.dumps(answers()), "length")
 
 
-def test_multi_head_trial_checker_returns_each_head_and_the_expected_score(monkeypatch):
-    heads = dict(reasonableness=0.9, cancer_type=0.8, burden=0.5, treatment_history=0.2, biomarker=0.1)
+def test_match_quality_reads_key_text_only_and_returns_each_answer_and_the_expected_score(monkeypatch):
+    answers = dict(reasonableness=0.9, cancer_type=0.8, burden=0.5, treatment_history=0.2, biomarker=0.1)
     seen = {}
 
-    def run_checker(prompts, *, checker_config, model_metadata_cache_dir=None, return_all_scores=False):
-        seen.update(prompts=prompts, all_scores=return_all_scores)
-        return [[{"label": label, "score": value} for label, value in heads.items()]], {"model_name": "multi-head"}
+    def run_decisions(requests, *, config=None, progress=None):
+        seen.update(requests=requests)
+        return [dict(answers)], {"model_name": "d1"}
 
-    monkeypatch.setattr("matchminer_ai.matching.rerank.run_checker", run_checker)
+    monkeypatch.setattr("matchminer_ai.matching.rerank.run_decisions", run_decisions)
     pairs = pd.DataFrame([dict(patient_id="P1", cohort_trial_id="T1-cohort-1",
                                patient_summary="Lung cancer.\n\nOther relevant history:\nDialysis.",
                                cohort_eligibility_criteria="Lung cancer.\nNo dialysis.",
@@ -64,6 +64,8 @@ def test_multi_head_trial_checker_returns_each_head_and_the_expected_score(monke
     result = score_match_quality(pairs, config=load_default_preset(), filter_low_quality=False)
     expected = 0.9 * (1 + 0.8 + 0.5 + 0.2 + 2 * 0.1) / 6
     assert result.match_quality_score.tolist() == pytest.approx([expected])
-    assert [result[f"match_quality_{label}"].iloc[0] for label in LABELS] == pytest.approx(list(heads.values()))
-    assert list(result.columns[:2]) == ["patient_id", "cohort_trial_id"] and seen["all_scores"]
-    assert seen["prompts"] == ["Lung cancer.\nNow here is the patient summary:Lung cancer."]  # key text only
+    assert [result[f"match_quality_{label}"].iloc[0] for label in LABELS] == pytest.approx(list(answers.values()))
+    assert list(result.columns[:2]) == ["patient_id", "cohort_trial_id"]
+    (state, questions), = seen["requests"]
+    assert "Lung cancer." in state and "ialysis" not in state  # key text only
+    assert list(questions) == list(LABELS)

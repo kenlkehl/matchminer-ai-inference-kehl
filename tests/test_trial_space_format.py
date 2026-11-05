@@ -5,7 +5,6 @@ import pytest
 from matchminer_ai._trial_space_format import has_required_space_fields
 from matchminer_ai._qc.trials import trial_qc_report
 from matchminer_ai.contextualization.query import build_trial_space_query
-from matchminer_ai.matching.llm_checks import _load_prompt_template
 from matchminer_ai.trials.postprocess import flatten_trial_to_spaces
 from matchminer_ai.trials.hierarchy import FIELDS, OUTPUT_FIELDS, VERSION
 
@@ -66,6 +65,6 @@ def test_context_query_retains_negative_clauses_without_guessing_a_split():
     assert query.biomarkers_required == query.biomarkers_excluded == ''
 
 
-def test_trialchecker_receives_the_complete_combined_space():
-    classifier = _load_prompt_template('match_quality_checker_template.txt').format(SPACE, 'Fabricated patient.')
-    assert classifier.startswith(SPACE)
+def test_decision_model_receives_the_complete_combined_space():
+    from matchminer_ai.matching.decision_model import match_state
+    assert SPACE.strip() in match_state('Fabricated patient.', SPACE)

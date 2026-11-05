@@ -159,7 +159,7 @@ def retrieve_guideline_patients(
     progress_callback=None,
     patient_embeddings=None,
 ):
-    """Retrieve then TrialChecker-score patients for one finalized guideline space.
+    """Retrieve then match-quality-score patients for one finalized guideline space.
 
     Returns (selected patients, provenance). candidate_k controls the number of
     highest-cosine patient summaries scored, capped at the population size.
@@ -230,7 +230,7 @@ def retrieve_guideline_patients(
         validate="many_to_one",
     )
     check_cancelled()
-    progress(f"TrialChecker scoring {len(pairs)} candidate patients")
+    progress(f"Match-quality scoring {len(pairs)} candidate patients")
     score_batches = []
     metadata = None
     for start in range(0, len(pairs), 32):
@@ -245,7 +245,7 @@ def retrieve_guideline_patients(
             metadata is not None
             and metadata["model_metadata"] != batch_metadata["model_metadata"]
         ):
-            raise ValueError("TrialChecker model changed between batches.")
+            raise ValueError("Match-quality model changed between batches.")
         metadata = batch_metadata
         score_batches.append(batch)
         progress(
@@ -254,7 +254,7 @@ def retrieve_guideline_patients(
     scores = pd.concat(score_batches, ignore_index=True)
     keys = ["patient_id", "space_trial_id"]
     if len(scores) != len(pairs) or scores.duplicated(keys).any():
-        raise ValueError("TrialChecker must return one score per candidate.")
+        raise ValueError("The match-quality check must return one score per candidate.")
     ranked = candidates.merge(
         scores[keys + ["match_quality_score", "match_quality_pass"]],
         on=keys,
@@ -264,7 +264,7 @@ def retrieve_guideline_patients(
     if not np.isfinite(
         pd.to_numeric(ranked.match_quality_score, errors="coerce")
     ).all():
-        raise ValueError("TrialChecker returned invalid scores.")
+        raise ValueError("The match-quality check returned invalid scores.")
     ranked = ranked.sort_values(
         ["match_quality_score", "similarity_score", "patient_id"],
         ascending=[False, False, True],

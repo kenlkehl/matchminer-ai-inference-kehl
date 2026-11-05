@@ -1,4 +1,4 @@
-"""Retrieve stored guideline considerations with TrialSpace and TrialChecker."""
+"""Retrieve stored guideline considerations with TrialSpace and the decision model's match score."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def retrieve_guideline_considerations(
     return_metadata: bool = False,
     progress_callback: Callable[[str], None] | None = None,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
-    """Return considerations for each patient's highest TrialChecker-ranked spaces.
+    """Return considerations for each patient's highest match-quality-ranked spaces.
 
     Parameters
     ----------
@@ -64,7 +64,7 @@ def retrieve_guideline_considerations(
         Unchanged files reuse validated records in the loader's process-local
         cache; changed catalog/status/audit files are reloaded and validated.
     top_n : int, default 5
-        Maximum spaces returned per patient, ranked by TrialChecker score.
+        Maximum spaces returned per patient, ranked by match-quality score.
     candidate_k : int or None, default 20
         TrialSpace nearest neighbors to rerank per patient. Must be >= top_n,
         or None to score every catalog space. A smaller catalog returns fewer rows.
@@ -87,7 +87,7 @@ def retrieve_guideline_considerations(
     -------
     pd.DataFrame or tuple[pd.DataFrame, dict]
         One row per selected patient-space pair, including ``patient_id``,
-        ``rank`` (TrialChecker order), ``retrieval_rank`` (TrialSpace order),
+        ``rank`` (match-quality order), ``retrieval_rank`` (TrialSpace order),
         ``similarity_score``, ``match_quality_score``, ``match_quality_pass``, and
         the complete stored catalog record, including both consideration menus.
 
@@ -189,20 +189,20 @@ def retrieve_guideline_considerations(
         on="space_trial_id",
         validate="many_to_one",
     )
-    progress(f"Scoring {len(pairs)} patient-space pairs with TrialChecker")
+    progress(f"Scoring {len(pairs)} patient-space pairs with the decision model's match questions")
     scores, checker_metadata = score_match_quality(
         pairs, config=resolved, filter_low_quality=False, return_metadata=True
     )
     keys = ["patient_id", "space_trial_id"]
     if scores.duplicated(keys).any() or len(scores) != len(pairs):
         raise ValueError(
-            "TrialChecker did not return exactly one score per candidate pair."
+            "The match-quality check did not return exactly one score per candidate pair."
         )
     scored = candidates.merge(scores, on=keys, validate="one_to_one", how="left")
     if not np.isfinite(
         pd.to_numeric(scored["match_quality_score"], errors="coerce")
     ).all():
-        raise ValueError("TrialChecker returned missing or non-finite scores.")
+        raise ValueError("The match-quality check returned missing or non-finite scores.")
     scored = scored.sort_values(
         ["patient_id", "match_quality_score", "similarity_score", "space_trial_id"],
         ascending=[True, False, False, True],

@@ -41,7 +41,7 @@ save_patient_cohort(active, "/authorized/private/cohort.zip")
 restored = load_patient_cohort("/authorized/private/cohort.zip")
 ```
 
-`candidate_k` controls TrialSpace candidates that undergo TrialChecker, capped
+`candidate_k` controls TrialSpace candidates that undergo match-quality scoring, capped
 at population size. Embedding and scoring use batches of 32 records, with
 progress and cancellation checks between batches. `min_match_score=None` retains all candidates. The trial space
 is the query and patient summaries are the corpus. Both sides use the same loaded

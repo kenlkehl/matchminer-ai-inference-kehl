@@ -10,8 +10,8 @@ from matchminer_ai.config import load_default_preset
 from matchminer_ai.llm.prompts import load_prompt_text
 from matchminer_ai.trials import remove_boilerplate_criteria
 from matchminer_ai.trials.cohort_boilerplate import (
-    BOILERPLATE_COLUMN, DEBOILERPLATE_JSON_SCHEMA, KEY_COLUMN, DEBOILERPLATE_PROMPT, build_deboilerplate_messages, gather_criteria,
-    parse_deboilerplated, split_criteria,
+    BOILERPLATE_COLUMN, DEBOILERPLATE_JSON_SCHEMA, ITEMS_COLUMN, KEY_COLUMN, DEBOILERPLATE_PROMPT, build_deboilerplate_messages,
+    gather_criteria, load_criteria_items, parse_deboilerplated, split_criteria,
 )
 
 CRITERIA = ("Inclusion criteria:\nTrial one adults with {x} cancer.\n  a. Prior platinum therapy.\nECOG 0-1.\n\n"
@@ -73,15 +73,20 @@ def test_prompt_shows_the_numbered_cohort_and_ends_with_the_item():
                  "A biomarker or other test result that a criterion requires is not boilerplate",
                  "An item that combines boilerplate with any requirement that is not boilerplate is not boilerplate",
                  "is boilerplate only when every item it introduces is boilerplate",
-                 "When you are unsure whether the item is boilerplate, treat it as not boilerplate"):
+                 "When you are unsure whether the item is boilerplate, treat it as not boilerplate",
+                 "takes that heading's type, even when it is worded negatively",
+                 "an item that only introduces the items below it takes their type"):
         assert rule in first, rule
-    assert parse_deboilerplated('{"boilerplate": true}') is True and parse_deboilerplated('{"boilerplate": false}') is False
-    assert DEBOILERPLATE_JSON_SCHEMA["required"] == ["boilerplate"]
-    for bad in ('{"boilerplate": "yes"}', '{"boilerplate": true, "why": ""}', '{}'):
+    assert parse_deboilerplated('{"criterion_type": "exclusion", "boilerplate": true}') == {
+        "criterion_type": "exclusion", "boilerplate": True}
+    assert DEBOILERPLATE_JSON_SCHEMA["required"] == ["criterion_type", "boilerplate"]
+    for bad in ('{"boilerplate": true}', '{"criterion_type": "inclusion", "boilerplate": "yes"}',
+                '{"criterion_type": "both", "boilerplate": true}', '{"boilerplate": true, "criterion_type": "inclusion"}',
+                '{"criterion_type": "inclusion", "boilerplate": true, "why": ""}', '{}'):
         with pytest.raises(ValueError):
             parse_deboilerplated(bad)
     with pytest.raises(ValueError):
-        parse_deboilerplated('{"boilerplate": true}', "length")
+        parse_deboilerplated('{"criterion_type": "inclusion", "boilerplate": true}', "length")
 
 
 def test_each_item_is_classified_and_the_criteria_are_sorted_in_code(config, cohort_backend):
@@ -99,9 +104,16 @@ def test_each_item_is_classified_and_the_criteria_are_sorted_in_code(config, coh
         "Exclusion criteria:\nAny of the following:\n  - Prior anti-PD-1 therapy.", "Inclusion criteria:\nTrial one children."]
     assert result[BOILERPLATE_COLUMN].tolist() == ["Inclusion criteria:\nECOG 0-1.\nExclusion criteria:\n  - Active hepatitis B.",
                                                    "Inclusion criteria:\nConsent."]
-    assert result.drop(columns=[KEY_COLUMN, BOILERPLATE_COLUMN]).equals(frame)  # all the criteria stay
+    assert result.drop(columns=[KEY_COLUMN, BOILERPLATE_COLUMN, ITEMS_COLUMN]).equals(frame)  # all the criteria stay
+    items = load_criteria_items(result[ITEMS_COLUMN].iloc[0])  # every line keeps both tags, in order
+    assert [(i["number"], i["criterion_type"], i["boilerplate"]) for i in items] == [
+        (1, "inclusion", False), (2, "inclusion", False), (3, "inclusion", True), (4, "exclusion", False),
+        (5, "exclusion", True), (6, "exclusion", False)]
+    assert items[4]["text"] == "  - Active hepatitis B." and items[4]["heading"] == "Exclusion criteria:"
     saved = metadata["trial_cohorts"]["T1"][0]
-    assert [(i["number"], i["text"], i["boilerplate"]) for i in saved["items"]][2] == (3, "ECOG 0-1.", True)
+    assert [(i["number"], i["text"], i["criterion_type"], i["boilerplate"]) for i in saved["items"]][2] == (
+        3, "ECOG 0-1.", "inclusion", True)
+    assert metadata["criterion_type_heading_disagreements"] == 0
     assert saved["items"][0]["attempts"][0]["reasoning"] == "test reasoning"
     assert metadata["items"] == 8 and not metadata["deboilerplate_errors"] and not metadata["unclassified_items"]
 
@@ -117,6 +129,7 @@ def test_unclassified_items_stay_and_an_all_boilerplate_cohort_keeps_its_criteri
     assert result[KEY_COLUMN].tolist() == ["Trial one adults.\nECOG 0-1.", "Trial one: ECOG 0-1.\nConsent."]
     assert result[BOILERPLATE_COLUMN].tolist() == ["Consent.", None]
     assert list(metadata["unclassified_items"]["T1-cohort-0"]) == [2]
+    assert [i["criterion_type"] for i in load_criteria_items(result[ITEMS_COLUMN].iloc[0])] == ["inclusion", None, "inclusion"]
     assert list(metadata["deboilerplate_errors"]) == ["T1-cohort-1"]
 
 

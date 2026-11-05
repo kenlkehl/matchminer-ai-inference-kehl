@@ -1,4 +1,5 @@
-"""Which text each stage reads: key text for retrieval and TrialChecker, boilerplate for BoilerplateChecker.
+"""Which text each stage reads: key text for retrieval and the decision model's match questions,
+boilerplate text for its boilerplate question, and the complete summary for its per-criterion question.
 
 A cohort's key criteria are its criteria that are not boilerplate (``cohort_key_criteria`` from
 ``remove_boilerplate_criteria``); a patient summary's key section is its cancer history
@@ -52,3 +53,16 @@ def patient_boilerplate_texts(df: pd.DataFrame) -> list[str]:
         from matchminer_ai.patients.postprocess import split_patient_summary
         return [split_patient_summary(text)[1] for text in df["patient_summary"].fillna("").astype(str)]
     raise ValueError("patient rows need general_exclusion_criteria_evidence or patient_summary")
+
+
+def patient_full_texts(df: pd.DataFrame) -> list[str]:
+    """Complete summaries: the key section, then ``Other relevant history:`` and the boilerplate section."""
+    from matchminer_ai.patients.postprocess import normalize_patient_summary
+    if "cancer_history_summary" in df.columns:
+        others = (df["general_exclusion_criteria_evidence"].fillna("").astype(str).tolist()
+                  if "general_exclusion_criteria_evidence" in df.columns else [""] * len(df))
+        return [normalize_patient_summary(key, other or None)
+                for key, other in zip(df["cancer_history_summary"].fillna("").astype(str), others, strict=True)]
+    if "patient_summary" in df.columns:
+        return [normalize_patient_summary(text) for text in df["patient_summary"].fillna("").astype(str)]
+    raise ValueError("patient rows need cancer_history_summary or patient_summary")

@@ -15,7 +15,7 @@ MatchMiner-AI has 6 main steps (Figure 1):
 2. Summarize Patients <br>
 3. Embed Trial Spaces[^1] and Patient Summaries (TrialSpace Model) <br>
 4. Generate Candidate Matches <br>
-5. Evaluate Candidate Match Quality (TrialChecker Model) <br>
+5. Evaluate Candidate Match Quality (Decision Model) <br>
 6. Check for Common Exclusion criteria unrelated to the core clinical question asked by the trial (Boilerplate Checker Model)<br>
 
 [^1]: A processed clinical trial is divided into one or more Trial Spaces. Please see the [Trial Spaces](#trial-spaces) section for more information.
@@ -35,16 +35,16 @@ Table 1: MatchMiner-AI Steps and Models. <br>
 | 2. Summarize Patients | `summarize_patients` | open-weights local LLM | by default, currently uses `google/gemma-4-31B-it` |
 | 3. Embed Trial Spaces and Patient Summaries | `embed_for_matching` | `TrialSpace`, a trained Sentence Transformers model | provided on Hugging Face at `https://huggingface.co/ksg-dfci` |
 | 4. Generate Candidate Matches | `generate_candidate_matches` | NA | |
-| 5. Evaluate Candidate Match Quality | `score_match_quality` | `TrialChecker`, a trained ModernBERT model [^2] | provided on Hugging Face at `https://huggingface.co/ksg-dfci` |
-| 6. Check for Exclusions | `exclusion_criteria_check` | `BoilerplateChecker`, a trained ModernBERT model [^2] | provided on Hugging Face at `https://huggingface.co/ksg-dfci` |
+| 5. Evaluate Candidate Match Quality | `score_match_quality` | the decision model's five match questions (`LiquidAI/d1-2B` by default, or a fine-tuned checkpoint) [^2] | `https://huggingface.co/LiquidAI/d1-2B` |
+| 6. Check for Exclusions | `exclusion_criteria_check` | the decision model's boilerplate question [^2] | `https://huggingface.co/LiquidAI/d1-2B` |
 
 [^2] for both score_match_quality and exclusion_criteria_check, we also offer alternative functions which perform these steps using a LLM. To run these steps with a LLM, use `score_match_quality_wth_LLM` and `exclusion_criteria_check_with_LLM`.
 
 ## Model Collections
 MatchMiner-AI combines an open-source large language model, used with specific prompts and parameters, with three families of trained models which have been released on HuggingFace at [huggingface.co/ksg-dfci](https://huggingface.co/ksg-dfci):
 - TrialSpace finds candidate trials for a patient.<br>
-- TrialChecker judges whether the patient meets a trial’s eligibility criteria.<br>
-- BoilerplateChecker checks the general (boilerplate) eligibility criteria most trials share, inclusion requirements as well as exclusions.<br>
+- The decision model's match questions judge whether the patient is potentially eligible on a cohort's key criteria (yes = potentially eligible, no = clearly ineligible) and which key dimensions specifically match.<br>
+- Its boilerplate question checks the general (boilerplate) eligibility criteria most trials share, inclusion requirements as well as exclusions (yes = potentially eligible, no = clearly fails one). `check_eligibility_criteria` asks about each criteria line (yes = does not clearly fail it).<br>
 
 The trained models can be found on HuggingFace. The prompts and parameters used for the open-source large language model summaries are found in this matchminer-ai-inference repository. When a new collection is released, the version of the package will change and will be documented with the new collection. Please see the table below for package and model collection compatibility.
 

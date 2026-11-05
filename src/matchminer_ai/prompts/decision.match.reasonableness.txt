@@ -1,0 +1,1 @@
+Is this patient potentially eligible for this cohort after review of the patient history and these key criteria? If the patient is potentially eligible, answer yes; if the patient is clearly ineligible, answer no.

@@ -46,10 +46,10 @@ def split_patient_summary(text: str) -> tuple[str, str]:
     """Return a summary's key section and its boilerplate section.
 
     The key section is the cancer history (cancer type, histology, extent,
-    treatment, biomarkers) that TrialSpace retrieval and TrialChecker read; the
+    treatment, biomarkers) that TrialSpace retrieval and the decision model's match questions read; the
     boilerplate section is the text after ``Other relevant history:``
     (comorbidities, performance status, organ function, other cancers and other
-    general-eligibility evidence) that BoilerplateChecker reads. Historical
+    general-eligibility evidence) that the decision model's boilerplate question reads. Historical
     headings are accepted, and a missing section is ``Not documented.``.
     """
     value = normalize_patient_summary(text if isinstance(text, str) else "")

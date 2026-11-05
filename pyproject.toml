@@ -49,7 +49,7 @@ dependencies = [
   "rapidocr>=3.9.1",
   "trafilatura>=2.0.0",
   "lxml>=5.0",
-  "transformers>=5.8.0",
+  "transformers>=5.19.0",
 ]
 
 [project.scripts]

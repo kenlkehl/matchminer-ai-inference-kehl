@@ -188,6 +188,13 @@ class ScriptedCohortBackend:
             queue = queue.get(target, [{"boilerplate": False}])
         value = queue.pop(0) if len(queue) > 1 else queue[0]
         answer, finish = value if isinstance(value, tuple) else (value, "stop")
+        if step == "deboilerplate" and isinstance(answer, dict) and "criterion_type" not in answer:
+            # The item's type follows its label in the numbered list (inclusion without one).
+            line = next((line for line in text.rsplit("ITEM TO CLASSIFY", 1)[0].splitlines()
+                         if line.startswith("[") and line.split("] ", 1)[-1].strip() == target), "")
+            above = text.rsplit("ITEM TO CLASSIFY", 1)[0].split(line, 1)[0] if line else ""
+            heading = "exclusion" if above.rfind("Exclusion criteria:") > above.rfind("Inclusion criteria:") else "inclusion"
+            answer = {"criterion_type": heading, **answer}
         return json.dumps(answer) if isinstance(answer, dict) else answer, finish
 
     def generate_llm_outputs(self, *, prompt_list, llm_config, **kwargs):

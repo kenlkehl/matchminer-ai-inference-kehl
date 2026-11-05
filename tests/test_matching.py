@@ -10,7 +10,6 @@ from matchminer_ai.matching import (
     exclusion_criteria_check,
     exclusion_criteria_check_with_llm,
     generate_candidate_matches,
-    interpret_exclusion_criteria,
     interpret_match_quality,
     score_match_quality,
     score_match_quality_with_llm,
@@ -72,517 +71,108 @@ def test_generate_candidate_matches_returns_all_when_k_none():
     assert result["rank"].tolist() == [1, 2]
 
 
-class _MockCheckerBackend:
-    """Minimal checker backend that records calls and returns fixed predictions."""
+class _FakeDecisions:
+    """Stands in for the decision model: records each request and answers P(yes) by question name."""
 
-    def __init__(self, predictions):
-        """Store fixed predictions and initialize call capture fields."""
-        self.predictions = predictions
-        self.last_prompts = None
-        self.last_checker_config = None
-        self.last_model_metadata_cache_dir = None
+    def __init__(self, answer):
+        self.answer, self.requests = answer, []
 
-    def run_checker(self, prompts, *, checker_config, model_metadata_cache_dir=None, return_all_scores=False):
-        """Record checker inputs and return configured predictions."""
-        self.last_prompts = prompts
-        self.last_checker_config = checker_config
-        self.last_model_metadata_cache_dir = model_metadata_cache_dir
-        return self.predictions, {"model_name": checker_config["model_name"]}
+    def __call__(self, requests, *, config=None, progress=None):
+        self.requests.extend(requests)
+        return ([{name: self.answer(state, name) for name in questions} for state, questions in requests],
+                {"model_name": "LiquidAI/d1-2B", "model_sha": "pinned"})
 
 
-def test_score_match_quality_maps_outputs_and_filters(monkeypatch):
-    """Map checker logits to confidence scores and apply cutoff-based filtering."""
-    backend = _MockCheckerBackend(
-        [
-            {"score": 2.0},
-            {"score": -2.0},
-        ]
-    )
-    monkeypatch.setattr(
-        "matchminer_ai.matching.rerank.run_checker", backend.run_checker
-    )
-    config = MMAIConfig(
-        preset_name="default",
-        debug_mode=False,
-        trial={},
-        patient={},
-        local={},
-        remote={},
-        embedding={},
-        model_metadata_cache_dir=None,
-        raw={
-            "match_quality": {
-                "model_name": "ksg-dfci/TrialChecker-1225",
-                "device": "cpu",
-                "prompt_file": "match_quality_checker_template.txt",
-                "score_cutoff": 0.2,
-            }
-        },
-    )
-    pairs = pd.DataFrame(
-        [
-            {
-                "patient_id": "P1",
-                "space_trial_id": "T1-1",
-                "cancer_history_summary": "summary a",
-                "clinical_space_summary": "space a",
-            },
-            {
-                "patient_id": "P2",
-                "space_trial_id": "T2-1",
-                "cancer_history_summary": "summary b",
-                "clinical_space_summary": "space b",
-            },
-        ]
-    )
-
-    unfiltered = score_match_quality(pairs, config=config, filter_low_quality=False)
-    assert list(unfiltered.columns) == [
-        "patient_id",
-        "space_trial_id",
-        "match_quality_score",
-        "match_quality_pass",
-    ]
-    assert unfiltered["match_quality_pass"].tolist() == [True, False]
-    assert unfiltered["match_quality_score"].tolist() == pytest.approx(
-        [0.880797, 0.119203],
-        abs=1e-6,
-    )
-    assert backend.last_checker_config["model_name"] == "ksg-dfci/TrialChecker-1225"
-
-    filtered = score_match_quality(pairs, config=config, filter_low_quality=True)
-    assert len(filtered) == 1
-    assert filtered.loc[0, "patient_id"] == "P1"
-    assert bool(filtered.loc[0, "match_quality_pass"]) is True
+def _config(**sections):
+    return MMAIConfig(preset_name="default", debug_mode=False, trial={}, patient={}, local={}, remote={}, embedding={},
+                      model_metadata_cache_dir=None, raw=sections)
 
 
-def test_score_match_quality_return_metadata(monkeypatch):
-    """Return config snapshot and checker model metadata when requested."""
-    backend = _MockCheckerBackend(
-        [
-            {"score": 2.0},
-        ]
-    )
-    monkeypatch.setattr(
-        "matchminer_ai.matching.rerank.run_checker", backend.run_checker
-    )
-    config = MMAIConfig(
-        preset_name="default",
-        debug_mode=False,
-        trial={},
-        patient={},
-        local={},
-        remote={},
-        embedding={},
-        model_metadata_cache_dir=".mmai_cache/model_metadata",
-        raw={
-            "match_quality": {
-                "model_name": "ksg-dfci/TrialChecker-1225",
-                "device": "cpu",
-                "prompt_file": "match_quality_checker_template.txt",
-                "score_cutoff": 0.2,
-            }
-        },
-    )
-    pairs = pd.DataFrame(
-        [
-            {
-                "patient_id": "P1",
-                "space_trial_id": "T1-1",
-                "cancer_history_summary": "summary a",
-                "clinical_space_summary": "space a",
-            }
-        ]
-    )
-
-    result, metadata = score_match_quality(
-        pairs,
-        config=config,
-        filter_low_quality=False,
-        return_metadata=True,
-    )
-
-    assert len(result) == 1
-    assert metadata["config_snapshot"]["match_quality"]["model_name"] == (
-        "ksg-dfci/TrialChecker-1225"
-    )
-    assert metadata["model_metadata"]["score_match_quality"]["model_name"] == (
-        "ksg-dfci/TrialChecker-1225"
-    )
+def test_score_match_quality_asks_the_five_match_questions_and_scores_them(monkeypatch):
+    """One state per pair (patient key section, cohort key criteria), five noul questions, expected score."""
+    probabilities = {"reasonableness": 0.9, "cancer_type": 0.5, "burden": 0.0, "treatment_history": 0.0, "biomarker": 1.0}
+    fake = _FakeDecisions(lambda state, name: probabilities[name] if "Lung" in state else 0.01)
+    monkeypatch.setattr("matchminer_ai.matching.rerank.run_decisions", fake)
+    pairs = pd.DataFrame({"patient_id": ["P1", "P2"], "space_trial_id": ["T1-1", "T2-1"],
+                          "cancer_history_summary": ["Lung adenocarcinoma.", "Breast cancer."],
+                          "cohort_key_criteria": ["Metastatic NSCLC.", "Melanoma."]})
+    result, metadata = score_match_quality(pairs, config=_config(match_quality={"score_cutoff": 0.2}),
+                                           return_metadata=True)
+    state, questions = fake.requests[0]
+    assert state.index("Lung adenocarcinoma.") < state.index("Metastatic NSCLC.")
+    assert list(questions) == ["reasonableness", "cancer_type", "burden", "treatment_history", "biomarker"]
+    assert questions["reasonableness"].startswith("Is this patient potentially eligible for this cohort")
+    assert "if the patient is clearly ineligible, answer no" in questions["reasonableness"]
+    assert "evidence_status" not in "".join(questions.values())
+    assert result["patient_id"].tolist() == ["P1"]  # P2 scores below the cutoff
+    assert result["match_quality_score"].iloc[0] == pytest.approx(0.9 * (1 + 0.5 + 2) / 6)
+    assert result["match_quality_biomarker"].iloc[0] == 1.0
+    assert metadata["model_metadata"]["score_match_quality"]["model_name"] == "LiquidAI/d1-2B"
 
 
-def test_exclusion_criteria_check_maps_outputs_and_filters(monkeypatch):
-    """Map boilerplate checker outputs and apply optional pass filtering."""
-    backend = _MockCheckerBackend(
-        [
-            {"label": "NEGATIVE", "score": 0.81},
-            {"label": "POSITIVE", "score": 0.66},
-        ]
-    )
-    monkeypatch.setattr(
-        "matchminer_ai.matching.exclusion_check.run_checker", backend.run_checker
-    )
-    config = MMAIConfig(
-        preset_name="default",
-        debug_mode=False,
-        trial={},
-        patient={},
-        local={},
-        remote={},
-        embedding={},
-        model_metadata_cache_dir=None,
-        raw={
-            "exclusion_criteria": {
-                "model_name": "ksg-dfci/BoilerPlateChecker-1225",
-                "device": "cpu",
-                "prompt_file": "exclusion_criteria_checker_template.txt",
-            }
-        },
-    )
-    matches = pd.DataFrame(
-        [
-            {
-                "patient_id": "P1",
-                "trial_id": "T1",
-                "general_exclusion_criteria": "Trial excludes X",
-                "general_exclusion_criteria_evidence": "Patient has no X",
-            },
-            {
-                "patient_id": "P2",
-                "trial_id": "T2",
-                "general_exclusion_criteria": "Trial excludes Y",
-                "general_exclusion_criteria_evidence": "Patient has Y",
-            },
-        ]
-    )
-
-    unfiltered = exclusion_criteria_check(
-        matches,
-        config=config,
-        filter_excluded=False,
-    )
-    assert list(unfiltered.columns) == [
-        "patient_id",
-        "trial_id",
-        "exclusion_score",
-        "exclusion_criteria_pass",
-    ]
-    assert unfiltered["exclusion_criteria_pass"].tolist() == [True, False]
-    assert unfiltered["exclusion_score"].tolist() == [0.81, 0.66]
-    assert (
-        backend.last_checker_config["model_name"] == "ksg-dfci/BoilerPlateChecker-1225"
-    )
-
-    filtered = exclusion_criteria_check(matches, config=config, filter_excluded=True)
-    assert len(filtered) == 1
-    assert filtered.loc[0, "patient_id"] == "P1"
-    assert bool(filtered.loc[0, "exclusion_criteria_pass"]) is True
+def test_exclusion_criteria_check_yes_means_potentially_eligible(monkeypatch):
+    fake = _FakeDecisions(lambda state, name: 0.9 if "ECOG 1" in state else 0.2)
+    monkeypatch.setattr("matchminer_ai.matching.exclusion_check.run_decisions", fake)
+    pairs = pd.DataFrame({"patient_id": ["P1", "P2"], "cohort_trial_id": ["T1-1", "T1-1"],
+                          "general_exclusion_criteria_evidence": ["ECOG 1.", "Active hepatitis B."],
+                          "cohort_boilerplate_criteria": ["ECOG 0-1. No active hepatitis B."] * 2})
+    result = exclusion_criteria_check(pairs, config=_config(exclusion_criteria={"pass_cutoff": 0.5}))
+    assert list(fake.requests[0][1]) == ["boilerplate"]
+    assert fake.requests[0][1]["boilerplate"].startswith("Is this patient potentially eligible")
+    assert result["exclusion_criteria_pass"].tolist() == [True, False]
+    assert result["exclusion_criteria_pass_probability"].tolist() == [0.9, 0.2]
+    assert result["exclusion_score"].tolist() == pytest.approx([0.9, 0.8])  # the predicted outcome's probability
+    kept = exclusion_criteria_check(pairs, config=_config(), filter_excluded=True)
+    assert kept["patient_id"].tolist() == ["P1"]
 
 
-def test_exclusion_criteria_check_return_metadata(monkeypatch):
-    """Return config snapshot and exclusion-checker model metadata."""
-    backend = _MockCheckerBackend(
-        [
-            {"label": "NEGATIVE", "score": 0.81},
-        ]
-    )
-    monkeypatch.setattr(
-        "matchminer_ai.matching.exclusion_check.run_checker", backend.run_checker
-    )
-    config = MMAIConfig(
-        preset_name="default",
-        debug_mode=False,
-        trial={},
-        patient={},
-        local={},
-        remote={},
-        embedding={},
-        model_metadata_cache_dir=".mmai_cache/model_metadata",
-        raw={
-            "exclusion_criteria": {
-                "model_name": "ksg-dfci/BoilerPlateChecker-1225",
-                "device": "cpu",
-                "prompt_file": "exclusion_criteria_checker_template.txt",
-            }
-        },
-    )
-    matches = pd.DataFrame(
-        [
-            {
-                "patient_id": "P1",
-                "trial_id": "T1",
-                "general_exclusion_criteria": "Trial excludes X",
-                "general_exclusion_criteria_evidence": "Patient has no X",
-            }
-        ]
-    )
-
-    result, metadata = exclusion_criteria_check(
-        matches,
-        config=config,
-        filter_excluded=False,
-        return_metadata=True,
-    )
-
-    assert len(result) == 1
-    assert metadata["config_snapshot"]["exclusion_criteria"]["model_name"] == (
-        "ksg-dfci/BoilerPlateChecker-1225"
-    )
-    assert metadata["model_metadata"]["exclusion_criteria_check"]["model_name"] == (
-        "ksg-dfci/BoilerPlateChecker-1225"
-    )
+def test_check_eligibility_criteria_asks_each_tagged_line_once_per_state(monkeypatch):
+    """Yes = the patient does not clearly fail the line; a low P(yes) flags a clearly failed line."""
+    from matchminer_ai.matching import check_eligibility_criteria
+    items = json.dumps([
+        {"number": 1, "heading": "Inclusion criteria:", "text": "Age >= 18.", "criterion_type": "inclusion", "boilerplate": False},
+        {"number": 2, "heading": "Exclusion criteria:", "text": "Active hepatitis B.", "criterion_type": "exclusion",
+         "boilerplate": True},
+        {"number": 3, "heading": "Exclusion criteria:", "text": "Unclassified.", "criterion_type": None, "boilerplate": False}])
+    fake = _FakeDecisions(lambda state, name: {"criterion_1": 0.95, "criterion_2": 0.1}[name])
+    monkeypatch.setattr("matchminer_ai.matching.criteria_check.run_decisions", fake)
+    pairs = pd.DataFrame({"patient_id": ["P1", "P1"], "cohort_trial_id": ["T1-1", "T1-2"],
+                          "cancer_history_summary": ["Lung cancer."] * 2,
+                          "general_exclusion_criteria_evidence": ["Chronic hepatitis B, active."] * 2,
+                          "cohort_criteria_items": [items, items]})
+    result, metadata = check_eligibility_criteria(pairs, config=_config(), return_metadata=True)
+    assert len(fake.requests) == 1  # the same summary and criteria are asked once
+    state, questions = fake.requests[0]
+    assert "Other relevant history:\nChronic hepatitis B" in state and "[2] Active hepatitis B." in state
+    assert list(questions) == ["criterion_1", "criterion_2"]
+    assert questions["criterion_2"].endswith("CRITERION TO ASSESS\n[2] Exclusion criterion: Active hepatitis B.")
+    assert result[["cohort_trial_id", "criterion_number", "criterion_clearly_fails"]].values.tolist() == [
+        ["T1-1", 1, False], ["T1-1", 2, True], ["T1-2", 1, False], ["T1-2", 2, True]]
+    assert metadata["model_metadata"]["check_eligibility_criteria"]["unchecked_lines"] == 2
+    with pytest.raises(ValueError, match="remove_boilerplate_criteria"):
+        check_eligibility_criteria(pairs.drop(columns=["cohort_criteria_items"]), config=_config())
 
 
-def test_interpret_match_quality_returns_source_relative_attributions(monkeypatch):
-    """Expose a selected TrialChecker result and source-relative token spans."""
-    config = MMAIConfig(
-        preset_name="default",
-        debug_mode=False,
-        trial={},
-        patient={},
-        local={},
-        remote={},
-        embedding={},
-        model_metadata_cache_dir=None,
-        raw={
-            "match_quality": {
-                "model_name": "checker/trial",
-                "device": "cpu",
-                "prompt_file": "match_quality_checker_template.txt",
-                "score_cutoff": 0.8,
-            }
-        },
-    )
-    pairs = pd.DataFrame(
-        [
-            {
-                "patient_id": "synthetic-patient",
-                "space_trial_id": "NCT00000000-1",
-                "cancer_history_summary": "EGFR-mutant lung cancer",
-                "clinical_space_summary": "EGFR-mutant lung cancer trial",
-            }
-        ]
-    )
-    captured = {}
+def test_interpret_match_quality_maps_state_ranges_and_orients_to_the_decision(monkeypatch):
+    fake = _FakeDecisions(lambda state, name: 0.2)
+    monkeypatch.setattr("matchminer_ai.matching.rerank.run_decisions", fake)
+    seen = {}
 
-    def fake_checker(prompts, *, checker_config, model_metadata_cache_dir=None, return_all_scores=False):
-        del model_metadata_cache_dir
-        captured["prompts"] = prompts
-        captured["checker_config"] = checker_config
-        return [{"label": "LABEL_0", "score": 0.0}], {"model_name": "checker/trial"}
+    def attribute(state, questions, target, ranges, *, config=None, top_k=30):
+        seen.update({name: state[a:b] for name, (a, b) in ranges.items()}, target=target)
+        return {"method": "gradient_x_input", "target": target, "coverage": {},
+                "token_attributions": {"patient_key_summary": [
+                    {"text": "Lung", "start": 0, "end": 4, "raw_score": 2.0, "normalized_score": 1.0,
+                     "importance": 1.0, "direction": "supports_prediction"}]}}
 
-    def fake_attribution(
-        prompts,
-        *,
-        component_ranges,
-        checker_config,
-        target_labels,
-        target_directions,
-        top_k,
-        model_metadata_cache_dir=None,
-    ):
-        del prompts, checker_config, model_metadata_cache_dir
-        captured["ranges"] = component_ranges
-        captured["directions"] = target_directions
-        captured["labels"] = target_labels
-        captured["top_k"] = top_k
-        return [
-            {
-                "method": "gradient_x_input",
-                "token_attributions": {
-                    "cancer_history_summary": [
-                        {
-                            "text": "EGFR",
-                            "start": 0,
-                            "end": 4,
-                            "raw_score": -0.2,
-                            "normalized_score": -1.0,
-                            "importance": 1.0,
-                            "direction": "opposes_prediction",
-                        }
-                    ],
-                    "clinical_space_summary": [],
-                },
-                "coverage": {
-                    "cancer_history_summary": {"truncated": False},
-                    "clinical_space_summary": {"truncated": False},
-                },
-            }
-        ]
-
-    monkeypatch.setattr(
-        "matchminer_ai.matching.rerank.run_checker",
-        fake_checker,
-    )
-    monkeypatch.setattr(
-        "matchminer_ai.matching.rerank.attribute_checker_tokens",
-        fake_attribution,
-    )
-
-    result, metadata = interpret_match_quality(
-        pairs,
-        config=config,
-        top_k=12,
-        return_metadata=True,
-    )
-
-    assert result.loc[0, "match_quality_score"] == pytest.approx(0.5)
-    assert bool(result.loc[0, "match_quality_pass"]) is False
-    assert result.loc[0, "attribution_target"] == "match_quality_fail"
-    assert result.loc[0, "token_attributions"]["cancer_history_summary"][0][
-        "start"
-    ] == 0
-    assert captured["directions"] == [-1.0]
-    assert captured["labels"] == [""]  # a single-output model has one logit to interpret
-    assert captured["top_k"] == 12
-    assert metadata["interpretability"] == {
-        "method": "gradient_x_input",
-        "top_k_per_source": 12,
-    }
-    assert metadata["model_metadata"]["interpret_match_quality"] == {
-        "model_name": "checker/trial"
-    }
-    prompt = captured["prompts"][0]
-    patient_start, patient_end = captured["ranges"][0]["patient_key_summary"]
-    trial_start, trial_end = captured["ranges"][0]["cohort_key_criteria"]
-    assert prompt[patient_start:patient_end] == "EGFR-mutant lung cancer"
-    assert prompt[trial_start:trial_end] == "EGFR-mutant lung cancer trial"
-
-
-def test_interpret_exclusion_criteria_targets_reported_label(monkeypatch):
-    """Interpret the BoilerplateChecker class reported for a selected pair."""
-    config = MMAIConfig(
-        preset_name="default",
-        debug_mode=False,
-        trial={},
-        patient={},
-        local={},
-        remote={},
-        embedding={},
-        model_metadata_cache_dir=None,
-        raw={
-            "exclusion_criteria": {
-                "model_name": "checker/boilerplate",
-                "device": "cpu",
-                "prompt_file": "exclusion_criteria_checker_template.txt",
-            }
-        },
-    )
-    matches = pd.DataFrame(
-        [
-            {
-                "patient_id": "synthetic-patient",
-                "trial_id": "NCT00000000",
-                "general_exclusion_criteria_evidence": "History of pneumonitis",
-                "general_exclusion_criteria": "Exclude prior pneumonitis",
-            }
-        ]
-    )
-    captured = {}
-
-    monkeypatch.setattr(
-        "matchminer_ai.matching.exclusion_check.run_checker",
-        lambda *_args, **_kwargs: (
-            [{"label": "POSITIVE", "score": 0.91}],
-            {"model_name": "checker/boilerplate"},
-        ),
-    )
-
-    def fake_attribution(_prompts, **kwargs):
-        captured.update(kwargs)
-        return [
-            {
-                "method": "gradient_x_input",
-                "token_attributions": {
-                    "general_exclusion_criteria_evidence": [],
-                    "general_exclusion_criteria": [],
-                },
-                "coverage": {
-                    "general_exclusion_criteria_evidence": {"truncated": False},
-                    "general_exclusion_criteria": {"truncated": False},
-                },
-            }
-        ]
-
-    monkeypatch.setattr(
-        "matchminer_ai.matching.exclusion_check.attribute_checker_tokens",
-        fake_attribution,
-    )
-
-    result = interpret_exclusion_criteria(matches, config=config)
-
-    assert bool(result.loc[0, "exclusion_criteria_pass"]) is False
-    assert result.loc[0, "attribution_target"] == "exclusion_criteria_fail"
-    assert captured["target_labels"] == ["POSITIVE"]
-    assert captured["target_directions"] == [1.0]
-    assert set(captured["component_ranges"][0]) == {
-        "patient_boilerplate_summary",
-        "cohort_boilerplate_criteria",
-    }
-
-
-def test_attribute_checker_tokens_uses_gradient_and_tracks_truncation(monkeypatch):
-    """Compute signed gradient-times-input scores without a model download."""
-    import torch
-
-    from matchminer_ai.matching import inference
-
-    class FakeTokenizer:
-        def __call__(self, prompt, **_kwargs):
-            retained = prompt[:4]
-            return {
-                "input_ids": torch.tensor(
-                    [[(ord(char) % 31) + 1 for char in retained]],
-                    dtype=torch.long,
-                ),
-                "attention_mask": torch.ones((1, len(retained)), dtype=torch.long),
-                "offset_mapping": torch.tensor(
-                    [[[index, index + 1] for index in range(len(retained))]],
-                    dtype=torch.long,
-                ),
-            }
-
-    class FakeModel(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.embedding = torch.nn.Embedding(64, 2)
-            torch.nn.init.constant_(self.embedding.weight, 1.0)
-            self.config = SimpleNamespace(id2label={0: "LABEL_0"})
-
-        def get_input_embeddings(self):
-            return self.embedding
-
-        def forward(self, input_ids, attention_mask):
-            embeddings = self.embedding(input_ids)
-            masked = embeddings * attention_mask.unsqueeze(-1)
-            return SimpleNamespace(logits=masked.sum(dim=(1, 2)).unsqueeze(-1))
-
-    fake_pipeline = SimpleNamespace(
-        tokenizer=FakeTokenizer(),
-        model=FakeModel(),
-        device=torch.device("cpu"),
-    )
-    monkeypatch.setattr(
-        inference,
-        "_get_checker_pipeline",
-        lambda *_args, **_kwargs: fake_pipeline,
-    )
-
-    result = inference.attribute_checker_tokens(
-        ["abcdef"],
-        component_ranges=[{"source": (0, 6)}],
-        checker_config={"model_name": "fake", "device": "cpu", "max_length": 4},
-        target_labels=["LABEL_0"],
-        target_directions=[-1.0],
-        top_k=2,
-    )[0]
-
-    tokens = result["token_attributions"]["source"]
-    assert len(tokens) == 2
-    assert all(token["direction"] == "opposes_prediction" for token in tokens)
-    assert all(token["normalized_score"] == pytest.approx(-1.0) for token in tokens)
-    assert result["coverage"]["source"]["retained_token_count"] == 4
-    assert result["coverage"]["source"]["truncated"] is True
+    monkeypatch.setattr("matchminer_ai.matching.rerank.attribute_decision", attribute)
+    pairs = pd.DataFrame({"patient_id": ["P1"], "space_trial_id": ["T1-1"],
+                          "cancer_history_summary": ["Lung cancer."], "cohort_key_criteria": ["Melanoma."]})
+    result = interpret_match_quality(pairs, config=_config())
+    assert seen == {"cohort_key_criteria": "Melanoma.", "patient_key_summary": "Lung cancer.", "target": "reasonableness"}
+    assert result["attribution_target"].tolist() == ["reasonableness_no"]
+    token = result["token_attributions"].iloc[0]["patient_key_summary"][0]
+    assert token["normalized_score"] == -1.0 and token["direction"] == "opposes_prediction"  # supports yes -> opposes no
 
 
 def test_run_checker_reuses_cached_pipeline(monkeypatch):

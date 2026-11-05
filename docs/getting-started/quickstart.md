@@ -36,9 +36,10 @@ print(metadata["trial_rejections"])
 
 Cohort criteria include boilerplate. The optional
 `trials.remove_boilerplate_criteria` step adds each cohort's key criteria
-(`cohort_key_criteria`, read by TrialSpace retrieval and TrialChecker) and
-boilerplate criteria (`cohort_boilerplate_criteria`, read by
-BoilerplateChecker); patient summaries carry the matching key and boilerplate
+(`cohort_key_criteria`, read by TrialSpace retrieval and the decision model's match questions) and
+boilerplate criteria (`cohort_boilerplate_criteria`, read by its boilerplate
+question) and every line with its inclusion/exclusion and boilerplate tags
+(`cohort_criteria_items`, read by `check_eligibility_criteria`); patient summaries carry the matching key and boilerplate
 sections. See the [trial API](../api/trials.md#key-and-boilerplate-criteria)
 and the [embedding API](../api/embedding.md).
 
@@ -68,7 +69,7 @@ The patient-centric workflow with those legacy trial spaces has these main steps
    either `exclusion_criteria_check` or `exclusion_criteria_check_with_llm`.
 
 When an exact space-to-paradigm membership graph is available, the optional
-`rank_patient_space_paradigms` workflow can retrieve and TrialChecker-rerank a
+`rank_patient_space_paradigms` workflow can retrieve and match-quality-rerank a
 wider trial-space pool, retain the leading spaces, and roll their IDs up to
 one-line paradigm descriptors. The package does not bundle the paradigm
 catalog; callers retain responsibility for its version, provenance, and caveat

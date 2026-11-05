@@ -1,4 +1,4 @@
-"""Separate each cohort's key criteria from its boilerplate criteria.
+"""Separate each cohort's key criteria from its boilerplate criteria, and tag every criterion line.
 
 Cohort extraction (cohort_workflow) copies every eligibility criterion that applies to a cohort
 verbatim, including boilerplate that most cancer trials share: consent, compliance, sample and
@@ -9,13 +9,15 @@ other cancers, participation in another trial at the same time, contraception, p
 lactation, vaccine restrictions, study-staff and catch-all exclusions (each unless it is central
 to what the trial studies). :func:`remove_boilerplate_criteria` splits each cohort's criteria into
 items, one per line (:func:`split_criteria`), and asks ``trial.cohorts.deboilerplate.user.txt``
-whether each item is boilerplate, one request per item showing the cohort's numbered criteria
-without the trial document. Code then sorts the unchanged items into the key criteria (those that
-are not boilerplate: what distinguishes the cohort's population) and the boilerplate criteria
-(:func:`gather_criteria`); the model never copies the criteria, so none can be lost or reworded.
-TrialSpace retrieval and TrialChecker read the key criteria; BoilerplateChecker reads the
-boilerplate criteria. It is optional at inference; training uses it after
-:func:`~matchminer_ai.trials.merge_equivalent_cohorts`.
+whether each item is an inclusion or an exclusion criterion and whether it is boilerplate, one
+request per item showing the cohort's numbered criteria without the trial document. Code then sorts
+the unchanged items into the key criteria (those that are not boilerplate: what distinguishes the
+cohort's population) and the boilerplate criteria (:func:`gather_criteria`); the model never copies
+the criteria, so none can be lost or reworded. Every item's two tags are kept, with its number and
+text, in ``cohort_criteria_items``, which the decision model's per-criterion check reads.
+TrialSpace retrieval and the decision model's match questions read the key criteria; its
+boilerplate question reads the boilerplate criteria. It is optional at inference; training uses it
+after :func:`~matchminer_ai.trials.merge_equivalent_cohorts`.
 """
 
 from __future__ import annotations
@@ -40,13 +42,17 @@ from .cohort_merge import _section
 from .cohort_workflow import _load_object
 
 DEBOILERPLATE_PROMPT = "trial.cohorts.deboilerplate.user.txt"
-DEBOILERPLATE_SCHEMA_VERSION = "trial-cohorts-deboilerplate-v3"
+DEBOILERPLATE_SCHEMA_VERSION = "trial-cohorts-deboilerplate-v4"
+CRITERION_TYPES = ("inclusion", "exclusion")
 DEBOILERPLATE_JSON_SCHEMA = {
-    "type": "object", "additionalProperties": False, "required": ["boilerplate"],
-    "properties": {"boilerplate": {"type": "boolean"}},
+    "type": "object", "additionalProperties": False, "required": ["criterion_type", "boilerplate"],
+    "properties": {"criterion_type": {"type": "string", "enum": list(CRITERION_TYPES)}, "boilerplate": {"type": "boolean"}},
 }
 KEY_COLUMN = "cohort_key_criteria"
 BOILERPLATE_COLUMN = "cohort_boilerplate_criteria"
+# One JSON string per cohort: its items in order, each {"number", "heading", "text", "criterion_type",
+# "boilerplate"}. A JSON string, not a list, so CSV and parquet round trips keep it readable.
+ITEMS_COLUMN = "cohort_criteria_items"
 _LABEL = re.compile(r"\s*(inclusion|exclusion)\s+criteria\s*:?\s*", re.IGNORECASE)
 
 
@@ -77,25 +83,56 @@ def gather_criteria(items: list[tuple[str, str]], boilerplate: list[bool]) -> tu
     return "\n".join(lists[False]), "\n".join(lists[True])
 
 
-def build_deboilerplate_messages(name: str, items: list[tuple[str, str]], number: int, prompt: str) -> list[dict[str, str]]:
-    """The request for item ``number`` (from 1). Everything before the item is the same for all
-    of a cohort's items, so a server's prefix cache can reuse it (formatted once so braces stay literal)."""
+def number_criteria(items: list[tuple[str, str]]) -> str:
+    """The items as one numbered list: each line as ``[n] line`` (from 1), under its "Inclusion
+    criteria:" or "Exclusion criteria:" label where the label changes. The classification request,
+    the per-criterion decision question and its teacher prompt all show a cohort's criteria so."""
     numbered, label = [], None
     for n, (item_label, line) in enumerate(items, 1):
         if item_label and item_label != label:
             numbered.append(item_label)
         label = item_label
         numbered.append(f"[{n}] {line}")
-    return [{"role": "user", "content": prompt.format(cohort_name=name, eligibility_criteria="\n".join(numbered),
+    return "\n".join(numbered)
+
+
+def build_deboilerplate_messages(name: str, items: list[tuple[str, str]], number: int, prompt: str) -> list[dict[str, str]]:
+    """The request for item ``number`` (from 1). Everything before the item is the same for all
+    of a cohort's items, so a server's prefix cache can reuse it (formatted once so braces stay literal)."""
+    return [{"role": "user", "content": prompt.format(cohort_name=name, eligibility_criteria=number_criteria(items),
                                                       item_number=number, item=items[number - 1][1].strip())}]
 
 
-def parse_deboilerplated(text: str, finish_reason: str = "stop") -> bool:
-    """Whether the item is boilerplate."""
-    value = _load_object(text, finish_reason, ["boilerplate"])["boilerplate"]
-    if not isinstance(value, bool):
+def parse_deboilerplated(text: str, finish_reason: str = "stop") -> dict[str, Any]:
+    """The item's two tags: ``{"criterion_type": "inclusion" | "exclusion", "boilerplate": bool}``."""
+    value = _load_object(text, finish_reason, ["criterion_type", "boilerplate"])
+    if value["criterion_type"] not in CRITERION_TYPES:
+        raise ValueError('criterion_type must be "inclusion" or "exclusion"')
+    if not isinstance(value["boilerplate"], bool):
         raise ValueError("boilerplate must be true or false")
-    return value
+    return {"criterion_type": value["criterion_type"], "boilerplate": value["boilerplate"]}
+
+
+def heading_type(heading: str) -> str | None:
+    """The criterion type an item's "Inclusion criteria:" / "Exclusion criteria:" label gives, or None."""
+    return {"Inclusion criteria:": "inclusion", "Exclusion criteria:": "exclusion"}.get(heading)
+
+
+def criteria_items(items: list[tuple[str, str]], tags: list[dict[str, Any] | None]) -> str:
+    """The ``cohort_criteria_items`` value: a JSON list of the items in order, each with its number,
+    heading, text and tags (``criterion_type`` None, ``boilerplate`` False for an item whose answer
+    never validated)."""
+    return json.dumps([{"number": n, "heading": label, "text": line,
+                        "criterion_type": (tag or {}).get("criterion_type"), "boilerplate": bool((tag or {}).get("boilerplate"))}
+                       for n, ((label, line), tag) in enumerate(zip(items, tags, strict=True), 1)], ensure_ascii=False)
+
+
+def load_criteria_items(value: Any) -> list[dict[str, Any]]:
+    """A ``cohort_criteria_items`` value (its JSON string, or an already parsed list) as a list of items."""
+    items = json.loads(value) if isinstance(value, str) else list(value)
+    if not all(isinstance(i, dict) and {"number", "text", "criterion_type"} <= set(i) for i in items):
+        raise ValueError(f"{ITEMS_COLUMN} must be a list of items with number, text and criterion_type")
+    return items
 
 
 def remove_boilerplate_criteria(
@@ -112,9 +149,11 @@ def remove_boilerplate_criteria(
     ``cohort_eligibility_criteria``; other columns are kept), extracted or merged. Each row's
     criteria are split into items (:func:`split_criteria`); each item gets one LLM request with
     ``trial.cohorts.deboilerplate.user.txt`` and the LLM settings of ``section`` ("trial" for
-    ctgov listings, "protocol_cohort_extraction" for protocols), whose answer is validated and
+    ctgov listings, "protocol_cohort_extraction" for protocols), whose answer (the item's
+    ``criterion_type``, inclusion or exclusion, and whether it is boilerplate) is validated and
     retried on failure up to that section's ``max_attempts``. An item whose answer never validates
-    counts as not boilerplate and is reported in the metadata's ``unclassified_items``. The items
+    counts as not boilerplate, has no criterion type, and is reported in the metadata's
+    ``unclassified_items``. The items
     are then gathered unchanged (:func:`gather_criteria`). A cohort without items, or whose items
     are all boilerplate, keeps its criteria unchanged, with no boilerplate criteria, and is
     reported in ``deboilerplate_errors``. Both are keyed by ``cohort_trial_id`` when the rows have
@@ -124,7 +163,10 @@ def remove_boilerplate_criteria(
     criteria), with a ``cohort_key_criteria`` column holding the key criteria (the criteria that are
     not boilerplate; all the criteria for a cohort in ``deboilerplate_errors``) and a
     ``cohort_boilerplate_criteria`` column holding the boilerplate criteria (None for a cohort in
-    ``deboilerplate_errors``). Every item's attempts in
+    ``deboilerplate_errors``), and a ``cohort_criteria_items`` column holding every item with its
+    tags (:func:`criteria_items`; a JSON string). The metadata's ``criterion_type_heading_disagreements``
+    counts items whose criterion type differs from the "Inclusion criteria:" or "Exclusion
+    criteria:" label above them. Every item's attempts in
     the metadata's ``trial_cohorts`` (each trial's results as ``deboilerplate.json`` stores them)
     keep the model's answer and reasoning. With ``output_dir``, each trial's results are saved to
     ``<output_dir>/<trial_id>/deboilerplate.json`` as its requests return, and an item's
@@ -147,7 +189,7 @@ def remove_boilerplate_criteria(
     metadata = {"schema_version": DEBOILERPLATE_SCHEMA_VERSION, "prompt_sha256": prompt_sha,
                 "deboilerplate_errors": {}, "unclassified_items": {}, "skipped_completed": 0,
                 "items": sum(map(len, items)), "items_reused": 0}
-    labels: dict[tuple[int, int], bool] = {}  # (row, item number) -> boilerplate
+    labels: dict[tuple[int, int], dict[str, Any]] = {}  # (row, item number) -> its two tags
     attempts: dict[tuple[int, int], list[dict[str, Any]]] = {}
     failed: dict[tuple[int, int], str] = {}
     rows_of: dict[Any, list[int]] = {}
@@ -162,10 +204,12 @@ def remove_boilerplate_criteria(
                    and record.get("prompt_sha256") == prompt_sha)
         saved = {e["input_sha256"]: e for e in record.get("cohorts", []) if current}
         for row in rows:
-            done = {i["number"]: i for i in saved.get(inputs[row], {}).get("items", []) if "boilerplate" in i}
+            done = {i["number"]: i for i in saved.get(inputs[row], {}).get("items", [])
+                    if "boilerplate" in i and "criterion_type" in i}
             for number in range(1, len(items[row]) + 1):
                 if number in done:
-                    labels[row, number], attempts[row, number] = done[number]["boilerplate"], done[number].get("attempts", [])
+                    labels[row, number] = {k: done[number][k] for k in ("criterion_type", "boilerplate")}
+                    attempts[row, number] = done[number].get("attempts", [])
                     metadata["items_reused"] += 1
                 else:  # a cohort's items stay together so their shared prefix is cached
                     messages = build_deboilerplate_messages(names[row], items[row], number, prompt)
@@ -178,7 +222,8 @@ def remove_boilerplate_criteria(
         numbers = range(1, len(items[row]) + 1)
         if not all((row, n) in labels or (row, n) in failed for n in numbers):
             return None
-        criteria, boilerplate = gather_criteria(items[row], [labels.get((row, n), False) for n in numbers])
+        criteria, boilerplate = gather_criteria(items[row], [labels.get((row, n), {}).get("boilerplate", False)
+                                                             for n in numbers])
         if not criteria:
             return texts[row], None, ("no criteria to classify" if not items[row]
                                       else "every item was classified as boilerplate; criteria kept as extracted")
@@ -187,8 +232,7 @@ def remove_boilerplate_criteria(
     def entries_of(trial_id):
         entries = []
         for r in rows_of[trial_id]:
-            numbered = [{"number": n, "label": label, "text": line,
-                         **({"boilerplate": labels[r, n]} if (r, n) in labels else {}),
+            numbered = [{"number": n, "label": label, "text": line, **labels.get((r, n), {}),
                          **({"error": failed[r, n]} if (r, n) in failed else {}),
                          "attempts": attempts.get((r, n), [])}
                         for n, (label, line) in enumerate(items[r], 1) if (r, n) in attempts]
@@ -257,6 +301,11 @@ def remove_boilerplate_criteria(
     result_frame = frame.copy()
     result_frame[KEY_COLUMN] = [criteria for criteria, _, _ in outcomes]
     result_frame[BOILERPLATE_COLUMN] = pd.Series([boilerplate for _, boilerplate, _ in outcomes], dtype=object)
+    result_frame[ITEMS_COLUMN] = [criteria_items(items[r], [labels.get((r, n)) for n in range(1, len(items[r]) + 1)])
+                                  for r in range(len(frame))]
+    metadata["criterion_type_heading_disagreements"] = sum(
+        1 for (r, n), tag in labels.items()
+        if heading_type(items[r][n - 1][0]) not in (None, tag["criterion_type"]))
     metadata["cohorts"] = len(frame)
     metadata["trial_cohorts"] = {trial_id: entries_of(trial_id) for trial_id in rows_of}
     if root is not None:
@@ -266,6 +315,7 @@ def remove_boilerplate_criteria(
     return (result_frame, metadata) if return_metadata else result_frame
 
 
-__all__ = ["BOILERPLATE_COLUMN", "KEY_COLUMN", "DEBOILERPLATE_JSON_SCHEMA", "DEBOILERPLATE_PROMPT", "DEBOILERPLATE_SCHEMA_VERSION",
-           "build_deboilerplate_messages", "gather_criteria", "parse_deboilerplated", "remove_boilerplate_criteria",
-           "split_criteria"]
+__all__ = ["BOILERPLATE_COLUMN", "CRITERION_TYPES", "ITEMS_COLUMN", "KEY_COLUMN", "DEBOILERPLATE_JSON_SCHEMA",
+           "DEBOILERPLATE_PROMPT", "DEBOILERPLATE_SCHEMA_VERSION", "build_deboilerplate_messages", "criteria_items",
+           "gather_criteria", "heading_type", "load_criteria_items", "number_criteria", "parse_deboilerplated",
+           "remove_boilerplate_criteria", "split_criteria"]

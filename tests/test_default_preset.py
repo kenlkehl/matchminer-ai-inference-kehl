@@ -90,12 +90,11 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     assert config.embedding.get("backend", "sequence") == "sequence"
     assert config.embedding["model_path"] == "ksg-dfci/TrialSpace-0526"
     assert config.embedding["max_seq_length"] == 4096
-    assert config.raw["match_quality"]["model_name"] == "ksg-dfci/TrialChecker-0526"
-    assert config.raw["match_quality"]["max_length"] == 8192
-    assert config.raw["exclusion_criteria"]["model_name"] == (
-        "ksg-dfci/BoilerplateChecker-0526"
-    )
-    assert config.raw["exclusion_criteria"]["max_length"] == 8192
+    from matchminer_ai.matching.decision_model import decision_settings
+    decision = decision_settings(config)
+    assert (decision["model_name"], decision["revision"]) == ("LiquidAI/d1-2B", "652f920e544ea37f81e4b0ce89b81d4ed0da90b1")
+    assert decision["max_length"] == 10000
+    assert config.raw["match_quality"] == {"score_cutoff": 0.2}
 
     assert config.llm_match_quality["local"]["engine"]["max_model_len"] == 50000
     assert config.llm_match_quality["local"]["model_name"] == "google/gemma-4-31B-it"
