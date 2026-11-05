@@ -336,7 +336,8 @@ def run_decisions(
             tokens += int(out["usage"]["input_tokens"])
         if progress is not None:
             progress(min(start + batch, len(requests)), len(requests))
-    metadata = {"model_name": str(settings["model_name"]), "revision": settings.get("revision"),
+    local = Path(str(settings["model_name"])).expanduser().is_dir()
+    metadata = {"model_name": str(settings["model_name"]), "revision": None if local else settings.get("revision"),
                 "model_sha": _model_sha(settings), "backend": settings["backend"], "questions_sha256": questions_digest(),
                 "set_size": settings["set_size"] or getattr(model.config, "d1_set_size", None),
                 "max_length": settings["max_length"], "requests": len(requests),
