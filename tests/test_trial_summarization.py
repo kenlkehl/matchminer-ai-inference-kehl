@@ -359,7 +359,7 @@ def test_local_backend_generate_llm_outputs(monkeypatch, default_config):
     }
     default_config.trial["reasoning_parser"] = "gemma4"
     default_config.trial["tool_call_parser"] = "qwen3_coder"
-    default_config.trial["prompt_file"] = "llm_match_quality.user.txt"
+    default_config.trial["prompt_file"] = "match_quality.labels.system.txt"
     default_config.trial.setdefault("local", {}).setdefault("generation", {})[
         "seed"
     ] = 123

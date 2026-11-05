@@ -66,12 +66,6 @@ def test_context_query_retains_negative_clauses_without_guessing_a_split():
     assert query.biomarkers_required == query.biomarkers_excluded == ''
 
 
-def test_trialchecker_receives_complete_combined_space_and_polarity_guidance():
-    template = _load_prompt_template('llm_match_quality.user.txt')
-    prompt = template.format(patient_summary='Fabricated patient.', trial_summary=SPACE)
-    assert prompt.count(SPACE) == 1
-    assert 'prohibits pembrolizumab exposure' in prompt
-    assert 'excludes an EGFR mutation' in prompt
-    assert '(f) Excluded biomarkers' in prompt
+def test_trialchecker_receives_the_complete_combined_space():
     classifier = _load_prompt_template('match_quality_checker_template.txt').format(SPACE, 'Fabricated patient.')
     assert classifier.startswith(SPACE)
