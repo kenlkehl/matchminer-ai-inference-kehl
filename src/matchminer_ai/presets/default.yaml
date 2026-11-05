@@ -24,7 +24,7 @@ remote:
 trial:
   extraction_method: cohorts
   cohorts:
-    # Registry listings and protocols share the three cohort prompts
+    # ctgov listings and protocols share the three cohort prompts
     # (trials/cohort_workflow.py): screen, cohort names, criteria per cohort.
     max_attempts: 3
     # Constrain each remote answer to its step's JSON schema.
@@ -228,7 +228,7 @@ protocol_cohort_extraction:
   # Prompts per backend call, and calls running at once so fast endpoints stay busy.
   chunk_size: 500
   chunks_in_flight: 2
-  # The same three cohort prompts as registry listings; each remote answer is
+  # The same three cohort prompts as ctgov listings; each remote answer is
   # constrained to its step's JSON schema.
   structured_outputs: true
   sampling_profile: auto
@@ -255,7 +255,7 @@ protocol_cohort_extraction:
       chat_template_kwargs:
         enable_thinking: true
 synthetic_protocol_generation:
-  # Registry-seeded synthetic protocols for training data (prompt v11 and its
+  # ctgov-seeded synthetic protocols for training data (prompt v11 and its
   # weighted eligibility layouts in data/synthetic_protocol_layouts.json).
   chunk_size: 500
   # Chunks running at once, so fast endpoints keep working while a chunk drains.

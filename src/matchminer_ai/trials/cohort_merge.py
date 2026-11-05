@@ -103,7 +103,7 @@ def merge_equivalent_cohorts(
 
     ``cohorts`` holds extraction rows (``COHORT_COLUMNS``, any extra columns are kept), for one
     or many trials. Each trial with more than one cohort gets one LLM request with
-    ``trial.cohorts.merge.user.txt`` and the LLM settings of ``section`` ("trial" for registry
+    ``trial.cohorts.merge.user.txt`` and the LLM settings of ``section`` ("trial" for ctgov
     listings, "protocol_cohort_extraction" for protocols); its answer is validated as a
     partition of the cohort numbers and retried on failure up to that section's
     ``max_attempts``. A trial whose answer never validates keeps its cohorts unmerged and is

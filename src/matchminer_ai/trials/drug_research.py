@@ -48,7 +48,7 @@ FACET_QUERY_TERMS = {
     "safety": "safety adverse events toxicity prescribing information",
 }
 
-#: Registry condition strings carry staging-manual suffixes that no indexer
+#: ctgov condition strings carry staging-manual suffixes that no indexer
 #: knows ("Stage III Colon Cancer AJCC v8"). They only ever shrink the hit set.
 _INDICATION_NOISE = re.compile(
     r"\b(?:ajcc|uicc|who)\s*(?:v\.?\s*\d+|\d+(?:th|nd|rd|st)?(?:\s+edition)?)\b",
@@ -87,7 +87,7 @@ class ResearchSubject:
         )
 
 
-#: Registry conditions that name no disease. Conditioning a query on "Advanced
+#: ctgov conditions that name no disease. Conditioning a query on "Advanced
 #: Solid Tumors" reproduces the drug-name query and wastes one of the few slots
 #: a drug gets, so they are dropped rather than searched.
 _GENERIC_INDICATIONS = frozenset(
@@ -121,7 +121,7 @@ _GENERIC_INDICATIONS = frozenset(
 
 
 def clean_indication(value: Any) -> str:
-    """Normalize one registry condition string into a searchable disease phrase."""
+    """Normalize one ctgov condition string into a searchable disease phrase."""
 
     text = clean_text(_INDICATION_NOISE.sub(" ", str(value or "")), max_chars=120)
     text = re.sub(r"\s+", " ", text.strip(" ,;.-"))
@@ -201,7 +201,7 @@ class ResearchSettings:
 
     request_timeout: float = 30.0
     max_attempts: int = 5
-    registry_max_attempts: int = 10
+    ctgov_max_attempts: int = 10
     initial_backoff: float = 1.0
     maximum_backoff: float = 60.0
     max_concurrency: int = 6
@@ -209,7 +209,7 @@ class ResearchSettings:
     max_web_results_per_drug: int = 60
     max_web_documents_per_drug: int = 24
     max_pubmed_records: int = 40
-    max_registry_studies: int = 25
+    max_ctgov_studies: int = 25
     max_civic_records: int = 40
     max_europe_pmc_records: int = 12
     max_regulatory_records: int = 8
@@ -571,7 +571,7 @@ class PubMedDrugSource:
 
 class ClinicalTrialsDrugSource:
     name = "clinicaltrials_gov"
-    source_type = "trial_registry"
+    source_type = "trial_ctgov"
 
     async def fetch(
         self,
@@ -588,14 +588,14 @@ class ClinicalTrialsDrugSource:
             params={
                 "query.intr": drug.preferred_name,
                 "format": "json",
-                "pageSize": min(settings.max_registry_studies, 100),
+                "pageSize": min(settings.max_ctgov_studies, 100),
                 "countTotal": "true",
             },
         )
         response.raise_for_status()
         studies = response.json().get("studies", [])
         passages: list[EvidencePassage] = []
-        for study in studies[: settings.max_registry_studies]:
+        for study in studies[: settings.max_ctgov_studies]:
             protocol = study.get("protocolSection", {})
             ident = protocol.get("identificationModule", {})
             description = protocol.get("descriptionModule", {})
@@ -986,7 +986,7 @@ def build_pubmed_term(subject: ResearchSubject, facet: str) -> str:
     names = " OR ".join(f"{_quote(name)}[Title/Abstract]" for name in subject.names)
     if subject.indication:
         # Unquoted, so PubMed expands the disease to its MeSH tree rather than
-        # demanding the registry's exact phrasing: quoting "Colon Adenocarcinoma"
+        # demanding ctgov's exact phrasing: quoting "Colon Adenocarcinoma"
         # drops the same search from 20 hits to 2.
         return (
             f"({names}) AND {subject.indication} "
@@ -1025,7 +1025,7 @@ def build_source_query(
     """Render the query one source should run for this subject and facet.
 
     PubMed and Europe PMC need boolean syntax, cancer.gov and the general web
-    need prose, and the registry, label, and curation sources search by exact
+    need prose, and the ctgov, label, and curation sources search by exact
     agent name and ignore the query entirely. Building all of them here is what
     lets the class and indication axes reach every source that can use them.
     """
@@ -1089,7 +1089,7 @@ async def _run_source_with_retries(
     sleep: Callable[[float], Awaitable[None]],
 ) -> tuple[list[EvidencePassage], list[ResearchAttempt], str]:
     max_attempts = (
-        settings.registry_max_attempts
+        settings.ctgov_max_attempts
         if source.name == "clinicaltrials_gov"
         else settings.max_attempts
     )
@@ -1283,7 +1283,7 @@ async def research_class(
 ) -> tuple[list[EvidencePassage], list[ResearchAttempt], str, list[str]]:
     """Retrieve the corpus for one pharmacologic class, shared by every member.
 
-    Only the query-driven sources run here. The registry, label, and curation
+    Only the query-driven sources run here. The ctgov, label, and curation
     adapters search by exact agent name, so a class name returns nothing from
     them and asking costs a request per class for no evidence.
     """
@@ -1479,7 +1479,7 @@ async def research_drug(
 
     When ``indications`` are supplied, each also gets its own bounded pass with
     the disease as a required clause. The catalog is still patient-free: those
-    diseases come from the registry records of the trials the drug appears in.
+    diseases come from the ctgov records of the trials the drug appears in.
     """
 
     resolved_settings = settings or ResearchSettings()

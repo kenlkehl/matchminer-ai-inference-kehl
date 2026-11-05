@@ -9,8 +9,8 @@ from typing import Any
 from matchminer_ai.llm.prompts import load_prompt_text
 
 COHORT_PROMPT = "trial.cohorts.user.txt"
-# Registry text and full protocols follow one contract: a single-cohort answer
-# carries that cohort's extracted criteria instead of deferring to the registry
+# ctgov text and full protocols follow one contract: a single-cohort answer
+# carries that cohort's extracted criteria instead of deferring to the ctgov
 # eligibility field, so both sources apply the same enrollment-only, US-only
 # and formatting rules. v3 (named cohorts, no single-cohort criteria) remains
 # readable for historical checkpoints.
@@ -73,7 +73,7 @@ def build_protocol_cohort_messages(
 
 
 # Under a JSON grammar a thinking model that is still revising can only write its
-# revision into the strings (one registry answer added a cohort whose criteria
+# revision into the strings (one ctgov answer added a cohort whose criteria
 # were "placeholder"). Such a string is never real criteria; reject it so the
 # trial is retried.
 _PLACEHOLDER = re.compile(r"\W*(?:placeholder|tbd|todo|to be determined|\.\.\.|…)\W*", re.IGNORECASE)

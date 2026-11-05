@@ -108,14 +108,14 @@ The configured LLM synthesizes the evidence ledger into structured facts with
 validated passage support IDs. A matched bundled NCIt definition is materialized
 as its own citable ledger passage rather than supplied as uncitable side context.
 Synthesis retains supported evidence across maturity levels—including ontology,
-preclinical, first-in-human, phase 1, registry, and mature clinical evidence—and
+preclinical, first-in-human, phase 1, ctgov, and mature clinical evidence—and
 labels its level without requiring approval, randomization, publication, or
 mature outcomes. Token-limited or blank final responses are retried, and the
 default synthesis completion budget is 100,000 tokens; if every ordinary
 attempt is token-limited, the final attempt disables thinking. The bundle stores two
 clean projections: a
 GoodOption summary without safety and a Help Me Choose summary with safety.
-URLs, queries, source labels, registry metadata, and failure notices remain in
+URLs, queries, source labels, ctgov metadata, and failure notices remain in
 the internal Parquet ledger and do not appear in either patient-bearing prompt.
 
 Each class corpus is synthesized in its own call on its own budget, and stored
@@ -128,7 +128,7 @@ rubric's instruction to prefer agent-specific evidence has something to bind to.
 
 Catalog publication and its intermediate JSON checkpoints are atomic. By
 default, checkpoints are stored beside the requested catalog in
-`<catalog>_checkpoints`. Completed registry fetches, intervention screens, drug
+`<catalog>_checkpoints`. Completed ctgov fetches, intervention screens, drug
 research, and drug syntheses are reused when the same build is restarted.
 Technically blocked fetches are retried. The checkpoint manifest fingerprints
 the NCT list, source/research settings, ontology version, the text of the

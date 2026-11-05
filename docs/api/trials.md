@@ -23,15 +23,17 @@
 ## Trial steps, separately or end to end
 
 Each step is its own function, so a caller can run some and skip others: `extract_cohorts`
-(registry listings; named `summarize_trials` before November 2026, a deprecated alias) or
+(ClinicalTrials.gov, "ctgov", listings; named `summarize_trials` before November 2026, a deprecated alias) or
 `extract_protocol_cohorts` (full protocols) screen for cancer treatment and extract each
 cohort's complete criteria; `merge_equivalent_cohorts` combines a trial's cohorts with
 essentially the same criteria; `remove_boilerplate_criteria` splits each cohort's criteria
 into key and boilerplate criteria; `screen_trials` runs only the screen. `process_trials`
-runs the screen, cohort extraction, merge and boilerplate removal on registry listings, in
-the order training uses them, and returns merged cohorts with `cohort_key_criteria` and
+runs the screen, cohort extraction, merge and boilerplate removal in the order training uses
+them, on ctgov listings (`source="ctgov"`, the default) or full protocols
+(`source="protocol"`, with that section's settings for every step), and returns merged cohorts with `cohort_key_criteria` and
 `cohort_boilerplate_criteria` (each step's metadata with `return_metadata=True`;
-`output_dir` saves and reuses the merge and boilerplate results per trial).
+`output_dir` saves and reuses each trial's results). Until November 2026 the package called
+ClinicalTrials.gov "registry"; outputs from then keep `cohort_criteria_source="registry"`.
 
 ## Three-step treatment screening and cohort extraction
 
@@ -116,7 +118,7 @@ number of cohorts. The returned DataFrame contains accepted cohorts only:
 | `cohort_number` | Zero-based population index in source order. |
 | `cohort_name` | The cohort's name from step 2, also for a single population. Kept out of eligibility text and embeddings. |
 | `cohort_eligibility_criteria` | That cohort's complete criteria from its own request. |
-| `cohort_criteria_source` | `registry` (`extract_cohorts`) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` and `eligibility_criteria`. |
+| `cohort_criteria_source` | `ctgov` (`extract_cohorts`; `registry` before November 2026) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` and `eligibility_criteria`. |
 | `cancer_treatment_trial` | `yes` for every returned row. |
 | `multiple_cohorts` | `yes` when the trial has more than one cohort. |
 
@@ -227,7 +229,7 @@ results are saved to `<output_dir>/<trial_id>/deboilerplate.json`: per cohort,
 with their answers and reasoning. Classifications are reused while the prompt
 and the cohort's name and criteria are unchanged.
 
-Both steps are optional at inference. They take `section="trial"` (registry
+Both steps are optional at inference. They take `section="trial"` (ctgov
 listings) or `"protocol_cohort_extraction"` (protocols) for their LLM settings;
 training runs the merge first, then the boilerplate step.
 
@@ -244,9 +246,9 @@ With `output_dir`, every attempt's answer and reasoning is appended to
 while the prompt and the trial's document are unchanged. Training draws its
 trial sample from the trials this screen accepts.
 
-## Synthetic protocols seeded by registry records
+## Synthetic protocols seeded by ctgov records
 
-`generate_synthetic_protocols` writes one fabricated full protocol per registry
+`generate_synthetic_protocols` writes one fabricated full protocol per ctgov
 seed, for building training corpora of realistic, often messily specified
 eligibility text. Seeds have a unique `trial_id` and optional `title`,
 `brief_summary`, `detailed_description` and `eligibility_criteria` strings;

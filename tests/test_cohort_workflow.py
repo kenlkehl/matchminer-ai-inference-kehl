@@ -1,4 +1,4 @@
-"""Three-step cohort extraction: prompts, step contracts, and the registry API (extract_cohorts)."""
+"""Three-step cohort extraction: prompts, step contracts, and the ctgov API (extract_cohorts)."""
 
 import json
 import re
@@ -11,7 +11,7 @@ from matchminer_ai.config import load_default_preset
 from matchminer_ai.trials import extract_cohorts
 from matchminer_ai.trials.cohort_workflow import (
     COHORT_COLUMNS, JSON_SCHEMAS, REPRESENTATION_VERSION, SCHEMA_VERSION, STEPS, assemble_decision,
-    build_messages, load_prompts, parse_cohort_list, parse_criteria, parse_screen, registry_trial_text,
+    build_messages, load_prompts, parse_cohort_list, parse_criteria, parse_screen, ctgov_trial_text,
 )
 
 YES, NO = {"cancer_treatment_trial": "yes"}, {"cancer_treatment_trial": "no"}
@@ -94,8 +94,8 @@ def test_criteria_prompt_extracts_every_criterion_verbatim_with_the_applicabilit
     assert not any(word in listing for word in ("identical", "combine"))
 
 
-def test_registry_listing_is_one_document_of_title_summary_and_criteria():
-    text = registry_trial_text("A trial", None, "Inclusion:\n  Adults.")
+def test_ctgov_listing_is_one_document_of_title_summary_and_criteria():
+    text = ctgov_trial_text("A trial", None, "Inclusion:\n  Adults.")
     assert text == "Title: A trial\n\nBrief summary:\n\n\nEligibility criteria:\nInclusion:\n  Adults."
 
 
@@ -147,10 +147,10 @@ def test_cohorts_with_identical_criteria_are_combined():
     assert assemble_decision(["A", "B"], ["Same.", "Same."])[0]["multiple_cohorts"] == "no"
 
 
-# Registry API
+# ctgov API
 
 
-def test_summarize_trials_runs_three_steps_and_returns_complete_cohort_rows(config, cohort_backend):
+def test_extract_cohorts_runs_three_steps_and_returns_complete_cohort_rows(config, cohort_backend):
     cohort_backend.script.update({"Trial T0": {"screen": [NO]}, "Trial T1": one_cohort(), "Trial T2": two_parts()})
     frame = trials(["T0", "T1", "T2"])
     original = frame.copy(deep=True)
@@ -168,7 +168,7 @@ def test_summarize_trials_runs_three_steps_and_returns_complete_cohort_rows(conf
     assert result.cohort_name.tolist() == ["All participants", "Part A", "Part B"]
     assert result.cohort_eligibility_criteria.tolist() == [SOLE, *CRITERIA.values()]
     assert result.multiple_cohorts.tolist() == ["no", "yes", "yes"]
-    assert result.cohort_criteria_source.eq("registry").all()
+    assert result.cohort_criteria_source.eq("ctgov").all()
     assert metadata["schema_version"] == SCHEMA_VERSION and metadata["representation_version"] == REPRESENTATION_VERSION
     assert metadata["trial_rejections"] == {"T0": NO} and metadata["trial_errors"] == {}
     assert metadata["trial_cohort_names"] == {"T1": ["All participants"], "T2": ["Part A", "Part B"]}
@@ -265,3 +265,27 @@ def test_summarize_trials_is_a_deprecated_alias_of_extract_cohorts(monkeypatch):
     monkeypatch.setattr(trials_api, "extract_cohorts", lambda *args, **kwargs: ("rows", kwargs))
     with pytest.warns(DeprecationWarning, match="extract_cohorts"):
         assert trials_api.summarize_trials("listings", return_metadata=True) == ("rows", {"return_metadata": True})
+
+
+def test_process_trials_routes_protocols_to_their_extractor_and_section(monkeypatch):
+    import matchminer_ai.trials as trials_api
+    seen = []
+    def extract(protocols, *, config, text_output_dir, output_dir, return_metadata, progress_callback):
+        seen.append(("protocol", output_dir, text_output_dir))
+        return pd.DataFrame([dict(trial_id="NCT1", cohort_number=0, cohort_eligibility_criteria="Adults.")]), {}
+    def step(name):
+        def run(cohorts, *, config, section, output_dir, return_metadata):
+            seen.append((name, section))
+            return cohorts, {}
+        return run
+    monkeypatch.setattr(trials_api, "extract_protocol_cohorts", extract)
+    monkeypatch.setattr(trials_api, "merge_equivalent_cohorts", step("merge"))
+    monkeypatch.setattr(trials_api, "remove_boilerplate_criteria", step("boilerplate"))
+    protocols = pd.DataFrame([dict(trial_id="NCT1", protocol_path="fabricated.md")])
+    trials_api.process_trials(protocols, source="protocol", output_dir="saved", text_output_dir="text")
+    assert seen == [("protocol", "saved", "text"), ("merge", "protocol_cohort_extraction"),
+                    ("boilerplate", "protocol_cohort_extraction")]
+    with pytest.raises(ValueError, match="source must be"):
+        trials_api.process_trials(protocols, source="registry")
+    with pytest.raises(ValueError, match="only to source='protocol'"):
+        trials_api.process_trials(protocols, text_output_dir="text")

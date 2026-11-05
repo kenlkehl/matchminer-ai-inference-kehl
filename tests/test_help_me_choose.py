@@ -23,7 +23,7 @@ from matchminer_ai.help_me_choose import (
     extract_drug_interventions,
     extract_trial_eligibility_criteria,
     fetch_trial_eligibility_criteria,
-    fetch_trial_registry_document,
+    fetch_trial_ctgov_document,
     normalize_nct_reference,
     request_vllm_comparison,
     research_trials,
@@ -127,7 +127,7 @@ def test_nct_url_fetch_is_wrangled_for_trial_space_extraction():
         return httpx.Response(200, json=STUDY)
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        document = fetch_trial_registry_document(
+        document = fetch_trial_ctgov_document(
             "https://clinicaltrials.gov/study/NCT12345678",
             client=client,
         )
@@ -193,7 +193,7 @@ def test_patient_marker_reaches_comparison_only_after_catalog_load():
         trial_id="NCT12345678",
         drug_id="D1",
         preferred_name="Drug A",
-        registry_name="Drug A",
+        ctgov_name="Drug A",
         intervention_type="DRUG",
         role="investigational",
         role_confidence="high",
@@ -213,8 +213,8 @@ def test_patient_marker_reaches_comparison_only_after_catalog_load():
     catalog = GoodOptionCatalog(
         path=Path("/tmp/catalog"),
         manifest={"compatibility_id": "v2"},
-        trial_registry=pd.DataFrame(
-            [{"trial_id": "NCT12345678", "title": "Trial", "registry_status": "ok", "phases_json": "[]", "brief_summary": ""}]
+        trial_ctgov=pd.DataFrame(
+            [{"trial_id": "NCT12345678", "title": "Trial", "ctgov_status": "ok", "phases_json": "[]", "brief_summary": ""}]
         ),
         trial_drug_index=pd.DataFrame([assignment.to_record()]),
         drug_summaries=pd.DataFrame([summary.to_record()]),

@@ -11,7 +11,7 @@ Treat the terms cohort, arm, part, phase, module, stage, and group as equivalent
 
 WHERE COHORTS ARE DEFINED
 -In a full protocol, cohorts may be described in the synopsis, the study design section, the study schema or flow chart, the eligibility sections, cohort- or part-specific sections or modules, appendices, tables, and footnotes. Search the whole document. The body of the protocol is authoritative over the synopsis. If the document includes an amendment history or summary of changes, use the trial as it currently stands, not deleted or superseded text quoted in change tables.
--In a registry listing, cohorts may be described in the title, the brief summary, or headings and labeled lists within the eligibility criteria.
+-In a ClinicalTrials.gov registry listing, cohorts may be described in the title, the brief summary, or headings and labeled lists within the eligibility criteria.
 
 WHICH COHORTS TO LIST
 -List every cohort the document defines, including cohorts that appear only in the study design, schema, flow chart, synopsis, or an amendment, such as an expansion or backfill group, and cohorts described as closed to enrollment, fully enrolled, completed, on hold, or terminated.

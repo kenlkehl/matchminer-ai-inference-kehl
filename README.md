@@ -150,14 +150,15 @@ normal API answers or change any model's training targets.
 The default result uses `cohort_trial_id`, `cohort_number`, `cohort_name`,
 `cohort_eligibility_criteria` (that cohort's complete criteria, boilerplate
 included, from its own request) and decision/source columns; a single-population
-trial yields one named row. The registry eligibility field is never copied
+trial yields one named row. The ctgov eligibility field is never copied
 verbatim. Rejected trials produce no cohort rows and remain in metadata and
 DataFrame attrs; malformed/truncated responses are failures, not rejections.
 See the [cohort contract and configuration](docs/api/trials.md#three-step-treatment-screening-and-cohort-extraction).
 
 `trials.extract_cohorts` was named `summarize_trials` before November 2026 (a deprecated
 alias remains). Two optional steps take those rows, and `trials.process_trials` runs all of
-them end to end (screen, cohorts, merge, boilerplate removal) on registry listings.
+them end to end (screen, cohorts, merge, boilerplate removal) on ClinicalTrials.gov (ctgov)
+listings by default or, with `source="protocol"`, on full protocols.
 `trials.merge_equivalent_cohorts` combines a
 trial's cohorts whose criteria are essentially the same, and
 `trials.remove_boilerplate_criteria` classifies each criteria line as
@@ -273,7 +274,7 @@ Optional source-grounded extensions can also:
   exact caller-supplied space-to-paradigm membership graph, while preserving
   one-to-many mappings and paradigm caveat metadata;
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
-  LLM-screen registry entries for concrete agents with direct anticancer
+  LLM-screen ctgov entries for concrete agents with direct anticancer
   treatment intent, deduplicate NCIt-normalized drugs across trials, synthesize
   mechanism, efficacy, biomarker prevalence, biomarker-directed benefit, and
   safety, then resume compatible atomic screening, research, and synthesis

@@ -1,4 +1,4 @@
-"""Registry-seeded synthetic protocol generation."""
+"""ctgov-seeded synthetic protocol generation."""
 
 from copy import deepcopy
 import json

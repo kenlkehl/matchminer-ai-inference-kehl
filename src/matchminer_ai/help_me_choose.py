@@ -5,8 +5,8 @@ The privacy boundary in this module is structural:
 * The patient-bearing comparison APIs require a pre-built GoodOption catalog.
 * The legacy low-level :func:`research_trials` helper accepts NCT IDs only and
   is not a fallback used by catalog-backed scoring or the Patient-Centric app.
-* :func:`fetch_trial_registry_document` accepts an NCT ID or official study URL
-  and returns only registry fields needed by trial-space extraction.
+* :func:`fetch_trial_ctgov_document` accepts an NCT ID or official study URL
+  and returns only ctgov fields needed by trial-space extraction.
 * Any low-level search query contains only drug/biological intervention names.
 * Patient text first enters GoodOption scoring or
   :func:`build_comparison_messages` after catalog loading and validation.
@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
+import warnings
 
 import httpx
 import pandas as pd
@@ -98,7 +99,7 @@ class TrialEligibilityCriteria:
 
 
 @dataclass(frozen=True)
-class TrialRegistryDocument:
+class TrialCtgovDocument:
     """ClinicalTrials.gov fields used by trial-space extraction."""
 
     nct_id: str
@@ -249,10 +250,10 @@ def _last_update_post_date(study: Mapping[str, Any]) -> str:
     return _clean_text(value, max_chars=40)
 
 
-def extract_trial_registry_document(
+def extract_trial_ctgov_document(
     nct_id: str,
     study: Mapping[str, Any],
-) -> TrialRegistryDocument:
+) -> TrialCtgovDocument:
     """Wrangle an API v2 study into the trial summarization input fields."""
 
     normalized_id = normalize_nct_id(nct_id)
@@ -272,7 +273,7 @@ def extract_trial_registry_document(
     detailed_description = _clean_multiline_text(
         description.get("detailedDescription")
     )
-    return TrialRegistryDocument(
+    return TrialCtgovDocument(
         nct_id=normalized_id,
         trial_title=title,
         brief_summary=brief_summary,
@@ -314,12 +315,12 @@ def _fetch_trial_study_sync(
             resolved_client.close()
 
 
-def fetch_trial_registry_document(
+def fetch_trial_ctgov_document(
     nct_reference: str,
     *,
     client: httpx.Client | None = None,
     timeout: float = 30.0,
-) -> TrialRegistryDocument:
+) -> TrialCtgovDocument:
     """Fetch and wrangle one NCT ID or ClinicalTrials.gov study URL."""
 
     normalized_id, study = _fetch_trial_study_sync(
@@ -327,7 +328,7 @@ def fetch_trial_registry_document(
         client=client,
         timeout=timeout,
     )
-    return extract_trial_registry_document(normalized_id, study)
+    return extract_trial_ctgov_document(normalized_id, study)
 
 
 def fetch_trial_eligibility_criteria(
@@ -338,7 +339,7 @@ def fetch_trial_eligibility_criteria(
 ) -> TrialEligibilityCriteria:
     """Fetch current complete eligibility criteria for one NCT ID."""
 
-    document = fetch_trial_registry_document(
+    document = fetch_trial_ctgov_document(
         nct_id,
         client=client,
         timeout=timeout,
@@ -651,10 +652,10 @@ def build_comparison_messages(
     sources: list[ReportSource] = []
     for index, context in enumerate(match_contexts, start=1):
         nct_id = normalize_nct_id(context.get("nct_id") or context.get("trial_id"))
-        registry = catalog.trial_registry.loc[
-            catalog.trial_registry["trial_id"].astype(str).eq(nct_id)
+        ctgov = catalog.trial_ctgov.loc[
+            catalog.trial_ctgov["trial_id"].astype(str).eq(nct_id)
         ]
-        registry_record = registry.iloc[0].to_dict() if not registry.empty else {}
+        ctgov_record = ctgov.iloc[0].to_dict() if not ctgov.empty else {}
         assignments = catalog.assignments_for_trial(nct_id)
         good_option = good_options_by_id.get(nct_id)
         good_option_assessments = (
@@ -711,12 +712,12 @@ def build_comparison_messages(
             {
                 "nct_id": nct_id,
                 "clinicaltrials_gov_source": clinicaltrials_label,
-                "title": str(registry_record.get("title") or ""),
-                "overall_status": str(registry_record.get("overall_status") or ""),
+                "title": str(ctgov_record.get("title") or ""),
+                "overall_status": str(ctgov_record.get("overall_status") or ""),
                 "phases": json.loads(
-                    str(registry_record.get("phases_json") or "[]")
+                    str(ctgov_record.get("phases_json") or "[]")
                 ),
-                "brief_summary": str(registry_record.get("brief_summary") or ""),
+                "brief_summary": str(ctgov_record.get("brief_summary") or ""),
                 "drug_evidence_summaries": drug_summaries,
                 "matchminer_selected_space": _clean_text(
                     context.get("clinical_space_summary"), max_chars=4000
@@ -996,19 +997,40 @@ async def generate_trial_comparison(
     }
 
 
+# Names before November 2026, when "registry" (ClinicalTrials.gov) became "ctgov".
+TrialRegistryDocument = TrialCtgovDocument
+
+
+def extract_trial_registry_document(*args, **kwargs):
+    """Deprecated name of :func:`extract_trial_ctgov_document`."""
+    warnings.warn("extract_trial_registry_document is deprecated; use extract_trial_ctgov_document",
+                  DeprecationWarning, stacklevel=2)
+    return extract_trial_ctgov_document(*args, **kwargs)
+
+
+def fetch_trial_registry_document(*args, **kwargs):
+    """Deprecated name of :func:`fetch_trial_ctgov_document`."""
+    warnings.warn("fetch_trial_registry_document is deprecated; use fetch_trial_ctgov_document",
+                  DeprecationWarning, stacklevel=2)
+    return fetch_trial_ctgov_document(*args, **kwargs)
+
+
 __all__ = [
     "DrugIntervention",
     "DrugSearchResult",
     "ReportSource",
     "TrialDrugResearch",
     "TrialEligibilityCriteria",
-    "TrialRegistryDocument",
+    "TrialCtgovDocument",
     "build_comparison_messages",
     "build_drug_search_queries",
     "extract_drug_interventions",
     "extract_trial_eligibility_criteria",
-    "extract_trial_registry_document",
+    "extract_trial_ctgov_document",
     "fetch_trial_eligibility_criteria",
+    "fetch_trial_ctgov_document",
+    "TrialRegistryDocument",
+    "extract_trial_registry_document",
     "fetch_trial_registry_document",
     "fetch_trial_study",
     "format_report",

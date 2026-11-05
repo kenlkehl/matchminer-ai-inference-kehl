@@ -1,6 +1,6 @@
 """Build a GoodOption evidence catalog, including drug classes, from NCT IDs.
 
-The build reads only public trial registry records and public literature; no
+The build reads only public ctgov trial records and public literature; no
 patient data is involved, so it may run against a shared endpoint. The served
 model is discovered from the endpoint and its registered sampling profile is
 applied to every catalog LLM stage.

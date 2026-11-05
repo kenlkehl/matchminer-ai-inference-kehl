@@ -1,4 +1,4 @@
-"""Synthetic full protocol documents seeded by ClinicalTrials.gov registry text."""
+"""Synthetic full protocol documents seeded by ClinicalTrials.gov (ctgov) records."""
 
 from __future__ import annotations
 
@@ -45,14 +45,14 @@ def choose_layout(trial_id: str, layouts: list[dict[str, Any]]) -> int:
 
 
 def _seed_text(value: Any) -> str:
-    # Missing table cells arrive as None or NaN; blank registry fields are marked too.
+    # Missing table cells arrive as None or NaN; blank ctgov fields are marked too.
     return (value.strip() or MISSING) if isinstance(value, str) else MISSING
 
 
 def build_synthetic_protocol_messages(
     seed: dict[str, Any], layout_text: str, *, system: str | None = None, user: str | None = None,
 ) -> list[dict[str, str]]:
-    """Format once so braces in registry text remain literal."""
+    """Format once so braces in ctgov text remain literal."""
     fields = {key: _seed_text(seed.get(key)) for key in SEED_FIELDS}
     system = load_prompt_text(SYNTHETIC_PROTOCOL_SYSTEM_PROMPT) if system is None else system
     user = load_prompt_text(SYNTHETIC_PROTOCOL_USER_PROMPT) if user is None else user
@@ -87,7 +87,7 @@ def generate_synthetic_protocols(
     return_metadata: bool = False,
     progress_callback: SyntheticProtocolProgress | None = None,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
-    """Write one synthetic full protocol per registry seed.
+    """Write one synthetic full protocol per ctgov seed.
 
     ``seeds`` has one row per trial with a unique ``trial_id`` and optional
     ``title``, ``brief_summary``, ``detailed_description`` and
@@ -108,7 +108,7 @@ def generate_synthetic_protocols(
     retried up to ``max_attempts``.
 
     Outputs are fabricated training documents, not real protocols, and must not
-    be presented as trial criteria. Registry text reaches the configured LLM.
+    be presented as trial criteria. ctgov text reaches the configured LLM.
     """
     resolved = config or load_default_preset()
     if not isinstance(resolved, MMAIConfig):

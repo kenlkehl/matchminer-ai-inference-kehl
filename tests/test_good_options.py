@@ -90,7 +90,7 @@ def _catalog(*, blocked_second: bool = False) -> GoodOptionCatalog:
             trial_id="NCT12345678",
             drug_id="D1",
             preferred_name="Novel Agent",
-            registry_name="Novel Agent",
+            ctgov_name="Novel Agent",
             intervention_type="DRUG",
             role="investigational",
             role_confidence="high",
@@ -100,7 +100,7 @@ def _catalog(*, blocked_second: bool = False) -> GoodOptionCatalog:
             trial_id="NCT12345678",
             drug_id="D2",
             preferred_name="Second Agent",
-            registry_name="Second Agent",
+            ctgov_name="Second Agent",
             intervention_type="BIOLOGICAL",
             role="uncertain",
             role_confidence="low",
@@ -110,7 +110,7 @@ def _catalog(*, blocked_second: bool = False) -> GoodOptionCatalog:
             trial_id="NCT12345678",
             drug_id="D3",
             preferred_name="Control Agent",
-            registry_name="Control Agent",
+            ctgov_name="Control Agent",
             intervention_type="DRUG",
             role="control",
             role_confidence="high",
@@ -120,12 +120,12 @@ def _catalog(*, blocked_second: bool = False) -> GoodOptionCatalog:
     return GoodOptionCatalog(
         path=Path("/tmp/test-catalog"),
         manifest={"compatibility_id": "compat-v2"},
-        trial_registry=pd.DataFrame(
+        trial_ctgov=pd.DataFrame(
             [
                 {
                     "trial_id": "NCT12345678",
                     "title": "Trial",
-                    "registry_status": "ok",
+                    "ctgov_status": "ok",
                     "phases_json": "[]",
                     "brief_summary": "",
                 }
@@ -1175,7 +1175,7 @@ def test_structural_background_read_survives_the_screen_calling_it_investigation
     drug set and diluted the cell therapy's own score threefold.
     """
 
-    interventions = catalog_module._extract_registry_interventions(
+    interventions = catalog_module._extract_ctgov_interventions(
         "NCT12345678",
         {
             "protocolSection": {
@@ -1209,7 +1209,7 @@ def test_structural_background_read_survives_the_screen_calling_it_investigation
             "role": "investigational",
             "confidence": "high",
             "rationale": "Administered as part of the experimental regimen.",
-            "active_entity_names": [item.registry_name],
+            "active_entity_names": [item.ctgov_name],
         }
         for index, item in enumerate(interventions)
     }
@@ -2269,7 +2269,7 @@ def test_catalog_build_deduplicates_drugs_and_indexes_control_roles(
     assert load_good_option_catalog(output).compatibility_id
 
 
-def test_catalog_screens_non_treatment_registry_entries_before_research(
+def test_catalog_screens_non_treatment_ctgov_entries_before_research(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     names = [
@@ -2305,7 +2305,7 @@ def test_catalog_screens_non_treatment_registry_entries_before_research(
         return study
 
     def screen(_trial_id, interventions):
-        assert [item.registry_name for item in interventions] == names
+        assert [item.ctgov_name for item in interventions] == names
         output: dict[str, dict[str, Any]] = {}
         for index, name in enumerate(names):
             included = index < 2
@@ -2359,8 +2359,8 @@ def test_catalog_screens_non_treatment_registry_entries_before_research(
 
     assert researched == ["Selumetinib Sulfate", "Sotorasib"]
     assert list(catalog.drug_summaries["preferred_name"]) == researched
-    assert set(catalog.trial_drug_index["registry_name"]) == set(researched)
-    screening = catalog.trial_intervention_screening.set_index("registry_name")
+    assert set(catalog.trial_drug_index["ctgov_name"]) == set(researched)
+    screening = catalog.trial_intervention_screening.set_index("ctgov_name")
     assert bool(screening.loc["Selumetinib Sulfate", "included"])
     assert not bool(screening.loc["Tranexamic Acid", "included"])
     assert (
@@ -2378,7 +2378,7 @@ def test_catalog_screens_non_treatment_registry_entries_before_research(
         message["content"]
         for message in catalog_module.build_intervention_screening_messages(
             "NCT12345678",
-            catalog_module._extract_registry_interventions("NCT12345678", study),
+            catalog_module._extract_ctgov_interventions("NCT12345678", study),
         )
     )
     assert "diagnostic or imaging tracers" in prompt
@@ -2421,7 +2421,7 @@ def test_default_intervention_screen_retries_invalid_schema(
     result = asyncio.run(
         catalog_module._resolve_roles_with_default_llm(
             {
-                "NCT12345678": catalog_module._extract_registry_interventions(
+                "NCT12345678": catalog_module._extract_ctgov_interventions(
                     "NCT12345678", STUDY
                 )
             },
@@ -2460,7 +2460,7 @@ def test_default_intervention_screen_accepts_code_fenced_bare_array(
     result = asyncio.run(
         catalog_module._resolve_roles_with_default_llm(
             {
-                "NCT12345678": catalog_module._extract_registry_interventions(
+                "NCT12345678": catalog_module._extract_ctgov_interventions(
                     "NCT12345678", STUDY
                 )
             },
@@ -2482,7 +2482,7 @@ def test_intervention_screen_accepts_active_entities_explicit_in_description() -
             "armGroupLabels": ["Experimental"],
         }
     ]
-    interventions = catalog_module._extract_registry_interventions("NCT12345678", study)
+    interventions = catalog_module._extract_ctgov_interventions("NCT12345678", study)
     output = {
         "0": {
             "research_disposition": "include",
@@ -2509,7 +2509,7 @@ def test_intervention_screen_accepts_active_entities_explicit_in_description() -
             "armGroupLabels": ["Experimental"],
         }
     ]
-    short_name_intervention = catalog_module._extract_registry_interventions(
+    short_name_intervention = catalog_module._extract_ctgov_interventions(
         "NCT12345678", study
     )
     output["0"]["active_entity_names"] = ["S1"]
@@ -2561,7 +2561,7 @@ def test_catalog_fails_closed_invalid_screen_item_and_continues(
         )
     )
 
-    screening = catalog.trial_intervention_screening.set_index("registry_name")
+    screening = catalog.trial_intervention_screening.set_index("ctgov_name")
     assert screening.loc["Novel Agent", "research_disposition"] == "uncertain"
     assert not bool(screening.loc["Novel Agent", "included"])
     assert "excluded fail-closed" in screening.loc["Novel Agent", "rationale"]
@@ -2573,7 +2573,7 @@ def test_catalog_fails_closed_invalid_screen_item_and_continues(
     )
 
 
-def test_catalog_resumes_registry_roles_and_completed_drug_research(
+def test_catalog_resumes_ctgov_roles_and_completed_drug_research(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class SimulatedDisconnect(BaseException):
@@ -2698,7 +2698,7 @@ def test_catalog_resumes_registry_roles_and_completed_drug_research(
     assert fetch_calls == ["NCT12345678"]
     assert role_calls == ["NCT12345678"]
     assert research_calls == ["Control Agent"]
-    assert ("registry", "NCT12345678 (checkpoint)") in progress
+    assert ("ctgov", "NCT12345678 (checkpoint)") in progress
     assert ("screening", "NCT12345678 (checkpoint)") in progress
     assert ("research", "Novel Agent (checkpoint)") in progress
     checkpoint_manifest = json.loads(
@@ -2890,3 +2890,15 @@ def test_checker_text_contains_only_patient_and_clean_drug_summary() -> None:
         "Investigational drug evidence summary"
     )
     assert "https://" not in text
+
+
+def test_catalog_tables_written_before_the_ctgov_rename_still_load(tmp_path):
+    from matchminer_ai.trials import drug_catalog as catalog_module
+    pd.DataFrame([dict(trial_id="NCT1", registry_name="Fabricated agent", registry_status="ok")]).to_parquet(
+        tmp_path / "trial_registry.parquet", index=False)
+    pd.DataFrame([dict(source_type="trial_registry", facet="trial_registry", text="Fabricated")]).to_parquet(
+        tmp_path / "evidence.parquet", index=False)
+    ctgov = catalog_module._read_table(tmp_path, "trial_ctgov.parquet")
+    assert ctgov.to_dict("records") == [dict(trial_id="NCT1", ctgov_name="Fabricated agent", ctgov_status="ok")]
+    evidence = catalog_module._read_table(tmp_path, "evidence.parquet")
+    assert evidence.source_type.tolist() == ["trial_ctgov"] and evidence.facet.tolist() == ["trial_ctgov"]

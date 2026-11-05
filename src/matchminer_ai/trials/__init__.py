@@ -1,11 +1,11 @@
 """Trial processing APIs.
 
 Each trial step is its own function, so callers can run some and skip others:
-:func:`extract_cohorts` (registry listings) or :func:`extract_protocol_cohorts` (full
+:func:`extract_cohorts` (ctgov listings) or :func:`extract_protocol_cohorts` (full
 protocols) screen for cancer treatment and extract each cohort's complete criteria;
 :func:`merge_equivalent_cohorts` combines a trial's cohorts with essentially the same
 criteria; :func:`remove_boilerplate_criteria` separates key from boilerplate criteria.
-:func:`process_trials` runs all of them on registry listings, in that order.
+:func:`process_trials` runs all of them, on ctgov listings or protocols, in that order.
 """
 
 from __future__ import annotations
@@ -80,14 +80,14 @@ def extract_cohorts(
         With the default ``cohorts`` method, one row per accepted population:
         ``cohort_trial_id`` (``<trial_id>-cohort-<number>``), ``trial_id``,
         zero-based ``cohort_number``, ``cohort_name``, ``cohort_eligibility_criteria``,
-        ``cohort_criteria_source`` (``"registry"``), ``cancer_treatment_trial``, and
+        ``cohort_criteria_source`` (``"ctgov"``; ``"registry"`` before November 2026), ``cancer_treatment_trial``, and
         ``multiple_cohorts``. Each listing's title, brief summary and eligibility
         criteria form one document that goes through the same three steps and
         prompts as :func:`extract_protocol_cohorts`
         (:mod:`matchminer_ai.trials.cohort_workflow`): a cancer-treatment screen,
         the names of its cohorts with distinct eligibility, and one request per
         cohort for that cohort's complete criteria, which become its row's
-        ``cohort_eligibility_criteria``; the registry field is never copied
+        ``cohort_eligibility_criteria``; the ctgov field is never copied
         verbatim. Rejected trials produce no rows and remain in metadata and
         DataFrame attrs. Invalid responses are failures, not rejections. Debug
         mode adds ``trial_input_text`` and retains every step's responses in
@@ -198,56 +198,84 @@ def summarize_trials(*args, **kwargs):
 def process_trials(
     trials: pd.DataFrame,
     *,
+    source: str = "ctgov",
     config: MMAIConfig | None = None,
     output_dir: str | Path | None = None,
+    text_output_dir: str | Path | None = None,
+    progress_callback: ProtocolCohortProgress | None = None,
     return_metadata: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    Run every trial step on registry listings: treatment screen, cohorts, merge and boilerplate.
+    Run every trial step end to end: treatment screen, cohorts, merge and boilerplate.
 
-    The steps are the public functions, in the order training uses them, each with
-    ``section="trial"``: :func:`extract_cohorts` (a cancer-treatment screen, then the cohort
-    names and each cohort's complete criteria), :func:`merge_equivalent_cohorts` (a trial's
-    cohorts with essentially the same criteria become one row) and
-    :func:`remove_boilerplate_criteria` (each criteria line classified as boilerplate or not).
-    Call the functions separately to run only some of them.
+    The steps are the public functions, in the order training uses them. ``source`` selects the
+    extractor and the configuration section all three steps use:
+
+    - ``"ctgov"`` (default): ClinicalTrials.gov listings through :func:`extract_cohorts`, with
+      ``section="trial"``.
+    - ``"protocol"``: full protocol documents through :func:`extract_protocol_cohorts`, with
+      ``section="protocol_cohort_extraction"``.
+
+    Each extractor runs a cancer-treatment screen, then the cohort names and each cohort's
+    complete criteria; :func:`merge_equivalent_cohorts` makes a trial's cohorts with
+    essentially the same criteria one row; :func:`remove_boilerplate_criteria` classifies each
+    criteria line as boilerplate or not. Call the functions separately to run only some of them.
 
     Parameters
     ----------
     trials : pd.DataFrame
-        As for :func:`extract_cohorts`: unique ``trial_id`` and the text columns
-        ``trial_title``, ``brief_summary`` and ``eligibility_criteria``.
+        For ``"ctgov"``, as for :func:`extract_cohorts`: unique ``trial_id`` and the text columns
+        ``trial_title``, ``brief_summary`` and ``eligibility_criteria``. For ``"protocol"``, as
+        for :func:`extract_protocol_cohorts`: unique ``trial_id`` and ``protocol_path`` (PDF,
+        ``.txt`` or ``.md``).
+    source : {"ctgov", "protocol"}, optional
+        What each row is; see above.
     config : MMAIConfig, optional
-        Defaults to the package preset; its ``trial`` section must use the ``cohorts`` method.
+        Defaults to the package preset. For ``"ctgov"`` its ``trial`` section must use the
+        ``cohorts`` method.
     output_dir : str or Path, optional
-        Saves each trial's merge and boilerplate results under ``<output_dir>/<trial_id>/``
-        and reuses them while the cohorts and prompts are unchanged.
+        Saves each trial's results under ``<output_dir>/<trial_id>/`` (for protocols also the
+        extraction) and reuses them while the inputs and prompts are unchanged.
+    text_output_dir, progress_callback : optional
+        Protocols only, as for :func:`extract_protocol_cohorts`: where to keep each document's
+        extracted text, and a progress callback for the extraction.
     return_metadata : bool, optional
         Also return each step's metadata, keyed ``extraction``, ``merge`` and ``boilerplate``.
 
     Returns
     -------
     pd.DataFrame or tuple
-        One row per merged cohort of each accepted trial: the :func:`extract_cohorts` columns
+        One row per merged cohort of each accepted trial: the extractor's columns
         (``cohort_eligibility_criteria`` keeps the complete criteria), ``merged_from``, and
         the criteria split into ``cohort_key_criteria`` (read by TrialSpace retrieval and
         TrialChecker) and ``cohort_boilerplate_criteria`` (read by BoilerplateChecker).
         Rejected trials have no rows; their decisions are in the metadata and DataFrame attrs,
-        as for :func:`extract_cohorts`. ``(rows, metadata)`` with ``return_metadata``.
+        as for the extractors. ``(rows, metadata)`` with ``return_metadata``.
     """
     from matchminer_ai.config import load_default_preset
 
     resolved_config = config or load_default_preset()
     if not isinstance(resolved_config, MMAIConfig):
         raise TypeError("config must be an MMAIConfig instance or None.")
-    if resolved_config.trial.get("extraction_method", "cohorts") != "cohorts":
-        raise ValueError("process_trials requires trial.extraction_method=cohorts")
-    cohorts, extraction = extract_cohorts(trials, config=resolved_config, return_metadata=True)
+    if source == "ctgov":
+        if text_output_dir is not None or progress_callback is not None:
+            raise ValueError("text_output_dir and progress_callback apply only to source='protocol'")
+        if resolved_config.trial.get("extraction_method", "cohorts") != "cohorts":
+            raise ValueError("process_trials requires trial.extraction_method=cohorts")
+        section = "trial"
+        cohorts, extraction = extract_cohorts(trials, config=resolved_config, return_metadata=True)
+    elif source == "protocol":
+        section = "protocol_cohort_extraction"
+        cohorts, extraction = extract_protocol_cohorts(
+            trials, config=resolved_config, text_output_dir=text_output_dir, output_dir=output_dir,
+            return_metadata=True, progress_callback=progress_callback)
+    else:
+        raise ValueError("source must be 'ctgov' or 'protocol'")
     # The decisions stay in the metadata; pandas would deep-copy attrs into every group below.
     attrs, cohorts.attrs = dict(cohorts.attrs), {}
-    merged, merging = merge_equivalent_cohorts(cohorts, config=resolved_config, section="trial",
+    merged, merging = merge_equivalent_cohorts(cohorts, config=resolved_config, section=section,
                                                output_dir=output_dir, return_metadata=True)
-    result, cleaning = remove_boilerplate_criteria(merged, config=resolved_config, section="trial",
+    result, cleaning = remove_boilerplate_criteria(merged, config=resolved_config, section=section,
                                                    output_dir=output_dir, return_metadata=True)
     result.attrs = attrs
     if return_metadata:

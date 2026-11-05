@@ -112,7 +112,7 @@ def remove_boilerplate_criteria(
     ``cohort_eligibility_criteria``; other columns are kept), extracted or merged. Each row's
     criteria are split into items (:func:`split_criteria`); each item gets one LLM request with
     ``trial.cohorts.deboilerplate.user.txt`` and the LLM settings of ``section`` ("trial" for
-    registry listings, "protocol_cohort_extraction" for protocols), whose answer is validated and
+    ctgov listings, "protocol_cohort_extraction" for protocols), whose answer is validated and
     retried on failure up to that section's ``max_attempts``. An item whose answer never validates
     counts as not boilerplate and is reported in the metadata's ``unclassified_items``. The items
     are then gathered unchanged (:func:`gather_criteria`). A cohort without items, or whose items

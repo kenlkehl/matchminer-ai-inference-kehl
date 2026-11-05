@@ -155,12 +155,12 @@ CLASS_SUMMARY_COLUMNS = (
 
 
 @dataclass(frozen=True)
-class _RegistryIntervention:
+class _CtgovIntervention:
     trial_id: str
     trial_title: str
     trial_brief_summary: str
     trial_conditions: tuple[str, ...]
-    registry_name: str
+    ctgov_name: str
     intervention_type: str
     aliases: tuple[str, ...]
     description: str
@@ -180,7 +180,7 @@ class _CatalogLLMOutput:
 
 
 RoleResolver = Callable[
-    [str, Sequence[_RegistryIntervention]],
+    [str, Sequence[_CtgovIntervention]],
     Mapping[str, Mapping[str, Any]] | Awaitable[Mapping[str, Mapping[str, Any]]],
 ]
 SummarySynthesizer = Callable[
@@ -509,9 +509,9 @@ def _evidence_from_record(record: Mapping[str, Any]) -> EvidencePassage:
     )
 
 
-def _extract_registry_interventions(
+def _extract_ctgov_interventions(
     trial_id: str, study: Mapping[str, Any]
-) -> tuple[_RegistryIntervention, ...]:
+) -> tuple[_CtgovIntervention, ...]:
     protocol = study.get("protocolSection") or {}
     identification = protocol.get("identificationModule") or {}
     description_module = protocol.get("descriptionModule") or {}
@@ -539,7 +539,7 @@ def _extract_registry_interventions(
         for value in arms
         if clean_text(value.get("label"), max_chars=300)
     }
-    extracted: list[_RegistryIntervention] = []
+    extracted: list[_CtgovIntervention] = []
     for raw in module.get("interventions", []) or []:
         if not isinstance(raw, Mapping):
             continue
@@ -592,7 +592,7 @@ def _extract_registry_interventions(
             role, confidence, rationale = (
                 "supportive",
                 "high",
-                "Registry text explicitly identifies supportive use.",
+                "ctgov text explicitly identifies supportive use.",
             )
         elif re.search(
             r"\b(?:lymphodeplet\w*|conditioning (?:chemotherapy|regimen|therapy)|"
@@ -602,11 +602,11 @@ def _extract_registry_interventions(
             # Fludarabine and cyclophosphamide before a CAR-T are the platform the
             # cells are delivered on, not the agent under test. The screen reads
             # them as "part of the experimental regimen" because that is where the
-            # registry lists them, so this is settled structurally instead.
+            # ctgov lists them, so this is settled structurally instead.
             role, confidence, rationale = (
                 "background",
                 "high",
-                "Registry text identifies lymphodepleting or conditioning therapy.",
+                "ctgov text identifies lymphodepleting or conditioning therapy.",
             )
         elif re.search(
             r"\b(?:standard[- ]of[- ]care|standard backbone|background therapy|backbone therapy)\b",
@@ -620,13 +620,13 @@ def _extract_registry_interventions(
             role, confidence, rationale = (
                 "background",
                 "medium",
-                "Registry text identifies standard/background therapy.",
+                "ctgov text identifies standard/background therapy.",
             )
         else:
             role, confidence, rationale = (
                 "uncertain",
                 "low",
-                "Structured registry metadata does not by itself establish the drug role.",
+                "Structured ctgov metadata does not by itself establish the drug role.",
             )
         aliases = tuple(
             dict.fromkeys(
@@ -637,12 +637,12 @@ def _extract_registry_interventions(
             )
         )
         extracted.append(
-            _RegistryIntervention(
+            _CtgovIntervention(
                 trial_id=trial_id,
                 trial_title=trial_title,
                 trial_brief_summary=trial_brief_summary,
                 trial_conditions=trial_conditions,
-                registry_name=name,
+                ctgov_name=name,
                 intervention_type=intervention_type,
                 aliases=aliases,
                 description=description,
@@ -658,7 +658,7 @@ def _extract_registry_interventions(
 
 
 def build_intervention_screening_messages(
-    trial_id: str, interventions: Sequence[_RegistryIntervention]
+    trial_id: str, interventions: Sequence[_CtgovIntervention]
 ) -> list[dict[str, str]]:
     """Build a patient-free screen for cancer-treatment drug candidates."""
 
@@ -673,7 +673,8 @@ def build_intervention_screening_messages(
         "interventions": [
             {
                 "index": index,
-                "registry_name": item.registry_name,
+                # The model-facing key keeps its original name, so catalog prompts are unchanged.
+                "registry_name": item.ctgov_name,
                 "intervention_type": item.intervention_type,
                 "description": item.description,
                 "aliases": list(item.aliases),
@@ -692,7 +693,7 @@ def build_intervention_screening_messages(
 
 
 def build_role_resolution_messages(
-    trial_id: str, interventions: Sequence[_RegistryIntervention]
+    trial_id: str, interventions: Sequence[_CtgovIntervention]
 ) -> list[dict[str, str]]:
     """Backward-compatible alias for the combined intervention screen."""
 
@@ -795,7 +796,7 @@ def _token_limited_finish_reason(value: str) -> bool:
 
 
 async def _resolve_roles_with_default_llm(
-    by_trial: Mapping[str, Sequence[_RegistryIntervention]], *, config: MMAIConfig
+    by_trial: Mapping[str, Sequence[_CtgovIntervention]], *, config: MMAIConfig
 ) -> dict[str, Mapping[str, Mapping[str, Any]]]:
     """Return the last parsed output for each attempted trial.
 
@@ -892,12 +893,12 @@ async def _maybe_await(value: Any) -> Any:
 
 
 def _supported_active_names(
-    intervention: _RegistryIntervention, raw_names: Any
+    intervention: _CtgovIntervention, raw_names: Any
 ) -> tuple[str, ...]:
     if not isinstance(raw_names, Sequence) or isinstance(raw_names, (str, bytes)):
         raw_names = []
     support_fields = (
-        intervention.registry_name,
+        intervention.ctgov_name,
         *intervention.aliases,
         intervention.description,
         *intervention.arm_descriptions,
@@ -921,7 +922,7 @@ def _supported_active_names(
 
 
 def _name_variants(name: str) -> tuple[str, ...]:
-    """Surface forms of one registry name that should all resolve alike.
+    """Surface forms of one ctgov name that should all resolve alike.
 
     Registries write the same agent as "Avutometinib" in one trial and
     "avutometinib (VS-6766)" in another. Without the parenthetical stripped the
@@ -2299,7 +2300,7 @@ def _indications_for_drugs(
 ) -> dict[str, tuple[str, ...]]:
     """Map each drug to the diseases its own trials name.
 
-    The catalog is built patient-free, but it was never trial-free: the registry
+    The catalog is built patient-free, but it was never trial-free: the ctgov
     record it already stores says what each trial treats. Nothing in retrieval
     read it, so no query ever named a disease, and 62% of patient-drug pairs
     reached the scorer with evidence that never mentions the patient's cancer.
@@ -2431,14 +2432,14 @@ def indications_for_classes(
     }
 
 
-async def _fetch_registry_with_retries(
+async def _fetch_ctgov_with_retries(
     trial_id: str,
     *,
     client: httpx.AsyncClient,
     settings: ResearchSettings,
 ) -> tuple[Mapping[str, Any] | None, list[ResearchAttempt]]:
     attempts: list[ResearchAttempt] = []
-    for attempt in range(1, settings.registry_max_attempts + 1):
+    for attempt in range(1, settings.ctgov_max_attempts + 1):
         started = utc_now()
         try:
             study = await fetch_trial_study(trial_id, client=client)
@@ -2446,7 +2447,7 @@ async def _fetch_registry_with_retries(
             attempts.append(
                 ResearchAttempt(
                     drug_id="",
-                    facet="trial_registry",
+                    facet="trial_ctgov",
                     source="clinicaltrials_gov",
                     query=trial_id,
                     attempt=attempt,
@@ -2465,7 +2466,7 @@ async def _fetch_registry_with_retries(
                     error.response.status_code in {408, 425, 429}
                     or error.response.status_code >= 500
                 )
-            if not retryable or attempt >= settings.registry_max_attempts:
+            if not retryable or attempt >= settings.ctgov_max_attempts:
                 return None, attempts
             await asyncio.sleep(
                 min(
@@ -2477,7 +2478,7 @@ async def _fetch_registry_with_retries(
         attempts.append(
             ResearchAttempt(
                 drug_id="",
-                facet="trial_registry",
+                facet="trial_ctgov",
                 source="clinicaltrials_gov",
                 query=trial_id,
                 attempt=attempt,
@@ -2491,7 +2492,7 @@ async def _fetch_registry_with_retries(
     return None, attempts
 
 
-def _registry_row(trial_id: str, study: Mapping[str, Any] | None) -> dict[str, Any]:
+def _ctgov_row(trial_id: str, study: Mapping[str, Any] | None) -> dict[str, Any]:
     if study is None:
         return {
             "trial_id": trial_id,
@@ -2501,7 +2502,7 @@ def _registry_row(trial_id: str, study: Mapping[str, Any] | None) -> dict[str, A
             "brief_summary": "",
             "last_update_post_date": "",
             "retrieved_at": utc_now(),
-            "registry_status": "blocked",
+            "ctgov_status": "blocked",
             "study_sha256": "",
             "study_json": "",
         }
@@ -2528,7 +2529,7 @@ def _registry_row(trial_id: str, study: Mapping[str, Any] | None) -> dict[str, A
             max_chars=40,
         ),
         "retrieved_at": utc_now(),
-        "registry_status": "ok",
+        "ctgov_status": "ok",
         "study_sha256": hashlib.sha256(raw_json.encode()).hexdigest(),
         "study_json": raw_json,
     }
@@ -2545,7 +2546,7 @@ def _merge_evidence(
 
 
 def _role_output_validation_error(
-    interventions: Sequence[_RegistryIntervention],
+    interventions: Sequence[_CtgovIntervention],
     output: Mapping[str, Mapping[str, Any]],
 ) -> str | None:
     expected = {str(index) for index in range(len(interventions))}
@@ -2593,7 +2594,7 @@ def _role_output_validation_error(
                 ]
                 return (
                     f"intervention {index} has no active entity name supported by "
-                    "its registry name, aliases, or descriptions: "
+                    "its registry name, aliases, or descriptions: "  # model-facing retry feedback, unchanged
                     f"{returned_names!r}"
                 )
         elif category == "none":
@@ -2610,7 +2611,7 @@ def _role_output_validation_error(
 
 
 def _role_output_soft_warning(
-    interventions: Sequence[_RegistryIntervention],
+    interventions: Sequence[_CtgovIntervention],
     output: Mapping[str, Mapping[str, Any]],
 ) -> str | None:
     """Flag an output worth one more attempt without rejecting it outright.
@@ -2647,14 +2648,14 @@ def _role_output_soft_warning(
 
 
 def _role_output_is_complete(
-    interventions: Sequence[_RegistryIntervention],
+    interventions: Sequence[_CtgovIntervention],
     output: Mapping[str, Mapping[str, Any]],
 ) -> bool:
     return _role_output_validation_error(interventions, output) is None
 
 
 def _fail_closed_role_output(
-    interventions: Sequence[_RegistryIntervention],
+    interventions: Sequence[_CtgovIntervention],
     output: Mapping[str, Mapping[str, Any]],
     *,
     validation_error: str,
@@ -2691,7 +2692,7 @@ def _fail_closed_role_output(
 
 
 def derive_trial_assignments(
-    interventions_by_trial: Mapping[str, Sequence[_RegistryIntervention]],
+    interventions_by_trial: Mapping[str, Sequence[_CtgovIntervention]],
     role_outputs: Mapping[str, Mapping[str, Mapping[str, Any]]],
     *,
     ncit_index: Any,
@@ -2734,7 +2735,7 @@ def derive_trial_assignments(
             screening_rationale = clean_text(
                 role_output.get("rationale"), max_chars=1000
             )
-            # A high-confidence structural read beats the model. The registry
+            # A high-confidence structural read beats the model. The ctgov
             # saying "lymphodepleting chemotherapy" settles the role; the screen
             # reliably overrides it to investigational because the agent sits in
             # an experimental arm.
@@ -2769,7 +2770,7 @@ def derive_trial_assignments(
                 {
                     "trial_id": trial_id,
                     "intervention_index": intervention_index,
-                    "registry_name": intervention.registry_name,
+                    "ctgov_name": intervention.ctgov_name,
                     "intervention_type": intervention.intervention_type,
                     "research_disposition": disposition,
                     "included": disposition == "include",
@@ -2811,7 +2812,7 @@ def derive_trial_assignments(
                         trial_id=trial_id,
                         drug_id=identity.drug_id,
                         preferred_name=identity.preferred_name,
-                        registry_name=intervention.registry_name,
+                        ctgov_name=intervention.ctgov_name,
                         intervention_type=intervention.intervention_type,
                         role=role,
                         role_confidence=confidence,
@@ -2947,17 +2948,19 @@ async def build_good_option_catalog(
         reset=reset_checkpoint,
     )
     timeout = httpx.Timeout(max(1.0, resolved_settings.request_timeout))
-    registry_rows: list[dict[str, Any]] = []
+    ctgov_rows: list[dict[str, Any]] = []
     attempts: list[ResearchAttempt] = []
     studies: dict[str, Mapping[str, Any]] = {}
-    interventions_by_trial: dict[str, tuple[_RegistryIntervention, ...]] = {}
+    interventions_by_trial: dict[str, tuple[_CtgovIntervention, ...]] = {}
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         for index, trial_id in enumerate(normalized_ids, start=1):
             checkpoint_input = {"trial_id": trial_id}
-            saved = checkpoint.load("registry", trial_id, input_value=checkpoint_input)
+            saved = checkpoint.load("ctgov", trial_id, input_value=checkpoint_input)
+            if saved is None:  # a checkpoint written before "registry" became "ctgov"
+                saved = checkpoint.load("registry", trial_id, input_value=checkpoint_input)
             prior_attempts: list[ResearchAttempt] = []
             study: Mapping[str, Any] | None = None
-            registry_row: dict[str, Any] | None = None
+            ctgov_row: dict[str, Any] | None = None
             resumed = False
             if saved is not None:
                 prior_attempts = [
@@ -2966,27 +2969,29 @@ async def build_good_option_catalog(
                     if isinstance(value, Mapping)
                 ]
                 raw_study = saved.get("study")
-                raw_row = saved.get("registry_row")
+                raw_row = saved.get("ctgov_row", saved.get("registry_row"))
+                if isinstance(raw_row, Mapping):
+                    raw_row = {_LEGACY_CTGOV_COLUMNS.get(key, key): value for key, value in raw_row.items()}
                 if (
                     isinstance(raw_study, Mapping)
                     and isinstance(raw_row, Mapping)
-                    and str(raw_row.get("registry_status") or "") == "ok"
+                    and str(raw_row.get("ctgov_status") or "") == "ok"
                 ):
                     study = raw_study
-                    registry_row = dict(raw_row)
+                    ctgov_row = dict(raw_row)
                     resumed = True
             if not resumed:
-                study, new_attempts = await _fetch_registry_with_retries(
+                study, new_attempts = await _fetch_ctgov_with_retries(
                     trial_id, client=client, settings=resolved_settings
                 )
                 trial_attempts = [*prior_attempts, *new_attempts]
-                registry_row = _registry_row(trial_id, study)
+                ctgov_row = _ctgov_row(trial_id, study)
                 checkpoint.save(
-                    "registry",
+                    "ctgov",
                     trial_id,
                     input_value=checkpoint_input,
                     data={
-                        "registry_row": registry_row,
+                        "ctgov_row": ctgov_row,
                         "study": study,
                         "attempts": [item.to_record() for item in trial_attempts],
                     },
@@ -2994,27 +2999,27 @@ async def build_good_option_catalog(
             else:
                 trial_attempts = prior_attempts
             attempts.extend(trial_attempts)
-            if registry_row is None:
+            if ctgov_row is None:
                 raise RuntimeError(
-                    f"Registry checkpoint produced no row for {trial_id}."
+                    f"ctgov checkpoint produced no row for {trial_id}."
                 )
-            registry_rows.append(registry_row)
+            ctgov_rows.append(ctgov_row)
             if study is not None:
                 studies[trial_id] = study
-                interventions_by_trial[trial_id] = _extract_registry_interventions(
+                interventions_by_trial[trial_id] = _extract_ctgov_interventions(
                     trial_id, study
                 )
             if progress_callback:
                 suffix = " (checkpoint)" if resumed else ""
                 progress_callback(
-                    "registry", index, len(normalized_ids), f"{trial_id}{suffix}"
+                    "ctgov", index, len(normalized_ids), f"{trial_id}{suffix}"
                 )
 
     screening_inputs = {
         trial_id: items for trial_id, items in interventions_by_trial.items() if items
     }
     role_outputs: dict[str, Mapping[str, Mapping[str, Any]]] = {}
-    pending_roles: dict[str, tuple[_RegistryIntervention, ...]] = {}
+    pending_roles: dict[str, tuple[_CtgovIntervention, ...]] = {}
     screening_completed = 0
     for trial_id, items in screening_inputs.items():
         checkpoint_input = {
@@ -3645,13 +3650,13 @@ async def build_good_option_catalog(
             )
         )
 
-    trial_registry = pd.DataFrame(registry_rows)
+    trial_ctgov = pd.DataFrame(ctgov_rows)
     trial_intervention_screening = pd.DataFrame(
         screening_rows,
         columns=[
             "trial_id",
             "intervention_index",
-            "registry_name",
+            "ctgov_name",
             "intervention_type",
             "research_disposition",
             "included",
@@ -3670,7 +3675,7 @@ async def build_good_option_catalog(
             "trial_id",
             "drug_id",
             "preferred_name",
-            "registry_name",
+            "ctgov_name",
             "intervention_type",
             "role",
             "role_confidence",
@@ -3722,7 +3727,7 @@ async def build_good_option_catalog(
     research_attempts = pd.DataFrame([item.to_record() for item in attempts])
     _write_catalog_bundle(
         output,
-        trial_registry=trial_registry,
+        trial_ctgov=trial_ctgov,
         trial_intervention_screening=trial_intervention_screening,
         trial_drug_index=trial_drug_index,
         drug_summaries=drug_summaries,
@@ -3747,7 +3752,7 @@ async def build_good_option_catalog(
 def _write_catalog_bundle(
     output: Path,
     *,
-    trial_registry: pd.DataFrame,
+    trial_ctgov: pd.DataFrame,
     trial_intervention_screening: pd.DataFrame,
     trial_drug_index: pd.DataFrame,
     drug_summaries: pd.DataFrame,
@@ -3797,7 +3802,7 @@ def _write_catalog_bundle(
         resolved_class_evidence.to_parquet(
             class_evidence_dir / "part-00000.parquet", index=False
         )
-        trial_registry.to_parquet(temporary / "trial_registry.parquet", index=False)
+        trial_ctgov.to_parquet(temporary / "trial_ctgov.parquet", index=False)
         trial_intervention_screening.to_parquet(
             temporary / "trial_intervention_screening.parquet", index=False
         )
@@ -3816,7 +3821,7 @@ def _write_catalog_bundle(
         }
         manifest = {
             "build_id": hashlib.sha256(
-                f"{utc_now()}\0{len(trial_registry)}\0{len(drug_summaries)}".encode()
+                f"{utc_now()}\0{len(trial_ctgov)}\0{len(drug_summaries)}".encode()
             ).hexdigest()[:24],
             "created_at_utc": utc_now(),
             "compatibility_id": catalog_content_id(files),
@@ -3824,7 +3829,7 @@ def _write_catalog_bundle(
             "prompts_sha256": catalog_prompts_sha256(),
             "ncit": {"version": ncit_version, "resource": ncit_resource},
             "counts": {
-                "trials": len(trial_registry),
+                "trials": len(trial_ctgov),
                 "screened_interventions": len(trial_intervention_screening),
                 "excluded_interventions": int(
                     (
@@ -3881,11 +3886,32 @@ def _write_catalog_bundle(
         raise
 
 
+# Catalogs and checkpoints written before November 2026 called ClinicalTrials.gov "registry".
+_LEGACY_CTGOV_COLUMNS = {"registry_name": "ctgov_name", "registry_status": "ctgov_status"}
+_LEGACY_CTGOV_VALUES = {"trial_registry": "trial_ctgov"}
+
+
+def _ctgov_names(frame: pd.DataFrame) -> pd.DataFrame:
+    """A catalog table with pre-November-2026 "registry" column names and values renamed."""
+    frame = frame.rename(columns={old: new for old, new in _LEGACY_CTGOV_COLUMNS.items() if old in frame})
+    for column in ("source_type", "facet"):
+        if column in frame:
+            frame[column] = frame[column].replace(_LEGACY_CTGOV_VALUES)
+    return frame
+
+
+def _read_table(root: Path, name: str) -> pd.DataFrame:
+    path = root / name
+    if name == "trial_ctgov.parquet" and not path.is_file():
+        path = root / "trial_registry.parquet"  # the earlier name of the same table
+    return _ctgov_names(pd.read_parquet(path))
+
+
 def _read_evidence(path: Path, *, directory: str = "drug_evidence") -> pd.DataFrame:
     files = sorted((path / directory).glob("*.parquet"))
     if not files:
         return pd.DataFrame()
-    return pd.concat((pd.read_parquet(file) for file in files), ignore_index=True)
+    return _ctgov_names(pd.concat((pd.read_parquet(file) for file in files), ignore_index=True))
 
 
 def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
@@ -3907,25 +3933,25 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
             raise ValueError(f"Catalog is missing declared file: {relative}")
         if _sha256_file(target) != metadata.get("sha256"):
             raise ValueError(f"Catalog file hash mismatch: {relative}")
-    registry = pd.read_parquet(root / "trial_registry.parquet")
-    screening = pd.read_parquet(root / "trial_intervention_screening.parquet")
-    index = pd.read_parquet(root / "trial_drug_index.parquet")
+    ctgov = _read_table(root, "trial_ctgov.parquet")
+    screening = _read_table(root, "trial_intervention_screening.parquet")
+    index = _read_table(root, "trial_drug_index.parquet")
     summaries = pd.read_parquet(root / "drug_summaries.parquet")
     evidence = _read_evidence(root)
     drug_classes = pd.read_parquet(root / "drug_classes.parquet")
     class_summaries = pd.read_parquet(root / "class_summaries.parquet")
     class_evidence = _read_evidence(root, directory="class_evidence")
     declared_trial_ids = manifest.get("trial_ids")
-    if declared_trial_ids is not None and list(registry["trial_id"].astype(str)) != [
+    if declared_trial_ids is not None and list(ctgov["trial_id"].astype(str)) != [
         str(value) for value in declared_trial_ids
     ]:
-        raise ValueError("Catalog trial_ids do not match trial_registry row order.")
-    if registry["trial_id"].astype(str).duplicated().any():
-        raise ValueError("trial_registry contains duplicate trial_id values.")
+        raise ValueError("Catalog trial_ids do not match trial_ctgov row order.")
+    if ctgov["trial_id"].astype(str).duplicated().any():
+        raise ValueError("trial_ctgov contains duplicate trial_id values.")
     required_screening_columns = {
         "trial_id",
         "intervention_index",
-        "registry_name",
+        "ctgov_name",
         "research_disposition",
         "included",
         "exclusion_category",
@@ -3946,7 +3972,7 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
                 "trial_intervention_screening contains duplicate intervention rows."
             )
         if set(screening["trial_id"].astype(str)) - set(
-            registry["trial_id"].astype(str)
+            ctgov["trial_id"].astype(str)
         ):
             raise ValueError(
                 "trial_intervention_screening references unknown trial IDs."
@@ -4002,17 +4028,17 @@ def validate_good_option_catalog(path: str | Path) -> dict[str, Any]:
             raise ValueError(
                 f"trial_drug_index contains unknown roles: {unknown_roles}"
             )
-        if set(index["trial_id"].astype(str)) - set(registry["trial_id"].astype(str)):
+        if set(index["trial_id"].astype(str)) - set(ctgov["trial_id"].astype(str)):
             raise ValueError("trial_drug_index references unknown trial IDs.")
         included_pairs = set(
             screening.loc[
-                screening["included"].astype(bool), ["trial_id", "registry_name"]
+                screening["included"].astype(bool), ["trial_id", "ctgov_name"]
             ]
             .astype(str)
             .itertuples(index=False, name=None)
         )
         indexed_pairs = set(
-            index[["trial_id", "registry_name"]]
+            index[["trial_id", "ctgov_name"]]
             .astype(str)
             .itertuples(index=False, name=None)
         )
@@ -4244,14 +4270,12 @@ def _read_good_option_catalog(root: Path, *, validate: bool) -> GoodOptionCatalo
     return GoodOptionCatalog(
         path=root,
         manifest=manifest,
-        trial_registry=pd.read_parquet(root / "trial_registry.parquet"),
-        trial_intervention_screening=pd.read_parquet(
-            root / "trial_intervention_screening.parquet"
-        ),
-        trial_drug_index=pd.read_parquet(root / "trial_drug_index.parquet"),
+        trial_ctgov=_read_table(root, "trial_ctgov.parquet"),
+        trial_intervention_screening=_read_table(root, "trial_intervention_screening.parquet"),
+        trial_drug_index=_read_table(root, "trial_drug_index.parquet"),
         drug_summaries=pd.read_parquet(root / "drug_summaries.parquet"),
         drug_evidence=_read_evidence(root),
-        drug_research_attempts=pd.read_parquet(root / "drug_research_attempts.parquet"),
+        drug_research_attempts=_read_table(root, "drug_research_attempts.parquet"),
         drug_classes=pd.read_parquet(root / "drug_classes.parquet"),
         class_evidence=_read_evidence(root, directory="class_evidence"),
         class_summaries=pd.read_parquet(root / "class_summaries.parquet"),

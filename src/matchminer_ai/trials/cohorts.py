@@ -1,4 +1,4 @@
-"""Treatment screening and cohort extraction from registry listings for extract_cohorts."""
+"""Treatment screening and cohort extraction from ctgov listings for extract_cohorts."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
 
 from .cohort_workflow import (
     COHORT_COLUMNS, REPRESENTATION_VERSION, SCHEMA_VERSION, decision_rows, load_prompts, prompt_sha256,
-    registry_trial_text, run_cohort_workflow, step_runtimes,
+    ctgov_trial_text, run_cohort_workflow, step_runtimes,
 )
 
 # Kept as names for callers of the earlier single-request module.
@@ -75,7 +75,7 @@ def summarize_trial_cohorts(trials, config):
             lambda column: column.str.strip()).eq("").all(axis=1).any():
         raise ValueError("Each trial must contain nonempty source text")
     # The same document shape for every listing: title, brief summary, eligibility criteria.
-    frame["trial_text"] = [registry_trial_text(*values) for values in
+    frame["trial_text"] = [ctgov_trial_text(*values) for values in
                            frame[["trial_title", "brief_summary", "eligibility_criteria"]].itertuples(index=False)]
 
     trial_config = deepcopy(config.trial)
@@ -103,7 +103,7 @@ def summarize_trial_cohorts(trials, config):
         decision = metadata["trial_decisions"].get(source.trial_id)
         if decision is None or decision["cancer_treatment_trial"] == "no":
             continue
-        for row in decision_rows(source.trial_id, decision, source="registry"):
+        for row in decision_rows(source.trial_id, decision, source="ctgov"):
             if config.debug_mode:
                 row["trial_input_text"] = source.trial_text
             rows.append(row)

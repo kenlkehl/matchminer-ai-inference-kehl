@@ -1,4 +1,4 @@
-"""Three-step cohort extraction shared by registry listings and full protocols.
+"""Three-step cohort extraction shared by ctgov listings and full protocols.
 
 One trial document (a ClinicalTrials.gov listing's title, brief summary and
 eligibility criteria, or a full protocol) goes through the same three prompts:
@@ -86,7 +86,7 @@ def prompt_sha256(prompts: dict[str, str]) -> dict[str, str]:
     return hashes
 
 
-def registry_trial_text(title: Any, brief_summary: Any, eligibility_criteria: Any) -> str:
+def ctgov_trial_text(title: Any, brief_summary: Any, eligibility_criteria: Any) -> str:
     """A ClinicalTrials.gov listing as one document: title, brief summary, eligibility criteria."""
     text = lambda value: value.strip() if isinstance(value, str) else ""
     return (f"Title: {text(title)}\n\nBrief summary:\n{text(brief_summary)}\n\n"
@@ -192,7 +192,7 @@ def validate_decision(decision: Any) -> dict[str, Any]:
 
 
 def decision_rows(trial_id: str, decision: dict[str, Any], *, source: str) -> list[dict[str, Any]]:
-    """Cohort rows of one accepted decision; ``source`` is "registry" or "protocol"."""
+    """Cohort rows of one accepted decision; ``source`` is "ctgov" or "protocol"."""
     return [{
         "cohort_trial_id": f"{trial_id}-cohort-{number}", "trial_id": trial_id, "cohort_number": number,
         "cohort_name": cohort["cohort_name"], "cohort_eligibility_criteria": cohort["eligibility_criteria"],
@@ -350,6 +350,6 @@ def run_cohort_workflow(
 __all__ = [
     "COHORT_COLUMNS", "JSON_SCHEMAS", "PROMPT_FILES", "REPRESENTATION_VERSION", "SCHEMA_VERSION", "STEPS",
     "assemble_decision", "build_messages", "decision_rows", "load_prompts", "parse_cohort_list",
-    "parse_criteria", "parse_screen", "prompt_sha256", "registry_trial_text", "response_format",
+    "parse_criteria", "parse_screen", "prompt_sha256", "ctgov_trial_text", "response_format",
     "run_cohort_workflow", "step_runtimes", "validate_decision",
 ]

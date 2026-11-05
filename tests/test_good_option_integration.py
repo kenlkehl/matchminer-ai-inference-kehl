@@ -56,7 +56,7 @@ def outputs(c, s):
     )
     return {
         "screen": c.build_intervention_screening_messages(
-            "NCT12345678", c._extract_registry_interventions("NCT12345678", study)
+            "NCT12345678", c._extract_ctgov_interventions("NCT12345678", study)
         ),
         "synthesis_delta": c.build_synthesis_delta_messages(
             drug,

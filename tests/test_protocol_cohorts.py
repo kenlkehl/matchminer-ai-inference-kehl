@@ -44,14 +44,14 @@ def protocol_files(tmp_path, texts):
     return pd.DataFrame(rows)
 
 
-def test_protocols_use_the_registry_prompts_and_return_cohort_rows(tmp_path, config, cohort_backend):
+def test_protocols_use_the_ctgov_prompts_and_return_cohort_rows(tmp_path, config, cohort_backend):
     cohort_backend.script.update({"Protocol one": one_cohort(), "Protocol two": two_parts()})
     protocols = protocol_files(tmp_path, {"T1": "Protocol one {5.1} text", "T2": "Protocol two text"})
     result, metadata = extract_protocol_cohorts(protocols, config=config, return_metadata=True)
     calls = cohort_backend.calls
     assert [c[1]["remote"]["request_params"]["response_format"]["json_schema"]["schema"] for c in calls] == [
         JSON_SCHEMAS[s] for s in ("screen", "list", "criteria")]
-    # The same prompt text as registry listings, with the whole protocol as the document.
+    # The same prompt text as ctgov listings, with the whole protocol as the document.
     assert prompt_text(calls[0][0][0]) == build_messages("screen", "Protocol one {5.1} text", load_prompts())[0]["content"]
     assert list(result.columns) == COHORT_COLUMNS
     assert result.cohort_trial_id.tolist() == ["T1-cohort-0", "T2-cohort-0", "T2-cohort-1"]

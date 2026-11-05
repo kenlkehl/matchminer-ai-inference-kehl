@@ -60,7 +60,7 @@ class TrialDrugAssignment:
     trial_id: str
     drug_id: str
     preferred_name: str
-    registry_name: str
+    ctgov_name: str
     intervention_type: str
     role: str
     role_confidence: str
@@ -298,7 +298,7 @@ class GoodOptionCatalog:
 
     path: Path
     manifest: dict[str, Any]
-    trial_registry: pd.DataFrame
+    trial_ctgov: pd.DataFrame
     trial_drug_index: pd.DataFrame
     drug_summaries: pd.DataFrame
     drug_evidence: pd.DataFrame
@@ -330,7 +330,7 @@ class GoodOptionCatalog:
                     trial_id=normalized,
                     drug_id=str(record.get("drug_id") or ""),
                     preferred_name=str(record.get("preferred_name") or ""),
-                    registry_name=str(record.get("registry_name") or ""),
+                    ctgov_name=str(record.get("ctgov_name") or ""),
                     intervention_type=str(record.get("intervention_type") or ""),
                     role=str(record.get("role") or ""),
                     role_confidence=str(record.get("role_confidence") or ""),
@@ -429,13 +429,13 @@ class GoodOptionCatalog:
 
     def trial_status(self, trial_id: str) -> str:
         normalized = str(trial_id).strip().upper()
-        registry_row = self.trial_registry.loc[
-            self.trial_registry["trial_id"].astype(str).eq(normalized)
+        ctgov_row = self.trial_ctgov.loc[
+            self.trial_ctgov["trial_id"].astype(str).eq(normalized)
         ]
-        if registry_row.empty:
+        if ctgov_row.empty:
             return "missing_catalog_trial"
-        if str(registry_row.iloc[0].get("registry_status") or "") != "ok":
-            return "trial_registry_blocked"
+        if str(ctgov_row.iloc[0].get("ctgov_status") or "") != "ok":
+            return "trial_ctgov_blocked"
         assignments = self.assignments_for_trial(trial_id, scoreable_only=True)
         if not assignments:
             return "no_scoreable_drug"

@@ -4,7 +4,7 @@ Training draws its trial sample from trials this screen accepts, so the same pro
 (``trial.cohorts.screen.user.txt``), settings and response contract as the workflow's
 ``screen`` step decide which trials can be sampled, and every answer and its reasoning is
 kept. :func:`screen_trials` takes ClinicalTrials.gov listings (title, brief summary and
-eligibility criteria as one document, as :func:`registry_trial_text` builds it) or full
+eligibility criteria as one document, as :func:`ctgov_trial_text` builds it) or full
 documents.
 """
 
@@ -24,7 +24,7 @@ from matchminer_ai.llm.backends import get_llm_backend
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
 
 from .cohort_merge import _section
-from .cohort_workflow import JSON_SCHEMAS, build_messages, load_prompts, parse_screen, registry_trial_text
+from .cohort_workflow import JSON_SCHEMAS, build_messages, load_prompts, parse_screen, ctgov_trial_text
 
 SCREEN_SCHEMA_VERSION = "trial-cohorts-screen-v1"
 SCREEN_FILE = "screen.jsonl"
@@ -36,8 +36,8 @@ def _documents(frame: pd.DataFrame) -> list[str]:
     title = "trial_title" if "trial_title" in frame else "title"
     missing = {title, "brief_summary", "eligibility_criteria"} - set(frame)
     if missing:
-        raise ValueError(f"trials needs trial_text or registry columns; missing {sorted(missing)}")
-    return [registry_trial_text(t, s, e) for t, s, e in zip(frame[title], frame.brief_summary, frame.eligibility_criteria)]
+        raise ValueError(f"trials needs trial_text or ctgov columns; missing {sorted(missing)}")
+    return [ctgov_trial_text(t, s, e) for t, s, e in zip(frame[title], frame.brief_summary, frame.eligibility_criteria)]
 
 
 def screen_trials(

@@ -35,7 +35,7 @@ It queries seven sources: ClinicalTrials.gov, PubMed, Europe PMC, CIViC,
 DailyMed, cancer.gov, and a general web search that also downloads and extracts
 the text of the pages it finds. Each source gets a query written in its own
 syntax — boolean for the two literature indexes, prose for the web ones. The
-registry, label, and curation sources search by exact agent name and ignore the
+ctgov, label, and curation sources search by exact agent name and ignore the
 query.
 
 Three adaptive rounds run: the first searches everything, later rounds re-search
@@ -162,7 +162,7 @@ runs again from the stored facts with a budget sized to the trial (see Part B),
 so the ranking above decides what survives there too.
 
 These renders are the only thing a patient-bearing prompt ever sees. URLs,
-source names, queries, and registry metadata stay in the internal tables.
+source names, queries, and ctgov metadata stay in the internal tables.
 
 ### Step 7 — Write and validate
 
@@ -182,7 +182,7 @@ than restarting.
 
 ## Part B — Scoring one patient against one trial
 
-1. **Look up the trial.** If it is missing, its registry fetch failed, it has no
+1. **Look up the trial.** If it is missing, its ctgov fetch failed, it has no
    scoreable drug, or any scoreable drug failed research or synthesis, the pair
    comes back explicitly unscored with a reason. There is no fallback to live
    search.

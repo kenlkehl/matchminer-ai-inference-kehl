@@ -504,7 +504,7 @@ documents (PDF, OCR text or Markdown) and extracts their cohort eligibility crit
   request carries a strict JSON-schema `response_format` for its step.
 - `prompt_files` (optional): maps `screen`, `list` and `criteria` to other
   packaged prompt files; by default protocols use the same three prompts as
-  registry listings (`trial.cohorts.screen.user.txt`,
+  ctgov listings (`trial.cohorts.screen.user.txt`,
   `trial.cohorts.list.user.txt`, `trial.cohorts.criteria.user.txt`).
 
 The default model context is 262,144 tokens with up to 50,000 completion tokens,
@@ -809,7 +809,7 @@ block: `class_facets`, `class_sources`, `class_research_rounds`, and the
 `max_indication_*` caps for the indication axis. Indication terms come from the
 `conditionsModule.conditions` of the trials a drug appears in, falling back to
 `derivedSection.conditionBrowseModule.meshes`, so the catalog stays patient-free
-and cacheable. Both axes call only the query-driven sources; the registry, label,
+and cacheable. Both axes call only the query-driven sources; the ctgov, label,
 and curation adapters search by exact agent name and return nothing for a class
 name.
 
