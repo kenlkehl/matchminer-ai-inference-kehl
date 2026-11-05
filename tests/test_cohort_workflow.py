@@ -1,4 +1,4 @@
-"""Three-step cohort extraction: prompts, step contracts, and the registry API (summarize_trials)."""
+"""Three-step cohort extraction: prompts, step contracts, and the registry API (extract_cohorts)."""
 
 import json
 import re
@@ -8,7 +8,7 @@ import pytest
 
 from conftest import prompt_text
 from matchminer_ai.config import load_default_preset
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials import extract_cohorts
 from matchminer_ai.trials.cohort_workflow import (
     COHORT_COLUMNS, JSON_SCHEMAS, REPRESENTATION_VERSION, SCHEMA_VERSION, STEPS, assemble_decision,
     build_messages, load_prompts, parse_cohort_list, parse_criteria, parse_screen, registry_trial_text,
@@ -154,7 +154,7 @@ def test_summarize_trials_runs_three_steps_and_returns_complete_cohort_rows(conf
     cohort_backend.script.update({"Trial T0": {"screen": [NO]}, "Trial T1": one_cohort(), "Trial T2": two_parts()})
     frame = trials(["T0", "T1", "T2"])
     original = frame.copy(deep=True)
-    result, metadata, qc = summarize_trials(frame, config=config, return_metadata=True, return_qc=True)
+    result, metadata, qc = extract_cohorts(frame, config=config, return_metadata=True, return_qc=True)
     calls = cohort_backend.calls
     assert [len(prompts) for prompts, _ in calls] == [3, 2, 3]
     assert [c[1]["remote"]["request_params"]["response_format"]["json_schema"]["name"] for c in calls] == [
@@ -182,7 +182,7 @@ def test_only_the_failed_request_is_retried_with_the_full_document(config, cohor
     script = two_parts()
     script["criteria"]["Part B"] = [("{\"eligibility_criteria\": \"cut", "length"), {"eligibility_criteria": CRITERIA["Part B"]}]
     cohort_backend.script["Trial T0"] = script
-    result, metadata, qc = summarize_trials(trials(["T0"]), config=config, return_metadata=True, return_qc=True)
+    result, metadata, qc = extract_cohorts(trials(["T0"]), config=config, return_metadata=True, return_qc=True)
     retry = cohort_backend.calls[-1][0]
     assert len(retry) == 1 and "this cohort only: Part B" in prompt_text(retry[0])
     assert "Trial T0" in prompt_text(retry[0]) and "failed validation: Incomplete response: length" in prompt_text(retry[0])
@@ -195,7 +195,7 @@ def test_a_cohort_failing_every_attempt_fails_its_trial_only(config, cohort_back
     script = two_parts()
     script["criteria"]["Part A"] = ["not json"]
     cohort_backend.script.update({"Trial T0": script, "Trial T1": one_cohort()})
-    result, metadata = summarize_trials(trials(["T0", "T1"]), config=config, return_metadata=True)
+    result, metadata = extract_cohorts(trials(["T0", "T1"]), config=config, return_metadata=True)
     assert result.trial_id.tolist() == ["T1"]
     assert set(metadata["trial_errors"]) == {"T0"} and "criteria (cohort 0)" in metadata["trial_errors"]["T0"]
     assert metadata["trial_rejections"] == {}
@@ -203,23 +203,23 @@ def test_a_cohort_failing_every_attempt_fails_its_trial_only(config, cohort_back
 
 def test_failed_screen_is_not_a_rejection(config, cohort_backend):
     cohort_backend.script["Trial T0"] = {"screen": ['{"cancer_treatment_trial": "maybe"}']}
-    result = summarize_trials(trials(["T0"]), config=config)
+    result = extract_cohorts(trials(["T0"]), config=config)
     assert result.empty and list(result) == COHORT_COLUMNS
     assert set(result.attrs["trial_errors"]) == {"T0"} and result.attrs["trial_rejections"] == {}
     assert len(cohort_backend.calls) == 2
 
 
 def test_empty_input_and_duplicate_ids(config, cohort_backend):
-    assert summarize_trials(trials([]), config=config).empty and not cohort_backend.calls
+    assert extract_cohorts(trials([]), config=config).empty and not cohort_backend.calls
     with pytest.raises(ValueError, match="unique"):
-        summarize_trials(trials(["T0", "T0"]), config=config)
+        extract_cohorts(trials(["T0", "T0"]), config=config)
     assert not cohort_backend.calls
 
 
 def test_debug_mode_keeps_each_steps_answer(config, cohort_backend):
     config.debug_mode = True
     cohort_backend.script["Trial T0"] = two_parts()
-    result, metadata = summarize_trials(trials(["T0"]), config=config, return_metadata=True)
+    result, metadata = extract_cohorts(trials(["T0"]), config=config, return_metadata=True)
     responses = metadata["trial_responses"]["T0"]
     assert json.loads(responses["screen"]["answer"]) == YES and set(responses["criteria"]) == {0, 1}
     assert result.trial_input_text.str.startswith("Title: Trial T0").all()
@@ -230,3 +230,38 @@ def test_default_preset_uses_the_three_step_prompts():
     assert config.trial["extraction_method"] == "cohorts" and "cohorts" not in config.trial["prompt_files"]
     assert "prompt_file" not in config.protocol_cohort_extraction
     assert config.trial["cohorts"]["structured_outputs"] is True
+
+
+def test_process_trials_runs_every_trial_step_in_order(monkeypatch):
+    import matchminer_ai.trials as trials_api
+    calls = []
+    listing = pd.DataFrame([dict(trial_id="NCT1", trial_title="Fabricated trial", brief_summary="s",
+                                 eligibility_criteria="Adults.")])
+    def extract(trials, *, config, return_metadata):
+        calls.append(("extract", list(trials.trial_id)))
+        rows = pd.DataFrame([dict(trial_id="NCT1", cohort_number=0, cohort_eligibility_criteria="Adults.")])
+        rows.attrs["trial_decisions"] = {"NCT1": {"cancer_treatment_trial": "yes"}}
+        return rows, {"trial_decisions": rows.attrs["trial_decisions"]}
+    def merge(cohorts, *, config, section, output_dir, return_metadata):
+        assert cohorts.attrs == {} and section == "trial" and output_dir == "saved"
+        calls.append("merge")
+        return cohorts.assign(merged_from="[0]"), {"step": "merge"}
+    def clean(cohorts, *, config, section, output_dir, return_metadata):
+        assert section == "trial" and output_dir == "saved"
+        calls.append("boilerplate")
+        return cohorts.assign(cohort_key_criteria="Adults.", cohort_boilerplate_criteria=""), {"step": "boilerplate"}
+    monkeypatch.setattr(trials_api, "extract_cohorts", extract)
+    monkeypatch.setattr(trials_api, "merge_equivalent_cohorts", merge)
+    monkeypatch.setattr(trials_api, "remove_boilerplate_criteria", clean)
+    result, metadata = trials_api.process_trials(listing, output_dir="saved", return_metadata=True)
+    assert calls == [("extract", ["NCT1"]), "merge", "boilerplate"]
+    assert result.cohort_key_criteria.tolist() == ["Adults."] and "merged_from" in result
+    assert result.attrs["trial_decisions"] == {"NCT1": {"cancer_treatment_trial": "yes"}}
+    assert set(metadata) == {"extraction", "merge", "boilerplate"}
+
+
+def test_summarize_trials_is_a_deprecated_alias_of_extract_cohorts(monkeypatch):
+    import matchminer_ai.trials as trials_api
+    monkeypatch.setattr(trials_api, "extract_cohorts", lambda *args, **kwargs: ("rows", kwargs))
+    with pytest.warns(DeprecationWarning, match="extract_cohorts"):
+        assert trials_api.summarize_trials("listings", return_metadata=True) == ("rows", {"return_metadata": True})

@@ -5,7 +5,7 @@ to help you review how a summarization run behaved before using the outputs
 downstream.
 
 To request a QC report, pass `return_qc=True` to `summarize_patients` or
-`summarize_trials`.
+`extract_cohorts`.
 
 QC reports summarize how the current pipeline behaves, given the current
 prompts, filters, and postprocessing rules. Metrics are returned as rows with
@@ -33,7 +33,7 @@ Returned by `summarize_patients(..., return_qc=True)`.
 
 ## Trial summarization QC
 
-Returned by `summarize_trials(..., return_qc=True)`.
+Returned by `extract_cohorts(..., return_qc=True)`.
 
 The default `cohorts` method reports:
 

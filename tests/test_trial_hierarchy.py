@@ -6,7 +6,7 @@ import pytest
 
 from matchminer_ai.config import load_default_preset
 from matchminer_ai.llm.backends import LLMGenerationResult
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials import extract_cohorts
 from matchminer_ai.trials._hierarchical_backend import summarize_hierarchically
 from matchminer_ai.trials.hierarchy import (
     FIELD_QUESTIONS,
@@ -605,7 +605,7 @@ def test_public_summarization_retains_rejection_reasons_separately_from_failures
     assert "R1" not in str(failures)
     monkeypatch.setattr("matchminer_ai._qc.trials.count_embedding_tokens",
                         lambda texts, embedding_config, entity_type=None: [1] * len(texts))
-    spaces, public_metadata = summarize_trials(trials, config=config, return_metadata=True)
+    spaces, public_metadata = extract_cohorts(trials, config=config, return_metadata=True)
     assert spaces.empty
     assert public_metadata["trial_rejections"] == metadata["trial_rejections"]
 
@@ -676,7 +676,7 @@ def test_explicit_hierarchy_preserves_output_schema(monkeypatch):
             }
         ]
     )
-    result = summarize_trials(trials, config=config)
+    result = extract_cohorts(trials, config=config)
     assert len(backend.calls) == 8
     assert result.space_trial_id.tolist() == ["T1-0"]
     assert result.general_exclusion_criteria.tolist() == ["Active infection."]

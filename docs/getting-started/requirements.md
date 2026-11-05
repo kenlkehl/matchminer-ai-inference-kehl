@@ -22,7 +22,7 @@ See our [GPU recommendations](gpu-recommendations.md) documentation for examples
 If you are starting from the beginning of the patient-centric workflow, you
 need two input tables:
 
-- trial-level data for `summarize_trials`
+- trial-level data for `extract_cohorts`
 - note-level patient data for `summarize_patients`
 
 ### Trial input
@@ -33,7 +33,7 @@ brief summary, and eligibility criteria.
 If you are preparing trial input from ClinicalTrials.gov, first obtain the study
 records as JSON and then build one row per study by selecting these fields:
 
-| `summarize_trials` column | ClinicalTrials.gov JSON field |
+| `extract_cohorts` column | ClinicalTrials.gov JSON field |
 | --- | --- |
 | `trial_id` | `protocolSection.identificationModule.nctId` |
 | `trial_title` | `protocolSection.identificationModule.briefTitle` |
@@ -51,7 +51,7 @@ environment.
 ### Detailed input requirements
 
 See the
-[`summarize_trials`](../api/trials.md) and
+[`extract_cohorts`](../api/trials.md) and
 [`summarize_patients`](../api/patients.md) API docs for current DataFrame
 column requirements.
 

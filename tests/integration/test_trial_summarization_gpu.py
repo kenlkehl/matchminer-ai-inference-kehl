@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials import extract_cohorts
 
 
 def _require_cuda() -> None:
@@ -36,7 +36,7 @@ def test_trial_summarization_gpu_smoke():
         ["trial_id", "trial_title", "brief_summary", "eligibility_criteria"]
     ]
 
-    summaries, metadata = summarize_trials(trials, return_metadata=True)
+    summaries, metadata = extract_cohorts(trials, return_metadata=True)
 
     assert not summaries.empty
     assert "cohort_trial_id" in summaries.columns

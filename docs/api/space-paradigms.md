@@ -64,7 +64,7 @@ diagnosis, trial eligibility, or a treatment recommendation.
 
 ## Trial-space numbering compatibility
 
-After the upstream integration, `summarize_trials` numbers new spaces from zero
+After the upstream integration, `extract_cohorts` numbers new spaces from zero
 (`NCT12345678-0`, `NCT12345678-1`, ...). Earlier Kehl runs numbered them from one.
 The ranking API treats supplied IDs as opaque keys: existing one-based spaces,
 embeddings, and membership edges can still be used together without renumbering.

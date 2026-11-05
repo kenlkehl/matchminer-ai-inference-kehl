@@ -8,7 +8,7 @@ Most external workflows should start with these import paths:
 
 ```python
 from matchminer_ai import load_preset
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials import extract_cohorts
 from matchminer_ai.patients import summarize_patients
 from matchminer_ai.embedding import embed_for_matching
 from matchminer_ai.matching import (
@@ -24,12 +24,12 @@ from matchminer_ai.paradigms import rank_patient_space_paradigms
 Before starting, review the [data requirements](requirements.md#data) for the
 trial and patient input tables expected by the workflow.
 
-By default, `summarize_trials` now screens for cancer treatment and returns full
+By default, `extract_cohorts` now screens for cancer treatment and returns full
 eligibility criteria per distinct cohort. Rejected trials are recorded in
 metadata:
 
 ```python
-cohorts, metadata = summarize_trials(trials, return_metadata=True)
+cohorts, metadata = extract_cohorts(trials, return_metadata=True)
 print(cohorts[["cohort_trial_id", "cohort_eligibility_criteria"]])
 print(metadata["trial_rejections"])
 ```
@@ -51,13 +51,13 @@ extraction mode explicitly:
 ```python
 config = load_preset("default")
 config.trial["extraction_method"] = "hierarchical"
-trial_spaces = summarize_trials(trials, config=config)
+trial_spaces = extract_cohorts(trials, config=config)
 ```
 
 The patient-centric workflow with those legacy trial spaces has these main steps:
 
 1. Turn trial descriptions and eligibility criteria into structured trial
-   summaries with `summarize_trials`.
+   summaries with `extract_cohorts`.
 2. Turn patient notes into cancer history summaries with `summarize_patients`.
 3. Convert the trial and patient summaries into embeddings with
    `embed_for_matching` so they can be compared.

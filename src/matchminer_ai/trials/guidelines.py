@@ -124,7 +124,7 @@ def summarize_guidelines(
         Additional columns retain ``space``, ``diagnostic_workup``,
         ``treatment_options``, exact ``evidence``, ``source``, ``uncertainties``,
         context omissions, and a research-use notice. Return flag combinations
-        follow :func:`summarize_trials`: data, optional metadata, optional QC.
+        follow :func:`extract_cohorts`: data, optional metadata, optional QC.
 
     Notes
     -----

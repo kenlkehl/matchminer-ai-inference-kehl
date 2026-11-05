@@ -15,7 +15,7 @@ from matchminer_ai.trials.prompt_builder import (
     build_trial_text,
     get_filled_trial_prompt,
 )
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials import extract_cohorts
 from matchminer_ai.trials.summarize import run_llm_summarization
 
 
@@ -459,14 +459,14 @@ def test_summarize_trials_includes_debug_columns(monkeypatch):
         ]
     )
 
-    result = summarize_trials(trials, config=config)
+    result = extract_cohorts(trials, config=config)
     assert "trial_input_text" in result.columns
     assert "trial_answer_text" in result.columns
     assert result["trial_reasoning_text"].tolist() == ["trial reasoning"]
 
 
 def test_summarize_trials_lightweight_integration(monkeypatch):
-    """Run summarize_trials end-to-end with a mocked LLM call (backend.generate_llm_outputs)."""
+    """Run extract_cohorts end-to-end with a mocked LLM call (backend.generate_llm_outputs)."""
 
     captured_prompts = {}
 
@@ -524,7 +524,7 @@ def test_summarize_trials_lightweight_integration(monkeypatch):
     from matchminer_ai.config import load_default_preset
     config = load_default_preset()
     config.trial['extraction_method'] = 'one_shot'
-    result = summarize_trials(trials, config=config)
+    result = extract_cohorts(trials, config=config)
     assert len(result) == 1
     assert (
         result["clinical_space_summary"].iloc[0]
@@ -589,7 +589,7 @@ def test_summarize_trials_metadata_uses_live_config(monkeypatch, default_config)
         ]
     )
 
-    _result, metadata = summarize_trials(
+    _result, metadata = extract_cohorts(
         trials,
         config=default_config,
         return_metadata=True,
@@ -604,5 +604,5 @@ def test_summarize_trials_metadata_uses_live_config(monkeypatch, default_config)
         "http://localhost:8000/v1"
     ]
     assert metadata["model_metadata"] == {
-        "summarize_trials": {"model_sha": "sha"}
+        "extract_cohorts": {"model_sha": "sha"}
     }

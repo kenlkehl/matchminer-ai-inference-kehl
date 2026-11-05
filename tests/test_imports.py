@@ -47,7 +47,7 @@ from matchminer_ai.trials import (
     load_guideline_catalog,
     structure_trial_space,
     summarize_guidelines,
-    summarize_trials,
+    extract_cohorts,
 )
 
 
@@ -57,7 +57,7 @@ def test_imports():
     assert MMAIPipeline is not None
     assert load_config is not None
     assert ocr_pdf is not None
-    assert summarize_trials is not None
+    assert extract_cohorts is not None
     assert extract_trial_space_eligibility_criteria is not None
     assert structure_trial_space is not None
     assert summarize_patients is not None

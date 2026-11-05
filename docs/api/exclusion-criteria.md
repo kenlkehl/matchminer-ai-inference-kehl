@@ -14,7 +14,7 @@ Each row is one candidate pair with:
   section (or a complete `patient_summary`, whose text after
   `Other relevant history:` is taken).
 
-Cohorts from `summarize_trials` need the boilerplate step
+Cohorts from `extract_cohorts` need the boilerplate step
 (`trials.remove_boilerplate_criteria`) before this stage; see
 [key and boilerplate criteria](trials.md#key-and-boilerplate-criteria).
 

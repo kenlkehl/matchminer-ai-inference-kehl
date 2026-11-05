@@ -22,7 +22,7 @@ import torch
 
 from matchminer_ai.embedding import embed_for_matching
 from matchminer_ai.patients import summarize_patients
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials import extract_cohorts
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
@@ -92,7 +92,7 @@ def _generate_trial_package_embeddings(
     ].copy()
     trial_spaces = cast(
         pd.DataFrame,
-        summarize_trials(
+        extract_cohorts(
             trial_input,
             config=config,
             return_qc=False,

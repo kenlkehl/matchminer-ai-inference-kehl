@@ -6,7 +6,8 @@
         - extract_trial_space_eligibility_criteria
         - extract_protocol_cohorts
         - generate_synthetic_protocols
-        - summarize_trials
+        - extract_cohorts
+        - process_trials
         - merge_equivalent_cohorts
         - remove_boilerplate_criteria
         - screen_trials
@@ -19,9 +20,22 @@
         - get_guideline_considerations
         - structure_trial_space
 
+## Trial steps, separately or end to end
+
+Each step is its own function, so a caller can run some and skip others: `extract_cohorts`
+(registry listings; named `summarize_trials` before November 2026, a deprecated alias) or
+`extract_protocol_cohorts` (full protocols) screen for cancer treatment and extract each
+cohort's complete criteria; `merge_equivalent_cohorts` combines a trial's cohorts with
+essentially the same criteria; `remove_boilerplate_criteria` splits each cohort's criteria
+into key and boilerplate criteria; `screen_trials` runs only the screen. `process_trials`
+runs the screen, cohort extraction, merge and boilerplate removal on registry listings, in
+the order training uses them, and returns merged cohorts with `cohort_key_criteria` and
+`cohort_boilerplate_criteria` (each step's metadata with `return_metadata=True`;
+`output_dir` saves and reuses the merge and boilerplate results per trial).
+
 ## Three-step treatment screening and cohort extraction
 
-The default `trial.extraction_method` is `cohorts`. `summarize_trials` accepts
+The default `trial.extraction_method` is `cohorts`. `extract_cohorts` accepts
 one row per trial with `trial_id`, `trial_title`, `brief_summary`, and
 `eligibility_criteria`; IDs must be unique and nonempty. Each listing becomes
 one document, `Title: ...`, `Brief summary:` and `Eligibility criteria:` with
@@ -102,7 +116,7 @@ number of cohorts. The returned DataFrame contains accepted cohorts only:
 | `cohort_number` | Zero-based population index in source order. |
 | `cohort_name` | The cohort's name from step 2, also for a single population. Kept out of eligibility text and embeddings. |
 | `cohort_eligibility_criteria` | That cohort's complete criteria from its own request. |
-| `cohort_criteria_source` | `registry` (`summarize_trials`) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` and `eligibility_criteria`. |
+| `cohort_criteria_source` | `registry` (`extract_cohorts`) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` and `eligibility_criteria`. |
 | `cancer_treatment_trial` | `yes` for every returned row. |
 | `multiple_cohorts` | `yes` when the trial has more than one cohort. |
 
@@ -114,9 +128,9 @@ and `common_eligibility_criteria`) remain readable with
 trials produce no rows; empty and all-rejected runs keep the column schema.
 
 ```python
-from matchminer_ai.trials import summarize_trials
+from matchminer_ai.trials import extract_cohorts
 
-cohorts, metadata, qc = summarize_trials(
+cohorts, metadata, qc = extract_cohorts(
     trials, config=config, return_metadata=True, return_qc=True
 )
 print(metadata["trial_decisions"])
@@ -161,7 +175,7 @@ schema version and source-document SHA-256) with `reasoning.json`. A rerun with
 the same `output_dir` reuses a saved decision only when the prompts, schema and
 document bytes are unchanged, and sends the rest.
 
-The result has the `summarize_trials` cohort columns, with
+The result has the `extract_cohorts` cohort columns, with
 `cohort_criteria_source` set to `"protocol"`; `return_metadata=True` adds
 per-trial decisions, attempts and errors, source-document hashes and page
 counts, and the config snapshot. The whole document reaches the configured LLM

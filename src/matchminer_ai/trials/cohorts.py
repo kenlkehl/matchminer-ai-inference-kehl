@@ -1,4 +1,4 @@
-"""Treatment screening and cohort extraction from registry listings for summarize_trials."""
+"""Treatment screening and cohort extraction from registry listings for extract_cohorts."""
 
 from __future__ import annotations
 

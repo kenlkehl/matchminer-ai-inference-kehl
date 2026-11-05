@@ -31,7 +31,7 @@ Table 1: MatchMiner-AI Steps and Models. <br>
 
 | Step | Package Function | Model | Notes |
 |------|-------|-------|--------|
-| 1. Summarize Trials | `summarize_trials` | open-weights local LLM | by default, currently uses `google/gemma-4-31B-it` |
+| 1. Summarize Trials | `extract_cohorts` | open-weights local LLM | by default, currently uses `google/gemma-4-31B-it` |
 | 2. Summarize Patients | `summarize_patients` | open-weights local LLM | by default, currently uses `google/gemma-4-31B-it` |
 | 3. Embed Trial Spaces and Patient Summaries | `embed_for_matching` | `TrialSpace`, a trained Sentence Transformers model | provided on Hugging Face at `https://huggingface.co/ksg-dfci` |
 | 4. Generate Candidate Matches | `generate_candidate_matches` | NA | |
@@ -56,4 +56,4 @@ The trained models can be found on HuggingFace. The prompts and parameters used 
 
 ## Trial Spaces
 
-A clinical trial may target one or more populations of patients with cancer. For each trial, MatchMiner-AI will extract a list of clinical “spaces” for the trial from its eligibility criteria, where each space is defined as a unique combination of core clinical concepts (age, sex, cancer type, histology, burden of disease, prior treatment, and biomarkers) that might render the patient eligible. Some trials have only one “space,” whereas others, such as basket or umbrella trials, have several. This concept may sometimes align with "cohorts" or "arms" described in trial documents, but it does not always do so. For example, a randomized controlled trial may be for only one clinical "space" or target population, but it may have two "arms", one of which is the experimental treatment, and one of which is the control treatment. At the end of `summarize_trials`, each trial space is listed as a separate entity or cohort in the dataframe.
+A clinical trial may target one or more populations of patients with cancer. For each trial, MatchMiner-AI will extract a list of clinical “spaces” for the trial from its eligibility criteria, where each space is defined as a unique combination of core clinical concepts (age, sex, cancer type, histology, burden of disease, prior treatment, and biomarkers) that might render the patient eligible. Some trials have only one “space,” whereas others, such as basket or umbrella trials, have several. This concept may sometimes align with "cohorts" or "arms" described in trial documents, but it does not always do so. For example, a randomized controlled trial may be for only one clinical "space" or target population, but it may have two "arms", one of which is the experimental treatment, and one of which is the control treatment. At the end of `extract_cohorts`, each trial space is listed as a separate entity or cohort in the dataframe.

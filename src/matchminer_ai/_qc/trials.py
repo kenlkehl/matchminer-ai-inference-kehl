@@ -59,7 +59,7 @@ def trial_qc_report(
     Parameters
     ----------
     trial_spaces : pd.DataFrame
-        Output from summarize_trials, one row per trial space.
+        Output from extract_cohorts, one row per trial space.
         Required columns: trial_id, clinical_space_number,
         clinical_space_summary, general_exclusion_criteria.
     trial_source : pd.DataFrame

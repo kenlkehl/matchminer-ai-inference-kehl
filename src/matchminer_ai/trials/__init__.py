@@ -1,9 +1,18 @@
-"""Trial summarization APIs."""
+"""Trial processing APIs.
+
+Each trial step is its own function, so callers can run some and skip others:
+:func:`extract_cohorts` (registry listings) or :func:`extract_protocol_cohorts` (full
+protocols) screen for cancer treatment and extract each cohort's complete criteria;
+:func:`merge_equivalent_cohorts` combines a trial's cohorts with essentially the same
+criteria; :func:`remove_boilerplate_criteria` separates key from boilerplate criteria.
+:func:`process_trials` runs all of them on registry listings, in that order.
+"""
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+import warnings
 
 from matchminer_ai._metadata import package_metadata
 from matchminer_ai.config import MMAIConfig, config_snapshot
@@ -24,10 +33,12 @@ from .guideline_catalog import load_guideline_catalog, get_guideline_considerati
 from .pdq import prepare_pdq_library, summarize_pdq, summarize_pdq_collection
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     import pandas as pd
 
 
-def summarize_trials(
+def extract_cohorts(
     trials: pd.DataFrame,
     *,
     config: MMAIConfig | None = None,
@@ -45,7 +56,8 @@ def summarize_trials(
     Each cohort's criteria are copied verbatim, boilerplate included. Two optional steps take the
     returned rows, as for full protocols (:func:`extract_protocol_cohorts`):
     :func:`merge_equivalent_cohorts` and :func:`remove_boilerplate_criteria`, both with the default
-    ``section="trial"`` (training uses both, in that order).
+    ``section="trial"`` (training uses both, in that order; :func:`process_trials` runs all three).
+    Named ``summarize_trials`` before November 2026; that name remains as a deprecated alias.
 
     Parameters
     ----------
@@ -110,7 +122,7 @@ def summarize_trials(
     if missing:
         missing_list = ", ".join(sorted(missing))
         raise ValueError(
-            f"summarize_trials requires columns: {', '.join(sorted(required_columns))}. "
+            f"extract_cohorts requires columns: {', '.join(sorted(required_columns))}. "
             f"Missing: {missing_list}."
         )
 
@@ -123,7 +135,7 @@ def summarize_trials(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             **{key: value for key, value in metadata.items() if key != "model_metadata"},
-            "model_metadata": {"summarize_trials": metadata["model_metadata"]},
+            "model_metadata": {"extract_cohorts": metadata["model_metadata"]},
         }
         if return_metadata and return_qc:
             return result, metadata_payload, qc_report
@@ -165,7 +177,7 @@ def summarize_trials(
             "package": package_metadata(),
             "config_snapshot": config_snapshot(resolved_config),
             "model_metadata": {
-                "summarize_trials": metadata["model_metadata"],
+                "extract_cohorts": metadata["model_metadata"],
             },
             "trial_rejections": metadata.get("trial_rejections", {}),
         }
@@ -174,6 +186,72 @@ def summarize_trials(
         return result, metadata_payload
     if return_qc:
         return result, qc_report
+    return result
+
+
+def summarize_trials(*args, **kwargs):
+    """Deprecated name of :func:`extract_cohorts` (renamed November 2026)."""
+    warnings.warn("summarize_trials is deprecated; use extract_cohorts", DeprecationWarning, stacklevel=2)
+    return extract_cohorts(*args, **kwargs)
+
+
+def process_trials(
+    trials: pd.DataFrame,
+    *,
+    config: MMAIConfig | None = None,
+    output_dir: str | Path | None = None,
+    return_metadata: bool = False,
+) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
+    """
+    Run every trial step on registry listings: treatment screen, cohorts, merge and boilerplate.
+
+    The steps are the public functions, in the order training uses them, each with
+    ``section="trial"``: :func:`extract_cohorts` (a cancer-treatment screen, then the cohort
+    names and each cohort's complete criteria), :func:`merge_equivalent_cohorts` (a trial's
+    cohorts with essentially the same criteria become one row) and
+    :func:`remove_boilerplate_criteria` (each criteria line classified as boilerplate or not).
+    Call the functions separately to run only some of them.
+
+    Parameters
+    ----------
+    trials : pd.DataFrame
+        As for :func:`extract_cohorts`: unique ``trial_id`` and the text columns
+        ``trial_title``, ``brief_summary`` and ``eligibility_criteria``.
+    config : MMAIConfig, optional
+        Defaults to the package preset; its ``trial`` section must use the ``cohorts`` method.
+    output_dir : str or Path, optional
+        Saves each trial's merge and boilerplate results under ``<output_dir>/<trial_id>/``
+        and reuses them while the cohorts and prompts are unchanged.
+    return_metadata : bool, optional
+        Also return each step's metadata, keyed ``extraction``, ``merge`` and ``boilerplate``.
+
+    Returns
+    -------
+    pd.DataFrame or tuple
+        One row per merged cohort of each accepted trial: the :func:`extract_cohorts` columns
+        (``cohort_eligibility_criteria`` keeps the complete criteria), ``merged_from``, and
+        the criteria split into ``cohort_key_criteria`` (read by TrialSpace retrieval and
+        TrialChecker) and ``cohort_boilerplate_criteria`` (read by BoilerplateChecker).
+        Rejected trials have no rows; their decisions are in the metadata and DataFrame attrs,
+        as for :func:`extract_cohorts`. ``(rows, metadata)`` with ``return_metadata``.
+    """
+    from matchminer_ai.config import load_default_preset
+
+    resolved_config = config or load_default_preset()
+    if not isinstance(resolved_config, MMAIConfig):
+        raise TypeError("config must be an MMAIConfig instance or None.")
+    if resolved_config.trial.get("extraction_method", "cohorts") != "cohorts":
+        raise ValueError("process_trials requires trial.extraction_method=cohorts")
+    cohorts, extraction = extract_cohorts(trials, config=resolved_config, return_metadata=True)
+    # The decisions stay in the metadata; pandas would deep-copy attrs into every group below.
+    attrs, cohorts.attrs = dict(cohorts.attrs), {}
+    merged, merging = merge_equivalent_cohorts(cohorts, config=resolved_config, section="trial",
+                                               output_dir=output_dir, return_metadata=True)
+    result, cleaning = remove_boilerplate_criteria(merged, config=resolved_config, section="trial",
+                                                   output_dir=output_dir, return_metadata=True)
+    result.attrs = attrs
+    if return_metadata:
+        return result, {"extraction": extraction, "merge": merging, "boilerplate": cleaning}
     return result
 
 
@@ -186,6 +264,8 @@ __all__ = [
     "merge_equivalent_cohorts",
     "remove_boilerplate_criteria",
     "screen_trials",
+    "extract_cohorts",
+    "process_trials",
     "SyntheticProtocolProgress",
     "generate_synthetic_protocols",
     "structure_trial_space",

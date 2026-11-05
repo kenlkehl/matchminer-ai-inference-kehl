@@ -85,7 +85,7 @@ Publisher sampling settings were verified on 2026-10-16.
 
 `matchminer-ai` is a Python package for running the clinical trial matching inference workflow described in [Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching](https://doi.org/10.48550/arXiv.2412.17228). The package provides modular functions for the core MatchMiner-AI workflow: summarizing trials and patient histories, generating embeddings of each, retrieving candidate matches, scoring match quality, and assessing exclusion criteria.
 
-`summarize_trials` (ClinicalTrials.gov listings) and `extract_protocol_cohorts`
+`extract_cohorts` (ClinicalTrials.gov listings) and `extract_protocol_cohorts`
 (full protocols) share one three-step workflow and the same three prompts
 (`trial.cohorts.screen.user.txt`, `trial.cohorts.list.user.txt`,
 `trial.cohorts.criteria.user.txt`). A listing's title, brief summary and
@@ -155,7 +155,10 @@ verbatim. Rejected trials produce no cohort rows and remain in metadata and
 DataFrame attrs; malformed/truncated responses are failures, not rejections.
 See the [cohort contract and configuration](docs/api/trials.md#three-step-treatment-screening-and-cohort-extraction).
 
-Two optional steps take those rows. `trials.merge_equivalent_cohorts` combines a
+`trials.extract_cohorts` was named `summarize_trials` before November 2026 (a deprecated
+alias remains). Two optional steps take those rows, and `trials.process_trials` runs all of
+them end to end (screen, cohorts, merge, boilerplate removal) on registry listings.
+`trials.merge_equivalent_cohorts` combines a
 trial's cohorts whose criteria are essentially the same, and
 `trials.remove_boilerplate_criteria` classifies each criteria line as
 boilerplate or not, one request per line, and sorts the unchanged lines in code.

@@ -109,7 +109,7 @@ def extract_protocol_cohorts(
     """Screen full protocol documents and extract their cohort eligibility criteria.
 
     Each cohort's criteria are copied verbatim, boilerplate included. Two optional steps take the
-    returned rows, as for registry listings (:func:`~matchminer_ai.trials.summarize_trials`):
+    returned rows, as for registry listings (:func:`~matchminer_ai.trials.extract_cohorts`):
     :func:`~matchminer_ai.trials.merge_equivalent_cohorts` and
     :func:`~matchminer_ai.trials.remove_boilerplate_criteria`, both with
     ``section="protocol_cohort_extraction"`` (training uses both, in that order).
@@ -119,7 +119,7 @@ def extract_protocol_cohorts(
     with :func:`matchminer_ai.ocr_pdf`; pass ``text_output_dir`` to keep the
     text files, otherwise they are written to a temporary directory and removed.
     Each document is sent whole, without truncation, through the same three
-    prompts as registry listings in :func:`summarize_trials`
+    prompts as registry listings in :func:`extract_cohorts`
     (:mod:`matchminer_ai.trials.cohort_workflow`): a cancer-treatment screen, the
     list of cohort names, and one request per cohort for its eligibility
     criteria. With a remote backend and ``protocol_cohort_extraction.structured_outputs``
@@ -137,7 +137,7 @@ def extract_protocol_cohorts(
     same document bytes and sends only the rest.
 
     Returns one row per accepted cohort with the same columns as
-    :func:`summarize_trials` cohort extraction (``COHORT_COLUMNS``): each row's
+    :func:`extract_cohorts` cohort extraction (``COHORT_COLUMNS``): each row's
     ``cohort_eligibility_criteria`` are that cohort's complete criteria, and
     ``cohort_criteria_source`` is ``"protocol"``. Non-treatment trials and
     trials that fail validation produce no rows and are reported in

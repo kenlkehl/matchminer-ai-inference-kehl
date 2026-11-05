@@ -116,7 +116,7 @@ def test_public_cohort_retries_keep_each_endpoint_provenance(monkeypatch, tmp_pa
     import pandas as pd
     import openai
     from matchminer_ai.config import load_default_preset
-    from matchminer_ai.trials import summarize_trials
+    from matchminer_ai.trials import extract_cohorts
     path = tmp_path/'registry.json'
     path.write_text(json.dumps({'servers': [
         {'url':f'http://synthetic-{n}/v1', 'model':f'alias-{n}',
@@ -143,7 +143,7 @@ def test_public_cohort_retries_keep_each_endpoint_provenance(monkeypatch, tmp_pa
     config.remote.update(enabled=True, server_urls=[], server_urls_file=str(path))
     frame = pd.DataFrame([dict(trial_id='synthetic', trial_title='Synthetic trial',
                                brief_summary='Cancer treatment', eligibility_criteria='Adult')])
-    rows, meta = summarize_trials(frame, config=config, return_metadata=True)
+    rows, meta = extract_cohorts(frame, config=config, return_metadata=True)
     # Screen (malformed, then retried on the other server), cohort names, criteria.
     assert len(rows) == 1 and len(calls) == 4
     provenance = [item['response_metadata'] for item in meta['trial_attempts']['synthetic']['screen']]

@@ -32,7 +32,7 @@ accepts no patient context.
 `fetch_trial_registry_document` also accepts an official ClinicalTrials.gov
 study URL. It downloads the API v2 study and wrangles the official or brief
 title, brief summary, detailed description, and eligibility criteria into
-explicit fields for `summarize_trials` consumers. URL parsing never changes the
+explicit fields for `extract_cohorts` consumers. URL parsing never changes the
 request host: the API request is always sent to ClinicalTrials.gov using the
 normalized NCT ID.
 

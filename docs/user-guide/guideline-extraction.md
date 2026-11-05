@@ -2,7 +2,7 @@
 
 `matchminer_ai.trials.summarize_guidelines` turns one locally supplied NCCN
 guideline into canonical disease-state populations in the same nine-field text
-format returned by `summarize_trials`. Each population also has diagnostic/workup
+format returned by `extract_cohorts`. Each population also has diagnostic/workup
 considerations, treatment/management options, source quotations, and uncertainties.
 All clinical content is extracted by the configured LLM. Python manages source
 ownership, record identity, validation, persistence, and export.
@@ -71,7 +71,7 @@ spaces, metadata, qc = summarize_guidelines(
 ```
 
 The function accepts one disease per call and returns the same flag combinations
-as `summarize_trials`: a DataFrame, optionally followed by metadata and/or a QC
+as `extract_cohorts`: a DataFrame, optionally followed by metadata and/or a QC
 DataFrame. The standard columns are `space_trial_id`, `trial_id`,
 `clinical_space_number`, `clinical_space_summary`, and `general_exclusion_criteria`.
 Here `trial_id` has a `guideline:` namespace, and `general_exclusion_criteria` is
