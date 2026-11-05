@@ -17,11 +17,23 @@ Sex: (patient's sex)
 Cancer type: (patient's cancer type/primary site (eg breast cancer, lung cancer, etc))
 Histology: (patient's histology (eg adenocarcinoma, squamous carcinoma, etc))
 Current extent: (patient's current extent (localized, advanced, metastatic, etc); this is also where tumor markers for following disease status, such as CEA or PSA, should be documented if relevant. Don't list every such marker the patient has had checked over time, though, because these can get lengthy; just list the most recent value and trend if relevant to disease status.)
-Biomarkers: (genomic results, protein expression, etc, relevant for informing treatment selection. Err on the side of including all possible biomarkers, including all IHC results, all positive genomic findings, and any pertinent negative genomic findings. However, critically, standard lab values (eg CBC, CMP, LFTs, etc) MUST NOT be included in this section - only tumor biomarkers relevant to cancer treatment selection should be included. Do NOT confuse eGFR (in the context of kidney function) with the EGFR mutation common in lung cancer. Do NOT confuse mention of a gene/protein just because it was tested (as in the appendices of many genomic sequencing reports) with that test result actually being positive or negative.)
+Biomarkers: (genomic results, protein expression, etc, relevant for informing treatment selection. Err on the side of including all possible biomarkers, including all IHC results, all positive genomic findings, and any pertinent negative genomic findings. However, critically, standard lab values (eg CBC, CMP, LFTs, etc) MUST NOT be included in this section - only tumor biomarkers relevant to cancer treatment selection should be included; the most recent routine lab values belong in Other relevant history. Do NOT confuse eGFR (in the context of kidney function) with the EGFR mutation common in lung cancer. Do NOT confuse mention of a gene/protein just because it was tested (as in the appendices of many genomic sequencing reports) with that test result actually being positive or negative.)
 Treatment history: (surgery, radiation, chemotherapy/targeted therapy/immunotherapy, etc, including start and stop dates, and best response if noted. Treatment history should be provided chronologically. For cancer drug names, use generic names whenever you know them. Expand abbreviations where possible, (eg "carbo" -> "carboplatin", "pembro" -> "pembrolizumab", "AC/T" -> "doxorubicin + cyclophosphamide followed by paclitaxel", etc)
 
 Other relevant history:
-(any history of conditions that might meet clinical trial eligibility criteria for clinical trials, such as uncontrolled brain metastases, poor performance status, lack of measurable disease, congestive heart failure, pneumonitis, renal dysfunction, liver dysfunction, HIV or hepatitis infection, prior unrelated cancer diagnoses, etc.)
+(history relevant to the general eligibility criteria that most clinical trials share. Document whichever of the following the record contains, with dates:
+performance status (eg ECOG or Karnofsky), most recent value;
+lack of measurable disease, if documented;
+brain or other central nervous system metastases, including leptomeningeal disease: whether present, how and when they were treated (eg stereotactic radiosurgery, whole brain radiation, surgery), whether they are stable or progressing on the most recent imaging, related symptoms, and corticosteroid use for them;
+most recent routine laboratory values: complete blood count (eg white blood cells, absolute neutrophil count, hemoglobin, platelets), coagulation tests (eg INR, PT, PTT), kidney function (eg creatinine, creatinine clearance), and liver function (eg total bilirubin, AST, ALT), giving only the most recent value of each;
+left ventricular ejection fraction and QTc, if known;
+toxicities of earlier cancer treatment, of any kind (eg immune-related adverse events such as pneumonitis, colitis, hepatitis, or endocrinopathies; peripheral neuropathy; infusion reactions): the treatment that caused it, its grade if documented, how it was managed, and whether it has resolved;
+medical conditions other than cancer: cardiovascular (eg congestive heart failure, myocardial infarction, arrhythmia), pulmonary (eg interstitial lung disease), autoimmune, infectious (eg HIV, hepatitis B or C, tuberculosis, active infection), gastrointestinal, neurologic (eg seizures), psychiatric, endocrine (eg diabetes, thyroid disease), kidney and liver disease, solid organ transplant, and allergies or hypersensitivity reactions to drugs;
+recent major surgery other than surgery for the cancer, and recovery from it;
+prior unrelated cancer diagnoses, and inactive cancers (see below);
+current or prior enrollment in clinical trials, with the study treatment if documented;
+enrollment in hospice, or a documented decision not to pursue further anti-cancer therapy.
+Omit items the record does not document.)
 
 Clearly separate the "Other relevant history" section by adding a newline after the patient history; then the "Other relevant history:" text VERBATIM; then another newline; and then the other relevant history text.
 Always include Other relevant history, even if it is only "Not documented." Keep the cancer history and other relevant history together in one continuous summary.
@@ -46,7 +58,7 @@ Treatment history:
 # 3/2021-present: docetaxel; achieved partial response, ongoing as of last note
 
 Other relevant history:
-ECOG 1. Remote history of prostate cancer (inactive).
+ECOG 1 as of 3/2021. Most recent labs 3/15/2021: WBC 6.1, ANC 4.2, hemoglobin 11.2, platelets 245, INR 1.0, creatinine 0.9, total bilirubin 0.5, AST 24, ALT 19. LVEF 60% on echocardiogram 12/2019. Grade 2 immune-related hypothyroidism from pembrolizumab, diagnosed 10/2020, on levothyroxine. Grade 1 peripheral neuropathy from docetaxel, ongoing. Hypertension. No brain metastases on brain MRI 2/2021. Remote history of prostate cancer (inactive).
 
 Reference: common systemic therapy regimen abbreviations (use this list to expand abbreviations into generic drug names whenever they appear in the clinical record):
 - AC: doxorubicin + cyclophosphamide
