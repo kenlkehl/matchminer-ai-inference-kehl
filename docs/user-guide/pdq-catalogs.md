@@ -3,8 +3,7 @@
 The PDQ source adapter creates the same TrialSpace population, diagnostic/workup,
 and treatment-menu records as the guideline extraction API. It reuses extraction
 ownership, source-backed consolidation, population coverage, exact excerpt repair,
-checkpoint resume, export and final audit. It does not use the contextualization
-adapter's ranked, partial PDQ excerpts as a complete catalog source.
+checkpoint resume, export and final audit, working from complete PDQ documents.
 
 Every generation prompt opens with the library's purpose, the meaning of a clinical
 space, and how its nine population fields support later patient-summary matching.

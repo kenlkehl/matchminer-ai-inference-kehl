@@ -1,9 +1,5 @@
 import matchminer_ai
 from matchminer_ai import MMAIPipeline, load_config, ocr_pdf
-from matchminer_ai.contextualization import (
-    contextualize_trial_spaces,
-    personalize_trial_space_context,
-)
 from matchminer_ai.embedding import embed_for_matching
 from matchminer_ai.good_options import (
     build_good_option_catalog,
@@ -84,8 +80,6 @@ def test_imports():
     assert exclusion_criteria_check is not None
     assert interpret_match_quality is not None
     assert interpret_exclusion_criteria is not None
-    assert contextualize_trial_spaces is not None
-    assert personalize_trial_space_context is not None
     assert summarize_guidelines is not None
     assert list_guidelines is not None
     assert audit_guideline_catalog is not None

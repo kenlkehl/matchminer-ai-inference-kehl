@@ -486,7 +486,7 @@ context.
 
 New space text uses `Cancer primary site allowed`, `Prior treatment requirements`,
 and `Biomarker requirements`. Treatment and biomarker fields each retain both
-positive and negative conditions. Extraction postprocessing, QC, contextualization,
+positive and negative conditions. Extraction postprocessing, QC
 and training's 0c sampling accept these seven fields as well as saved legacy
 nine-field spaces; they do not rewrite saved text or mix extraction checkpoints.
 Match-label and synthetic-patient prompts preserve clause polarity and AND/OR

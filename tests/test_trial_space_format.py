@@ -4,7 +4,6 @@ import pytest
 
 from matchminer_ai._trial_space_format import has_required_space_fields
 from matchminer_ai._qc.trials import trial_qc_report
-from matchminer_ai.contextualization.query import build_trial_space_query
 from matchminer_ai.trials.postprocess import flatten_trial_to_spaces
 from matchminer_ai.trials.hierarchy import FIELDS, OUTPUT_FIELDS, VERSION
 
@@ -53,16 +52,6 @@ def test_missing_combined_field_is_rejected(label):
 
 def test_missing_half_of_legacy_field_is_rejected():
     assert not has_required_space_fields(LEGACY.replace('Biomarkers excluded:', 'Unrecognized:'))
-
-
-def test_context_query_retains_negative_clauses_without_guessing_a_split():
-    query = build_trial_space_query(dict(space_trial_id='T-0', trial_id='T', clinical_space_summary=SPACE))
-    assert query.disease == 'lung'
-    assert query.prior_treatment_requirements == 'prior cisplatin AND no prior pembrolizumab'
-    assert query.biomarker_requirements == 'KRAS G12D AND no EGFR mutation'
-    assert query.biomarker_query == query.biomarker_requirements
-    assert query.prior_treatment_required == query.prior_treatment_excluded == ''
-    assert query.biomarkers_required == query.biomarkers_excluded == ''
 
 
 def test_decision_model_receives_the_complete_combined_space():

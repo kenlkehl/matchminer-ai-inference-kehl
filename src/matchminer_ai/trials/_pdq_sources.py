@@ -2,8 +2,7 @@
 
 This adapter selects no clinical recommendations. It preserves section hierarchy,
 lists, table cells/spans, references and source links; the configured LLM performs
-clinical extraction. Live contextualization's ranked excerpts are deliberately
-not used as a substitute for a complete source document.
+clinical extraction.
 """
 
 from __future__ import annotations

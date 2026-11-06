@@ -291,6 +291,11 @@ config.trial["remote"]["model_name"] = "Qwen/Qwen3.8-Flash-Next"
 config.trial["remote"]["request_params"]["reasoning_effort"] = "medium"
 ```
 
+Model-specific reasoning text: the literal `Reasoning: high` system header is
+added only for GPT-OSS model identities. Gemma, Nemotron, Qwen, and other families
+use their configured chat-template/API thinking controls; task instructions are
+preserved without the GPT-OSS header. Unknown model identities receive no header.
+
 ## `trial`
 
 Task configuration for trial summarization.
@@ -829,6 +834,9 @@ name.
 `indication_facets` defaults to `efficacy_by_tumor`, `biomarker_prevalence`, and
 `biomarker_directed_efficacy` for both drug–disease and class–disease retrieval.
 
+PubMed requests read an optional `NCBI_API_KEY` from the environment, never from
+configuration snapshots. Without it, the NCBI API works at its lower public rate limit.
+
 ## `good_option_prompt`
 
 Patient-time packing of catalog drug and class evidence into the
@@ -873,55 +881,3 @@ so catalog-build fingerprints are unaffected.
 Deprecated. Configuration for the retired GoodOptionChecker classifier, kept so
 existing configs load. GoodOption scoring uses the LLM teacher
 (`llm_good_option`); the classifier APIs emit `DeprecationWarning`.
-
-## `trial_space_contextualization`
-
-Configuration for trial-only public-source retrieval and grounded synthesis.
-Its `local` and `remote` blocks select the synthesis LLM. Additional fields
-include:
-
-- `sources`: default source adapter names (`nci_pdq`, `fda`, `civic`,
-  `pubmed`, and `europe_pmc_open_guidelines`);
-- `request_timeout`: public-source HTTP timeout in seconds;
-- `max_concurrency`: maximum simultaneous source requests;
-- `max_evidence_per_source`: per-space adapter result limit;
-- `pubmed_retmax`: candidate count for each diagnostic, molecular-testing, and
-  treatment-guidance PubMed query;
-- `europe_pmc_languages`: allowed Europe PMC article language codes (English by
-  default);
-- `evidence_context_max_tokens`: model-token budget for raw evidence excerpts
-  (the implementation enforces a minimum of 10,000; default 12,000);
-- `diagnostic_context_min_tokens`: evidence budget reserved for diagnostic
-  passages before therapeutic/general evidence is packed; and
-- `evidence_item_max_tokens`: maximum contribution from one evidence record.
-
-The packer uses `tokenizer_name` from the active local or remote task block. If
-that tokenizer cannot be loaded, it records a warning and uses a lexical-token
-fallback rather than reverting to character counts. Context rows report packed
-token counts, dropped/truncated records, diagnostic coverage facets, and a
-deterministic diagnostic-evidence sufficiency signal.
-
-The Europe PMC adapter fetches structured full text only when core metadata
-reports an allowlisted CC BY or CC0 license. It then applies disease relevance,
-guideline/consensus, and diagnostic-section checks. Other open-access licenses
-and records without explicit license metadata are rejected.
-
-Optional source credentials and identification are read from environment
-variables rather than configuration snapshots:
-
-- `CIVIC_API_KEY`;
-- `NCBI_EMAIL` and `NCBI_API_KEY`.
-
-The NCBI API works without an API key at its lower public rate limit. Supplying
-`NCBI_EMAIL` is recommended so requests identify the application operator.
-
-## `patient_contextualization`
-
-LLM task configuration for the separate per-patient, per-space review. This
-stage does not call public-source adapters. Its `local` and `remote` blocks
-follow the same structure as `trial.local` and `trial.remote`.
-
-Model-specific reasoning text: the literal `Reasoning: high` system header is
-added only for GPT-OSS model identities. Gemma, Nemotron, Qwen, and other families
-use their configured chat-template/API thinking controls; task instructions are
-preserved without the GPT-OSS header. Unknown model identities receive no header.

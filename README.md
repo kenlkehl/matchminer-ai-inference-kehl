@@ -308,7 +308,7 @@ Optional source-grounded extensions can also:
   disease burden, treatment, response, and biomarker requirements;
 - roll a patient summary's TrialSpace/match-quality-ranked spaces up through an
   exact caller-supplied space-to-paradigm membership graph, while preserving
-  one-to-many mappings and paradigm caveat metadata;
+  one-to-many mappings and paradigm caveat metadata; and
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
   LLM-screen ctgov entries for concrete agents with direct anticancer
   treatment intent, deduplicate NCIt-normalized drugs across trials, synthesize
@@ -317,15 +317,9 @@ Optional source-grounded extensions can also:
   checkpoints, and
   estimate patient-specific option quality with a four-point-per-drug LLM
   rubric over drug and class evidence packed to the teacher's context (the
-  four-logit GoodOptionChecker is deprecated); and
-- contextualize a trial space using heading-aware NCI PDQ, FDA
-  companion-diagnostic and DailyMed material, accepted CIViC evidence, focused
-  PubMed searches, and permissively licensed Europe PMC guideline/consensus
-  full text.
+  four-logit GoodOptionChecker is deprecated).
 
-Trial-space retrieval rejects patient-bearing columns. Patient personalization
-is a separate API that sends patient context only to the configured LLM
-backend. These extensions produce research considerations, not treatment
+These extensions produce research considerations, not treatment
 recommendations, guideline compliance, or eligibility determinations.
 
 Good Option APIs follow the same stage boundaries as the other matching

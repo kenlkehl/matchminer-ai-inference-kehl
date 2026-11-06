@@ -156,26 +156,3 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     assert config.help_me_choose["remote"]["request_params"]["max_tokens"] == 6000
     assert config.help_me_choose["local"]["generation"]["repetition_penalty"] == 1.1
     assert config.help_me_choose["remote"]["extra_body"]["repetition_penalty"] == 1.1
-    assert config.trial_space_contextualization["sources"] == [
-        "nci_pdq",
-        "fda",
-        "civic",
-        "pubmed",
-        "europe_pmc_open_guidelines",
-    ]
-    assert (
-        config.trial_space_contextualization["evidence_context_max_tokens"]
-        == 12000
-    )
-    assert (
-        config.trial_space_contextualization["diagnostic_context_min_tokens"]
-        == 8000
-    )
-    assert (
-        config.trial_space_contextualization["local"]["generation"]["temperature"]
-        == 0.0
-    )
-    assert (
-        config.patient_contextualization["remote"]["request_params"]["max_tokens"]
-        == 5000
-    )
