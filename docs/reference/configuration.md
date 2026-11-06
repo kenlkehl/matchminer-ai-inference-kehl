@@ -266,7 +266,14 @@ Set a stage's `sampling_profile` to `none` to use entirely explicit settings;
 `gemma4`, `qwen3.8`, and `reflection-beam` (or `beam`) also allow explicit family
 selection for endpoint aliases.
 Unknown model families receive no automatic vendor settings. Existing custom
-configs without `sampling_profile` keep their explicit behavior.
+configs without `sampling_profile` keep their explicit behavior, with one
+exception: a section without `sampling_profile` served by Nemotron 3.5 Super
+(any `...nemotron-3.5-super-vl...` model name, profile `replaces_task_sampling`;
+user instruction 2026-11-05) sends NVIDIA's sampling (temperature 1.0, top_p
+0.95, top_k -1, min_p 0, repetition_penalty 1.0) in place of its fixed values,
+on the local and remote paths, keeping an explicit thinking switch. Name a
+profile (explicit keys then win) or set `sampling_profile: none` to keep a
+section's own sampling for Nemotron.
 
 This intentionally replaces the earlier preset's greedy patient/checker LLM
 sampling and mismatched Gemma top-k. Matching model versions, output budgets,
