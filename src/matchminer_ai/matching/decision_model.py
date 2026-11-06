@@ -50,6 +50,12 @@ CRITERION = "criterion"
 FAMILIES = (*LABELS, BOILERPLATE, CRITERION)
 CRITERION_TYPES = ("inclusion", "exclusion")
 CRITERION_STATUSES = ("met", "not_met", "insufficient_information", "not_applicable")
+# The per-criterion teacher's answer, for structured (constrained) decoding after its reasoning.
+CRITERION_LABEL_JSON_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["answer", "criterion_status", "reason"],
+    "properties": {"answer": {"enum": ["yes", "no"]}, "criterion_status": {"enum": list(CRITERION_STATUSES)},
+                   "reason": {"type": "string"}},
+}
 PROMPTS = {
     "match_state": "decision.match.state.txt",
     "reasonableness": "decision.match.reasonableness.txt",
@@ -419,7 +425,8 @@ def oriented(explanation: dict[str, Any], decision: bool) -> dict[str, Any]:
     return explanation
 
 
-__all__ = ["BASE_MODEL", "BASE_REVISION", "BOILERPLATE", "CRITERION", "CRITERION_STATUSES", "CRITERION_TYPES",
+__all__ = ["BASE_MODEL", "BASE_REVISION", "BOILERPLATE", "CRITERION", "CRITERION_LABEL_JSON_SCHEMA", "CRITERION_STATUSES",
+           "CRITERION_TYPES",
            "FAMILIES", "attribute_decision", "boilerplate_question", "boilerplate_state", "checkable_items",
            "clear_decision_model_cache", "criteria_state", "criterion_name", "criterion_question",
            "criterion_teacher_messages", "decision_settings", "load_decision_model", "match_questions", "match_state",
