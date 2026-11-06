@@ -9,6 +9,14 @@ https://huggingface.co/Qwen/Qwen3.5-4B#best-practices
 Reflection Beam defaults (verified 2026-10-16):
 https://developers.reflection.ai/serving-vllm
 https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/main/generation_config.json
+
+A section's own sampling keys normally win over these defaults. A section that names no
+``sampling_profile`` fixes its own sampling (for example greedy extraction); for a model whose
+profile is marked ``replaces_task_sampling`` (Nemotron 3.5 Super, user instruction 2026-11-05)
+the profile's sampling replaces that fixed sampling, so every workflow served by Nemotron sends
+NVIDIA's settings. A section that names a profile keeps the usual rule (its explicit keys win), and
+``sampling_profile: none`` sends only its own (:func:`replacing_profile`,
+:func:`apply_replacing_profile`).
 """
 
 from __future__ import annotations
@@ -94,6 +102,38 @@ def vendor_defaults(
     }, template
 
 
+def replacing_profile(model_name, sampling_profile=None):
+    """The registered profile whose sampling replaces a section's fixed sampling, or None.
+
+    ``sampling_profile`` is the section's own setting: None (unset) means the section fixes its
+    sampling, which a ``replaces_task_sampling`` profile replaces; any named profile, or ``"none"``,
+    keeps the section's explicit keys.
+    """
+    if sampling_profile is not None:
+        return None
+    from .model_profiles import resolve_model_profile
+
+    profile = resolve_model_profile(str(model_name or ""))
+    return profile if profile is not None and profile.replaces_task_sampling else None
+
+
+def apply_replacing_profile(model_name, sampling_profile, params, extra=None):
+    """Replace the sampling keys of ``params`` (and ``extra``, the vLLM extensions, when given)
+    with the replacing profile's, and default its chat-template kwargs. Mutates and returns
+    ``(params, extra)``; a model without a replacing profile is left unchanged."""
+    profile = replacing_profile(model_name, sampling_profile)
+    if profile is None:
+        return params, extra
+    params.update(profile.request_params)
+    if extra is not None:  # vLLM extensions only where an extra body is sent
+        extra.update(profile.extra_body)
+    if extra is not None:
+        template = extra.setdefault("chat_template_kwargs", {})
+        for key, value in profile.chat_template_kwargs.items():
+            template.setdefault(key, value)  # an explicit thinking switch stays
+    return params, extra
+
+
 def remote_sampling(runtime):
     """Resolve API and vLLM extension parameters without mutating configuration."""
     remote = runtime.get("remote", {})
@@ -123,6 +163,8 @@ def remote_sampling(runtime):
         ).setdefault(key, value)
     if template:
         extra["chat_template_kwargs"] = template
+    apply_replacing_profile(runtime.get("model_name"), runtime.get("sampling_profile"), params, extra)
+    template = extra.get("chat_template_kwargs", {})
     if (beam or template.get("enable_thinking")) and template.get("reasoning_effort"):
         if (
             "reasoning_effort" in params

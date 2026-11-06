@@ -40,6 +40,9 @@ class ModelProfile:
     source: str = ""
     tool_call_parser: str | None = None
     name_regex: str | None = None
+    # When True, the profile's sampling replaces a task section's own fixed sampling (for example a
+    # greedy extraction preset), not only its unset keys; a section opts out with sampling_profile: none.
+    replaces_task_sampling: bool = False
 
     def matches(self, model_name: str) -> bool:
         normalized = model_name.strip().lower()
@@ -96,6 +99,9 @@ NEMOTRON_3_5_SUPER_VL = ModelProfile(
         "https://huggingface.co/nvidia/"
         "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4 (verified 2026-10-15; text)"
     ),
+    # User instruction 2026-11-05: every workflow served by Nemotron uses NVIDIA's sampling,
+    # including sections whose presets fix greedy decoding for other models.
+    replaces_task_sampling=True,
 )
 
 REFLECTION_BEAM = ModelProfile(

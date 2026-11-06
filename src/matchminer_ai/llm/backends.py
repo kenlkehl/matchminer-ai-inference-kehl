@@ -448,6 +448,14 @@ def build_llm_runtime_config(
         runtime_config["sampling_params"] = {**defaults, **generation_config}
         if template:
             runtime_config["chat_template_kwargs"] = template
+        from .sampling import replacing_profile
+
+        profile = replacing_profile(runtime_config["model_name"], runtime_config.get("sampling_profile"))
+        if profile is not None:  # e.g. Nemotron: the publisher's sampling replaces a task's greedy preset
+            runtime_config["sampling_params"] = {**runtime_config["sampling_params"], **profile.request_params,
+                                                 **profile.extra_body}
+            runtime_config["chat_template_kwargs"] = {**profile.chat_template_kwargs,
+                                                      **(runtime_config.get("chat_template_kwargs") or {})}
     else:
         from .remote_inference import build_remote_request_config
 

@@ -850,6 +850,13 @@ async def request_vllm_comparison(
             "repetition_penalty": 1.1,
             "chat_template_kwargs": {"enable_thinking": True},
         }
+    # Help Me Choose fixes its own sampling; a model whose publisher sampling replaces task
+    # presets (Nemotron 3.5 Super) gets the publisher's instead.
+    from matchminer_ai.llm.sampling import apply_replacing_profile
+
+    sampling, extra_body = apply_replacing_profile(
+        model, None, {"temperature": 0.2, "top_p": 0.95}, extra_body
+    )
     client = AsyncOpenAI(
         base_url=normalized_url,
         api_key=api_key or "not-needed",
@@ -863,8 +870,7 @@ async def request_vllm_comparison(
                 [dict(message) for message in messages],
                 remote_config or {},
             ),
-            temperature=0.2,
-            top_p=0.95,
+            **sampling,
             max_tokens=6000,
             extra_body=extra_body,
         )

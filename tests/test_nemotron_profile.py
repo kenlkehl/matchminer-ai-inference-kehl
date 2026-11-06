@@ -86,3 +86,38 @@ def test_profile_replaces_old_filters_and_server_builds_both_parsers():
 
 def test_other_nemotron_generations_are_not_guessed():
     assert resolve_model_profile("nvidia/NVIDIA-Nemotron-3-Super-120B-A12B") is None
+
+
+@pytest.mark.parametrize("section", ["patient_structuring", "llm_good_option", "trial_space_contextualization"])
+def test_nemotron_replaces_fixed_greedy_sampling_and_other_models_keep_it(section):
+    """User instruction 2026-11-05: workflows served by Nemotron use NVIDIA's sampling."""
+    from matchminer_ai.llm.backends import build_llm_runtime_config
+
+    config = load_default_preset()
+    llm = config.raw[section]
+    assert "sampling_profile" not in llm  # these sections fix their own (greedy) sampling
+    for model, nemotron in ((MODEL, True), ("RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8", True),
+                            ("google/gemma-4-31B-it", False)):
+        for remote in (True, False):
+            config.remote["enabled"] = remote
+            section_config = {**llm, "local": {**llm["local"], "model_name": model},
+                              "remote": {**llm["remote"], "model_name": model}}
+            runtime = build_llm_runtime_config(section, section_config, config=config)
+            sampling = dict(runtime["sampling_params"])
+            if remote:
+                sampling.update({k: v for k, v in runtime["remote"]["extra_body"].items() if k != "chat_template_kwargs"})
+            if nemotron:
+                assert {k: sampling[k] for k in ("temperature", "top_p", "top_k", "min_p", "repetition_penalty")} == {
+                    "temperature": 1.0, "top_p": 0.95, "top_k": -1, "min_p": 0.0, "repetition_penalty": 1.0}
+                assert runtime["chat_template_kwargs"]["enable_thinking"] in (True, False)  # an explicit switch stays
+            else:
+                assert sampling["temperature"] == 0.0 and sampling["top_k"] == 1  # the section's own
+
+
+def test_a_named_profile_keeps_explicit_keys_for_nemotron():
+    params, extra = remote_sampling({"model_name": MODEL, "sampling_profile": "auto",
+                                     "remote": {"request_params": {"temperature": 0.3}, "extra_body": {}}})
+    assert params["temperature"] == 0.3 and extra["top_k"] == -1
+    params, _ = remote_sampling({"model_name": MODEL, "sampling_profile": "none",
+                                 "remote": {"request_params": {"temperature": 0.0}, "extra_body": {"top_k": 1}}})
+    assert params["temperature"] == 0.0
