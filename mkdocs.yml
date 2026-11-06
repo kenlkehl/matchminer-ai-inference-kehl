@@ -39,7 +39,6 @@ nav:
       - Embedding: api/embedding.md
       - Candidate Matching: api/candidate-matching.md
       - Match Quality: api/match-quality.md
-      - Space-paradigm Roll-up: api/space-paradigms.md
       - Guideline Consideration Retrieval: api/guideline-retrieval.md
       - Exclusion Criteria: api/exclusion-criteria.md
       - Criteria Check: api/criteria-check.md

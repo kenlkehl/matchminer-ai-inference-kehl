@@ -305,10 +305,7 @@ Optional source-grounded extensions can also:
   record per active cancer, dependency-ready LLM batching, hierarchical
   OncoTree coding, and locally searched NCIt drug normalization;
 - transform a clinical-space summary into JSON while preserving age, sex,
-  disease burden, treatment, response, and biomarker requirements;
-- roll a patient summary's TrialSpace/match-quality-ranked spaces up through an
-  exact caller-supplied space-to-paradigm membership graph, while preserving
-  one-to-many mappings and paradigm caveat metadata; and
+  disease burden, treatment, response, and biomarker requirements; and
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
   LLM-screen ctgov entries for concrete agents with direct anticancer
   treatment intent, deduplicate NCIt-normalized drugs across trials, synthesize
@@ -332,11 +329,6 @@ input templates live in `src/matchminer_ai/prompts/`. The former
 `matchminer_ai.good_options` imports remain compatibility aliases. Scoring
 prompts re-render drug and class evidence from stored facts at a trial-sized
 budget (`good_option_prompt`).
-
-The optional space-paradigm roll-up does not bundle a canonical paradigm
-catalog. It consumes caller-supplied trial spaces, exact membership edges, and
-one-line paradigm descriptors. Its ranking is a transparent roll-up of matching
-signals, not a new eligibility or treatment score.
 
 For detailed instructions, please see the
 [documentation website](https://dfci.github.io/matchminer-ai-inference/).

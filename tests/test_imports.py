@@ -20,10 +20,6 @@ from matchminer_ai.matching import (
     score_match_quality,
     write_guideline_considerations_report,
 )
-from matchminer_ai.paradigms import (
-    PatientParadigmRankingResult,
-    rank_patient_space_paradigms,
-)
 from matchminer_ai.patients import (
     answer_question_with_raw_patient_notes,
     compress_patient_note,
@@ -75,8 +71,6 @@ def test_imports():
     assert find_trial_centric_cutoff is not None
     assert assess_trial_centric_cutoff_stability is not None
     assert score_match_quality is not None
-    assert PatientParadigmRankingResult is not None
-    assert rank_patient_space_paradigms is not None
     assert exclusion_criteria_check is not None
     assert interpret_match_quality is not None
     assert interpret_exclusion_criteria is not None

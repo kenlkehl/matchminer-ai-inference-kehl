@@ -18,7 +18,6 @@ from matchminer_ai.matching import (
     score_match_quality,
     score_match_quality_with_llm,
 )
-from matchminer_ai.paradigms import rank_patient_space_paradigms
 ```
 
 Before starting, review the [data requirements](requirements.md#data) for the
@@ -68,9 +67,3 @@ The patient-centric workflow with those legacy trial spaces has these main steps
 6. Screen matched patient-trial pairs for possible exclusion criteria with
    either `exclusion_criteria_check` or `exclusion_criteria_check_with_llm`.
 
-When an exact space-to-paradigm membership graph is available, the optional
-`rank_patient_space_paradigms` workflow can retrieve and match-quality-rerank a
-wider trial-space pool, retain the leading spaces, and roll their IDs up to
-one-line paradigm descriptors. The package does not bundle the paradigm
-catalog; callers retain responsibility for its version, provenance, and caveat
-status.
