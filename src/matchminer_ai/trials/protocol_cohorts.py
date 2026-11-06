@@ -127,9 +127,9 @@ def extract_protocol_cohorts(
     schema with vLLM structured outputs; local in-process generation relies on
     validation and retries. Only failed requests are retried, up to ``max_attempts``.
 
-    Requests go through the backend in chunks of ``chunk_size``, with up to
-    ``chunks_in_flight`` chunks running at once so fast endpoints are not left
-    idle while an earlier chunk finishes. With ``output_dir``, each decided trial
+    A remote backend keeps ``chunk_size * chunks_in_flight`` requests in flight,
+    each sent as another returns, so one slow answer holds up only itself; a local
+    backend gets batches of ``chunk_size``, ``chunks_in_flight`` at once. With ``output_dir``, each decided trial
     is written to ``<output_dir>/<trial_id>/extraction.json`` (parsed decision,
     cohort names, attempts per step with serving endpoints, source-document hash)
     with ``reasoning.json`` (each step's reasoning) as soon as it is decided; a

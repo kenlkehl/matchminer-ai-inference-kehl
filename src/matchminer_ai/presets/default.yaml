@@ -29,7 +29,8 @@ trial:
     max_attempts: 3
     # Constrain each remote answer to its step's JSON schema.
     structured_outputs: true
-    # Requests per backend call, and calls running at once.
+    # A remote backend keeps chunk_size * chunks_in_flight requests in flight,
+    # each sent as another returns; a local one gets batches of chunk_size.
     chunk_size: 500
     chunks_in_flight: 2
   hierarchy:
@@ -225,7 +226,8 @@ protocol_cohort_extraction:
   # above max_document_characters fail rather than being truncated.
   max_document_characters: 800000
   max_attempts: 3
-  # Prompts per backend call, and calls running at once so fast endpoints stay busy.
+  # A remote backend keeps chunk_size * chunks_in_flight requests in flight,
+  # each sent as another returns; a local one gets batches of chunk_size.
   chunk_size: 500
   chunks_in_flight: 2
   # The same three cohort prompts as ctgov listings; each remote answer is
@@ -257,8 +259,9 @@ protocol_cohort_extraction:
 synthetic_protocol_generation:
   # ctgov-seeded synthetic protocols for training data (prompt v11 and its
   # weighted eligibility layouts in data/synthetic_protocol_layouts.json).
+  # A remote backend keeps chunk_size * chunks_in_flight requests in flight,
+  # each sent as another returns, so one slow protocol holds up only itself.
   chunk_size: 500
-  # Chunks running at once, so fast endpoints keep working while a chunk drains.
   chunks_in_flight: 2
   max_attempts: 3
   sampling_profile: auto

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
@@ -18,8 +17,8 @@ import pandas as pd
 
 from matchminer_ai.config import MMAIConfig, config_snapshot, load_default_preset
 from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
-from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
+from matchminer_ai.llm.request_queue import RequestQueue
 
 SYNTHETIC_PROTOCOL_SYSTEM_PROMPT = "trial.synthetic_protocol.system.txt"
 SYNTHETIC_PROTOCOL_USER_PROMPT = "trial.synthetic_protocol.user.txt"
@@ -96,16 +95,17 @@ def generate_synthetic_protocols(
     and its eligibility section follows one of the weighted layouts in
     ``synthetic_protocol_layouts.json``, chosen by a stable hash of the trial ID.
 
-    Requests go through the configured backend in chunks of
-    ``synthetic_protocol_generation.chunk_size``, with up to ``chunks_in_flight``
-    chunks running at once so fast endpoints are not left idle while an earlier
-    chunk's slowest requests finish. Remote runs use the shared endpoint pool, so
-    adaptive concurrency and endpoint registries (``remote.server_urls_file``)
-    apply as for other workloads. With ``output_dir``, each trial's
-    ``protocol.md``, ``reasoning.txt`` and ``meta.json`` are written when its
-    chunk returns, trials already completed with the same prompt are skipped, and
-    the result holds file paths instead of text. Empty or truncated outputs are
-    retried up to ``max_attempts``.
+    Requests go through a :class:`~matchminer_ai.llm.request_queue.RequestQueue`:
+    remote backends keep ``synthetic_protocol_generation.chunk_size *
+    chunks_in_flight`` requests in flight, each sent as another returns, so one
+    slow protocol holds up only itself; other backends get chunks of
+    ``chunk_size``, up to ``chunks_in_flight`` at once. Remote runs use the shared
+    endpoint pool, so adaptive concurrency and endpoint registries
+    (``remote.server_urls_file``) apply as for other workloads. With
+    ``output_dir``, each trial's ``protocol.md``, ``reasoning.txt`` and
+    ``meta.json`` are written when its request returns, trials already completed
+    with the same prompt are skipped, and the result holds file paths instead of
+    text. Empty or truncated outputs are retried up to ``max_attempts``.
 
     Outputs are fabricated training documents, not real protocols, and must not
     be presented as trial criteria. ctgov text reaches the configured LLM.
@@ -157,60 +157,49 @@ def generate_synthetic_protocols(
     total = len(records)
     _emit(progress_callback, "generate", len(rows), total, f"{len(pending)} protocol(s) to generate")
 
-    def record_chunk(chunk, generation):
-        """Save accepted outputs; return the items to retry."""
-        retry = []
-        metadata["model_metadata"] = {k: v for k, v in generation.model_metadata.items() if k != "responses"}
-        provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
-        for index, ((record, layout_index, attempt), text, reasoning, finish) in enumerate(zip(
-                chunk, generation.final_outputs, generation.reasoning_outputs, generation.finish_reasons, strict=True)):
-            trial_id, text = record["trial_id"], str(text or "")
-            attempt_record = {"attempt": attempt, "finish_reason": finish, "characters": len(text)}
-            if index in provenance:
-                attempt_record["response_metadata"] = provenance[index]
-            metadata["trial_attempts"].setdefault(trial_id, []).append(attempt_record)
-            if finish != "stop" or not text.strip():
-                metadata["trial_errors"][trial_id] = f"finish_reason={finish}, {len(text)} characters"
-                if attempt < max_attempts:
-                    retry.append((record, layout_index, attempt + 1))
-                continue
-            metadata["trial_errors"].pop(trial_id, None)
-            row = dict(trial_id=trial_id, layout_index=layout_index, finish_reason=finish, attempts=attempt,
-                       protocol=text, protocol_path=None)
-            if root:
-                run_dir = root / trial_id
-                run_dir.mkdir(parents=True, exist_ok=True)
-                _write_atomic(run_dir / "protocol.md", text)
-                _write_atomic(run_dir / "reasoning.txt", str(reasoning or ""))
-                seed = {key: record.get(key) for key in ("trial_id", *SEED_FIELDS) if key in record}
-                _write_atomic(run_dir / "meta.json", json.dumps(dict(
-                    trial_id=trial_id, prompt_sha256=prompt_sha256, layout_index=layout_index, attempt=attempt,
-                    finish_reason=finish, completed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    response_metadata=attempt_record.get("response_metadata"), seed=seed,
-                ), indent=2, default=str))
-                row.update(protocol=None, protocol_path=str(run_dir / "protocol.md"))
-            rows[trial_id] = row
-        return retry
+    def messages(record, layout_index):
+        return build_synthetic_protocol_messages(record, layouts[layout_index]["text"], system=system, user=user)
+
+    def record_answer(item, text, reasoning, finish, provenance):
+        """Save an accepted output, or queue a retry."""
+        record, layout_index, attempt = item
+        trial_id, text = record["trial_id"], str(text or "")
+        attempt_record = {"attempt": attempt, "finish_reason": finish, "characters": len(text)}
+        if provenance is not None:
+            attempt_record["response_metadata"] = provenance
+        metadata["trial_attempts"].setdefault(trial_id, []).append(attempt_record)
+        if finish != "stop" or not text.strip():
+            metadata["trial_errors"][trial_id] = f"finish_reason={finish}, {len(text)} characters"
+            if attempt < max_attempts:
+                queue.add((record, layout_index, attempt + 1), messages(record, layout_index))
+            return
+        metadata["trial_errors"].pop(trial_id, None)
+        row = dict(trial_id=trial_id, layout_index=layout_index, finish_reason=finish, attempts=attempt,
+                   protocol=text, protocol_path=None)
+        if root:
+            run_dir = root / trial_id
+            run_dir.mkdir(parents=True, exist_ok=True)
+            _write_atomic(run_dir / "protocol.md", text)
+            _write_atomic(run_dir / "reasoning.txt", str(reasoning or ""))
+            seed = {key: record.get(key) for key in ("trial_id", *SEED_FIELDS) if key in record}
+            _write_atomic(run_dir / "meta.json", json.dumps(dict(
+                trial_id=trial_id, prompt_sha256=prompt_sha256, layout_index=layout_index, attempt=attempt,
+                finish_reason=finish, completed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                response_metadata=attempt_record.get("response_metadata"), seed=seed,
+            ), indent=2, default=str))
+            row.update(protocol=None, protocol_path=str(run_dir / "protocol.md"))
+        rows[trial_id] = row
 
     if pending:
-        backend = get_llm_backend(resolved)
-        # Chunks run in worker threads against the shared endpoint pool; results,
-        # files and retry bookkeeping are handled only in this thread.
-        with ThreadPoolExecutor(max_workers=chunks_in_flight) as executor:
-            running = {}
-            while pending or running:
-                while pending and len(running) < chunks_in_flight:
-                    chunk, pending = pending[:chunk_size], pending[chunk_size:]
-                    prompts = build_prompt_list(
-                        [build_synthetic_protocol_messages(r, layouts[i]["text"], system=system, user=user)
-                         for r, i, _ in chunk], llm_config=runtime)
-                    running[executor.submit(backend.generate_llm_outputs, prompt_list=prompts, llm_config=runtime,
-                                            model_metadata_cache_dir=resolved.model_metadata_cache_dir)] = chunk
-                finished, _ = wait(running, return_when=FIRST_COMPLETED)
-                for future in finished:
-                    pending.extend(record_chunk(running.pop(future), future.result()))
-                _emit(progress_callback, "generate", len(rows), total,
-                      f"{len(rows)} of {total} generated; {len(metadata['trial_errors'])} awaiting retry or failed")
+        queue = RequestQueue(get_llm_backend(resolved), {None: runtime}, chunk_size=chunk_size,
+                             chunks_in_flight=chunks_in_flight,
+                             model_metadata_cache_dir=resolved.model_metadata_cache_dir)
+        for record, layout_index, attempt in pending:
+            queue.add((record, layout_index, attempt), messages(record, layout_index))
+        # Results, files and retry bookkeeping are handled only in this thread.
+        metadata["model_metadata"] = queue.run(record_answer, progress=lambda: _emit(
+            progress_callback, "generate", len(rows), total,
+            f"{len(rows)} of {total} generated; {len(metadata['trial_errors'])} awaiting retry or failed"))
 
     columns = ["trial_id", "layout_index", "finish_reason", "attempts", "protocol", "protocol_path"]
     result = pd.DataFrame([rows[r["trial_id"]] for r in records if r["trial_id"] in rows], columns=columns)

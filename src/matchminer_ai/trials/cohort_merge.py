@@ -11,7 +11,6 @@ names with "; " and whose criteria are those of the group's first cohort.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
@@ -24,8 +23,8 @@ import pandas as pd
 from matchminer_ai._storage import atomic_json
 from matchminer_ai.config import MMAIConfig, load_default_preset
 from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
-from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
+from matchminer_ai.llm.request_queue import RequestQueue
 
 from .cohort_schema import _unique_keys, unwrap_json_fence
 from .cohort_workflow import COHORT_COLUMNS
@@ -157,42 +156,39 @@ def merge_equivalent_cohorts(
     if pending:
         runtime, settings = _section(resolved, section)
         metadata["structured_outputs"] = settings["structured"]
-        backend = get_llm_backend(resolved)
-        while pending:
-            chunks = [pending[i:i + settings["chunk_size"]] for i in range(0, len(pending), settings["chunk_size"])]
-            with ThreadPoolExecutor(max_workers=settings["chunks_in_flight"]) as pool:
-                results = list(pool.map(lambda chunk: (chunk, backend.generate_llm_outputs(
-                    prompt_list=build_prompt_list([item[2] for item in chunk], llm_config=runtime),
-                    llm_config=runtime, model_metadata_cache_dir=resolved.model_metadata_cache_dir)), chunks))
-            pending = []
-            for chunk, generation in results:
-                provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
-                for position, ((trial_id, attempt, _, original), answer, reasoning, finish) in enumerate(zip(
-                        chunk, generation.final_outputs, generation.reasoning_outputs, generation.finish_reasons,
-                        strict=True)):
-                    entry = {"attempt": attempt, "finish_reason": finish, "answer": answer, "reasoning": reasoning}
-                    if position in provenance:
-                        entry["response_metadata"] = provenance[position]
-                    metadata["trial_attempts"].setdefault(trial_id, []).append(entry)
-                    try:
-                        parsed = parse_merge_groups(answer, finish, len(groups_of[trial_id]))
-                    except ValueError as exc:
-                        entry["validation_error"] = str(exc)
-                        if attempt < settings["max_attempts"]:
-                            pending.append((trial_id, attempt + 1, original + [{"role": "user", "content": (
-                                f"The preceding attempt failed validation: {exc}. Return a complete replacement "
-                                "JSON object following the original instructions.")}], original))
-                        else:
-                            metadata["merge_errors"][trial_id] = str(exc)
-                            metadata["trial_groups"][trial_id] = [[i] for i in range(len(groups_of[trial_id]))]
-                        continue
-                    metadata["trial_groups"][trial_id] = parsed
-                    if root is not None:
-                        atomic_json(root / str(trial_id) / "merge.json", {
-                            "trial_id": trial_id, **identity(groups_of[trial_id]), "groups": parsed,
-                            "cohort_names": list(groups_of[trial_id].cohort_name),
-                            "completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                            "attempts": metadata["trial_attempts"][trial_id]})
+        queue = RequestQueue(get_llm_backend(resolved), {None: runtime}, chunk_size=settings["chunk_size"],
+                             chunks_in_flight=settings["chunks_in_flight"],
+                             model_metadata_cache_dir=resolved.model_metadata_cache_dir)
+        for trial_id, attempt, messages, original in pending:
+            queue.add((trial_id, attempt, original), messages)
+
+        def record(item, answer, reasoning, finish, provenance):
+            trial_id, attempt, original = item
+            entry = {"attempt": attempt, "finish_reason": finish, "answer": answer, "reasoning": reasoning}
+            if provenance is not None:
+                entry["response_metadata"] = provenance
+            metadata["trial_attempts"].setdefault(trial_id, []).append(entry)
+            try:
+                parsed = parse_merge_groups(answer, finish, len(groups_of[trial_id]))
+            except ValueError as exc:
+                entry["validation_error"] = str(exc)
+                if attempt < settings["max_attempts"]:
+                    queue.add((trial_id, attempt + 1, original), original + [{"role": "user", "content": (
+                        f"The preceding attempt failed validation: {exc}. Return a complete replacement "
+                        "JSON object following the original instructions.")}])
+                else:
+                    metadata["merge_errors"][trial_id] = str(exc)
+                    metadata["trial_groups"][trial_id] = [[i] for i in range(len(groups_of[trial_id]))]
+                return
+            metadata["trial_groups"][trial_id] = parsed
+            if root is not None:
+                atomic_json(root / str(trial_id) / "merge.json", {
+                    "trial_id": trial_id, **identity(groups_of[trial_id]), "groups": parsed,
+                    "cohort_names": list(groups_of[trial_id].cohort_name),
+                    "completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "attempts": metadata["trial_attempts"][trial_id]})
+
+        queue.run(record)
 
     rows = []
     for trial_id in trials:

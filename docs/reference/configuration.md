@@ -325,9 +325,14 @@ Prompt template filenames loaded from `matchminer_ai.prompts` for the legacy
 Settings of the default `cohorts` method, the three-step workflow shared with
 `protocol_cohort_extraction`: `max_attempts` (per request, 1-10, default 3),
 `structured_outputs` (default true; each remote request is constrained by its
-step's JSON schema), `chunk_size` (requests of one step per backend call,
-default 500), `chunks_in_flight` (default 2), and optional `prompt_files`
-mapping `screen`, `list` and `criteria` to other packaged prompt files.
+step's JSON schema), `chunk_size` (default 500) and `chunks_in_flight`
+(default 2, at most 16), and optional `prompt_files` mapping `screen`, `list`
+and `criteria` to other packaged prompt files. A remote backend keeps
+`chunk_size * chunks_in_flight` requests in flight, sending each on its own as
+another returns, so one slow answer holds up only itself; a local backend gets
+batches of `chunk_size` requests of one step, `chunks_in_flight` at once. The
+merge and boilerplate steps (`merge_equivalent_cohorts`,
+`remove_boilerplate_criteria`) and `screen_trials` use the same settings.
 
 ### `trial.reasoning_parser`
 
@@ -508,10 +513,11 @@ documents (PDF, OCR text or Markdown) and extracts their cohort eligibility crit
 - `max_attempts`: validation attempts per request (1-10, default 3); only
   failed requests are retried, and a cohort that fails every attempt fails its
   protocol.
-- `chunk_size`: requests of one step per backend call (default 500). With
-  `output_dir`, each protocol is saved as soon as it is decided.
-- `chunks_in_flight`: calls running at once (default 2, at most 16), so fast
-  endpoints are not left idle while an earlier call finishes.
+- `chunk_size` (default 500) and `chunks_in_flight` (default 2, at most 16): a
+  remote backend keeps `chunk_size * chunks_in_flight` requests in flight, each
+  sent as another returns; a local backend gets batches of `chunk_size`
+  requests of one step, `chunks_in_flight` at once. With `output_dir`, each
+  protocol is saved as soon as it is decided.
 - `structured_outputs`: when true and the remote backend is enabled, each
   request carries a strict JSON-schema `response_format` for its step.
 - `prompt_files` (optional): maps `screen`, `list` and `criteria` to other
@@ -529,10 +535,11 @@ Configuration for `generate_synthetic_protocols`. Its `local`, `remote`,
 `sampling_profile`, `reasoning_effort` and `reasoning_parser` fields follow the
 other LLM task sections.
 
-- `chunk_size`: prompts per backend call (default 500); outputs are written
-  when a chunk returns.
-- `chunks_in_flight`: chunks running at once (default 2, at most 16), so fast
-  endpoints keep working while an earlier chunk's slowest requests finish.
+- `chunk_size` (default 500) and `chunks_in_flight` (default 2, at most 16): a
+  remote backend keeps `chunk_size * chunks_in_flight` requests in flight, each
+  sent as another returns, so one slow protocol holds up only itself; a local
+  backend gets batches of `chunk_size`, `chunks_in_flight` at once. Outputs are
+  written when their request returns.
 - `max_attempts`: attempts per trial for empty or truncated outputs (1-10,
   default 3).
 - `layouts_file`: optional override of `synthetic_protocol_layouts.json`.

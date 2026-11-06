@@ -25,15 +25,14 @@ attempt fails the trial.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from copy import deepcopy
 import hashlib
 import json
 import re
 from typing import Any
 
-from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
+from matchminer_ai.llm.request_queue import RequestQueue
 
 from .cohort_schema import _PLACEHOLDER, _unique_keys, unwrap_json_fence
 
@@ -235,19 +234,23 @@ def run_cohort_workflow(
     A state has ``decision`` (None until accepted or rejected), ``error`` (the last
     validation error of a failed trial), ``cohort_names``, ``attempts`` per step
     (criteria attempts per cohort index), ``merged_cohorts`` and ``truncated``.
-    Requests of one step go to the backend in chunks of ``chunk_size``, up to
-    ``chunks_in_flight`` at once; later steps are scheduled first so trials finish
-    early. ``on_decision(trial_id, decision, state)`` runs in this thread when a
-    trial is decided.
+    Requests go through a :class:`~matchminer_ai.llm.request_queue.RequestQueue`:
+    remote backends keep ``chunk_size * chunks_in_flight`` requests in flight, each
+    sent as another returns; other backends get chunks of ``chunk_size`` requests of
+    one step, up to ``chunks_in_flight`` at once. Later steps, and a step's retries
+    and follow-ups, are sent first so trials finish early.
+    ``on_decision(trial_id, decision, state)`` runs in this thread when a trial is
+    decided, and ``on_progress(states)`` after each chunk or every few seconds.
     """
     texts = dict(documents)
     states = {trial_id: {"decision": None, "error": None, "cohort_names": None, "merged_cohorts": [],
                          "truncated": False, "attempts": {"screen": [], "list": [], "criteria": {}},
                          **({"responses": {"screen": None, "list": None, "criteria": {}}} if debug else {})}
               for trial_id in texts}
-    queues: dict[str, list[tuple]] = {step: [] for step in STEPS}
+    # Later steps first, so a started trial finishes before new ones start.
+    queue = RequestQueue(backend, {step: runtimes[step] for step in reversed(STEPS)}, chunk_size=chunk_size,
+                         chunks_in_flight=chunks_in_flight, model_metadata_cache_dir=model_metadata_cache_dir)
     criteria: dict[str, dict[int, str]] = {}
-    model_metadata: dict[str, Any] = {}
 
     def messages(trial_id, step, index):
         names = states[trial_id]["cohort_names"]
@@ -255,7 +258,7 @@ def run_cohort_workflow(
                               cohort_name=names[index] if step == "criteria" else None)
 
     for trial_id in texts:
-        queues["screen"].append((trial_id, "screen", None, 1, messages(trial_id, "screen", None)))
+        queue.add((trial_id, "screen", None, 1), messages(trial_id, "screen", None), "screen")
 
     def finish(trial_id, decision):
         states[trial_id]["decision"] = decision
@@ -264,7 +267,7 @@ def run_cohort_workflow(
             on_decision(trial_id, decision, states[trial_id])
 
     def record(item, answer, reasoning, finish_reason, provenance):
-        trial_id, step, index, attempt, sent = item
+        trial_id, step, index, attempt = item
         state = states[trial_id]
         if state["decision"] is not None or (state["error"] is not None and state.get("failed")):
             return  # another cohort's request already failed the trial
@@ -290,7 +293,7 @@ def run_cohort_workflow(
                 retry = messages(trial_id, step, index) + [{"role": "user", "content": (
                     f"The preceding attempt failed validation: {exc}. Return a complete replacement "
                     "JSON object following the original instructions and the full document.")}]
-                queues[step].append((trial_id, step, index, attempt + 1, retry))
+                queue.add((trial_id, step, index, attempt + 1), retry, step)
             else:
                 state["failed"] = True
             return
@@ -299,12 +302,12 @@ def run_cohort_workflow(
             if parsed == "no":
                 finish(trial_id, {"cancer_treatment_trial": "no"})
             else:
-                queues["list"].append((trial_id, "list", None, 1, messages(trial_id, "list", None)))
+                queue.add((trial_id, "list", None, 1), messages(trial_id, "list", None), "list")
         elif step == "list":
             state["cohort_names"] = parsed
             criteria[trial_id] = {}
             for i in range(len(parsed)):
-                queues["criteria"].append((trial_id, "criteria", i, 1, messages(trial_id, "criteria", i)))
+                queue.add((trial_id, "criteria", i, 1), messages(trial_id, "criteria", i), "criteria")
         else:
             criteria[trial_id][index] = parsed
             names = state["cohort_names"]
@@ -313,35 +316,7 @@ def run_cohort_workflow(
                 state["merged_cohorts"] = merged
                 finish(trial_id, decision)
 
-    def next_chunk():
-        for step in reversed(STEPS):
-            if queues[step]:
-                chunk, queues[step][:] = queues[step][:chunk_size], queues[step][chunk_size:]
-                return step, chunk
-        return None
-
-    with ThreadPoolExecutor(max_workers=chunks_in_flight) as executor:
-        running = {}
-        while running or any(queues.values()):
-            while len(running) < chunks_in_flight and (picked := next_chunk()) is not None:
-                step, chunk = picked
-                running[executor.submit(
-                    backend.generate_llm_outputs,
-                    prompt_list=build_prompt_list([item[4] for item in chunk], llm_config=runtimes[step]),
-                    llm_config=runtimes[step], model_metadata_cache_dir=model_metadata_cache_dir,
-                )] = chunk
-            finished, _ = wait(running, return_when=FIRST_COMPLETED)
-            for future in finished:
-                chunk = running.pop(future)
-                generation = future.result()
-                model_metadata = {k: v for k, v in generation.model_metadata.items() if k != "responses"}
-                provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
-                for position, (item, answer, reasoning, finish_reason) in enumerate(zip(
-                        chunk, generation.final_outputs, generation.reasoning_outputs,
-                        generation.finish_reasons, strict=True)):
-                    record(item, answer, reasoning, finish_reason, provenance.get(position))
-            if on_progress is not None:
-                on_progress(states)
+    model_metadata = queue.run(record, progress=None if on_progress is None else lambda: on_progress(states))
     for state in states.values():
         state.pop("failed", None)
     return states, model_metadata

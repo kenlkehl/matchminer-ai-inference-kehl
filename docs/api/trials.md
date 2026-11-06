@@ -91,8 +91,10 @@ fail validation and never become negative decisions. With a remote backend and
 `response_format` with its step's schema (`JSON_SCHEMAS`). Only failed
 requests are retried, with the full document, the original instructions and
 the validation error, up to `trial.cohorts.max_attempts`; a cohort that fails
-every attempt fails its trial. Requests of one step go to the backend in
-chunks of `trial.cohorts.chunk_size`, `chunks_in_flight` at once. Cohorts whose
+every attempt fails its trial. A remote backend keeps
+`trial.cohorts.chunk_size * chunks_in_flight` requests in flight, each sent as
+another returns; a local backend gets batches of `chunk_size` requests of one
+step, `chunks_in_flight` at once. Cohorts whose
 extracted criteria are identical are combined into one row with both names.
 
 A trial's decision (schema `trial-cohorts-stepwise-v1`) is

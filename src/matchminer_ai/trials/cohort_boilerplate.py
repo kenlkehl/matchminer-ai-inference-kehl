@@ -22,7 +22,6 @@ after :func:`~matchminer_ai.trials.merge_equivalent_cohorts`.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -35,8 +34,8 @@ import pandas as pd
 from matchminer_ai._storage import atomic_json
 from matchminer_ai.config import MMAIConfig, load_default_preset
 from matchminer_ai.llm.backends import get_llm_backend
-from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
+from matchminer_ai.llm.request_queue import RequestQueue
 
 from .cohort_merge import _section
 from .cohort_workflow import _load_object
@@ -258,38 +257,36 @@ def remove_boilerplate_criteria(
     if pending:
         runtime, settings = _section(resolved, section, "trial_cohorts_deboilerplate", DEBOILERPLATE_JSON_SCHEMA)
         metadata["structured_outputs"] = settings["structured"]
-        backend = get_llm_backend(resolved)
-        while pending:
-            chunks = [pending[i:i + settings["chunk_size"]] for i in range(0, len(pending), settings["chunk_size"])]
-            with ThreadPoolExecutor(max_workers=settings["chunks_in_flight"]) as pool:
-                generations = pool.map(lambda chunk: (chunk, backend.generate_llm_outputs(
-                    prompt_list=build_prompt_list([item[3] for item in chunk], llm_config=runtime),
-                    llm_config=runtime, model_metadata_cache_dir=resolved.model_metadata_cache_dir)), chunks)
-                pending = []
-                for chunk, generation in generations:  # each chunk is saved as soon as it returns
-                    provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
-                    touched = set()
-                    for position, ((row, number, attempt, _, original), answer, reasoning, finish) in enumerate(zip(
-                            chunk, generation.final_outputs, generation.reasoning_outputs, generation.finish_reasons,
-                            strict=True)):
-                        entry = {"attempt": attempt, "finish_reason": finish, "answer": answer, "reasoning": reasoning}
-                        if position in provenance:
-                            entry["response_metadata"] = provenance[position]
-                        attempts.setdefault((row, number), []).append(entry)
-                        touched.add(frame.trial_id.iloc[row])
-                        try:
-                            labels[row, number] = parse_deboilerplated(answer, finish)
-                        except ValueError as exc:
-                            entry["validation_error"] = str(exc)
-                            if attempt < settings["max_attempts"]:
-                                pending.append((row, number, attempt + 1, original + [{"role": "user", "content": (
-                                    f"The preceding attempt failed validation: {exc}. Return a complete replacement "
-                                    "JSON object following the original instructions.")}], original))
-                                continue
-                            failed[row, number] = str(exc)
-                    if root is not None:
-                        for trial_id in touched:
-                            save(trial_id)
+        queue = RequestQueue(get_llm_backend(resolved), {None: runtime}, chunk_size=settings["chunk_size"],
+                             chunks_in_flight=settings["chunks_in_flight"],
+                             model_metadata_cache_dir=resolved.model_metadata_cache_dir)
+        unanswered: dict[Any, int] = {}  # each trial's items still waiting for a final answer
+        for row, number, attempt, messages, original in pending:
+            queue.add((row, number, attempt, original), messages)
+            unanswered[frame.trial_id.iloc[row]] = unanswered.get(frame.trial_id.iloc[row], 0) + 1
+
+        def record(item, answer, reasoning, finish, provenance):
+            row, number, attempt, original = item
+            entry = {"attempt": attempt, "finish_reason": finish, "answer": answer, "reasoning": reasoning}
+            if provenance is not None:
+                entry["response_metadata"] = provenance
+            attempts.setdefault((row, number), []).append(entry)
+            try:
+                labels[row, number] = parse_deboilerplated(answer, finish)
+            except ValueError as exc:
+                entry["validation_error"] = str(exc)
+                if attempt < settings["max_attempts"]:
+                    queue.add((row, number, attempt + 1, original), original + [{"role": "user", "content": (
+                        f"The preceding attempt failed validation: {exc}. Return a complete replacement "
+                        "JSON object following the original instructions.")}])
+                    return
+                failed[row, number] = str(exc)
+            trial_id = frame.trial_id.iloc[row]
+            unanswered[trial_id] -= 1
+            if root is not None and not unanswered[trial_id]:  # a trial is saved when its last item is done
+                save(trial_id)
+
+        queue.run(record)
 
     outcomes = [result(r) for r in range(len(frame))]
     for r, (_, _, error) in enumerate(outcomes):

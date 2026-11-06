@@ -10,7 +10,6 @@ documents.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -21,7 +20,7 @@ import pandas as pd
 
 from matchminer_ai.config import MMAIConfig, load_default_preset
 from matchminer_ai.llm.backends import get_llm_backend
-from matchminer_ai.llm.prompt_rendering import build_prompt_list
+from matchminer_ai.llm.request_queue import RequestQueue
 
 from .cohort_merge import _section
 from .cohort_workflow import JSON_SCHEMAS, build_messages, load_prompts, parse_screen, ctgov_trial_text
@@ -109,37 +108,36 @@ def screen_trials(
     if pending:
         runtime, settings = _section(resolved, section, "trial_cohorts_screen", JSON_SCHEMAS["screen"])
         metadata["structured_outputs"] = settings["structured"]
-        backend = get_llm_backend(resolved)
-        while pending:
-            chunks = [pending[i:i + settings["chunk_size"]] for i in range(0, len(pending), settings["chunk_size"])]
-            with ThreadPoolExecutor(max_workers=settings["chunks_in_flight"]) as pool:
-                generations = pool.map(lambda chunk: (chunk, backend.generate_llm_outputs(
-                    prompt_list=build_prompt_list([item[2] for item in chunk], llm_config=runtime),
-                    llm_config=runtime, model_metadata_cache_dir=resolved.model_metadata_cache_dir)), chunks)
-                pending = []
-                for chunk, generation in generations:  # each chunk's finished trials are saved as it returns
-                    provenance = {item["row_idx"]: item for item in generation.model_metadata.get("responses", [])}
-                    finished = []
-                    for position, ((row, attempt, _, original), answer, reasoning, finish) in enumerate(zip(
-                            chunk, generation.final_outputs, generation.reasoning_outputs, generation.finish_reasons,
-                            strict=True)):
-                        entry = {"attempt": attempt, "finish_reason": finish, "answer": answer, "reasoning": reasoning}
-                        if position in provenance:
-                            entry["response_metadata"] = provenance[position]
-                        attempts.setdefault(row, []).append(entry)
-                        try:
-                            decisions[row] = parse_screen(answer, finish)
-                        except ValueError as exc:
-                            entry["validation_error"] = str(exc)
-                            if attempt < settings["max_attempts"]:
-                                pending.append((row, attempt + 1, original + [{"role": "user", "content": (
-                                    f"The preceding attempt failed validation: {exc}. Return a complete replacement "
-                                    "JSON object following the original instructions and the full document.")}],
-                                    original))
-                                continue
-                            errors[row] = str(exc)
-                        finished.append(row)
-                    write(finished)
+        queue = RequestQueue(get_llm_backend(resolved), {None: runtime}, chunk_size=settings["chunk_size"],
+                             chunks_in_flight=settings["chunks_in_flight"],
+                             model_metadata_cache_dir=resolved.model_metadata_cache_dir)
+        for row, attempt, messages, original in pending:
+            queue.add((row, attempt, original), messages)
+        finished: list[int] = []
+
+        def record(item, answer, reasoning, finish, provenance):
+            row, attempt, original = item
+            entry = {"attempt": attempt, "finish_reason": finish, "answer": answer, "reasoning": reasoning}
+            if provenance is not None:
+                entry["response_metadata"] = provenance
+            attempts.setdefault(row, []).append(entry)
+            try:
+                decisions[row] = parse_screen(answer, finish)
+            except ValueError as exc:
+                entry["validation_error"] = str(exc)
+                if attempt < settings["max_attempts"]:
+                    queue.add((row, attempt + 1, original), original + [{"role": "user", "content": (
+                        f"The preceding attempt failed validation: {exc}. Return a complete replacement "
+                        "JSON object following the original instructions and the full document.")}])
+                    return
+                errors[row] = str(exc)
+            finished.append(row)
+
+        def flush():  # finished trials are appended to the file as the requests go
+            write(finished)
+            finished.clear()
+
+        queue.run(record, progress=flush)
 
     result = pd.DataFrame({"trial_id": ids,
                            "cancer_treatment_trial": pd.Series([decisions.get(r) for r in range(len(ids))], dtype=object),
