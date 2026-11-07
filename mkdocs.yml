@@ -38,6 +38,7 @@ nav:
       - Patient Summarization: api/patients.md
       - Embedding: api/embedding.md
       - Candidate Matching: api/candidate-matching.md
+      - Teacher Labeling: api/labeling.md
       - Match Quality: api/match-quality.md
       - Guideline Consideration Retrieval: api/guideline-retrieval.md
       - Exclusion Criteria: api/exclusion-criteria.md

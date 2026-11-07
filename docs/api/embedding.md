@@ -60,3 +60,49 @@ same path.
       members:
         - embed_for_matching
         - embed_texts
+
+## Large encoding jobs: several GPUs or vLLM embedding servers
+
+`open_encoder(EncoderSettings(...))` encodes many texts at once and returns float32, L2-normalized NumPy
+vectors in input order. It is what the training repository mines with; `embed_for_matching` keeps its own
+configuration and defaults.
+
+- One device (`devices=("cuda:0",)`): the model's own `encode`.
+- Several devices (`devices=("cuda:0", "cuda:1", ...)`): one spawned worker process per device. The
+  coordinator takes the model's own length order and deals out the batches a one-device run would form, so
+  every text is encoded in the same batch and the vectors equal the one-device vectors on the same GPU type.
+- `backend="openai"`: OpenAI-compatible `/v1/embeddings` servers (`remote={"server_urls": [...]}` or a
+  `server_urls_file` registry). vLLM serves EmbeddingGemma 2 natively from version 0.32
+  (`build_embedding_server_command` gives `vllm serve <model> --runner pooling ...`; one server per GPU). The
+  client prepends the prompt, truncates and tokenizes exactly as sentence-transformers does, sends token ids
+  to the least-loaded server, and normalizes. vLLM's kernels and bf16 weights give vectors close to (about
+  0.999 cosine), not equal to, the local backends'.
+
+`encoder_identity(settings)` names everything that changes the vectors (backend, model and revision, prompts,
+length, precision, batching) and no paths or devices; store it with the vectors and never mix vectors with
+different identities. TrialSpace's prompt profile is `trialspace_contract.model_prompts("trialspace")`.
+
+```python
+from matchminer_ai.embedding import EncoderSettings, open_encoder
+from matchminer_ai.embedding.trialspace_contract import model_prompts
+
+settings = EncoderSettings("google/embeddinggemma-2", revision="914f7f89142e33e77833254d9c9b90c3cef7303b",
+                           devices=tuple(f"cuda:{i}" for i in range(8)), batch_size=32, max_seq_length=8192,
+                           dtype="float32", autocast="bfloat16", prompts=model_prompts("trialspace"),
+                           include_prompt_in_pooling=True, text_only=True)
+with open_encoder(settings) as encoder:
+    patients = encoder.encode(patient_key_texts, "patient_summary")
+```
+
+Exact search over such vectors in query batches, on one or more devices, is
+`matchminer_ai.matching.retrieval.score_batches` (every batch against every document, so the scores do not
+depend on the number of devices), with `stable_top_k` for index-order ties.
+
+::: matchminer_ai.embedding.encoder
+    options:
+      members:
+        - EncoderSettings
+        - open_encoder
+        - encoder_identity
+
+::: matchminer_ai.matching.retrieval
