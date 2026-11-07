@@ -191,6 +191,37 @@ def build_vllm_server_command(
     )
 
 
+def build_embedding_server_command(
+    model: str,
+    *,
+    port: int,
+    host: str = "127.0.0.1",
+    served_model_name: str | None = None,
+    revision: str | None = None,
+    max_model_len: int = 8192,
+    dtype: str | None = None,
+    extra_args: Sequence[str] | None = None,
+) -> VLLMServerCommand:
+    """A ``vllm serve`` command for an embedding (pooling) model such as EmbeddingGemma 2.
+
+    vLLM serves EmbeddingGemma 2 natively from version 0.32 with mean pooling and normalization from
+    the model's sentence-transformers modules; clients apply the prompt themselves
+    (:class:`matchminer_ai.embedding.encoder.OpenAIEmbeddingsEncoder`). Start one server per GPU by
+    setting ``CUDA_VISIBLE_DEVICES`` for each command.
+    """
+    command = ["vllm", "serve", model, "--runner", "pooling", "--host", host, "--port", str(port),
+               "--max-model-len", str(max_model_len)]
+    if served_model_name:
+        command += ["--served-model-name", served_model_name]
+    if revision:
+        command += ["--revision", revision]
+    if dtype:
+        command += ["--dtype", dtype]
+    command += [str(arg) for arg in extra_args or ()]
+    return VLLMServerCommand(command=command, base_url=f"http://{host}:{port}/v1", host=host, port=port,
+                             model_name=model, served_model_name=served_model_name or model, task="embedding")
+
+
 def check_openai_endpoint(
     server_urls: str | Sequence[str],
     *,
@@ -416,6 +447,7 @@ def start_vllm_servers(
 
 __all__ = [
     "VLLMServerCommand",
+    "build_embedding_server_command",
     "build_vllm_server_command",
     "build_vllm_server_commands",
     "check_openai_endpoint",
