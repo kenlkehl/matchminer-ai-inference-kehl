@@ -1,8 +1,10 @@
 # Guideline extraction
 
 `matchminer_ai.trials.summarize_guidelines` turns one locally supplied NCCN
-guideline into canonical disease-state populations in the same nine-field text
-format returned by `extract_cohorts`. Each population also has diagnostic/workup
+guideline into canonical disease-state populations, each defined by nine population
+fields (stored as one line in `clinical_space_summary`). Loading a catalog lays those
+fields out as a trial cohort's key criteria (`cohort_key_criteria`; see
+[Key criteria](#key-criteria)). Each population also has diagnostic/workup
 considerations, treatment/management options, source quotations, and uncertainties.
 All clinical content is extracted by the configured LLM. Python manages source
 ownership, record identity, validation, persistence, and export.
@@ -80,9 +82,10 @@ services expecting NCT identifiers.
 
 Additional columns include the nine-field `space` object, `diagnostic_workup`,
 `treatment_options`, `evidence`, `source`, `uncertainties`, and omitted context.
-Each menu item has its conditions, source-stated category, and evidence. The
-standard text/ID columns can be passed to the package's TrialSpace embedding API;
-this function does not load an embedding model or perform matching.
+Each menu item has its conditions, source-stated category, and evidence. Load the
+exported catalog with `load_guideline_catalog` to get each space's
+`cohort_key_criteria`, the text the retrieval APIs pass to TrialSpace and the decision
+model; this function does not load an embedding model or perform matching.
 
 ## Endpoint and budget configuration
 
@@ -439,6 +442,36 @@ print(record.iloc[0]["diagnostic_workup"])
 print(record.iloc[0]["treatment_options"])
 ```
 
+### Key criteria
+
+Every loaded record also has `cohort_key_criteria`: its nine fields in the layout of a
+trial cohort's key criteria (`cohort_key_criteria` from `remove_boilerplate_criteria`,
+built with the same `gather_criteria`). The seven required fields come under
+"Inclusion criteria:", then `prior_treatment_excluded` and `biomarkers_excluded`
+under "Exclusion criteria:", one unnumbered line per field, written as in
+`clinical_space_summary` ("Label: value."). A field that is `NA` (no restriction
+recorded) has no line, and a heading without lines is left out. For a fabricated
+space:
+
+```text
+Inclusion criteria:
+Age range allowed: Age >=18 years.
+Cancer type allowed: Fictional cancer.
+Cancer burden allowed: Metastatic disease.
+Biomarkers required: Marker X positive.
+Exclusion criteria:
+Prior treatment excluded: Prior fictional inhibitor.
+```
+
+Guideline spaces have no boilerplate, so this is the text TrialSpace retrieval and
+the decision model's match questions read, as they read a cohort's key criteria
+(`retrieve_guideline_considerations`, `retrieve_guideline_patients`). It is derived
+from `space` on every load, never written to a catalog, and not part of
+`catalog_sha256`; exports and `clinical_space_summary` are unchanged, and lookup and
+the workup review's population context still use `clinical_space_summary`. Guideline
+vectors embedded from the earlier one-line text are stale: regenerate any you store
+yourself (the persistent cache below re-embeds them automatically).
+
 Lookup requires a catalog ID or the exact `clinical_space_summary` text. Unknown
 spaces raise an error rather than silently substituting another population. Text
 lookup may return multiple source editions; use an ID for one specific record.
@@ -502,8 +535,8 @@ write_guideline_considerations_report(
 
 This composes the existing public functions in order:
 
-1. `embed_for_matching` embeds the patient summaries and the catalog's TrialSpace
-   definitions with the same configured TrialSpace model. Catalog vectors are
+1. `embed_for_matching` embeds the patient summaries and the spaces' key criteria
+   (`cohort_key_criteria`) with the same configured TrialSpace model. Catalog vectors are
    computed once per call for all supplied patients, or reused from the optional
    disk cache described below.
 2. `generate_candidate_matches` retrieves `candidate_k` spaces by cosine similarity.
@@ -542,7 +575,9 @@ process restarts. The default is `None` (no disk vector cache). The cache stores
 vectors and input hashes, never patient summaries, patient vectors, or guideline
 text. Keep it outside code repositories because the vectors are source-derived.
 Identical text can reuse vectors across disease selections and catalog updates;
-new or changed definitions are embedded individually. Catalog validation and
+new or changed definitions are embedded individually. Entries are keyed by the exact
+key-criteria text, so vectors saved for the earlier one-line definitions are never
+reused; they are recomputed on first use and the old entries are simply unused. Catalog validation and
 source-integrity checks still run on every call, and returned menus always come
 from the current catalog.
 

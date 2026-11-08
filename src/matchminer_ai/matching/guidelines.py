@@ -95,6 +95,8 @@ def retrieve_guideline_considerations(
     -----
     The two public model stages are ``embed_for_matching`` and
     ``score_match_quality``, with ``generate_candidate_matches`` between them.
+    Both read each space's ``cohort_key_criteria`` from ``load_guideline_catalog``:
+    its nine fields in the layout of a trial cohort's key criteria.
     Catalog embeddings are computed once per call for all supplied patients,
     or reused from the optional verified cache. Only missing/changed text is
     embedded. Patient embeddings always use the same model configuration.
@@ -167,7 +169,7 @@ def retrieve_guideline_considerations(
             f"Embedding {len(spaces)} guideline spaces with the same TrialSpace model"
         )
         space_vectors, space_metadata = embed_for_matching(
-            spaces[["space_trial_id", "clinical_space_summary"]],
+            spaces[["space_trial_id", "cohort_key_criteria"]],
             entity_type="trial",
             config=resolved,
             return_metadata=True,
@@ -185,7 +187,7 @@ def retrieve_guideline_considerations(
     candidates = generate_candidate_matches(patient_vectors, space_vectors, k=candidate_k)
     candidates = candidates.rename(columns={"rank": "retrieval_rank"})
     pairs = candidates.merge(patients, on="patient_id", validate="many_to_one").merge(
-        spaces[["space_trial_id", "clinical_space_summary"]],
+        spaces[["space_trial_id", "cohort_key_criteria"]],
         on="space_trial_id",
         validate="many_to_one",
     )

@@ -61,6 +61,7 @@ def cohort():
         space={
             "space_trial_id": "s",
             "clinical_space_summary": "Fabricated population",
+            "cohort_key_criteria": "Inclusion criteria:\nFabricated population.",
             "diagnostic_workup": [
                 {
                     "name": "Test",
@@ -146,7 +147,7 @@ def test_review_isolation_failure_counts_and_csv(cohort, monkeypatch):
     monkeypatch.setattr("matchminer_ai.patients.review_patient_workup", review)
     result = review_population_workup(cohort, config=load_default_preset(), max_concurrent_patients=1)
     assert [len(texts) for texts, _ in calls] == [1, 2]
-    assert all(kwargs["population_context"] == "Fabricated population" for _, kwargs in calls)
+    assert all(kwargs["population_context"] == "Inclusion criteria:\nFabricated population." for _, kwargs in calls)
     table = population_results_table(result)
     assert len(table) == 4 and set(table.method) == {"full_notes"}
     row = result.report["aggregate"][0]

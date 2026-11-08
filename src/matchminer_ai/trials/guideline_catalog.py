@@ -34,6 +34,9 @@ _CATALOG_CACHE_MAX_FILES = 128
 # A full guideline collection exceeds 64 MiB. A smaller-than-collection LRU
 # evicts early files during each sequential scan and gets no hits next time.
 _CATALOG_CACHE_MAX_BYTES = 512 * 1024 * 1024
+# Derived from each record's nine-field space on every load; never stored in a catalog.
+# The same column a cohort's key criteria use (cohort_boilerplate.KEY_COLUMN).
+KEY_CRITERIA_COLUMN = "cohort_key_criteria"
 
 
 def _file_signature(path, *, required=False):
@@ -264,6 +267,12 @@ def load_guideline_catalog(
     pd.DataFrame or tuple[pd.DataFrame, dict]
         Complete, validated catalog records. Stored clinical text, conditions,
         categories, evidence, and uncertainties are preserved without rewriting.
+        Each record also gets ``cohort_key_criteria``: its nine-field space laid
+        out as a trial cohort's key criteria (one "Label: value." line per field
+        under "Inclusion criteria:" and "Exclusion criteria:", NA fields left out).
+        TrialSpace retrieval and the decision model's match questions read it.
+        It is derived on every load, never stored, and excluded from
+        ``catalog_sha256``; a supplied column of that name is recomputed.
 
     Notes
     -----
@@ -280,6 +289,8 @@ def load_guideline_catalog(
     records are independent copies, including nested menus and evidence.
     """
     import pandas as pd
+
+    from ._guideline_schema import format_key_criteria
 
     if progress_callback is not None and not callable(progress_callback):
         raise TypeError("progress_callback must be callable or None.")
@@ -298,6 +309,8 @@ def load_guideline_catalog(
     loaded_files = 0
     if isinstance(catalog, pd.DataFrame):
         progress("Validating supplied guideline records")
+        # A loaded catalog passed back in keeps its fingerprint: the key criteria are derived.
+        catalog = catalog.drop(columns=KEY_CRITERIA_COLUMN, errors="ignore")
         frame = pd.DataFrame(
             copy.deepcopy(catalog.to_dict("records")), columns=catalog.columns
         )
@@ -404,6 +417,7 @@ def load_guideline_catalog(
         },
     }
     frame = frame.reset_index(drop=True)
+    frame[KEY_CRITERIA_COLUMN] = [format_key_criteria(space) for space in frame["space"]]
     if artifacts and not isinstance(catalog, pd.DataFrame):
         progress(
             f"Guideline catalogs ready: reused {cached_files} validated catalogs; "

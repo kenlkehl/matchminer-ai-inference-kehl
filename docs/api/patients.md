@@ -313,7 +313,7 @@ review = review_patient_workup(
     raw_notes,                       # single-patient note DataFrame or raw string
     matched_space["diagnostic_workup"],
     config=config,                  # patient LLM config; remote.enabled=True
-    population_context=matched_space["clinical_space_summary"],  # guideline target, not patient facts
+    population_context=matched_space["cohort_key_criteria"],  # guideline key criteria, not patient facts
     progress_callback=print,
 )
 ```

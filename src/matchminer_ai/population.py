@@ -245,7 +245,8 @@ def review_population_workup(
                 config=config,
                 backup_config=backup_config,
                 max_consecutive_failures=max_consecutive_failures,
-                population_context=cohort.space.get("clinical_space_summary"),
+                population_context=(cohort.space.get("cohort_key_criteria")
+                                    or cohort.space.get("clinical_space_summary")),
             )
         except Exception as exc:  # one patient's failure keeps its error rows (cancellation is a BaseException);
             # only the exception type is kept: provider messages can echo patient text.

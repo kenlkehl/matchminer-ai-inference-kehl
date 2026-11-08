@@ -44,7 +44,7 @@ def write_guideline_considerations_report(
     directory, outside public packages and source control.
     """
     from .guidelines import _patient_frame
-    from matchminer_ai.trials._guideline_schema import FIELDS
+    from matchminer_ai.trials._guideline_schema import format_key_criteria
 
     patients = _patient_frame(patient_summaries)
     required = {
@@ -159,12 +159,13 @@ def write_guideline_considerations_report(
                 "",
                 f"Source: {_text(source['title'])}, {_text(source['version'])}.",
                 "",
-                "**Catalog population**",
+                "**Catalog population key criteria**",
                 "",
             ]
+            # One line per field, under the headings, as in a cohort's key criteria.
             lines += [
-                f"- **{label}:** {_text(row['space'][key])}"
-                for key, label in FIELDS.items()
+                _text(line) + "  "
+                for line in format_key_criteria(row["space"]).splitlines()
             ]
             lines.append("")
             if source.get("source_kind") == "nci_pdq":

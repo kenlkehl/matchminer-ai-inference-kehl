@@ -42,7 +42,10 @@ restored = load_patient_cohort("/authorized/private/cohort.zip")
 ```
 
 `candidate_k` controls TrialSpace candidates that undergo match-quality scoring, capped
-at population size. Embedding and scoring use batches of 32 records, with
+at population size. The space is embedded and scored by its key criteria
+(`cohort_key_criteria`, the nine fields laid out as a trial cohort's key criteria; see
+the [guideline extraction guide](guideline-extraction.md#key-criteria)), which
+`metadata["space"]` and the cohort's `space` keep. Embedding and scoring use batches of 32 records, with
 progress and cancellation checks between batches. `min_match_score=None` retains all candidates. The trial space
 is the query and patient summaries are the corpus. Both sides use the same loaded
 embedding model metadata; raw notes never enter these matching stages. A catalog

@@ -244,6 +244,10 @@ Both steps are optional at inference. They take `section="trial"` (ctgov
 listings) or `"protocol_cohort_extraction"` (protocols) for their LLM settings;
 training runs the merge first, then the boilerplate step.
 
+Guideline catalog spaces have no boilerplate; `load_guideline_catalog` lays their nine
+population fields out the same way, as `cohort_key_criteria` (see the
+[guideline extraction guide](../user-guide/guideline-extraction.md#key-criteria)).
+
 ## Cancer-treatment screen only
 
 `screen_trials` runs only the workflow's first step

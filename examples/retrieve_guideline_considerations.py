@@ -106,7 +106,7 @@ def main():
         )
     config = load_default_preset()
     config.embedding["device"] = args.device
-    config.raw["match_quality"]["device"] = args.device
+    config.raw["decision_model"]["device"] = args.device
     config.model_metadata_cache_dir = str(
         args.metadata_cache_dir or output / "model_metadata"
     )

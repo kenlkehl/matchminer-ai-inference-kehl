@@ -351,9 +351,14 @@ Existing catalogs can also be queried by exact space using
 `trials.get_guideline_considerations`, or ranked for patient summaries using
 `matching.retrieve_guideline_considerations` (TrialSpace retrieval followed by
 match-quality ranking). These APIs return the stored diagnostic and treatment
-menus with their conditions, citations, and uncertainties.
+menus with their conditions, citations, and uncertainties. Loaded spaces carry
+`cohort_key_criteria`, their nine population fields laid out as a trial cohort's key
+criteria ("Inclusion criteria:" / "Exclusion criteria:", one field per line, NA fields
+omitted); TrialSpace and the decision model read that text.
 Pass `embedding_cache_dir` to the retrieval API to persist and reuse compatible
 guideline embeddings across requests and restarts; patient vectors are not cached.
+Guideline vectors made from the earlier one-line nine-field text must be regenerated;
+the persistent cache is keyed by the exact text, so it re-embeds them automatically.
 Validated guideline files also reuse an in-memory cache until their catalog,
 completion status, or audit files change, avoiding repeated reads and validation.
 

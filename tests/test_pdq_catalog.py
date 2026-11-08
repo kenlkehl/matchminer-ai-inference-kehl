@@ -433,7 +433,9 @@ def test_public_pdq_catalog_roundtrip_audit_lookup_and_offline_resume(
     )
     loaded = load_guideline_catalog(output)
     selected = get_guideline_considerations(output, space_trial_id=row.space_trial_id)
-    pd.testing.assert_frame_equal(result, loaded)
+    # Loading adds only the derived key criteria (never stored in the export).
+    pd.testing.assert_frame_equal(result, loaded.drop(columns="cohort_key_criteria"))
+    assert loaded.cohort_key_criteria.iloc[0].startswith("Inclusion criteria:\n")
     assert selected.iloc[0].diagnostic_workup == row.diagnostic_workup
     assert selected.iloc[0].treatment_options == row.treatment_options
     assert list_guidelines(source).disease.tolist() == ["fictional"]

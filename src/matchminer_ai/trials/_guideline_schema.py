@@ -178,6 +178,34 @@ def format_space(space):
     )
 
 
+# The two fields that disqualify; the other seven state what the population requires.
+EXCLUSION_FIELDS = ("prior_treatment_excluded", "biomarkers_excluded")
+
+
+def format_key_criteria(space):
+    """The space's key criteria, laid out as a trial cohort's ``cohort_key_criteria``.
+
+    Each field is one line, written as in ``format_space`` ("Label: value."), under
+    "Inclusion criteria:" (the seven requirements) and then "Exclusion criteria:"
+    (the two excluded fields), gathered by ``cohort_boilerplate.gather_criteria``; a
+    heading without lines is left out. A field that is NA (no restriction recorded)
+    has no line, as a cohort has no criterion for a dimension it does not restrict.
+    """
+    from .cohort_boilerplate import gather_criteria
+
+    format_space(space)  # the same shape and stand-alone checks
+    items = []
+    for excluded in (False, True):
+        heading = "Exclusion criteria:" if excluded else "Inclusion criteria:"
+        for key, label in FIELDS.items():
+            value = normalized(space[key]).rstrip(".")
+            if (key in EXCLUSION_FIELDS) == excluded and value.casefold() not in {"na", "n/a"}:
+                items.append((heading, f"{label}: {value}."))
+    if not items:
+        raise ValueError("A guideline space needs at least one field that is not NA.")
+    return gather_criteria(items, [False] * len(items))[0]
+
+
 def validate_evidence(evidence, pages):
     if not evidence:
         raise ValueError(

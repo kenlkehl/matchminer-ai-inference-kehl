@@ -61,6 +61,9 @@ def test_trial_is_query_patient_is_corpus_candidate_limit_and_threshold(
     assert selected.retrieval_rank.tolist() == [2]
     assert meta["scored_count"] == 2 and meta["population_count"] == 3
     assert meta["space"]["diagnostic_workup"] == catalog_frame.iloc[0].diagnostic_workup
+    # The space is scored by its key criteria, laid out as a cohort's.
+    assert stages[0].cohort_key_criteria.unique().tolist() == [meta["space"]["cohort_key_criteria"]]
+    assert meta["space"]["cohort_key_criteria"].startswith("Inclusion criteria:\n")
 
 
 def test_zero_matches_and_candidate_cap(catalog_frame, stages):
@@ -183,7 +186,7 @@ def test_multiple_embedding_and_checker_batches_cover_requested_candidates(
     assert selected.match_quality_score.is_monotonic_decreasing
     assert metadata["population_count"] == 70 and metadata["scored_count"] == 40
     assert "Embedded 70/70 patient summaries" in updates
-    assert "TrialChecked 40/40 candidate patients" in updates
+    assert "Match-quality scored 40/40 candidate patients" in updates
 
 
 def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(

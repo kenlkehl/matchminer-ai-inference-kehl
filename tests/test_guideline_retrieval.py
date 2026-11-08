@@ -14,7 +14,12 @@ from matchminer_ai.matching import (
     write_guideline_considerations_report,
 )
 from matchminer_ai.trials import get_guideline_considerations, load_guideline_catalog
-from matchminer_ai.trials._guideline_schema import format_space, materialize_evidence
+from matchminer_ai.trials._guideline_schema import (
+    FIELDS,
+    format_key_criteria,
+    format_space,
+    materialize_evidence,
+)
 from matchminer_ai.trials._guideline_sources import load_guideline
 from test_guideline_extraction import make_library, state
 
@@ -79,7 +84,8 @@ def model_stages(monkeypatch):
                 {"patient_id": frame.patient_id, "embedding": [[1.0, 0.0]] * len(frame)}
             )
         else:
-            assert list(frame.columns) == ["space_trial_id", "clinical_space_summary"]
+            assert list(frame.columns) == ["space_trial_id", "cohort_key_criteria"]
+            assert frame.cohort_key_criteria.str.startswith("Inclusion criteria:\n").all()
             vectors = {"a": [1.0, 0.0], "b": [0.8, 0.6], "c": [0.6, 0.8]}
             result = pd.DataFrame(
                 {
@@ -93,6 +99,7 @@ def model_stages(monkeypatch):
         assert filter_low_quality is False
         assert return_metadata
         assert "diagnostic_workup" not in frame and "unused_note" not in frame
+        assert "clinical_space_summary" not in frame and "cohort_key_criteria" in frame
         calls["checker"].append(frame.copy())
         result = frame[["patient_id", "space_trial_id"]].copy()
         result["match_quality_score"] = result.space_trial_id.map(
@@ -459,6 +466,45 @@ def test_patient_retrieval_reuses_catalog_validation(
         assert any("reused" in p for p in progress)
 
 
+def test_loader_adds_key_criteria_laid_out_as_cohort_key_criteria(catalog_frame):
+    space = dict(
+        catalog_frame.iloc[0].space,
+        age_range_allowed="Age >=18 years",
+        prior_treatment_excluded="Prior  fictional inhibitor.",
+        biomarkers_required="Marker X positive",
+    )
+    catalog_frame.at[0, "space"] = space
+    catalog_frame.at[0, "clinical_space_summary"] = format_space(space)
+    loaded, metadata = load_guideline_catalog(catalog_frame, return_metadata=True)
+    # As cohort_boilerplate.gather_criteria lays out a cohort's key criteria: the
+    # headings, then one unnumbered line per field ("Label: value."); NA fields have none.
+    assert loaded.cohort_key_criteria.tolist() == [
+        "Inclusion criteria:\nAge range allowed: Age >=18 years.\n"
+        "Cancer type allowed: Fictional disease.\nCancer burden allowed: State a.\n"
+        "Biomarkers required: Marker X positive.\n"
+        "Exclusion criteria:\nPrior treatment excluded: Prior fictional inhibitor.",
+        "Inclusion criteria:\nCancer type allowed: Fictional disease.\n"
+        "Cancer burden allowed: State b.",
+        "Inclusion criteria:\nCancer type allowed: Fictional disease.\n"
+        "Cancer burden allowed: State c.",
+    ]
+    for line in loaded.cohort_key_criteria.iloc[0].splitlines():
+        assert line.endswith(" criteria:") or line in loaded.clinical_space_summary.iloc[0]
+    # Derived on load, never stored: a loaded catalog passed back keeps its
+    # fingerprint, and a supplied stale column is recomputed.
+    stale = loaded.assign(cohort_key_criteria="Stale text")
+    again, again_metadata = load_guideline_catalog(stale, return_metadata=True)
+    assert again.cohort_key_criteria.tolist() == loaded.cohort_key_criteria.tolist()
+    assert again_metadata["catalog_sha256"] == metadata["catalog_sha256"]
+    lookup = get_guideline_considerations(stale, space_trial_id="b")
+    assert lookup.cohort_key_criteria.tolist() == [loaded.cohort_key_criteria.iloc[1]]
+    unrestricted = dict.fromkeys(FIELDS, "NA")
+    catalog_frame.at[1, "space"] = unrestricted
+    catalog_frame.at[1, "clinical_space_summary"] = format_space(unrestricted)
+    with pytest.raises(ValueError, match="not NA"):
+        load_guideline_catalog(catalog_frame)
+
+
 def test_loader_rejects_missing_menus_duplicate_ids_and_changed_space(catalog_frame):
     with pytest.raises(ValueError, match="missing columns"):
         load_guideline_catalog(catalog_frame.drop(columns=["diagnostic_workup"]))
@@ -609,6 +655,11 @@ def test_report_renders_input_conditions_sources_and_rank_order(
     )
     assert "When finding B is present" in text
     assert "Fictional disease state alpha" in text
+    assert (
+        "**Catalog population key criteria**\n\nInclusion criteria:  \n"
+        "Cancer type allowed: Fictional disease.  \nCancer burden allowed: State b.  \n"
+    ) in text
+    assert "Sex allowed" not in text
     assert "#page=2" in text
     assert "not probabilities" in text
     assert "checker-revision" in text
@@ -688,6 +739,7 @@ def test_saved_vectors_reused_with_reordered_catalog(
     disk = Path(metadata["guideline_embedding_cache"]["path"]).read_bytes()
     assert b"Synthetic patient" not in disk
     assert catalog_frame.iloc[0].clinical_space_summary.encode() not in disk
+    assert format_key_criteria(catalog_frame.iloc[0].space).encode() not in disk
 
 
 def test_only_added_and_changed_guideline_texts_are_embedded(

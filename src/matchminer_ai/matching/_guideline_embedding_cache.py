@@ -94,7 +94,9 @@ def cached_guideline_embeddings(
         )
 
     identity = _embedding_cache_identity(config.embedding, patient_model)
-    keys = [digest(text.encode()) for text in spaces.clinical_space_summary]
+    # Keyed by the exact text embedded (the space's key criteria), so a changed layout
+    # or definition is a miss and is embedded again.
+    keys = [digest(text.encode()) for text in spaces.cohort_key_criteria]
     unique = dict(zip(keys, spaces.index, strict=True))
     found = {}
     path = None
@@ -126,7 +128,7 @@ def cached_guideline_embeddings(
     if missing:
         subset = spaces.loc[
             [unique[key] for key in missing],
-            ["space_trial_id", "clinical_space_summary"],
+            ["space_trial_id", "cohort_key_criteria"],
         ]
         fresh, metadata = embed(
             subset, entity_type="trial", config=config, return_metadata=True

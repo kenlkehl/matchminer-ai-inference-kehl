@@ -165,6 +165,8 @@ def retrieve_guideline_patients(
     highest-cosine patient summaries scored, capped at the population size.
     min_match_score=None retains every scored candidate. Scores are prioritization
     signals, not eligibility decisions. No raw notes or remote LLM are used.
+    The space is embedded and scored by its ``cohort_key_criteria`` (see
+    ``trials.load_guideline_catalog``).
     Patient vectors are made in this call unless ``patient_embeddings`` from
     ``embed_guideline_patients`` covers every patient with unchanged summary text
     and the same verified encoder used for the guideline space. None are saved.
@@ -199,7 +201,7 @@ def retrieve_guideline_patients(
     check_cancelled()
     progress("Embedding the selected guideline population with TrialSpace")
     sv, sm = embed_for_matching(
-        spaces[["space_trial_id", "clinical_space_summary"]],
+        spaces[["space_trial_id", "cohort_key_criteria"]],
         entity_type="trial",
         config=config,
         return_metadata=True,
@@ -225,7 +227,7 @@ def retrieve_guideline_patients(
     # Query is the trial space; the corpus is the full patient population.
     candidates = generate_candidate_matches(sv, pv, k=candidate_k).rename(columns={"rank": "retrieval_rank"})
     pairs = candidates.merge(patients, on="patient_id", validate="one_to_one").merge(
-        spaces[["space_trial_id", "clinical_space_summary"]],
+        spaces[["space_trial_id", "cohort_key_criteria"]],
         on="space_trial_id",
         validate="many_to_one",
     )
@@ -249,7 +251,7 @@ def retrieve_guideline_patients(
         metadata = batch_metadata
         score_batches.append(batch)
         progress(
-            f"TrialChecked {min(start + 32, len(pairs))}/{len(pairs)} candidate patients"
+            f"Match-quality scored {min(start + 32, len(pairs))}/{len(pairs)} candidate patients"
         )
     scores = pd.concat(score_batches, ignore_index=True)
     keys = ["patient_id", "space_trial_id"]
