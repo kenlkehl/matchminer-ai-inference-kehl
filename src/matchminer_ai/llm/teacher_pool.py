@@ -362,6 +362,13 @@ class DynamicServerRegistry:
         async with self._lock:
             return [e for e in self._entries.values() if not e.retired]
 
+    def endpoint_stats(self) -> List[dict]:
+        """Every endpoint's admission and outcome counters, retired ones included (label client processes)."""
+        return [dict(url=entry.url, retired=entry.retired, **entry.semaphore.stats(),
+                     successful_requests=entry.ok_count, request_errors=entry.err_count,
+                     validation_errors=entry.output_validation_err_count, error_types=dict(entry.error_types),
+                     last_error=entry.last_error) for entry in self._entries.values()]
+
     def request_capacity(self) -> int:
         """Maximum active slots; read on the registry's owning event loop."""
         return sum(

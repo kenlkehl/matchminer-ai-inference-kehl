@@ -5,6 +5,7 @@ after all required question responses are saved. Resume reads this sequential
 file, never the completed pairs' individual response files.
 """
 import asyncio
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -30,7 +31,7 @@ def pending_candidates(pairs, scores):
 
 
 class ScoreJournal:
-    def __init__(self, output, signature, *, allow_import=False):
+    def __init__(self, output, signature, *, allow_import=False, shared=False):
         self.output = Path(output)
         self.root = self.output / 'score_journal'
         self.path = self.root / 'scores.jsonl'
@@ -50,6 +51,7 @@ class ScoreJournal:
             self.root.mkdir(parents=True, exist_ok=True)
             write_json(manifest, expected)
         self.signature = signature
+        self.shared = shared  # several label client processes append (labeling.clients)
         self.queue = asyncio.Queue(maxsize=32768)
         self.background = BackgroundWork(1, 1, 'score-journal')
         self.error = None
@@ -85,8 +87,11 @@ class ScoreJournal:
     def append(self, rows):
         raw = ''.join(json.dumps(r, separators=(',', ':'), ensure_ascii=False) + '\n'
                       for r in rows).encode()
-        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        fd = os.open(self.path, (os.O_RDWR if self.shared else os.O_WRONLY) | os.O_CREAT | os.O_APPEND, 0o600)
         try:
+            if self.shared:  # one append at a time, never after another client's torn record
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                self._cut_torn_tail(fd)
             remaining = memoryview(raw)
             while remaining:
                 written = os.write(fd, remaining)
@@ -96,6 +101,20 @@ class ScoreJournal:
             os.fsync(fd)
         finally:
             os.close(fd)
+
+    def _cut_torn_tail(self, fd):
+        size = end = os.fstat(fd).st_size
+        if not size or os.pread(fd, 1, size - 1) == b'\n':
+            return
+        while end:
+            start = max(0, end - 65536)
+            index = os.pread(fd, end - start, start).rfind(b'\n')
+            end = start + index + 1 if index >= 0 else start
+            if index >= 0:
+                break
+        (self.root / f'torn-tail-{time.time_ns()}.bin').write_bytes(os.pread(fd, size - end, end))
+        os.ftruncate(fd, end)
+        os.fsync(fd)
 
     async def _writer(self):
         batch = []

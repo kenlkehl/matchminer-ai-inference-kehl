@@ -13,10 +13,10 @@ class ResponseStore:
     A missing shard file costs one open instead of repeated stat/mkdir operations.
     """
 
-    def __init__(self, root, *, compact=False, read_only=False):
+    def __init__(self, root, *, compact=False, read_only=False, shared=False):
         self.root = Path(root)
         from .compact_responses import CompactResponses, FILENAME
-        self.database = (CompactResponses(self.root, read_only=read_only)
+        self.database = (CompactResponses(self.root, read_only=read_only, shared=shared)
                          if compact or (self.root/FILENAME).exists() else None)
         if self.database is not None:
             self.legacy = {p.stem for p in self.root.glob('*.json')}

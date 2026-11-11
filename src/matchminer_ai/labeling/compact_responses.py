@@ -16,10 +16,11 @@ class CompactResponses:
     and every reading thread has its own read-only connection. With one transaction and fsync per response, and
     reads waiting on the same lock, a labeler process stalled near 30 responses/s (2026-11-10)."""
 
-    def __init__(self, root, *, read_only=False, reserve_bytes=16 * 1024**3):
+    def __init__(self, root, *, read_only=False, reserve_bytes=16 * 1024**3, shared=False):
         self.root = Path(root)
         self.path = self.root/FILENAME
         self.read_only = read_only
+        self.shared = shared  # one of several label client processes: the labeling process closes the WAL
         self.lock = threading.RLock()
         self.reserve_bytes = reserve_bytes
         self.last_space_check = 0.0
@@ -116,7 +117,7 @@ class CompactResponses:
             for reader in readers:  # before the checkpoint: open readers would keep the WAL from truncating
                 reader.close()
             if self.connection is not None:
-                if not self.read_only:
+                if not self.read_only and not self.shared:
                     self.connection.execute('PRAGMA wal_checkpoint(TRUNCATE)')
                     self.connection.execute('PRAGMA journal_mode=DELETE')
                 self.connection.close()

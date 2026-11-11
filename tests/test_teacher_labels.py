@@ -99,3 +99,108 @@ def test_criteria_labels_ask_one_tagged_line_with_the_complete_summary():
     validate_row('criteria', dict(criterion=json.loads(fails), criterion_type='exclusion'))
     with pytest.raises(ValueError):  # a line whose type differs from the corpus is not asked
         list(questions([dict(rows[0], criterion_type='exclusion')], patients, cohorts, task='criteria'))
+
+
+def test_client_processes_label_what_one_process_labels(tmp_path, monkeypatch):
+    """--label-client-processes 2 (its clients run as threads here) publishes the one-process outputs; the number
+    of clients enters no identity."""
+    import argparse
+    import hashlib
+    import http.server
+    import pickle
+    import threading
+    from pathlib import Path
+    from matchminer_ai.labeling import add_label_cli_args, clients, run_label, runner
+    model = 'nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4'
+
+    class Teacher(http.server.BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def log_message(self, *args):
+            pass
+
+        def reply(self, value):
+            data = json.dumps(value).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            self.reply(dict(object='list', data=[dict(id=model, object='model', root=model, max_model_len=262144)]))
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            h = hashlib.sha256(body['prompt'].encode()).hexdigest()
+            text = (answer(**{label: int(h[i], 16) % 2 for i, label in enumerate(LABELS)})
+                    if 'reasonableness' in json.dumps(body.get('structured_outputs')) else ('Yes!' if int(h[0], 16) % 2 else 'No!'))
+            self.reply(dict(id='cmpl-1', object='text_completion', created=0, model=model,
+                            choices=[dict(index=0, text=text, finish_reason='stop', logprobs=None)]))
+
+    class Tokenizer:
+        chat_template, backend_tokenizer = 'fabricated', None
+
+        def apply_chat_template(self, messages, **kwargs):
+            return '\n'.join(message['content'] for message in messages)
+
+        def encode(self, text, add_special_tokens=False):
+            return text.split()
+
+    class Client:  # a client process's run, in a thread, so the fakes above reach it
+        def __init__(self, spec, fds):
+            self.pid, self.returncode = None, None
+            self.thread = threading.Thread(target=self.main, args=(spec,))
+            self.thread.start()
+
+        def main(self, spec):
+            try:
+                clients.run_client(pickle.loads(Path(spec).read_bytes()))
+            finally:
+                self.returncode = 0 if self.returncode is None else self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self):
+            self.thread.join()
+
+        terminate = kill = lambda self: None
+
+    monkeypatch.setattr(runner, 'load_tokenizer', lambda *args, **kwargs: Tokenizer())
+    monkeypatch.setattr(runner, 'resolve_parser_name', lambda *args: None)
+    monkeypatch.setattr(clients, 'spawn', Client)
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Teacher)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    patients = [dict(id=f'p{i}', text=f'Key: metastatic cancer {i}.', boilerplate=f'History {i % 2}.', split='train')
+                for i in range(4)]
+    cohorts = [dict(id=f'c{i}', trial_id=f'T{i}', text=f'Key: cohort {i}.', boilerplate=f'No dialysis {i}.' if i else '',
+                    split='train') for i in range(4)]
+    (tmp_path / 'corpus').mkdir()
+    for name, rows in (('patients.jsonl', patients), ('cohorts.jsonl', cohorts)):
+        (tmp_path / 'corpus' / name).write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    pairs = [dict(patient_id=p['id'], cohort_id=c['id'], split='train') for p in patients for c in cohorts]
+    (tmp_path / 'pairs.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in pairs * 2))  # duplicates too
+
+    def published(task, count):
+        output = tmp_path / f'{task}{count}'
+        parser = add_label_cli_args(argparse.ArgumentParser())
+        args = parser.parse_args(['--corpus', str(tmp_path / 'corpus'), '--candidates', str(tmp_path / 'pairs.jsonl'),
+                                  '--output', str(output), '--task', task, '--teacher-model', model,
+                                  '--teacher-tokenizer', model, '--server_urls', f'http://127.0.0.1:{server.server_port}/v1',
+                                  '--max_concurrent_per_server', '3', '--label-client-processes', str(count)])
+        args.label_scratch_dir = str(tmp_path / 'scratch')
+        run_label(args)
+        products = json.loads((output / 'storage_complete.json').read_text())['products']
+        labels = [{k: v for k, v in json.loads(line).items() if k != 'generated_at'}
+                  for line in (output / 'labels.jsonl').read_text().splitlines()]
+        return dict(labels=labels, products=sorted(products), status=json.loads((output / 'status.json').read_text())['state'],
+                    **{name: (output / name).read_text() for name in ('labeling_manifest.json', 'scores.jsonl')
+                       if (output / name).exists()})
+
+    for task, questions_ in (('match', 16), ('boilerplate', 12)):
+        one, two = published(task, 1), published(task, 2)
+        assert one == two and one['status'] == 'complete' and len(one['labels']) == questions_
+        assert not [key for key in json.loads(one['labeling_manifest.json']) if 'client' in key or 'process' in key]
+        assert not list((tmp_path / 'scratch').glob('*/clients')) and 'clients' not in str(one['products'])
+    server.shutdown()

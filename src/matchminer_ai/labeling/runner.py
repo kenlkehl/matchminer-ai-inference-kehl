@@ -10,7 +10,7 @@ criteria (yes = does not clearly fail it). Every response is kept with its reaso
 prompt.
 """
 import asyncio
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, nullcontext
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import fcntl
@@ -116,19 +116,25 @@ async def label(args):
     output.mkdir(parents=True, exist_ok=True)
     with (output / 'labeling.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        args.label_lock_fd = lock.fileno()  # client processes inherit it (clients.spawn)
         from .workspace import run_local_label
         return await run_local_label(args, _label)
 
 
-async def _label(args, output):
+async def _label(args, output, client=None):
+    """``client``: the spec of one of several client processes (:mod:`.clients`), which labels its share of
+    the pending pairs into the same store and journal; the labeling process prepares, exports and publishes."""
     auto_maximum = getattr(args, 'max_auto_pending_requests', DEFAULT_AUTO_WORKERS_MAX)
     worker_target(args.pending_requests, 0, auto_maximum)  # Validate before loading the corpus.
+    processes = 1 if client else getattr(args, 'label_client_processes', 1)
+    if processes < 1:
+        raise ValueError('--label-client-processes must be positive')
     timing = dict(pid=os.getpid(), started_at=datetime.now(timezone.utc).isoformat(), first_request_at=None,
                   attempts_started=0)
     from .publication import input_fingerprints, publish_scores
     source_inputs = input_fingerprints(args.corpus, args.candidates)
     patients, cohorts = load_corpus(args.corpus)
-    pairs = read_jsonl(args.candidates)
+    pairs = read_jsonl(args.candidates)  # a client's: its share of the pending pairs
     sources = prompt_sources()
     task = getattr(args, 'task', 'match')
     if task not in TASKS:
@@ -136,19 +142,23 @@ async def _label(args, output):
     tokenizer = load_tokenizer(args.teacher_tokenizer, cache_dir=args.cache_dir)
     defaults = resolve_sampling_defaults(args.teacher_tokenizer)
     sampling = CompletionSampling(model=args.teacher_model, request_timeout=args.request_timeout, **defaults)
-    signature = dict(task=task, contract=contract_hash(task, sources), patients=digest(patients), cohorts=digest(cohorts),
-                     pairs=digest(pairs), sampling=asdict(sampling), tokenizer=args.teacher_tokenizer,
-                     template=digest(tokenizer.chat_template), max_tokens=args.max_tokens,
-                     context_length=args.teacher_context)
     gated = task == 'match'  # match labels are scored and journaled per pair
-    if gated:
-        from .scoring import score_contract
-        signature['aggregation_contract'] = score_contract(signature['contract'])
-    manifest = output / 'labeling_manifest.json'
-    if manifest.exists() and json.loads(manifest.read_text()) != signature:
-        raise ValueError('Teacher identity changed; use a new label directory')
-    write_json(manifest, signature)
-    write_json(output / 'prompt_sources.json', sources)
+    if client is not None:
+        signature = client['signature']
+    else:
+        signature = dict(task=task, contract=contract_hash(task, sources), patients=digest(patients),
+                         cohorts=digest(cohorts), pairs=digest(pairs), sampling=asdict(sampling),
+                         tokenizer=args.teacher_tokenizer, template=digest(tokenizer.chat_template),
+                         max_tokens=args.max_tokens, context_length=args.teacher_context)
+        if gated:
+            from .scoring import score_contract
+            signature['aggregation_contract'] = score_contract(signature['contract'])
+        manifest = output / 'labeling_manifest.json'
+        if manifest.exists() and json.loads(manifest.read_text()) != signature:
+            raise ValueError('Teacher identity changed; use a new label directory')
+        write_json(manifest, signature)
+        write_json(output / 'prompt_sources.json', sources)
+    status_path = Path(client['directory']) / 'status.json' if client else output / 'status.json'
     checkpoint_dir = output / 'responses'
     checkpoint_dir.mkdir(exist_ok=True)
     served_name = getattr(args, 'teacher_served_model', None) or args.teacher_model
@@ -188,13 +198,17 @@ async def _label(args, output):
 
     if getattr(args, 'scheduler_adaptive_concurrency', False) and not getattr(args, 'scheduler_metrics_file', None):
         args.scheduler_metrics_file = str(output / 'concurrency_status.json')
-    registry = build_registry_from_args(args)
+    clients = None
+    if processes > 1:
+        from .clients import Clients
+        clients = Clients(args, output, processes)
+    registry = build_registry_from_args(clients.coordinator_args() if clients else args)
     pmap, cmap = {p['id']: p for p in patients}, {c['id']: c for c in cohorts}
-    if (output / 'reuse_sources.json').exists():
+    if client is None and (output / 'reuse_sources.json').exists():
         if not gated:
             raise ValueError('Candidate-subset reuse requires match labels')
         from .reuse import import_completed_sources
-        write_json(output / 'status.json', dict(state='waiting_for_source_labels', **timing))
+        write_json(status_path, dict(state='waiting_for_source_labels', **timing))
         imported = await asyncio.to_thread(import_completed_sources, output, signature, pmap, cmap, pairs,
             compact=getattr(args, 'compact_response_store', False))
         print(f'[labels] imported {imported} completed candidate-subset pairs with their reasoning traces', flush=True)
@@ -213,11 +227,14 @@ async def _label(args, output):
     def snapshot(state='labeling'):
         # Copy mutable counters on the event loop, then serialize/write outside
         # it. Never send patient text into operational telemetry.
-        return dict(state=state, **timing,
+        value = dict(state=state, **timing,
             updated_at=datetime.now(timezone.utc).isoformat(), total_pairs=len(pairs),
             completed=restored_questions + len(completed), failures=dict(failures), client=dict(client_stats),
             event_loop_lag=dict(loop_lag),
             **(dict(scored_pairs=len(scores), score_distribution=dict(score_counts)) if gated else {}))
+        if client is not None:
+            value['servers'] = registry.endpoint_stats()
+        return clients.merge(value) if clients else value
 
     async def monitor_loop():
         while True:
@@ -229,25 +246,29 @@ async def _label(args, output):
 
     async def report_progress():
         while True:
-            client_stats.update(preprocessing=dict(preparer.stats),
-                                preprocessing_queue=preparer.queue.qsize(),
-                                request_queue=session.queue.qsize() if hasattr(session, 'queue') else None)
-            await telemetry.run(write_json, output / 'status.json', snapshot())
+            if not clients:
+                client_stats.update(preprocessing=dict(preparer.stats),
+                                    preprocessing_queue=preparer.queue.qsize(),
+                                    request_queue=session.queue.qsize() if hasattr(session, 'queue') else None)
+            await telemetry.run(write_json, status_path, snapshot())
             await asyncio.sleep(10)
 
     async with (AsyncExitStack() as stack, BackgroundWork() as storage,
                 BackgroundWork(name='label-checkpoint-read') as checkpoint_reads,
                 BackgroundWork(1, 1, 'label-progress') as telemetry,
-                PromptPreparer(tokenizer, resolve_chat_template_kwargs(args.teacher_tokenizer),
-                               context=args.teacher_context, max_tokens=args.max_tokens) as preparer,
-                RequestSession(registry, work, max_attempts=args.max_attempts) as session):
+                nullcontext() if clients else PromptPreparer(
+                    tokenizer, resolve_chat_template_kwargs(args.teacher_tokenizer),
+                    context=args.teacher_context, max_tokens=args.max_tokens) as preparer,
+                clients.serving(registry) if clients else RequestSession(
+                    registry, work, max_attempts=args.max_attempts) as session):
         journal = None
         if gated:
             from .journal import ScoreJournal, pending_candidates
-            journal = ScoreJournal(output, signature)
-            write_json(output / 'status.json', snapshot('loading_completed_scores'))
+            journal = ScoreJournal(output, signature, shared=client is not None)
+            write_json(status_path, snapshot('loading_completed_scores'))
             resume_started = time.monotonic()
-            scores = await storage.run(journal.load, pmap, cmap)
+            # A client's pairs are already pending; the labeling process loaded the journal.
+            scores = await storage.run(journal.load, pmap, cmap) if client is None else {}
             if scores:
                 scheduled_pairs = await storage.run(pending_candidates, pairs, scores)
             restored_pairs.update(scores)
@@ -257,8 +278,9 @@ async def _label(args, output):
             timing.update(restored_pairs=len(restored_pairs), restored_questions=restored_questions,
                           resume_index_seconds=time.monotonic() - resume_started)
             await stack.enter_async_context(journal)
-            print(f'[labels] restored {len(restored_pairs)} completed pairs from compact journal; '
-                  'individual reasoning traces were not replayed', flush=True)
+            if client is None:
+                print(f'[labels] restored {len(restored_pairs)} completed pairs from compact journal; '
+                      'individual reasoning traces were not replayed', flush=True)
         def load_checkpoint(item):
             # Network-filesystem reads must not block every active HTTP request
             # or the scheduler while a production run resumes saved answers.
@@ -275,7 +297,7 @@ async def _label(args, output):
             return path, None
 
         response_store = await storage.run(ResponseStore, checkpoint_dir,
-            compact=getattr(args, 'compact_response_store', False))
+            compact=getattr(args, 'compact_response_store', False), shared=client is not None)
         stack.callback(response_store.close)
 
         async def ask(item):
@@ -323,13 +345,30 @@ async def _label(args, output):
         reporter = asyncio.create_task(report_progress())
         loop_monitor = asyncio.create_task(monitor_loop())
         try:
-            await run_workers(iterator, process, lambda: registry.request_capacity(),
-                              workers=args.pending_requests, maximum=auto_maximum, on_resize=resized)
+            if clients:
+                await clients.run(registry, scheduled_pairs, task, signature)
+            else:
+                await run_workers(iterator, process, lambda: registry.request_capacity(),
+                                  workers=args.pending_requests, maximum=auto_maximum, on_resize=resized)
         finally:
             reporter.cancel()
             loop_monitor.cancel()
             await asyncio.gather(reporter, loop_monitor, return_exceptions=True)
-            await telemetry.run(write_json, output / 'status.json', snapshot('incomplete'))
+            await telemetry.run(write_json, status_path, snapshot('incomplete'))
+    if client is not None:
+        write_json(Path(client['directory']) / 'result.json', dict(completed=sorted(completed), failures=failures),
+                   compact=True)
+        return None
+    if clients:  # every client's answers are in the response store and its scores in the journal
+        completed.update(dict.fromkeys(clients.completed))
+        failures.update(clients.failures)
+        if gated:
+            scores = journal.load(pmap, cmap)
+            if len(scores) != len(restored_pairs) + len(completed):
+                raise ValueError('The score journal disagrees with the clients\' completed pairs')
+            for key in scores.keys() - restored_pairs:
+                score_counts[str(scores[key]['score'])] += 1
+        clients.finish()
     def export_keys():
         for pair_key in sorted(restored_pairs):
             for key in scores[pair_key]['question_keys'].values():
@@ -384,6 +423,10 @@ def add_label_cli_args(parser):
                         help='Pairs in flight; 0 automatically follows live endpoint capacity')
     parser.add_argument('--max-auto-pending-requests', type=int, default=DEFAULT_AUTO_WORKERS_MAX,
                         help='Upper bound on automatic pair workers; explicit --pending-requests overrides it')
+    parser.add_argument('--label-client-processes', type=int, default=1,
+                        help='Client processes sharing the pending pairs, each with its own event loop, and together '
+                             'each server\'s concurrency limit; no output or identity depends on it, so a run '
+                             'resumes with any value')
     parser.set_defaults(max_concurrent_per_server=DEFAULT_CEILING, initial_concurrent_per_server=DEFAULT_INITIAL,
                         scheduler_adaptive_concurrency=True, request_timeout=7200, max_attempts=4)
     return parser

@@ -39,6 +39,7 @@ class LabelWorkspace:
         self.local.labels_export_path = self.public/'labels.jsonl'
         self.public_metrics = Path(getattr(args, 'scheduler_metrics_file', None) or self.public/'concurrency_status.json')
         self.local.scheduler_metrics_file = str(self.state/'concurrency_status.json')
+        self.local.label_client_dir = str(self.work/'clients')  # beside state/, which is published
         self.stop = threading.Event()
         self.thread = None
         self.lock = None
