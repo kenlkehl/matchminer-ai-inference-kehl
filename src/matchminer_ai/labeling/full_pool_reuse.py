@@ -53,8 +53,15 @@ def import_full_pool_source(output, signature, patients, cohorts, pairs, entry, 
         try:
             keys = (src.database.keys() if src.database is not None else
                     {p.stem for p in (source/'responses').rglob('*.json')})
+            # A response's key is digest([patient, cohort, task]), checked below, so a key that is no target
+            # pair's key belongs to no target pair: skip it unread (83% of round 1's responses lay outside
+            # round 2's candidates and took two hours to read and discard, 2026-11-09).
+            tasks = {task for row in scores.values() for task in row['question_keys']}
+            targets = {digest([pid, cid, task]) for pid, cid in wanted for task in tasks} if tasks else None
             batch = []
             for key in sorted(keys):
+                if targets is not None and key not in targets:
+                    continue
                 _, row = src.read(key)
                 pair = (row['patient_id'], row['cohort_id'])
                 if pair not in wanted:

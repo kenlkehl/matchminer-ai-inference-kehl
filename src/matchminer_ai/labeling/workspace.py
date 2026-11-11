@@ -1,5 +1,6 @@
 """SSD-backed label generation with compact traces and verified NFS publication."""
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import copy
 import fcntl
 import hashlib
@@ -13,6 +14,8 @@ import time
 
 from .files import atomic_json, copy_verified, require_local_disk, require_free_space
 from .files import file_stamp
+
+PUBLISH_WORKERS = 32
 
 
 def enabled(args):
@@ -177,7 +180,15 @@ class LabelWorkspace:
         paths=[p for p in self.state.rglob('*') if p.is_file() and
                p.name not in {'labeling.lock','reuse_sources.json'} and not p.name.endswith(('.tmp','-wal','-shm'))]
         late={'scores_ready.json','status.json'}
-        for path in sorted(paths, key=lambda p:(p.name in late, p.name=='status.json', str(p))):
+        ordered=sorted(paths, key=lambda p:(p.name in late, p.name=='status.json', str(p)))
+        early=[p for p in ordered if p.name not in late]
+        # Tens of thousands of small invalid-response files took two hours one at a time on NFS (2026-11-10):
+        # copy them in parallel. The late files still go last, in order; products keep the same order.
+        with ThreadPoolExecutor(PUBLISH_WORKERS) as pool:
+            copied=pool.map(lambda p:copy_verified(p,self.public/p.relative_to(self.state)), early)
+            for path, record in zip(early, copied):
+                products[str(path.relative_to(self.state))]=record
+        for path in ordered[len(early):]:
             relative=path.relative_to(self.state)
             products[str(relative)]=copy_verified(path,self.public/relative)
         atomic_json(self.public/'storage_complete.json',dict(version=1, verified_at=time.time(),
