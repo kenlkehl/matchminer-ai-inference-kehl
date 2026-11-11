@@ -114,9 +114,10 @@ mature outcomes. Token-limited or blank final responses are retried, and the
 default synthesis completion budget is 100,000 tokens; if every ordinary
 attempt is token-limited, the final attempt disables thinking. The bundle stores two
 clean projections: a
-GoodOption summary without safety and a Help Me Choose summary with safety.
+GoodOption summary without safety and a summary with safety
+(`help_me_choose_summary`, named for the removed Help Me Choose comparison).
 URLs, queries, source labels, ctgov metadata, and failure notices remain in
-the internal Parquet ledger and do not appear in either patient-bearing prompt.
+the internal Parquet ledger and do not appear in the patient-bearing prompt.
 
 Each class corpus is synthesized in its own call on its own budget, and stored
 in `class_summaries.parquet`. Keeping it separate is deliberate: the drugs that

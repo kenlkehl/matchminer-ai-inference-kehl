@@ -13,7 +13,6 @@ from .pipeline import MMAIPipeline
 _LAZY_SUBMODULES = {
     "embedding",
     "good_options",
-    "help_me_choose",
     "llm",
     "matching",
     "patients",

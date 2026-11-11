@@ -24,7 +24,6 @@ import httpx
 import pandas as pd
 
 from matchminer_ai.config import config_snapshot, load_default_preset
-from matchminer_ai.help_me_choose import fetch_trial_study, normalize_nct_id
 from matchminer_ai.llm.backends import (
     build_llm_runtime_config,
     get_llm_backend,
@@ -38,6 +37,7 @@ from matchminer_ai.patients.ontology import (
     normalize_ontology_text,
 )
 
+from .ctgov_records import fetch_trial_study, normalize_nct_id
 from .drug_evidence import (
     DRUG_ROLES,
     EVIDENCE_SCOPES,
@@ -2903,16 +2903,8 @@ async def build_good_option_catalog(
     resolved_config = config or load_default_preset()
     resolved_settings = settings or ResearchSettings()
     catalog_config = dict(resolved_config.raw.get("good_option_catalog", {}))
-    ncit_resource = str(
-        catalog_config.get("ncit_resource")
-        or resolved_config.patient_structuring.get("ncit_resource")
-        or ""
-    )
-    ncit_version = str(
-        catalog_config.get("ncit_version")
-        or resolved_config.patient_structuring.get("ncit_version")
-        or "unknown"
-    )
+    ncit_resource = str(catalog_config.get("ncit_resource") or "")
+    ncit_version = str(catalog_config.get("ncit_version") or "unknown")
     if not ncit_resource:
         raise ValueError("GoodOption catalog configuration is missing ncit_resource.")
     ncit_index = load_ncit_drug_index(ncit_resource)

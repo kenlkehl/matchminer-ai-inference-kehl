@@ -85,3 +85,19 @@ def test_load_preset_keeps_default_name():
 
     assert config.preset_name == "default"
     assert config.trial["local"]["model_name"]
+
+
+def test_configs_with_removed_sections_still_load(tmp_path):
+    """Saved configs (e.g. running catalog builds) still carry sections removed on 2026-11-11."""
+    import yaml
+
+    data = load_preset("default").raw
+    removed = {"help_me_choose": {"local": {}}, "patient_structuring": {"ncit_resource": "x.zip"},
+               "trial_space_structuring": {}}
+    config_path = tmp_path / "saved.yaml"
+    config_path.write_text(yaml.safe_dump({**data, **removed}), encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert {name: config.raw[name] for name in removed} == removed
+    assert config.good_option_catalog["ncit_resource"] == "Thesaurus_26.07d.FLAT.zip"

@@ -88,7 +88,7 @@ def test_other_nemotron_generations_are_not_guessed():
     assert resolve_model_profile("nvidia/NVIDIA-Nemotron-3-Super-120B-A12B") is None
 
 
-@pytest.mark.parametrize("section", ["patient_structuring", "llm_good_option"])
+@pytest.mark.parametrize("section", ["llm_good_option"])
 def test_nemotron_replaces_fixed_greedy_sampling_and_other_models_keep_it(section):
     """User instruction 2026-11-05: workflows served by Nemotron use NVIDIA's sampling."""
     from matchminer_ai.llm.backends import build_llm_runtime_config

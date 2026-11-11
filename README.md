@@ -300,12 +300,7 @@ Optional source-grounded extensions can also:
 - screen complete trial eligibility criteria by decomposing them into grounded
   raw-note questions, embedding the note index once on CUDA, reusing its CPU
   vectors across concurrent question processes against an authorized endpoint,
-  and synthesizing a human-reviewable JSON result;
-- transform one or a batch of free-text cancer histories into JSON with one
-  record per active cancer, dependency-ready LLM batching, hierarchical
-  OncoTree coding, and locally searched NCIt drug normalization;
-- transform a clinical-space summary into JSON while preserving age, sex,
-  disease burden, treatment, response, and biomarker requirements; and
+  and synthesizing a human-reviewable JSON result; and
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
   LLM-screen ctgov entries for concrete agents with direct anticancer
   treatment intent, deduplicate NCIt-normalized drugs across trials, synthesize
@@ -460,13 +455,9 @@ Without a scope, existing workflow behavior is unchanged.
 
 ## Ontology attribution
 
-The optional structured patient-summary and trial-space workflows bundle and
-use the following ontology snapshots locally:
+The GoodOption catalog bundles and uses the following ontology snapshot locally
+to normalize drug names and cite their definitions:
 
-- **OncoTree**, developed at Memorial Sloan Kettering Cancer Center, stable
-  hierarchy snapshot downloaded 2026-07-31. OncoTree is licensed under the
-  [Creative Commons Attribution 4.0 International License](https://github.com/cBioPortal/oncotree/blob/master/LICENSE.md).
-  Project and source: [cBioPortal/oncotree](https://github.com/cBioPortal/oncotree).
 - **NCI Thesaurus (NCIt) 26.07d**, produced by the National Cancer Institute
   Enterprise Vocabulary Services group, Center for Biomedical Informatics and
   Information Technology, National Cancer Institute, Maryland, USA. NCIt is
@@ -475,11 +466,10 @@ use the following ontology snapshots locally:
   Source and terms of use:
   [NCI Enterprise Vocabulary Services](https://evs.nci.nih.gov/ftp1/NCI_Thesaurus/).
 
-OncoTree codes and NCIt records remain attributable to their respective
-creators. The bundled snapshots are unmodified; MatchMiner-AI adds local search,
-LLM-guided selection, and output formatting around them. NCI Thesaurus is a
-trademark of the National Cancer Institute. MatchMiner-AI does not imply
-endorsement by MSK or NCI.
+NCIt records remain attributable to their creators. The bundled snapshot is
+unmodified; MatchMiner-AI adds local search and output formatting around it. NCI
+Thesaurus is a trademark of the National Cancer Institute. MatchMiner-AI does
+not imply endorsement by NCI.
 
 > [!WARNING]
 > This package is currently pre-v1 and under active development.

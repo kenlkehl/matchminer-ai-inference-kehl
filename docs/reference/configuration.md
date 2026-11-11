@@ -547,49 +547,6 @@ other LLM task sections.
 The default model context is 262,144 tokens with up to 100,000 completion
 tokens, so long protocols and reasoning traces fit.
 
-## `patient_structuring`
-
-Configuration for ontology-grounded JSON conversion of an existing patient
-summary. The `local`, `remote`, and `reasoning_parser` fields follow the other
-LLM task sections.
-
-- `oncotree_resource` and `ncit_resource` select bundled ontology snapshots or
-  explicit local file paths.
-- `oncotree_max_depth` bounds hierarchical OncoTree descent.
-- `ontology_retry_limit` bounds malformed JSON and invalid-index retries.
-- `ncit_candidate_limit` bounds each locally searched candidate page.
-- `ncit_max_agent_steps` bounds revised NCIt search attempts.
-- `local.generation.max_tokens` and `remote.request_params.max_tokens` default
-  to 30,000 completion tokens so reasoning-capable endpoints retain enough
-  budget to emit the required JSON answer after their reasoning trace.
-
-Complete ontology contents remain local. Only immediate OncoTree children,
-bounded NCIt candidate labels, and selected NCIt definitions are sent to the
-configured LLM backend.
-
-`structure_patient_summaries` batches every dependency-ready prompt wave. In
-remote mode, the root-level `remote.max_concurrent_requests`, `batch_size`, and
-`server_urls` settings control request concurrency, chunking, and server
-distribution. `batch_size` is a scheduler chunk size, not one multi-prompt HTTP
-payload; an OpenAI-compatible chat-completion request is made for each prompt.
-
-## `trial_space_structuring`
-
-Configuration for ontology-grounded JSON conversion of an existing clinical
-trial-space summary. The `local`, `remote`, and `reasoning_parser` fields follow
-the other LLM task sections. Its ontology fields and limits have the same
-meaning as `patient_structuring`:
-
-- `oncotree_resource` and `ncit_resource` select bundled ontology snapshots or
-  explicit local file paths.
-- `oncotree_max_depth` bounds hierarchical OncoTree descent.
-- `ontology_retry_limit` bounds malformed JSON and invalid-index retries.
-- `ncit_candidate_limit` bounds each locally searched candidate page.
-- `ncit_max_agent_steps` bounds revised NCIt search attempts.
-
-The extraction prompt is trial-specific, but it reuses the bounded ontology
-selection harness. Complete ontology contents remain local.
-
 ## `embedding`
 
 Configuration for TrialSpace embedding. Retrieval embeds key text only: patient
@@ -753,13 +710,6 @@ return no separate reasoning field.
 ### `llm_exclusion_criteria.remote`
 
 Task-specific remote chat completion request settings. See `trial.remote`.
-
-## `help_me_choose`
-
-LLM task configuration for the optional matched-trial comparison. Its
-`local` and `remote` blocks follow the same structure as `trial.local` and
-`trial.remote`. Drug-information retrieval is intentionally separate from this
-LLM block and never accepts patient text.
 
 ## `llm_good_option`
 

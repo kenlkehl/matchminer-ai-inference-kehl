@@ -18,7 +18,6 @@
         - audit_guideline_catalog
         - load_guideline_catalog
         - get_guideline_considerations
-        - structure_trial_space
 
 ## Trial steps, separately or end to end
 
@@ -427,6 +426,26 @@ early branch or an unsupported model interpretation can still propagate. Review
 the node traces and final populations against the source before adopting new
 spaces or regenerating embeddings. Existing saved spaces are not migrated.
 
+## ClinicalTrials.gov records
+
+`matchminer_ai.trials.ctgov_records` fetches one public ClinicalTrials.gov API v2
+study by NCT ID and accepts no patient context. `fetch_trial_eligibility_criteria`
+reads `protocolSection.eligibilityModule.eligibilityCriteria`, preserves multiline
+criteria formatting, and returns the NCT ID, public study URL, retrieval timestamp,
+and ctgov last-update date with the text. `fetch_trial_ctgov_document` also accepts
+an official ClinicalTrials.gov study URL and wrangles the official or brief title,
+brief summary, detailed description, and eligibility criteria into explicit fields
+for `extract_cohorts` consumers. URL parsing never changes the request host: the
+API request is always sent to ClinicalTrials.gov using the normalized NCT ID. The
+GoodOption catalog fetches its studies with `fetch_trial_study`.
+
+::: matchminer_ai.trials.ctgov_records
+    options:
+      members:
+        - fetch_trial_eligibility_criteria
+        - fetch_trial_ctgov_document
+        - normalize_nct_reference
+
 ## Trial-space eligibility criteria
 
 `extract_trial_space_eligibility_criteria` accepts one clinical-space summary
@@ -467,37 +486,13 @@ the endpoint is authorized for the document's sensitivity. OCR and LLM outputs
 must be compared with the complete, current protocol and do not establish
 eligibility.
 
-## Structured trial-space schema
-
-`structure_trial_space` accepts one free-text clinical-space summary and returns
-a JSON-compatible dictionary containing its `trial_id` and `space_trial_id`.
-The legacy trial-space summarizer defines each space as a single cancer-type and
-histology combination, so this API structures one legacy space at a time. Full
-cohort criteria from the new default summarizer are not this API's input contract. Its output
-contains:
-
-- `age_range` and `sex_allowed`;
-- OncoTree-grounded `cancer_type` and `histology` objects;
-- `cancer_burden_allowed`, constrained to
-  `early_or_curative_intent` and/or `advanced_or_palliative_intent`;
-- `prior_treatment_required` and `prior_treatment_excluded`, preserving each
-  source requirement, response requirement, and NCIt-normalized drug; and
-- `biomarkers_required` and `biomarkers_excluded`, with one object per marker
-  and an explicit screening-assessment flag.
-
-The OncoTree agent sees only one hierarchy level at a time. The NCIt agent sees
-only bounded search candidates and retrieves full definitions only for
-candidate indices it selects. A complete ontology is never placed in LLM
-context.
-
 New space text uses `Cancer primary site allowed`, `Prior treatment requirements`,
 and `Biomarker requirements`. Treatment and biomarker fields each retain both
 positive and negative conditions. Extraction postprocessing, QC
 and training's 0c sampling accept these seven fields as well as saved legacy
 nine-field spaces; they do not rewrite saved text or mix extraction checkpoints.
 Match-label and synthetic-patient prompts preserve clause polarity and AND/OR
-logic. The structured ontology API and PDQ catalog retain their separate JSON
-required/excluded fields, with explicit prompt adapters for the combined input.
+logic. The PDQ catalog retains its separate JSON required/excluded fields.
 Existing trained models can consume the new text, but their quality on this prompt
 generation still requires evaluation; regenerate embeddings for changed spaces.
 

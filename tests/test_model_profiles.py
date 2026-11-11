@@ -167,11 +167,13 @@ def test_thinking_floor_raises_catalog_stage_budgets_only_upward():
     sections = catalog_llm_sections(config)
     assert "good_option_catalog.screening_llm" in sections
     assert "good_option_catalog.class_llm" in sections
+    stages = ("screening_llm", "class_llm")
+    preset = {stage: config.good_option_catalog[stage]["remote"]["request_params"]["max_tokens"] for stage in stages}
     apply_model_profile(config, "Qwen/Qwen3.8-Flash-Next", sections=sections)
     floor = QWEN3_8_FLASH_NEXT_THINKING.min_max_tokens
     catalog = config.good_option_catalog
-    for stage in ("screening_llm", "class_llm"):
-        assert catalog[stage]["remote"]["request_params"]["max_tokens"] == floor
+    for stage in stages:
+        assert catalog[stage]["remote"]["request_params"]["max_tokens"] == max(preset[stage], floor)
     assert catalog["synthesis_llm"]["remote"]["request_params"]["max_tokens"] == 100000
     assert config.llm_good_option["remote"]["request_params"]["max_tokens"] == 100000
     assert "reasoning_parser" not in catalog["screening_llm"]

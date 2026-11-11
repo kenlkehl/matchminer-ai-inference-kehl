@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 
 from matchminer_ai.config import config_snapshot, load_default_preset
-from matchminer_ai.help_me_choose import normalize_nct_id
 from matchminer_ai.llm.backends import (
     LLMGenerationResult,
     build_llm_runtime_config,
@@ -39,6 +38,7 @@ from matchminer_ai.trials.drug_catalog import (
     load_good_option_catalog,
     render_fact_summary,
 )
+from matchminer_ai.trials.ctgov_records import normalize_nct_id
 from matchminer_ai.trials.drug_evidence import (
     RUBRIC_CRITERIA,
     DrugSummary,

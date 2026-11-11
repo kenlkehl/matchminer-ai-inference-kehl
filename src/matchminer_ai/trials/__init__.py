@@ -28,7 +28,6 @@ from .cohort_boilerplate import remove_boilerplate_criteria
 from .cohort_screen import screen_trials
 from .protocol_cohorts import ProtocolCohortProgress, extract_protocol_cohorts
 from .synthetic_protocols import SyntheticProtocolProgress, generate_synthetic_protocols
-from .structure import structure_trial_space
 from .guidelines import audit_guideline_catalog, list_guidelines, summarize_guidelines, review_guideline_citations
 from .guideline_catalog import load_guideline_catalog, get_guideline_considerations
 from .pdq import prepare_pdq_library, summarize_pdq, summarize_pdq_collection
@@ -300,7 +299,6 @@ __all__ = [
     "process_trials",
     "SyntheticProtocolProgress",
     "generate_synthetic_protocols",
-    "structure_trial_space",
     "summarize_trials",
     "summarize_guidelines",
     "review_guideline_citations",

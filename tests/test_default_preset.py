@@ -53,17 +53,6 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     assert config.full_patient_screen["remote"]["extra_body"][
         "chat_template_kwargs"
     ] == {"enable_thinking": False}
-    assert config.patient_structuring["oncotree_version"] == "stable-2026-07-31"
-    assert config.patient_structuring["ncit_version"] == "26.07d"
-    assert config.patient_structuring["ncit_candidate_limit"] == 8
-    assert config.patient_structuring["ncit_max_agent_steps"] == 3
-    assert config.patient_structuring["local"]["generation"]["max_tokens"] == 30000
-    assert config.patient_structuring["remote"]["request_params"]["max_tokens"] == 30000
-    assert config.trial_space_structuring["oncotree_version"] == (
-        "stable-2026-07-31"
-    )
-    assert config.trial_space_structuring["ncit_version"] == "26.07d"
-    assert config.trial_space_structuring["ncit_candidate_limit"] == 8
     assert config.trial_space_criteria_extraction["max_document_characters"] == 120000
     assert config.trial_space_criteria_extraction["max_criteria_per_type"] == 256
     assert config.trial_space_criteria_extraction["response_retry_limit"] == 2
@@ -152,7 +141,3 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
         "top_p": 0.95,
     }
     assert remote["remote"]["extra_body"]["top_k"] == 64
-    assert config.help_me_choose["local"]["generation"]["max_tokens"] == 6000
-    assert config.help_me_choose["remote"]["request_params"]["max_tokens"] == 6000
-    assert config.help_me_choose["local"]["generation"]["repetition_penalty"] == 1.1
-    assert config.help_me_choose["remote"]["extra_body"]["repetition_penalty"] == 1.1

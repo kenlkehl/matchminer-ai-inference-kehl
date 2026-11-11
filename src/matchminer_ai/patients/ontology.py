@@ -1,8 +1,7 @@
-"""Local ontology access for structured patient summaries."""
+"""Local NCIt drug index for the GoodOption catalog."""
 
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
 import zipfile
@@ -13,7 +12,7 @@ from functools import lru_cache
 from importlib import resources
 from io import TextIOWrapper
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Iterator
 
 
 _NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
@@ -45,61 +44,6 @@ def _resource_path(resource_name: str) -> Iterator[Path]:
 
 
 @dataclass(frozen=True)
-class OncoTreeNode:
-    """One OncoTree node and its immediate descendants."""
-
-    code: str
-    name: str
-    main_type: str | None
-    tissue: str | None
-    children: tuple["OncoTreeNode", ...]
-
-    def prompt_record(self, index: int) -> dict[str, Any]:
-        """Return the bounded node representation exposed to the LLM."""
-        return {
-            "index": index,
-            "code": self.code,
-            "name": self.name,
-            "main_type": self.main_type,
-            "tissue": self.tissue,
-            "has_children": bool(self.children),
-        }
-
-
-def _parse_oncotree_node(raw: dict[str, Any]) -> OncoTreeNode:
-    children_raw = raw.get("children") or {}
-    if not isinstance(children_raw, dict):
-        raise ValueError("OncoTree node children must be a mapping.")
-    children = tuple(
-        sorted(
-            (_parse_oncotree_node(child) for child in children_raw.values()),
-            key=lambda node: (node.name.casefold(), node.code),
-        )
-    )
-    return OncoTreeNode(
-        code=str(raw.get("code") or "").strip(),
-        name=str(raw.get("name") or "").strip(),
-        main_type=(str(raw["mainType"]).strip() if raw.get("mainType") else None),
-        tissue=(str(raw["tissue"]).strip() if raw.get("tissue") else None),
-        children=children,
-    )
-
-
-@lru_cache(maxsize=4)
-def load_oncotree(resource_name: str) -> OncoTreeNode:
-    """Load and cache a bundled or explicitly configured OncoTree snapshot."""
-    with _resource_path(resource_name) as path:
-        with path.open("r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    if not isinstance(raw, dict) or not raw:
-        raise ValueError("OncoTree resource must contain a non-empty mapping.")
-    root_raw = raw.get("TISSUE")
-    if not isinstance(root_raw, dict):
-        raise ValueError("OncoTree resource is missing its TISSUE root node.")
-    return _parse_oncotree_node(root_raw)
-
-
-@dataclass(frozen=True)
 class NCItDrugRecord:
     """The NCIt fields needed for local drug normalization."""
 
@@ -108,36 +52,6 @@ class NCItDrugRecord:
     synonyms: tuple[str, ...]
     definition: str | None
     semantic_types: tuple[str, ...]
-
-    def selection_record(self, index: int, query: str) -> dict[str, Any]:
-        """Return a compact record without the definition for candidate choice."""
-        normalized_query = normalize_ontology_text(query)
-        ranked_synonyms = sorted(
-            self.synonyms,
-            key=lambda synonym: SequenceMatcher(
-                None,
-                normalized_query,
-                normalize_ontology_text(synonym),
-            ).ratio(),
-            reverse=True,
-        )
-        return {
-            "index": index,
-            "ncit_code": self.code,
-            "preferred_name": self.preferred_name,
-            "synonyms": ranked_synonyms[:6],
-        }
-
-    def detail_record(self, index: int) -> dict[str, Any]:
-        """Return the selected record fields used to verify a match."""
-        return {
-            "index": index,
-            "ncit_code": self.code,
-            "preferred_name": self.preferred_name,
-            "synonyms": list(self.synonyms[:12]),
-            "definition": self.definition,
-            "semantic_types": list(self.semantic_types),
-        }
 
 
 class NCIThesaurusDrugIndex:
@@ -298,8 +212,6 @@ def load_ncit_drug_index(resource_name: str) -> NCIThesaurusDrugIndex:
 __all__ = [
     "NCItDrugRecord",
     "NCIThesaurusDrugIndex",
-    "OncoTreeNode",
     "load_ncit_drug_index",
-    "load_oncotree",
     "normalize_ontology_text",
 ]

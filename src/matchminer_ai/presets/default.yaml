@@ -287,86 +287,6 @@ synthetic_protocol_generation:
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
-patient_structuring:
-  oncotree_resource: oncotree_stable_7-31-26.json
-  oncotree_version: stable-2026-07-31
-  oncotree_max_depth: 10
-  ontology_retry_limit: 2
-  ncit_resource: Thesaurus_26.07d.FLAT.zip
-  ncit_version: 26.07d
-  ncit_candidate_limit: 8
-  ncit_max_agent_steps: 3
-  reasoning_parser: auto
-  local:
-    model_name: google/gemma-4-31B-it
-    engine:
-      max_model_len: 50000
-      tensor_parallel_size: 1
-      gpu_memory_utilization: 0.9
-      language_model_only: true
-    chat_template_kwargs:
-      enable_thinking: true
-    generation:
-      temperature: 0.0
-      top_k: 1
-      top_p: 1.0
-      min_p: 0.0
-      max_tokens: 30000
-      repetition_penalty: 1.05
-      skip_special_tokens: false
-  remote:
-    model_name: google/gemma-4-31B-it
-    request_params:
-      max_tokens: 30000
-      temperature: 0.0
-      top_p: 1.0
-    extra_body:
-      top_k: 1
-      min_p: 0.0
-      repetition_penalty: 1.05
-      skip_special_tokens: false
-      chat_template_kwargs:
-        enable_thinking: true
-trial_space_structuring:
-  oncotree_resource: oncotree_stable_7-31-26.json
-  oncotree_version: stable-2026-07-31
-  oncotree_max_depth: 10
-  ontology_retry_limit: 2
-  ncit_resource: Thesaurus_26.07d.FLAT.zip
-  ncit_version: 26.07d
-  ncit_candidate_limit: 8
-  ncit_max_agent_steps: 3
-  reasoning_parser: auto
-  local:
-    model_name: google/gemma-4-31B-it
-    engine:
-      max_model_len: 50000
-      tensor_parallel_size: 1
-      gpu_memory_utilization: 0.9
-      language_model_only: true
-    chat_template_kwargs:
-      enable_thinking: true
-    generation:
-      temperature: 0.0
-      top_k: 1
-      top_p: 1.0
-      min_p: 0.0
-      max_tokens: 6000
-      repetition_penalty: 1.05
-      skip_special_tokens: false
-  remote:
-    model_name: google/gemma-4-31B-it
-    request_params:
-      max_tokens: 6000
-      temperature: 0.0
-      top_p: 1.0
-    extra_body:
-      top_k: 1
-      min_p: 0.0
-      repetition_penalty: 1.05
-      skip_special_tokens: false
-      chat_template_kwargs:
-        enable_thinking: true
 embedding:
   # TrialSpace embeds key text only: cohort key criteria and patient key sections.
   model_path: "ksg-dfci/TrialSpace-0526"
@@ -510,13 +430,14 @@ good_option_catalog:
   class_assignment_max_attempts: 3
   screening_checkpoint_batch_size: 64
   class_checkpoint_batch_size: 64
+  # Nemotron's reasoning left about 5% of screens without an answer at 8,000 (2026-11-11).
   screening_llm:
     local:
       generation:
-        max_tokens: 8000
+        max_tokens: 50000
     remote:
       request_params:
-        max_tokens: 8000
+        max_tokens: 50000
   synthesis_llm:
     local:
       generation:
@@ -527,10 +448,10 @@ good_option_catalog:
   class_llm:
     local:
       generation:
-        max_tokens: 6000
+        max_tokens: 50000
     remote:
       request_params:
-        max_tokens: 6000
+        max_tokens: 50000
 # Patient-time packing of catalog drug and class evidence into the
 # llm_good_option prompt. Kept outside llm_good_option and good_option_catalog,
 # which fingerprint catalog checkpoints. Evidence gets what the context leaves
@@ -565,38 +486,6 @@ good_option_checker:
   model_name: ""
   device: cuda
   max_length: 8192
-help_me_choose:
-  reasoning_parser: auto
-  local:
-    model_name: google/gemma-4-31B-it
-    engine:
-      max_model_len: 50000
-      tensor_parallel_size: 1
-      gpu_memory_utilization: 0.9
-      language_model_only: true
-    chat_template_kwargs:
-      enable_thinking: true
-    generation:
-      temperature: 0.2
-      top_k: 20
-      top_p: 0.95
-      min_p: 0.0
-      max_tokens: 6000
-      repetition_penalty: 1.1
-      skip_special_tokens: false
-  remote:
-    model_name: google/gemma-4-31B-it
-    request_params:
-      max_tokens: 6000
-      temperature: 0.2
-      top_p: 0.95
-    extra_body:
-      top_k: 20
-      min_p: 0.0
-      repetition_penalty: 1.1
-      skip_special_tokens: false
-      chat_template_kwargs:
-        enable_thinking: true
 
 # Source-grounded disease-state catalogs from locally supplied guideline libraries.
 # Remote only; no guidelines or generated catalogs are distributed with the package.

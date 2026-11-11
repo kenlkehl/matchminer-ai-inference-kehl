@@ -38,7 +38,6 @@ from .raw_note_qa import (
     RawPatientNoteQuestionError,
     answer_question_with_raw_patient_notes,
 )
-from .structure import structure_patient_summaries, structure_patient_summary
 from .summary_quality import check_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
@@ -254,8 +253,6 @@ __all__ = [
     "full_patient_screen",
     "review_patient_workup",
     "review_patient_workup_with_note_search",
-    "structure_patient_summaries",
-    "structure_patient_summary",
     "summarize_patient_notes",
     "summarize_patients",
 ]
