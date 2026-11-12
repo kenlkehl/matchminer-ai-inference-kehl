@@ -160,7 +160,7 @@ Existing trial and patient defaults are unchanged.
 | `context_window` | `None`: use the full advertised `max_model_len`; require an explicit value if unavailable |
 | `remote.request_params.max_tokens` | 100,000 reserved output tokens, including reasoning |
 | `remote.request_params.temperature` / `top_p` | 1.0 / 0.95 |
-| `remote.extra_body.top_k` | Vendor profile: Gemma 4 = 64, Qwen 3.8 = 20 |
+| `remote.extra_body.top_k` | Vendor profile: Nemotron 3.5 Super = -1 (disabled), Gemma 4 = 64, Qwen 3.8 = 20 |
 | `remote.extra_body.chat_template_kwargs.enable_thinking` | `True` |
 | `reasoning_effort` | `xhigh` for Qwen 3.8; Gemma uses its thinking switch |
 | `safety_tokens` | 2,048 tokens for retry feedback |

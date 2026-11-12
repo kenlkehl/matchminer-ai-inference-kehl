@@ -554,6 +554,21 @@ human review. See [citation review and collection repair](docs/user-guide/guidel
 
 ### NVIDIA Nemotron 3.5 Super VL
 
+`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` is the default model of
+every LLM section of the default preset (trial, patient, raw-note Q&A, full-patient
+screen, criteria extraction, protocol cohorts, synthetic protocols, the LLM match,
+exclusion and GoodOption checks), locally and remotely; Gemma 4 and the other
+profiles remain supported by setting a section's `model_name`. Each local engine
+serves it in-process as the production vLLM servers do: `trust_remote_code`,
+`language_model_only`, prefix caching, the FlashInfer Mamba backend, a float16
+SSM cache with stochastic rounding (5 Philox rounds) and `mamba_cache_mode: align`.
+`start_vllm_servers()` passes the same settings as `vllm serve` flags. The NVFP4
+build needs a GPU with native FP4 (Blackwell); a different build, such as an FP8
+one, is selected by changing `model_name`. Sections whose thinking shares the
+output budget leave room for Nemotron's reasoning (10-15k tokens on long tasks):
+the LLM match and exclusion checks reserve the training teacher's 32,768 tokens
+and raw-note Q&A 16,000.
+
 Text LLM stages recognize `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`,
 the BF16 variant, and the served alias `nemotron-3.5-super-vl` with
 `sampling_profile: auto`. Opaque aliases can select
@@ -573,6 +588,6 @@ this model. `reasoning_parser` and `tool_call_parser` allow explicit overrides
 nightly; this package's older minimum version alone does not guarantee support.
 Reasoning is controlled by `chat_template_kwargs.enable_thinking`; medium effort
 uses `enable_thinking=true, medium_effort=true`. Reasoning and the final answer
-share the output-token budget. No output-budget floor or model/endpoint change
-is imposed. These are **text** defaults; the card's summary recommends 0.6
+share the output-token budget. The profile imposes no output-budget floor or
+endpoint change. These are **text** defaults; the card's summary recommends 0.6
 instead of 1.0 for vision. This profile does not introduce image/video inputs.

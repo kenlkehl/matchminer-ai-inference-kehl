@@ -230,7 +230,8 @@ trial has in total:
    active backend's `llm_good_option` `max_tokens` completion allowance,
    `safety_tokens`, room for a parse retry, and the fixed prompt text, and
    converts the rest at `chars_per_token` (3.5, conservative for Gemma 4, which
-   averages ~4.4 on catalog text). With the default preset that leaves roughly
+   averages ~4.4 on catalog text, and for the default Nemotron 3.5 Super, whose
+   tokenizer matches Gemma 4's 4.6 on ctgov eligibility criteria). With the default preset that leaves roughly
    500,000 characters.
 2. Drugs and classes share it by weighted max-min fair share, drugs at twice a
    class's weight. A subject needing less than its share releases the rest.

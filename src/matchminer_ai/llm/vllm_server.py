@@ -27,6 +27,19 @@ _VLLM_SERVER_TASKS = {
     "llm_exclusion_criteria",
 }
 
+# Optional local engine keys sent to ``vllm serve`` as vLLM's own flags (the default preset's
+# Nemotron settings). A true boolean is ``--flag`` and a false one ``--no-flag``.
+_SERVER_ENGINE_FLAGS = (
+    "trust_remote_code",
+    "language_model_only",
+    "enable_prefix_caching",
+    "mamba_backend",
+    "mamba_ssm_cache_dtype",
+    "enable_mamba_cache_stochastic_rounding",
+    "mamba_cache_philox_rounds",
+    "mamba_cache_mode",
+)
+
 
 @dataclass(frozen=True)
 class VLLMServerCommand:
@@ -119,9 +132,12 @@ def build_vllm_server_command(
 
     The helper loads the task's local model and exposes the task's remote model
     name as the OpenAI-compatible endpoint model. The helper maps only the
-    known local engine fields needed by the default
-    config. Additional server-only CLI flags, such as speculative decoding
-    options, should be supplied explicitly with ``extra_args``.
+    known local engine fields needed by the default config: the context,
+    parallelism and memory settings, plus ``_SERVER_ENGINE_FLAGS`` when present
+    (remote code, text only, prefix caching and Nemotron's Mamba cache settings).
+    Additional server-only CLI flags, such as speculative decoding options or
+    ``--chat-template-content-format``, should be supplied explicitly with
+    ``extra_args``.
     """
     resolved_config = config or load_default_preset()
     llm_config, local_config = _resolve_task_config(resolved_config, task)
@@ -149,6 +165,13 @@ def build_vllm_server_command(
         "--gpu-memory-utilization",
         str(local_config["gpu_memory_utilization"]),
     ]
+    for key in _SERVER_ENGINE_FLAGS:
+        if key in local_config:
+            value, flag = local_config[key], key.replace("_", "-")
+            if isinstance(value, bool):
+                command.append(f"--{flag}" if value else f"--no-{flag}")
+            else:
+                command.extend([f"--{flag}", str(value)])
     reasoning_parser = resolve_reasoning_parser(
         model_name,
         str(llm_config.get("reasoning_parser", "auto")),

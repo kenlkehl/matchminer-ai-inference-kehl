@@ -21,6 +21,7 @@ preset's sampling and log a warning.
 
 | Model match | Mode | Sampling | Floor |
 | --- | --- | --- | --- |
+| `*nemotron-3.5-super-vl*` (default) | thinking (`enable_thinking: true`) | temperature 1.0, top_p 0.95, top_k -1, min_p 0, presence 0, repetition 1.0; also replaces the fixed sampling of sections without `sampling_profile` | none |
 | `*qwen3.8-flash-next*` | thinking (`enable_thinking: true`) | temperature 1.0, top_p 0.95, top_k 20, min_p 0, presence 0, repetition 1.0 | 32,768 |
 
 ::: matchminer_ai.llm.model_profiles

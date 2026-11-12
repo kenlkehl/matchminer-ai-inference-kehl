@@ -177,10 +177,11 @@ receives the inference request.
 ### `remote.server_urls`
 
 List of OpenAI-compatible base URLs. Values are passed to the OpenAI client as
-`base_url`. For the default Gemma 4 configuration, the server should be a vLLM
-chat endpoint launched with the `gemma4` reasoning parser; the package
-`start_vllm_servers()` helper adds this flag from the selected LLM task's
-`reasoning_parser`.
+`base_url`. For the default Nemotron 3.5 Super configuration, the server should
+be a vLLM chat endpoint launched with the `nemotron_v3` reasoning parser, the
+`qwen3_coder` tool-call parser and `--trust-remote-code`; the package
+`start_vllm_servers()` helper adds these flags from the selected LLM task's
+`reasoning_parser`, `tool_call_parser` and local `engine` settings.
 
 Model names and request parameters are configured per LLM task under that
 task's backend block. For example, `trial.local.model_name` is the model loaded
@@ -190,7 +191,7 @@ request fields, and `trial.remote.extra_body` contains fields sent through
 request `extra_body`.
 
 Remote mode expects the endpoint to return final answer text in
-`message.content`. The default vLLM/Gemma setup can expose reasoning separately
+`message.content`. The default vLLM/Nemotron setup can expose reasoning separately
 via vLLM reasoning parser support. Other OpenAI-compatible endpoints may work
 only if they return final answer text in `message.content`; endpoints that
 include reasoning text in `message.content` are not currently supported.
@@ -231,12 +232,16 @@ profile after `/v1/models` identifies the actual served model.
 
 | Model / mode | Temperature | Top-p | Top-k | Other sampling defaults |
 | --- | ---: | ---: | ---: | --- |
+| Nemotron 3.5 Super (default) | 1.0 | 0.95 | Disabled (-1) | min-p 0, presence penalty 0, repetition penalty 1 |
 | Gemma 4 | 1.0 | 0.95 | 64 | Engine defaults for penalties |
 | Qwen 3.8, thinking | 1.0 | 0.95 | 20 | min-p 0, presence penalty 0, repetition penalty 1 |
 | Qwen 3.8, non-thinking | 0.7 | 0.8 | 20 | min-p 0, presence penalty 1.5, repetition penalty 1 |
 | Reflection Beam 1.0 | 0.7 | 0.99 | Disabled (-1) | min-p 0, presence penalty 0, repetition penalty 1 |
 
-These follow the vendor recommendations checked on 2026-09-24:
+Nemotron's temperature and top-p follow NVIDIA's
+[model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4)
+(checked 2026-10-15); its other sampling controls are neutral. The others
+follow the vendor recommendations checked on 2026-09-24:
 [Google Gemma 4](https://ai.google.dev/gemma/docs/core/model_card_4),
 [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next), and
 [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B).
@@ -307,7 +312,13 @@ Local in-process vLLM runtime settings:
 - `model_name`: model identifier loaded by local vLLM and used for local
   tokenizer/chat-template rendering and model metadata lookup.
 - `engine`: keyword arguments passed to `vllm.LLM(...)`; the package passes
-  `model=trial.local.model_name` separately.
+  `model=trial.local.model_name` separately. Every default engine serves
+  Nemotron 3.5 Super as the production servers do: `trust_remote_code`,
+  `language_model_only`, `enable_prefix_caching`, `mamba_backend: flashinfer`,
+  `mamba_ssm_cache_dtype: float16`, `enable_mamba_cache_stochastic_rounding`,
+  `mamba_cache_philox_rounds: 5` and `mamba_cache_mode: align`, with
+  `tensor_parallel_size: 1` (the NVFP4 build needs a Blackwell GPU). The vLLM
+  server helpers pass these keys as the same `vllm serve` flags.
 - `generation`: keyword arguments passed to `vllm.SamplingParams(...)`.
 - `chat_template_kwargs`: keyword arguments passed to tokenizer chat-template
   rendering.
@@ -337,7 +348,9 @@ merge and boilerplate steps (`merge_equivalent_cohorts`,
 ### `trial.reasoning_parser`
 
 vLLM reasoning parser name. The default `auto` resolves known model names,
-including `google/gemma-4-31B-it` to `gemma4`. Set this explicitly when using a
+including the default
+`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` to `nemotron_v3` and
+`google/gemma-4-31B-it` to `gemma4`. Set this explicitly when using a
 model not covered by the package mapping, or use `none` to disable reasoning
 parsing for a non-reasoning model. This setting applies to local vLLM execution
 and vLLM server launch helpers; non-vLLM remote endpoints may ignore it or
@@ -396,7 +409,9 @@ Prompt template filenames loaded from `matchminer_ai.prompts`.
 ### `patient.reasoning_parser`
 
 vLLM reasoning parser name. The default `auto` resolves known model names,
-including `google/gemma-4-31B-it` to `gemma4`. Set this explicitly when using a
+including the default
+`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` to `nemotron_v3` and
+`google/gemma-4-31B-it` to `gemma4`. Set this explicitly when using a
 model not covered by the package mapping, or use `none` to disable reasoning
 parsing for a non-reasoning model. Non-vLLM remote endpoints may return no
 separate reasoning field.
@@ -437,6 +452,9 @@ or OpenAI-compatible backend used by other LLM tasks.
   `-1.0` does not filter cosine results.
 - `max_agent_steps`: maximum parent-agent actions before forced finalization.
 - `response_retry_limit`: retry limit for malformed JSON responses.
+
+Thinking is on and shares the output budget: 16,000 tokens by default, in a
+50,000-token local context.
 
 The agent can request additional semantic retrieval or a separately grounded
 answer to a narrower related question. Both tools operate only on the in-memory
@@ -671,7 +689,9 @@ Configuration for the LLM-based match-quality checker.
 
 ### `llm_match_quality.local`
 
-Local in-process vLLM runtime settings. See `trial.local`.
+Local in-process vLLM runtime settings. See `trial.local`. The default context
+is 100,000 tokens with 32,768 completion tokens, reasoning included (the training
+teacher's label budget for the same prompt).
 
 ### `llm_match_quality.prompt_file`
 
@@ -682,7 +702,9 @@ a replacement must return the same JSON contract.
 ### `llm_match_quality.reasoning_parser`
 
 vLLM reasoning parser name. The default `auto` resolves known model names,
-including `google/gemma-4-31B-it` to `gemma4`. Non-vLLM remote endpoints may
+including the default
+`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` to `nemotron_v3` and
+`google/gemma-4-31B-it` to `gemma4`. Non-vLLM remote endpoints may
 return no separate reasoning field.
 
 ### `llm_match_quality.remote`
@@ -695,7 +717,9 @@ Configuration for the LLM-based exclusion-criteria checker.
 
 ### `llm_exclusion_criteria.local`
 
-Local in-process vLLM runtime settings. See `trial.local`.
+Local in-process vLLM runtime settings. See `trial.local`. The default context
+is 100,000 tokens with 32,768 completion tokens, reasoning included (the training
+teacher's boilerplate-label budget for the same prompt).
 
 ### `llm_exclusion_criteria.prompt_file`
 
@@ -706,7 +730,9 @@ of the cohort's boilerplate criteria.
 ### `llm_exclusion_criteria.reasoning_parser`
 
 vLLM reasoning parser name. The default `auto` resolves known model names,
-including `google/gemma-4-31B-it` to `gemma4`. Non-vLLM remote endpoints may
+including the default
+`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` to `nemotron_v3` and
+`google/gemma-4-31B-it` to `gemma4`. Non-vLLM remote endpoints may
 return no separate reasoning field.
 
 ### `llm_exclusion_criteria.remote`
@@ -814,7 +840,9 @@ Patient-time packing of catalog drug and class evidence into the
   `llm_good_option.local.engine.max_model_len` (262,144); set it when a remote
   endpoint serves a different length.
 - `chars_per_token` (3.5): conversion rate for the budget. Conservative for
-  Gemma 4, which averages about 4.4 characters per token on catalog text.
+  Gemma 4, which averages about 4.4 characters per token on catalog text, and
+  for Nemotron 3.5 Super, whose tokenizer averages the same as Gemma 4's (4.6)
+  on ctgov eligibility criteria.
 - `safety_tokens` (4,096): margin kept beyond the completion allowance, which
   is the active backend's `llm_good_option` `max_tokens`.
 - `max_drug_section_tokens`, `max_class_section_tokens` (20,000 each): upper

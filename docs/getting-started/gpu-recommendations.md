@@ -10,11 +10,11 @@ Determining the type of GPUs needed to run an AI pipeline can be complicated.  T
 ## Models Used In Our Pipeline
 MatchMiner-AI is a pipeline which uses 3 different models:
 
-- An LLM for patient summarization and trial 'space' extraction. We currently use variants of Google's Gemma-4-31B-IT model.
+- An LLM for patient summarization and trial 'space' extraction. The default is NVIDIA's Nemotron 3.5 Super, [nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4) (a 120B-parameter hybrid Mamba-Transformer mixture of experts with 12B active parameters, served text only). Earlier releases used variants of Google's Gemma-4-31B-IT, which remains supported.
 - 'TrialSpace' - an embedding model [https://huggingface.co/ksg-dfci/TrialSpace-0526](https://huggingface.co/ksg-dfci/TrialSpace-0526) , fine-tuned from Qwen 3 0.6B Embedding [https://huggingface.co/Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B).
 - The decision model - a 1.9B-parameter System One model that answers the match, boilerplate and per-criterion yes/no questions: [https://huggingface.co/LiquidAI/d1-2B](https://huggingface.co/LiquidAI/d1-2B) by default (LFM Open License v1.0), or a checkpoint fine-tuned from it by the training repository. In bfloat16 it needs a few GB of GPU memory plus activations for `decision_model.token_budget` (65,536) tokens per forward pass.
 
-For any given model, minimum compute/GPU requirements could be determined from others' experiences either with the model itself (e.g. Gemma-4-31B-IT) or with the base (pre-trained) models (Qwen 3 0.6B Embedding, d1-2B).
+For any given model, minimum compute/GPU requirements could be determined from others' experiences either with the model itself (e.g. Nemotron 3.5 Super or Gemma-4-31B-IT) or with the base (pre-trained) models (Qwen 3 0.6B Embedding, d1-2B).
 
 ## Minimum GPU Memory
 Nvidia provides some guidance and a short-hand metric for determining how much GPU VRAM is required to run a given LLM. (See [GPU Memory Essentials for AI Performance](https://developer.nvidia.com/blog/gpu-memory-essentials-for-ai-performance/)).  Specifically, it recommends having at least Parameter * Precision * 2 VRAM. Where Parameter is the number of parameters in the model and Precision is the bytes per parameter for the model's precision format -- FP32, FP16, FP8 or FP4.  (See conversion table below.)
@@ -33,6 +33,8 @@ For example, when we run [RedHatAI/gemma-4-31B-it-FP8-Dynamic](https://huggingfa
 *31,000,000,000 parameter* (31 billion parameters) * *1 byte/parameter* * *2 VRAM* (~62 GB)
 
 In practice, we run RedHatAI/gemma-4-31B-it-FP8-Dynamic on H100 (NVL PCIe) GPUs with 94GB VRAM each.
+
+Nemotron 3.5 Super's NVFP4 build needs native FP4 kernels (a Blackwell GPU). We serve it with tensor parallel size 1, one server per GPU, on GB300 and RTX Pro 6000 (96 GB) GPUs; only 8 of its 88 layers are attention layers, so long contexts need little KV-cache memory. On H100s, which lack native FP4, we serve the FP8 build, [RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8](https://huggingface.co/RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8), across four H100 NVL 96 GB GPUs; select it by setting each section's `model_name`.
 
 ## Minimum Software Stack Requirements
 The [dependencies in our pipeline](https://github.com/dfci/matchminer-ai-inference/blob/main/pyproject.toml) include packages which have particular compute/GPU requirments.  Currently these include:

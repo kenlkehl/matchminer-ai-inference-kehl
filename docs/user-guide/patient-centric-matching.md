@@ -31,8 +31,8 @@ Table 1: MatchMiner-AI Steps and Models. <br>
 
 | Step | Package Function | Model | Notes |
 |------|-------|-------|--------|
-| 1. Summarize Trials | `extract_cohorts` | open-weights local LLM | by default, currently uses `google/gemma-4-31B-it` |
-| 2. Summarize Patients | `summarize_patients` | open-weights local LLM | by default, currently uses `google/gemma-4-31B-it` |
+| 1. Summarize Trials | `extract_cohorts` | open-weights local LLM | by default, currently uses `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` |
+| 2. Summarize Patients | `summarize_patients` | open-weights local LLM | by default, currently uses `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` |
 | 3. Embed Trial Spaces and Patient Summaries | `embed_for_matching` | `TrialSpace`, a trained Sentence Transformers model | provided on Hugging Face at `https://huggingface.co/ksg-dfci` |
 | 4. Generate Candidate Matches | `generate_candidate_matches` | NA | |
 | 5. Evaluate Candidate Match Quality | `score_match_quality` | the decision model's five match questions (`LiquidAI/d1-2B` by default, or a fine-tuned checkpoint) [^2] | `https://huggingface.co/LiquidAI/d1-2B` |
