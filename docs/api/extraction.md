@@ -176,6 +176,13 @@ level) or skips the chunk (patient level, listed in `failed_chunks`). A request
 that fails in transport fails the note, or stops the patient so that a rerun
 resumes at that chunk.
 
+Requests are long: Nemotron 3.5 Super often reasons for 10,000-15,000 tokens
+before an answer, and a patient chunk's answer adds its quotes. Set
+`remote.request_timeout` (600 seconds in the default preset) to cover a whole
+completion on a busy server, for example 7,200 seconds; the shared endpoint
+pool retries a timed-out request from the start, so a timeout shorter than a
+completion never finishes.
+
 Returned DataFrames have `extraction_status` (`complete`, `partial` or
 `failed`), `error`, `item_count` and the `record` dict (None when failed).
 `return_metadata=True` adds the schema version, prompt and response-schema
