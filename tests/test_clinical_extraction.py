@@ -505,3 +505,24 @@ def test_note_ids_match_the_extraction_stages():
     assert frame.note_type.tolist() == ["Imaging", None]
     expected = dict(zip(frame.note_text, frame.note_id, strict=True))
     assert note_ids(notes) == [expected["First."], expected["Second."]]
+
+
+def test_document_extraction_reports_progress(config, monkeypatch):
+    calls = []
+
+    class Backend:
+        def generate_llm_outputs(self, *, prompt_list, llm_config, **kwargs):
+            return LLMGenerationResult(
+                final_outputs=["{}"] * len(prompt_list), finish_reasons=["stop"] * len(
+                    prompt_list), reasoning_outputs=[""] * len(prompt_list), raw_outputs=[],
+                model_metadata={})
+
+    monkeypatch.setattr("matchminer_ai.patients.extraction.documents.get_llm_backend",
+                        lambda _c: Backend())
+    config.document_extraction["max_attempts"] = 1
+    config.document_extraction["reasoning_off_fallback"] = False
+    notes = pd.DataFrame({"patient_id": ["p1"], "note_text": ["Fabricated."],
+                          "note_date": ["2024-01-01"]})
+    extract_document_records(notes, config=config,
+                             progress_callback=lambda done, total: calls.append((done, total)))
+    assert calls[0] == (0, 1) and calls[-1] == (1, 1)

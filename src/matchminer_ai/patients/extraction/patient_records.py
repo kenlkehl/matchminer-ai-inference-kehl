@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -230,6 +231,7 @@ def extract_patient_records(
     checkpoint_dir: str | Path | None = None,
     return_metadata: bool = False,
     return_qc: bool = False,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> pd.DataFrame | tuple:
     """Extract one structured record per patient from all of their notes.
 
@@ -260,6 +262,9 @@ def extract_patient_records(
         files hold patient-derived text.
     return_metadata, return_qc : bool
         Also return a metadata dict and a QC report.
+    progress_callback : callable, optional
+        Called as ``progress_callback(finished_chunks, total_chunks)`` before the
+        first request and then every few seconds while requests run.
 
     Returns
     -------
@@ -450,10 +455,20 @@ def extract_patient_records(
             save(pid)
             start(pid)
 
+        def report():
+            if progress_callback is not None:
+                total = sum(s["chunk_count"] or 0 for s in states.values())
+                finished = sum(
+                    (s["chunk_count"] or 0) if s["status"] != "running" else s["next_chunk"]
+                    for s in states.values()
+                )
+                progress_callback(finished, total)
+
         for pid in pending:
             start(pid)
+        report()
         logger.info("Extracting patient records for %d patients.", len(pending))
-        model_metadata = queue.run(record)
+        model_metadata = queue.run(record, progress=report)
 
     rows = []
     for pid, s in states.items():

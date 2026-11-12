@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -209,6 +210,7 @@ def extract_document_records(
     checkpoint_dir: str | Path | None = None,
     return_metadata: bool = False,
     return_qc: bool = False,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> pd.DataFrame | tuple:
     """Extract one structured record from each clinical note.
 
@@ -242,6 +244,9 @@ def extract_document_records(
     return_metadata, return_qc : bool
         Also return a metadata dict (schema version, prompt and schema hashes,
         model metadata, per-document attempts) and a QC report.
+    progress_callback : callable, optional
+        Called as ``progress_callback(finished_notes, total_notes)`` before the
+        first request and then every few seconds while requests run.
 
     Returns
     -------
@@ -428,7 +433,11 @@ def extract_document_records(
         def flush():
             write(finished)
             finished.clear()
+            if progress_callback is not None:
+                progress_callback(len(outcomes), len(notes_list))
 
+        if progress_callback is not None:
+            progress_callback(len(outcomes), len(notes_list))
         logger.info("Extracting document records for %d notes.", len(pending))
         model_metadata = queue.run(record, progress=flush)
 
