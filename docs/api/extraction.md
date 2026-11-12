@@ -70,8 +70,11 @@ Every item has:
 - `evidence`: one to four exact quotes, each with the note's `note_id`,
   `note_date` and the `start`/`end` character offsets of the quote in the
   note's own text. The model writes the quotes; code locates each one in the
-  note (exactly, or with different whitespace only) and keeps the note's own
-  text. A quote that is not in the note is rejected.
+  note and keeps the note's own text at that span. The words must occur in
+  order; only layout may differ (whitespace and line breaks, letter case,
+  markdown emphasis and heading marks, list markers at the start of a line,
+  typographic quotes and dashes), which a JSON answer cannot reproduce
+  reliably. A paraphrased or invented quote is rejected.
 
 ### Item types
 
@@ -168,7 +171,8 @@ Each request's answer is decoded under its JSON schema when the remote backend
 is enabled and `structured_outputs` is on, then validated in code: field types
 and vocabularies, `other` companions, dates, ids, `cancer_ids`, the report's own
 study or procedure, and every quote. A failed answer is retried with its
-problems named, up to `max_attempts`, then once with thinking off
+problems named (the model revises its rejected answer when it was complete
+JSON), up to `max_attempts`, then once with thinking off
 (`reasoning_off_fallback`). When the last attempt's only problems are quotes not
 found in the note, the items left without a found quote are dropped and counted
 (`partial`); any other problem on the last attempt fails the note (document

@@ -31,11 +31,11 @@ from matchminer_ai.llm.request_queue import RequestQueue
 from .common import (
     attempt_entry,
     attempt_group,
-    feedback_message,
     fill,
     ncit_agent_codes,
     parse_answer,
     qc_rows,
+    retry_messages,
     section_settings,
 )
 from .evidence import evidence_entry, locate_quote
@@ -437,7 +437,7 @@ def extract_patient_records(
                 entry["problems"] = [error] if error else [p.code for p in problems]
                 if not final:
                     queue.add((pid, index, attempt + 1, original),
-                              original + [{"role": "user", "content": feedback_message(problems, error)}],
+                              retry_messages(original, answer, check is not None, problems, error),
                               attempt_group(attempt + 1, settings))
                     return
                 s["failed_chunks"].append(index)

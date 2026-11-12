@@ -273,9 +273,16 @@ def test_quotes_must_occur_in_the_note():
     check = check_document_answer(document_answer("pathology_report", procedures=[invented]),
                                   note, item_types, linking=False, known_ids=set())
     assert check.grounding and not check.structural and check.dropped[0]["item_type"] == "procedure"
-    # Whitespace may differ; the record keeps the note's own text.
+    # Only layout may differ (whitespace, case, markdown marks, list markers,
+    # typographic dashes); the record keeps the note's own text at the span.
     assert locate_quote("A  B\nC", "A B C") == (0, 6)
-    assert locate_quote("tumor proportion score", "tumour proportion score") is None
+    text = "**Scan type:** CT chest\nBIOPSY:\n- MODERATELY differentiated \u2013 grade 2"
+    span = locate_quote(text, "scan type: ct chest")
+    assert text[span[0]:span[1]] == "Scan type:** CT chest"
+    span = locate_quote(text, "BIOPSY: moderately differentiated - grade 2")
+    assert text[span[0]:span[1]] == "BIOPSY:\n- MODERATELY differentiated \u2013 grade 2"
+    for invented in ("tumour proportion score", "Scan type: MRI chest", "BIOPSY: well differentiated"):
+        assert locate_quote(text + " tumor proportion score", invented) is None
 
 
 def test_structural_problems_are_reported_for_retry():
@@ -331,8 +338,10 @@ def test_extract_document_records_builds_grounded_records(config, monkeypatch, t
     assert records.extraction_status.tolist() == ["complete"] * 3
     format_ = backend.calls[0][1]["remote"]["request_params"]["response_format"]
     assert format_["type"] == "json_schema" and format_["json_schema"]["strict"] is True
-    retry = [p for prompts, _ in backend.calls for p in prompts if len(p.messages) == 2]
-    assert len(retry) == 1 and "quote not found in the document" in retry[0].messages[1]["content"]
+    # The rejected draft is revised, with its problem named.
+    retry = [p for prompts, _ in backend.calls for p in prompts if len(p.messages) == 3]
+    assert len(retry) == 1 and json.loads(retry[0].messages[1]["content"]) == first
+    assert "quote not found in the document" in retry[0].messages[2]["content"]
     ct = records.record[0]["items"]["imaging_studies"][0]
     assert ct["study_date"] == {"value": "2024-03-01", "precision": "day", "source": "note_date"}
     assert ct["source_of_document"] is True and ct["status"] == "performed"
@@ -434,7 +443,7 @@ def test_extract_patient_records_merges_chunk_updates(config, monkeypatch, tmp_p
     assert '{"item_id": "D1", "evidence"' not in second and '"item_id": "D1"' in second
     assert "[Note 2 | 2024-03-12]" in second and "NOTES, PART 2 OF 2" in second
     retry = backend.calls[2][0][0].messages
-    assert len(retry) == 2 and "not diagnosis ids" in retry[1]["content"]
+    assert len(retry) == 3 and retry[1]["role"] == "assistant" and "not diagnosis ids" in retry[2]["content"]
     items = row.record["items"]
     assert items["diagnoses"][0]["histology"] == "adenocarcinoma"
     assert [e["note_id"] for e in items["diagnoses"][0]["evidence"]] == ["ct", "path"]

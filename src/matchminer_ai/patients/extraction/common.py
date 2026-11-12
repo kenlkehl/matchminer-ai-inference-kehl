@@ -143,20 +143,43 @@ def parse_answer(text: str, finish_reason: str) -> dict:
     return value
 
 
+_REVISE = (
+    "The preceding assistant message is your answer, which was not accepted. Revise it "
+    "against the source notes and the original instructions: fix every problem listed "
+    "below, check the same rule throughout the answer, and keep the items that are "
+    "correct. Copy each quote exactly from the source text; when the source does not "
+    "support an item, remove the item. Return the complete revised JSON object."
+)
+
+
 def feedback_message(problems: list[Problem] | None, error: str | None = None) -> str:
-    """The user message a retry appends after the original request."""
-    lines = ["The preceding answer was not accepted."]
+    """The problems of a rejected answer, as a retry names them."""
+    lines = ["The preceding answer was not accepted:"]
     if error:
         lines.append(f"- {error}")
     for problem in (problems or [])[:_MAX_FEEDBACK_PROBLEMS]:
         lines.append(f"- {problem.message}")
     if problems and len(problems) > _MAX_FEEDBACK_PROBLEMS:
         lines.append(f"- and {len(problems) - _MAX_FEEDBACK_PROBLEMS} more problems")
-    lines.append(
-        "Return a complete replacement JSON object that follows the original "
-        "instructions. Every evidence quote must be copied exactly from the source text."
-    )
     return "\n".join(lines)
+
+
+def retry_messages(
+    original: list[dict], answer: str, parsed: bool, problems: list[Problem] | None,
+    error: str | None,
+) -> list[dict]:
+    """The next attempt's messages: the original request, then the rejected answer
+    to revise when it was complete JSON, then its problems."""
+    feedback = feedback_message(problems, error)
+    if parsed:
+        return original + [
+            {"role": "assistant", "content": answer},
+            {"role": "user", "content": f"{_REVISE}\n\n{feedback}"},
+        ]
+    return original + [{"role": "user", "content": (
+        f"{feedback}\nReturn a complete JSON object that follows the original "
+        "instructions. Every evidence quote must be copied exactly from the source text."
+    )}]
 
 
 def attempt_group(attempt: int, settings: SectionSettings) -> str:
@@ -221,6 +244,7 @@ __all__ = [
     "attempt_group",
     "feedback_message",
     "fill",
+    "retry_messages",
     "ncit_agent_codes",
     "parse_answer",
     "qc_rows",
