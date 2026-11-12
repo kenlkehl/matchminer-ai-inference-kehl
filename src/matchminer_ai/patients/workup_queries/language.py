@@ -53,11 +53,13 @@ from matchminer_ai.patients.extraction.schema import CORE_ITEM_TYPES, SCHEMA_VER
 
 QUERY_LANGUAGE_VERSION = "mmai-workup-query-v1"
 
-MAX_CRITERIA = 12
+# Guideline biomarker panels list 14 or more markers, each its own required group: an
+# 8-group cap made such a requirement impossible to write under structured outputs.
+MAX_CRITERIA = 24
 MAX_FILTERS = 8
 MAX_VALUES = 24
-MAX_GROUPS = 8
-MAX_LITERALS = 8
+MAX_GROUPS = 24
+MAX_LITERALS = 12
 MAX_APPROXIMATIONS = 8
 MAX_DAYS = 36500
 MAX_COUNT = 20

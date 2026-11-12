@@ -34,6 +34,9 @@ from matchminer_ai.patients.extraction.common import (
 )
 
 from .language import (
+    MAX_CRITERIA,
+    MAX_GROUPS,
+    MAX_LITERALS,
     QUERY_LANGUAGE_VERSION,
     SCHEMA_VERSION,
     canonical_query,
@@ -88,6 +91,7 @@ def compile_contract(extensions: Iterable[str] = ()) -> dict:
         "extensions": extensions,
         "prompt_sha256": digest({
             "template": template,
+        "limits": [MAX_CRITERIA, MAX_GROUPS, MAX_LITERALS],
             "field_guide": render_query_field_guide(extensions),
             "operators": render_operator_guide(),
             "examples": render_examples(),
@@ -123,6 +127,9 @@ def render_compile_prompt(
         "name": values["name"],
         "conditions": values["conditions"] or "(none stated)",
         "category": values["category"] or "(not stated)",
+        "max_criteria": str(MAX_CRITERIA),
+        "max_groups": str(MAX_GROUPS),
+        "max_literals": str(MAX_LITERALS),
     })
 
 

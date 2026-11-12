@@ -237,6 +237,20 @@ def test_validation_names_every_problem(change, expected):
     assert any(expected in p for p in problems), problems
 
 
+def test_a_fourteen_marker_panel_fits_the_schema():
+    markers = ["EGFR", "ALK", "KRAS", "ROS1", "BRAF", "NTRK1", "NTRK2", "NTRK3", "MET", "RET",
+               "ERBB2", "NRG1", "HER2", "c-Met"]
+    criteria = [criterion(f"m{i}", "biomarker", [("biomarker", "text_contains_any", [m],
+                                                  "no_match")], status="any")
+                for i, m in enumerate(markers)]
+    panel = query(criteria, [[(f"m{i}", False)] for i in range(len(markers))])
+    assert validate_workup_query(panel) == []
+    schema = lang.query_response_schema()["properties"]
+    assert schema["requirement"]["properties"]["all_of"]["maxItems"] >= len(markers)
+    assert schema["criteria"]["maxItems"] >= len(markers)
+    assert "up to 24 named matchers" in render_compile_prompt(REQUIREMENT)
+
+
 def test_validation_of_references_values_and_types():
     q = query([
         criterion("a", "imaging_study", CT, anchor="criterion_earliest", target="b"),

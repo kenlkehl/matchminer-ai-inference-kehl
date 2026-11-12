@@ -59,12 +59,12 @@ strict and non-recursive (no `$ref`, `null`, `minLength` or `pattern`).
 | `summary` | One sentence: what the query checks. |
 | `expressible` | `false` when the item types cannot check the requirement (examinations, laboratory panels, consultations, multidisciplinary evaluation, counseling). Then `criteria` is `[]`, every expression is `{"all_of": []}` and `not_expressible_reason` says why; the result is `unknown`. |
 | `approximations` | What was left out or approximated ("upper abdomen" by the abdomen region). Shown as limitations. |
-| `criteria` | Up to 12 named matchers of one item type each: `id`, `label`, `item_type`, `status` (`performed`, `planned`, `any`), `filters`, `window`, `min_count`. |
+| `criteria` | Up to 24 named matchers of one item type each: `id`, `label`, `item_type`, `status` (`performed`, `planned`, `any`), `filters`, `window`, `min_count`. |
 | `requirement` | What must be documented. |
 | `applies_when` | Documented facts that make a conditional step apply (`{"all_of": []}`: the whole population). |
 | `not_applicable_when` | Documented facts that make it not apply. It needs at least one criterion that is not negated: a step is never not applicable because something is undocumented. |
 
-Expressions are AND-of-OR: `{"all_of": [{"any_of": [{"criterion": "id",
+Expressions are AND-of-OR, with up to 24 groups of up to 12 literals: `{"all_of": [{"any_of": [{"criterion": "id",
 "negated": false}, ...]}, ...]}`. Alternatives are literals of one group;
 components that are all required are separate groups; a negated literal holds
 when its criterion does not. A requirement needs at least one criterion that is
