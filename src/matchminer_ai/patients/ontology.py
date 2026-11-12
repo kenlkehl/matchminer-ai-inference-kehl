@@ -11,7 +11,7 @@ from collections.abc import Collection, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from difflib import SequenceMatcher, get_close_matches
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from importlib import resources
 from io import TextIOWrapper
 from pathlib import Path
@@ -65,6 +65,200 @@ def normalize_ontology_text(value: str) -> str:
         "ascii", "ignore"
     ).decode("ascii")
     return _NON_ALPHANUMERIC.sub(" ", ascii_text.casefold()).strip()
+
+
+#: Greek letters, which ASCII folding would drop, as NCIt spells them.
+_GREEK_LETTERS = MappingProxyType(
+    {"α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "ε": "epsilon",
+     "κ": "kappa", "λ": "lambda", "ω": "omega"}
+)
+#: Words that join the agents of one product, as "/", "+" and "&" do:
+#: "Daratumumab and Hyaluronidase" is "Daratumumab-hyaluronidase".
+_JOINING_WORDS = frozenset({"and", "plus", "with"})
+#: Salts written two ways: abbreviated, or in INN rather than USAN spelling.
+_SALT_SPELLINGS = MappingProxyType(
+    {
+        "hcl": "hydrochloride", "hbr": "hydrobromide", "mesilate": "mesylate",
+        "besilate": "besylate", "tosilate": "tosylate", "camsilate": "camsylate",
+        "edisilate": "edisylate", "isetionate": "isethionate",
+    }
+)
+#: Counter-ions and hydrates. NCIt files a salt as its own concept beside the
+#: parent molecule ("Irinotecan Hydrochloride", "Irinotecan").
+_SALT_WORDS = frozenset(
+    {
+        "hydrochloride", "dihydrochloride", "trihydrochloride", "monohydrochloride",
+        "hydrobromide", "mesylate", "dimesylate", "besylate", "tosylate",
+        "ditosylate", "camsylate", "edisylate", "isethionate", "maleate",
+        "dimaleate", "malate", "fumarate", "hemifumarate", "citrate", "tartrate",
+        "bitartrate", "sulfate", "sulphate", "bisulfate", "phosphate",
+        "diphosphate", "acetate", "diacetate", "succinate", "lactate", "gluconate",
+        "chloride", "dichloride", "bromide", "sodium", "disodium", "potassium",
+        "calcium", "magnesium", "meglumine", "hydrate", "monohydrate", "dihydrate",
+        "trihydrate", "hemihydrate", "sesquihydrate", "anhydrous",
+    }
+)
+#: Words for how, or as whose product, an agent is given rather than which
+#: agent it is: "Trastuzumab SC", "Rituximab Biosimilar".
+_PRODUCT_WORDS = frozenset(
+    {
+        "sc", "subcutaneous", "subq", "iv", "intravenous", "oral", "injection",
+        "injectable", "infusion", "tablet", "tablets", "capsule", "capsules",
+        "biosimilar",
+    }
+)
+#: Therapeutic and imaging radionuclide elements, by name.
+_RADIONUCLIDE_SYMBOLS = MappingProxyType(
+    {
+        "actinium": "ac", "astatine": "at", "bismuth": "bi", "copper": "cu",
+        "fluorine": "f", "gallium": "ga", "holmium": "ho", "indium": "in",
+        "iodine": "i", "lead": "pb", "lutetium": "lu", "radium": "ra",
+        "rhenium": "re", "samarium": "sm", "strontium": "sr", "technetium": "tc",
+        "terbium": "tb", "thorium": "th", "yttrium": "y", "zirconium": "zr",
+    }
+)
+_ELEMENT_SYMBOLS = frozenset(_RADIONUCLIDE_SYMBOLS.values())
+#: Symbols read after a separate mass number ("177 Lu"): two letters, and not
+#: "in" or "at", which follow numbers as words.
+_SYMBOLS_AFTER_MASS = frozenset(
+    symbol for symbol in _ELEMENT_SYMBOLS if len(symbol) == 2
+) - {"in", "at"}
+_MASS_NUMBER = re.compile(r"\d{2,3}m?")
+_MASS_THEN_SYMBOL = re.compile(r"(\d{2,3}m?)([a-z]{1,2})")
+_SYMBOL_THEN_MASS = re.compile(r"([a-z]{1,2})(\d{2,3}m?)")
+_LIPOSOME_WORDS = frozenset({"liposome", "liposomes", "liposomal"})
+
+
+def _isotope_follows(words: Sequence[str], index: int, symbol: str) -> bool:
+    """Whether ``words[index:]`` begin with this element's mass number."""
+
+    word = words[index] if index < len(words) else ""
+    following = words[index + 1] if index + 1 < len(words) else ""
+    if word == symbol:
+        return bool(_MASS_NUMBER.fullmatch(following))
+    if _MASS_NUMBER.fullmatch(word):
+        return True
+    for pattern, group in ((_MASS_THEN_SYMBOL, 2), (_SYMBOL_THEN_MASS, 1)):
+        matched = pattern.fullmatch(word)
+        if matched and matched.group(group) == symbol:
+            return True
+    return False
+
+
+def _canonical_isotopes(words: Sequence[str]) -> list[str]:
+    """Write every radionuclide as symbol then mass: "lu177".
+
+    Registries and NCIt spell one isotope as "[177Lu]Lu-", "177Lu-", "Lu-177",
+    "Lutetium-177", or "Lutetium Lu 177". The element's name is dropped before
+    its mass, a mass written first moves after the symbol, and the symbol
+    repeated after "[177Lu]" is dropped. "Lu 177" needs nothing: it is
+    "lu177" once the words are joined.
+    """
+
+    canonical: list[str] = []
+    index = 0
+    while index < len(words):
+        word = words[index]
+        symbol = _RADIONUCLIDE_SYMBOLS.get(word)
+        if symbol is not None and _isotope_follows(words, index + 1, symbol):
+            following = words[index + 1]
+            if _MASS_NUMBER.fullmatch(following):
+                canonical.append(symbol + following)
+                index += 2
+            else:
+                index += 1
+            continue
+        matched = _MASS_THEN_SYMBOL.fullmatch(word)
+        if matched and matched.group(2) in _ELEMENT_SYMBOLS:
+            canonical.append(matched.group(2) + matched.group(1))
+            index += 1
+            if index < len(words) and words[index] == matched.group(2):
+                index += 1
+            continue
+        following = words[index + 1] if index + 1 < len(words) else ""
+        if _MASS_NUMBER.fullmatch(word) and following in _SYMBOLS_AFTER_MASS:
+            canonical.append(following + word)
+            index += 2
+            continue
+        canonical.append(word)
+        index += 1
+    return canonical
+
+
+def _drug_name_words(value: str) -> list[str]:
+    """Words of a drug name, with the spellings that mean the same agent unified.
+
+    On top of ``normalize_ontology_text`` (case, hyphens, slashes, plus signs):
+    Greek letters are spelled out, isotopes written one way
+    (``_canonical_isotopes``), salt abbreviations and INN salt spellings
+    written in full, "and", "plus" and "with" read as separators like "/",
+    "PEG" read as "pegylated", and "X liposome" read as "liposomal X".
+    """
+
+    text = str(value).casefold()
+    for letter, name in _GREEK_LETTERS.items():
+        text = text.replace(letter, f" {name} ")
+    words = _canonical_isotopes(normalize_ontology_text(text).split())
+    unified: list[str] = []
+    liposomal = False
+    for word in words:
+        word = _SALT_SPELLINGS.get(word, word)
+        if word in _JOINING_WORDS:
+            continue
+        if word in _LIPOSOME_WORDS:
+            liposomal = True
+            continue
+        unified.append("pegylated" if word == "peg" else word)
+    return ["liposomal", *unified] if liposomal else unified
+
+
+def drug_name_key(value: str) -> str:
+    """Return the comparison key two spellings of one drug name share.
+
+    The words of ``_drug_name_words`` joined without spaces, so "L19IL2" and
+    "L19-IL2", or "Interleukin 2" and "Interleukin-2", are one key. NCIt
+    aliases and screened names are compared on it, and a drug NCIt cannot
+    match is identified by it.
+    """
+
+    return "".join(_drug_name_words(value))
+
+
+#: Shortest word a one-letter misspelling is corrected in. Every word within one
+#: edit of a word this long shares its first or its last four letters.
+_CLOSE_SPELLING_MIN_LENGTH = 8
+
+
+@dataclass(frozen=True)
+class _DrugNameKeys:
+    """``drug_name_key`` forms of every NCIt alias, to the records they name."""
+
+    spelled: Mapping[str, set[int]]
+    salt_free: Mapping[str, set[int]]
+    #: Salt-free keys of aliases that name no salt: the parent molecules.
+    parents: Mapping[str, set[int]]
+    #: Alphabetic alias words of ``_CLOSE_SPELLING_MIN_LENGTH`` or more
+    #: letters, by "<" + their first four or ">" + their last four letters.
+    words_by_end: Mapping[str, set[str]]
+
+
+def _edit_position(left: str, right: str) -> int | None:
+    """Where one insertion, deletion, or substitution turns left into right.
+
+    None when the words are equal or more than one edit apart.
+    """
+
+    if left == right or abs(len(left) - len(right)) > 1:
+        return None
+    shorter, longer = sorted((left, right), key=len)
+    start = 0
+    while start < len(shorter) and shorter[start] == longer[start]:
+        start += 1
+    if len(shorter) == len(longer):
+        same = shorter[start + 1:] == longer[start + 1:]
+    else:
+        same = shorter[start:] == longer[start + 1:]
+    return start if same else None
 
 
 @contextmanager
@@ -459,6 +653,125 @@ class NCIThesaurusDrugIndex:
         )
         return [self.records[index] for index in ranked[:limit]]
 
+    @cached_property
+    def _name_keys(self) -> _DrugNameKeys:
+        spelled: dict[str, set[int]] = {}
+        salt_free: dict[str, set[int]] = {}
+        parents: dict[str, set[int]] = {}
+        words_by_end: dict[str, set[str]] = {}
+        for record_index, record in enumerate(self.records):
+            for alias in dict.fromkeys((record.preferred_name, *record.synonyms)):
+                words = _drug_name_words(alias)
+                if not words:
+                    continue
+                spelled.setdefault("".join(words), set()).add(record_index)
+                kept = [word for word in words if word not in _SALT_WORDS]
+                if kept:
+                    salt_free.setdefault("".join(kept), set()).add(record_index)
+                    if len(kept) == len(words):
+                        parents.setdefault("".join(kept), set()).add(record_index)
+                for word in words:
+                    if len(word) >= _CLOSE_SPELLING_MIN_LENGTH - 1 and word.isalpha():
+                        words_by_end.setdefault(f"<{word[:4]}", set()).add(word)
+                        words_by_end.setdefault(f">{word[-4:]}", set()).add(word)
+        return _DrugNameKeys(spelled, salt_free, parents, words_by_end)
+
+    def resolve_drug_name(self, names: Sequence[str]) -> NCItDrugRecord | None:
+        """Return the one concept the names spell, by the strictest rule that finds one.
+
+        For names ``search`` cannot match exactly. Each rule compares the
+        ``drug_name_key`` of the names with that of every NCIt alias, and accepts
+        a concept only when it is the only one that rule finds. The rules run in
+        order, each over all the names before the next:
+
+        1. The same key: "Daratumumab-hyaluronidase" is Daratumumab and
+           Hyaluronidase, "Ac-225 rosopatamab tetraxetan" is Actinium Ac 225
+           Rosopatamab Tetraxetan, "Liposomal irinotecan" is Irinotecan Liposome.
+        2. The same key without salts and hydrates ("5-ALA HCl" is
+           Aminolevulinic Acid); when several salts of one molecule tie, the
+           parent molecule is taken.
+        3. Route, dosage-form and "biosimilar" words moved first ("Azacitidine
+           oral" is Oral Azacitidine), or else dropped and rules 1 and 2 applied
+           to the rest ("Trastuzumab SC" is Trastuzumab).
+        4. One misspelled word corrected: a word of at least
+           ``_CLOSE_SPELLING_MIN_LENGTH`` letters that no NCIt alias uses, one
+           letter inserted, deleted or changed from words aliases do use, when
+           exactly one concept is then spelled ("5-Flurouracil" is
+           Fluorouracil). A word one edit inside its first two letters from an
+           NCIt word is never corrected (a d-, l- or e- prefix can name another
+           drug), nor is a word with digits, so "BMS-986500" is never
+           "BMS-986501".
+        """
+
+        keys = self._name_keys
+        word_lists = [words for name in names if (words := _drug_name_words(name))]
+        rules = (
+            self._by_spelling,
+            self._without_salt,
+            self._without_product_words,
+            self._by_close_spelling,
+        )
+        for rule in rules:
+            for words in word_lists:
+                found = rule(words, keys)
+                if found is not None:
+                    return self.records[found]
+        return None
+
+    @staticmethod
+    def _only(found: Collection[int]) -> int | None:
+        return next(iter(found)) if len(found) == 1 else None
+
+    def _by_spelling(self, words: Sequence[str], keys: _DrugNameKeys) -> int | None:
+        return self._only(keys.spelled.get("".join(words), ()))
+
+    def _without_salt(self, words: Sequence[str], keys: _DrugNameKeys) -> int | None:
+        key = "".join(word for word in words if word not in _SALT_WORDS)
+        found = keys.salt_free.get(key, set())
+        if len(found) > 1:
+            found = found & keys.parents.get(key, set())
+        return self._only(found)
+
+    def _without_product_words(
+        self, words: Sequence[str], keys: _DrugNameKeys
+    ) -> int | None:
+        product = [word for word in words if word in _PRODUCT_WORDS]
+        rest = [word for word in words if word not in _PRODUCT_WORDS]
+        if not product or not rest:
+            return None
+        found = self._by_spelling([*product, *rest], keys)
+        if found is None:
+            found = self._by_spelling(rest, keys)
+        if found is None:
+            found = self._without_salt(rest, keys)
+        return found
+
+    def _by_close_spelling(
+        self, words: Sequence[str], keys: _DrugNameKeys
+    ) -> int | None:
+        found: set[int] = set()
+        for position, word in enumerate(words):
+            if len(word) < _CLOSE_SPELLING_MIN_LENGTH or not word.isalpha():
+                continue
+            candidates = keys.words_by_end.get(
+                f"<{word[:4]}", set()
+            ) | keys.words_by_end.get(f">{word[-4:]}", set())
+            if word in candidates:
+                continue
+            near = {
+                candidate: edit
+                for candidate in candidates
+                if (edit := _edit_position(word, candidate)) is not None
+            }
+            # An edit in the first two letters can be a prefix (d-, l-, e-)
+            # that names another stereoisomer or drug, not a typo.
+            if any(edit < 2 for edit in near.values()):
+                continue
+            for candidate in near:
+                corrected = [*words[:position], candidate, *words[position + 1:]]
+                found |= keys.spelled.get("".join(corrected), set())
+        return self._only(found)
+
 
 @lru_cache(maxsize=4)
 def load_ncit_drug_index(resource_name: str) -> NCIThesaurusDrugIndex:
@@ -473,6 +786,7 @@ __all__ = [
     "NCItClassRecord",
     "NCItDrugRecord",
     "NCIThesaurusDrugIndex",
+    "drug_name_key",
     "load_ncit_drug_index",
     "normalize_ontology_text",
 ]

@@ -35,6 +35,7 @@ from matchminer_ai.patients.ontology import (
     NCItClassHierarchy,
     NCItClassRecord,
     NCItDrugRecord,
+    drug_name_key,
     load_ncit_drug_index,
     normalize_ontology_text,
 )
@@ -1114,22 +1115,50 @@ def _exact_ncit_match(
     return None
 
 
+def _ncit_queries(name: str, aliases: Sequence[str]) -> tuple[str, ...]:
+    """The forms of a drug's names to look up in NCIt, most literal first.
+
+    Each name as written and without its parentheticals, then each
+    parenthetical as a name of its own: "[177Lu]Lu-PSMA-617 (AAA617)" is
+    found by its code. A parenthetical of under four letters and digits
+    ("(UD)", "(LV)") is too short to identify an agent alone.
+    """
+
+    names = (name, *aliases)
+    forms = [
+        value
+        for raw in names
+        for value in (raw, re.sub(r"\([^)]*\)", " ", raw).strip())
+    ]
+    forms.extend(
+        inner.strip()
+        for raw in names
+        for inner in re.findall(r"\(([^()]*)\)", raw)
+        if len(_compact_name(inner)) >= 4
+    )
+    return tuple(dict.fromkeys(value for value in forms if value))
+
+
 def _canonicalize_drug(
     name: str, aliases: Sequence[str], *, ncit_index: Any
 ) -> DrugIdentity:
+    """Identify one agent by its NCIt concept, or else by its name's key.
+
+    An exact NCIt name or synonym for any form of the names wins. Otherwise
+    the index's ``resolve_drug_name`` rules may find the one concept the names
+    spell. An agent neither finds is identified by a hash of its
+    ``drug_name_key``, so "Interleukin 2" and "Interleukin-2" stay one drug.
+    """
+
     candidate: NCItDrugRecord | None = None
-    queries = tuple(
-        dict.fromkeys(
-            value
-            for raw in (name, *aliases)
-            for value in (raw, re.sub(r"\([^)]*\)", " ", raw).strip())
-            if value
-        )
-    )
+    queries = _ncit_queries(name, aliases)
     for query in queries:
         candidate = _exact_ncit_match(query, ncit_index.search(query, limit=8))
         if candidate is not None:
             break
+    resolve = getattr(ncit_index, "resolve_drug_name", None)
+    if candidate is None and resolve is not None:
+        candidate = resolve(queries)
     if candidate is not None:
         canonical_aliases = tuple(
             dict.fromkeys(
@@ -1147,8 +1176,8 @@ def _canonicalize_drug(
             aliases=canonical_aliases,
             definition=str(candidate.definition or ""),
         )
-    normalized = normalize_ontology_text(name)
-    digest = hashlib.sha256(normalized.encode()).hexdigest()[:20]
+    key = drug_name_key(name) or normalize_ontology_text(name)
+    digest = hashlib.sha256(key.encode()).hexdigest()[:20]
     return DrugIdentity(
         drug_id=f"NAME:{digest}",
         preferred_name=clean_text(name, max_chars=300),

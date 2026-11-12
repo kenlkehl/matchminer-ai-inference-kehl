@@ -35,9 +35,21 @@ asks once more about names spelled as combinations.
 
 Surviving agent names are matched against the bundled NCI Thesaurus snapshot for
 a canonical name, synonyms, and definition, then deduplicated across the whole
-run. A drug with no NCIt match gets a name-hash identity instead. The result is
-the unique drug set plus a table of which drugs appear in which trials in which
-role.
+run. An exact NCIt name or synonym wins: the name as written, without its
+parentheticals, or a parenthetical on its own ("[177Lu]Lu-PSMA-617 (AAA617)" is
+found by AAA617). Otherwise a concept is taken only when it is the single one a
+rule finds, the strictest rule first: the same name up to case, spaces, hyphens,
+separators ("/", "+", "and"), salt abbreviations, isotope notation ("Ac-225 X" is
+"Actinium Ac 225 X"), and "X liposome" for "liposomal X"; then without salts,
+taking the parent molecule when salts of it tie; then with route, dosage-form,
+and biosimilar words moved first or dropped ("Trastuzumab SC"); then with one
+misspelled word of eight or more letters corrected ("5-Flurouracil"). A wrong
+match is worse than none, so nothing else is tried: a name's first word alone
+("Polatuzumab"), an abbreviation NCIt lacks ("LV"), and an agent NCIt does not
+file as a drug ("GM-CSF") stay unmatched. A drug with no NCIt match gets an
+identity hashed from the same normalized name, so "Interleukin 2" and
+"Interleukin-2" stay one drug. The result is the unique drug set plus a table of
+which drugs appear in which trials in which role.
 
 ### Step 1 — Research each drug on the open internet
 

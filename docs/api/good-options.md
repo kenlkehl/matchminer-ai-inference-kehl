@@ -78,7 +78,14 @@ the disposition, exclusion category, confidence, rationale, supported
 active-entity names, and expanded regimen names (`regimen_names_json`). Excluded entries never enter `trial_drug_index.parquet`,
 the unique-drug set, web queries, evidence retrieval, or synthesis. Retained
 identities are normalized with the bundled NCIt snapshot and deduplicated across
-the complete run.
+the complete run. A name, its parenthetical-free form, or a parenthetical alone
+that is an exact NCIt name or synonym wins; otherwise
+`NCIThesaurusDrugIndex.resolve_drug_name` accepts a concept only when one rule
+finds exactly one: the same `drug_name_key` (case, spacing, separators, salt
+abbreviations, isotope notation, liposome word order), the same key without
+salts (the parent molecule when salts tie), route/dosage-form/biosimilar words
+moved or dropped, or one misspelled word of eight or more letters corrected. An
+unmatched drug's `NAME:` identity is a hash of its `drug_name_key`.
 
 Each unique drug is researched once across mechanism and targets, human efficacy
 by tumor type and histology, biomarker prevalence, biomarker-directed human

@@ -1773,7 +1773,7 @@ _NCIT_ROWS = (
 )
 
 
-def _ncit_fixture(tmp_path: Path):
+def _ncit_fixture(tmp_path: Path, rows=_NCIT_ROWS):
     import zipfile
 
     from matchminer_ai.patients.ontology import NCIThesaurusDrugIndex
@@ -1784,7 +1784,7 @@ def _ncit_fixture(tmp_path: Path):
             "Thesaurus.txt",
             "".join(
                 "\t".join((code, f"http://example.test/{code}", *fields)) + "\n"
-                for code, *fields in _NCIT_ROWS
+                for code, *fields in rows
             ),
         )
     return NCIThesaurusDrugIndex.from_flat_zip(str(path))
@@ -1972,6 +1972,87 @@ def test_drug_without_ncit_classes_gets_candidate_or_new_model_classes(
     assert new.aliases == ("BCL6 PROTAC",)
     assert by_name["FLT3 Inhibitor"].class_id == "NCIT:C124800"
     assert by_name["Tyrosine Kinase Inhibitor"].assigned_by == "llm_added_ncit_ancestor"
+
+
+#: Drug concepts for name matching, written as NCIt writes them.
+_PS = "Pharmacologic Substance"
+_NCIT_NAME_ROWS = (
+    ("C156401", "C274", "Daratumumab and Hyaluronidase-fihj|Daratumumab and Hyaluronidase", "", "", "", _PS),
+    ("C82676", "C274", "Irinotecan Sucrosofate|Irinotecan Liposome|Onivyde", "", "", "", _PS),
+    ("C234", "C274", "Aminolevulinic Acid|5-ALA", "", "", "", _PS),
+    ("C1849", "C274", "Aminolevulinic Acid Hydrochloride|Aminolevulinic Acid HCl", "", "", "", _PS),
+    ("C1647", "C274", "Trastuzumab|Herceptin", "", "", "", _PS),
+    ("C148145", "C274", "Lutetium Lu 177 Vipivotide Tetraxetan|177Lu-PSMA-617|AAA617", "", "", "", _PS),
+    ("C153159", "C274", "Actinium Ac 225 Rosopatamab Tetraxetan", "", "", "", _PS),
+    ("C505", "C274", "Fluorouracil|5-Fluorouracil|5-FU", "", "", "", _PS),
+    ("C74378", "C274", "Tricetamide", "", "", "", _PS),
+    ("C75243", "C274", "Trimetamide", "", "", "", _PS),
+    ("C66027", "C274", "Loflucarban", "", "", "", _PS),
+    ("C900010", "C274", "BMS-986501", "", "", "", _PS),
+    ("C1326", "C274", "Doxorubicin Hydrochloride|Doxorubicin HCl", "", "", "", _PS),
+    ("C104153", "C274", "Polatuzumab Vedotin|Polivy", "", "", "", _PS),
+    ("C1498", "C274", "Aldesleukin|Recombinant Human Interleukin-2", "", "", "", _PS),
+)
+
+
+def _ncit_code(index, name: str) -> str:
+    return catalog_module._canonicalize_drug(name, (), ncit_index=index).ncit_code
+
+
+def test_ncit_matching_reads_one_agent_through_its_spellings(tmp_path: Path) -> None:
+    index = _ncit_fixture(tmp_path, _NCIT_NAME_ROWS)
+
+    # Separators, and "X liposome" read as "liposomal X".
+    assert _ncit_code(index, "Daratumumab-hyaluronidase") == "C156401"
+    assert _ncit_code(index, "Liposomal irinotecan") == "C82676"
+    # A salt NCIt names wins; an abbreviated or other salt falls back to the
+    # parent molecule, even when another salt of it also matches.
+    assert _ncit_code(index, "aminolevulinic acid HCl") == "C1849"
+    assert _ncit_code(index, "5-ALA HCl") == "C234"
+    assert _ncit_code(index, "Aminolevulinic Acid Phosphate") == "C234"
+    # Route and biosimilar words.
+    assert _ncit_code(index, "Trastuzumab SC") == "C1647"
+    assert _ncit_code(index, "Trastuzumab biosimilar") == "C1647"
+    # Isotope notations, and a parenthetical looked up as a name of its own.
+    for name in (
+        "[177Lu]Lu-PSMA-617",
+        "Lu-177 PSMA-617",
+        "Lutetium-177-PSMA-617",
+        "Radioligand (AAA617)",
+    ):
+        assert _ncit_code(index, name) == "C148145", name
+    assert _ncit_code(index, "Ac-225 rosopatamab tetraxetan") == "C153159"
+    assert _ncit_code(index, "[225Ac]Ac-rosopatamab tetraxetan") == "C153159"
+
+
+def test_ncit_misspelling_is_corrected_only_toward_one_concept(tmp_path: Path) -> None:
+    index = _ncit_fixture(tmp_path, _NCIT_NAME_ROWS)
+
+    assert _ncit_code(index, "5-Flurouracil") == "C505"
+    # One letter from two drugs, one letter at a drug's prefix, and a code one
+    # digit from another code are all left unmatched.
+    assert _ncit_code(index, "Trixetamide") == ""
+    assert _ncit_code(index, "Xloflucarban") == ""
+    assert _ncit_code(index, "BMS-986500") == ""
+
+
+def test_unmatched_agents_merge_by_name_key_and_are_not_forced_onto_ncit(
+    tmp_path: Path,
+) -> None:
+    index = _ncit_fixture(tmp_path, _NCIT_NAME_ROWS)
+
+    def drug_id(name: str) -> str:
+        return catalog_module._canonicalize_drug(name, (), ncit_index=index).drug_id
+
+    # A word that changes the agent is never dropped, a name's first word is
+    # not the name, and a protein is not the drug made from it.
+    for name in ("Liposomal doxorubicin", "Polatuzumab", "Interleukin-2"):
+        assert drug_id(name).startswith("NAME:"), name
+    assert drug_id("Interleukin 2") == drug_id("Interleukin-2") == drug_id("INTERLEUKIN2")
+    assert drug_id("Cytokine Induced Memory-like NK Cells") == drug_id(
+        "Cytokine-induced memory-like NK cells"
+    )
+    assert drug_id("Interleukin-12") != drug_id("Interleukin-2")
 
 
 def test_evidence_bounding_reserves_room_for_every_query_scope() -> None:
