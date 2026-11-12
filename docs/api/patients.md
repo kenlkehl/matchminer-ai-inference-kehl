@@ -19,6 +19,10 @@ The key section's treatment history lists anti-cancer treatment only, one line p
 
 The boilerplate section records the evidence for the general criteria most trials share, with dates: performance status, measurable disease, brain and other CNS metastases and their treatment, the most recent routine labs (blood counts, coagulation, kidney and liver function), ejection fraction and QTc if known, toxicities of earlier cancer treatment, conditions other than cancer (including transplants and drug allergies), recent major surgery other than cancer surgery, other and inactive cancers, participation in any clinical trial, and hospice enrollment or a decision to stop anti-cancer therapy (`prompts/patient.serial.user.primer.txt`).
 
+Structured, evidence-linked records from the same note table (document-level
+and patient-level extraction) are described in
+[Structured Clinical Extraction](extraction.md).
+
 Historical boilerplate headings are normalized on output. `embed_for_matching`
 and the match-quality and exclusion checkers also accept a complete
 `patient_summary` in place of a section column and take the section they need. `patients.postprocess.split_patient_summary`

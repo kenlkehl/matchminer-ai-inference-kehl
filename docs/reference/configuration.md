@@ -500,6 +500,55 @@ of the embedding model. Use `max_workers=1` with local in-process vLLM. This
 workflow performs no web search, but retrieved patient excerpts and aggregated
 answers reach the configured LLM backend.
 
+## `document_extraction`
+
+Configuration for `patients.extract_document_records`, which extracts one
+structured record per note (see [Structured Clinical Extraction](../api/extraction.md)).
+Its `local`, `remote`, `sampling_profile`, `reasoning_effort` and
+`reasoning_parser` fields follow the other LLM task sections; the default model
+is Nemotron 3.5 Super with its own sampling (`sampling_profile: auto`).
+
+- `max_document_characters` (default 200,000): longer notes fail rather than
+  being truncated.
+- `max_attempts` (1-10, default 3): attempts per note for an answer that fails
+  validation, including a quote that is not in the note. With
+  `reasoning_off_fallback` (default true) one more attempt runs with thinking
+  off. After the last attempt, items left without any quote found in the note
+  are dropped and the record is `partial`; any other problem fails the note.
+- `structured_outputs` (default true): with the remote backend, each request
+  carries the record's strict JSON schema as `response_format` (vLLM structured
+  outputs).
+- `batch_size` (default 256) and `batches_in_flight` (default 2, at most 16): a
+  remote backend keeps `batch_size * batches_in_flight` requests in flight, each
+  sent as another returns; a local backend gets batches of `batch_size`.
+- `extensions` (default `[]`): disease-specific item types and guidance by name;
+  the package provides `thoracic`.
+- `ncit_agent_codes` (default false): add each treatment agent's NCIt concept
+  from the bundled NCIt snapshot (`ncit_resource`, by default
+  `good_option_catalog.ncit_resource`).
+
+The default completion budget is 40,000 tokens, reasoning included (Nemotron
+often reasons for 10,000-15,000 tokens before an answer whose quotes add more),
+in a 100,000-token local context.
+
+## `patient_extraction`
+
+Configuration for `patients.extract_patient_records`, which builds one record
+per patient from all of their notes. It takes the `document_extraction` keys
+above except `max_document_characters`, plus:
+
+- `chunk_tokens` (default 40,000) and `chunk_overlap_tokens` (default 500):
+  notes are packed in date order into chunks of at most `chunk_tokens` tokens of
+  the model's tokenizer (`remote.tokenizer_name`, or the model name); a longer
+  note is split at token boundaries with that overlap.
+- `context_tokens` (default null, meaning `local.engine.max_model_len`): a
+  chunk's prompt, including the record so far, plus the completion budget must
+  fit; a patient whose next prompt would not fit fails rather than being
+  truncated.
+
+The default batch is 64 requests, the completion budget 60,000 tokens and the
+local context 200,000 tokens.
+
 ## `trial_space_criteria_extraction`
 
 Configuration for extracting the complete inclusion and exclusion criteria

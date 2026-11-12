@@ -45,6 +45,28 @@ every prompt, answer and separate reasoning trace, including rejected attempts.
 Debug output also includes `patient_summary_attempts`; metadata reports attempt
 and rejection counts. These checks do not establish clinical completeness.
 
+Structured clinical extraction (`patients.extract_document_records` and
+`patients.extract_patient_records`) turns the same note table into
+evidence-linked records with one versioned data model
+(`mmai-clinical-extraction-v1`). A document record gives each note's type and,
+for an imaging report, the study that produced it (modality, body regions,
+contrast, date); for a pathology report, the procedure that produced its
+specimen (core biopsy, FNA, EBUS-TBNA, resection, cytology, bone marrow and so
+on, with site, date and result); and the diagnoses, biomarkers, treatments,
+disease assessments and performance status the note states. A patient record
+reads all of a patient's notes in date order, in chunks, and keeps cancer
+diagnoses with stage, biomarkers, treatment lines with agents, dates and best
+response, procedures, imaging history and key dated events. Choice fields use
+controlled vocabularies with `other` and `not_stated` escapes, dates keep their
+precision, and every item carries exact quotes that code locates in the note,
+with the note's id, date and offsets. Answers are decoded under JSON schemas and
+retried when invalid or ungrounded; disease-specific extensions (packaged:
+`thoracic`) add item types without changing the core model.
+`patients.extraction_items` flattens records to one row per item for queries
+such as "a CT of the chest within 30 days" or "tissue obtained by core biopsy".
+These are research abstraction aids that need human review, not clinical
+documentation. See [Structured Clinical Extraction](docs/api/extraction.md).
+
 Population workup workflows are available through
 `matching.retrieve_guideline_patients` and `matchminer_ai.population`. Supply
 patient summaries and source notes, select a finalized guideline space, retrieve

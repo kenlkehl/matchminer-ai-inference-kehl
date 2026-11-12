@@ -36,6 +36,7 @@ nav:
       - PDF Document OCR: api/documents.md
       - Trial Summarization: api/trials.md
       - Patient Summarization: api/patients.md
+      - Structured Clinical Extraction: api/extraction.md
       - Embedding: api/embedding.md
       - Candidate Matching: api/candidate-matching.md
       - Teacher Labeling: api/labeling.md
