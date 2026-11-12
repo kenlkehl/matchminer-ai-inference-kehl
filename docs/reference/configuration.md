@@ -573,13 +573,56 @@ Configuration for TrialSpace embedding. Retrieval embeds key text only: patient
 key sections (`cancer_history_summary`) and cohort key criteria
 (`cohort_key_criteria`); see the [embedding API](../api/embedding.md).
 
+The section maps onto the training repository's encoder settings
+(`matchminer_ai.embedding.encoder.EncoderSettings`), and `embed_for_matching`
+loads and encodes with the same functions training's mining uses, so the
+default encodes exactly as training encoded its model.
+
 ### `embedding.model_path`
 
-Sentence-transformer model path passed to `SentenceTransformer(...)`.
+Sentence-transformer model path or Hub id passed to `SentenceTransformer(...)`.
+
+**The default is a local, unpublished directory, on purpose** (user,
+2026-11-12): the n=5000 run's round-2 TrialSpace,
+`/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/trialspace/models/trialspace_round2`
+(`google/embeddinggemma-2` fine-tuned by `finetune_embedder.py`). A path that
+starts with `/` or `.`, or that exists, must be a readable directory; otherwise
+embedding (and embedding token counts) fail with `FileNotFoundError`, so runs
+off camus or its NFS mount stop instead of mixing vectors. Nothing falls back
+to `ksg-dfci/TrialSpace-0526` or any Hub model. The model was saved by
+sentence-transformers 6.1 and needs 6.1 or later to load.
 
 ### `embedding.device`
 
-Device string passed to `SentenceTransformer(...)`.
+Device string passed to `SentenceTransformer(...)`. Autocast applies on CUDA
+only, so CPU vectors (float32 throughout) are not interchangeable with CUDA
+vectors; the encoder identity stored with cached vectors records which was used.
+
+### `embedding.dtype`, `embedding.autocast`
+
+Weight precision (`float32` or `bfloat16`) and CUDA autocast precision
+(`bfloat16`). The defaults, `float32` and `bfloat16`, are training's mining
+settings. Absent, the model's own dtype is kept and autocast is off.
+
+### `embedding.prompt_profile`, `embedding.default_prompt_name`
+
+`prompt_profile: trialspace` applies `trialspace_contract.model_prompts("trialspace")`
+over the model's saved prompts, as mining does: patients are encoded with
+`patient_summary` and cohorts with `this_space`. A TrialSpace trained by
+`matchminer-ai-training` saves the same prompts. `default_prompt_name`
+(`SentenceSimilarity`) is the prompt for calls that name none. Absent, the
+model's saved prompts are used unchanged.
+
+### `embedding.include_prompt_in_pooling`, `embedding.text_only`
+
+Mean pooling over the prompt tokens as well as the text (`true`, as trained),
+and loading EmbeddingGemma 2 without its vision and audio towers (`true`).
+These settings are specific to EmbeddingGemma 2 TrialSpace models; remove
+them when pointing `model_path` at another model family.
+
+### `embedding.batch_size`
+
+Texts per encoder batch (default 32, as mining encodes; 12 when absent).
 
 On CUDA, embedding first uses PyTorch's default scaled-dot-product-attention
 dispatcher. If cuDNN reports that it cannot build a valid attention execution
@@ -590,8 +633,8 @@ Other runtime errors are not retried.
 ### `embedding.prompt_file`
 
 Prompt filename loaded from `matchminer_ai.prompts` and used as the `query`
-prompt only for a model that saved none; a model's saved prompts are never
-replaced. The file is prepended exactly as written (only its final newline is
+prompt only for a model that saved none and has no `prompt_profile` (so never
+for the default); a model's saved prompts are never replaced. The file is prepended exactly as written (only its final newline is
 removed). The default, `embedding.txt`, is byte-identical to TrialSpace-0526's
 saved `query` prompt, including its trailing space. A TrialSpace model that
 saves prompts named `patient_summary` and `this_space` encodes each side with
@@ -599,7 +642,9 @@ its own prompt.
 
 ### `embedding.max_seq_length`
 
-Runtime truncation cutoff for embedding inputs (default 4096). `SentenceTransformer`
+Runtime truncation cutoff for embedding inputs (default 4096, the round-2 fit's
+cap; the n=5000 round-3 mining encoded at 8,192, which changed one synthetic
+cohort in 15,263). `SentenceTransformer`
 uses this value during `encode()`, so inputs longer than this limit are
 truncated before embedding generation. QC reports use the same value, counting
 tokens with each side's prompt, when flagging key text that exceeds the

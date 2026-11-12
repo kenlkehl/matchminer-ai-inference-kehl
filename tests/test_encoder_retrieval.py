@@ -111,3 +111,23 @@ def test_batched_search_over_devices_equals_one_matmul_with_stable_ties():
     assert all(np.array_equal(a, b) for (_, a), (_, b) in zip(one, two))
     assert np.allclose(np.concatenate([b for _, b in one]), queries @ documents.T, atol=1e-5)
     assert stable_top_k([0.5, 0.9, 0.5, 0.9, 0.1], 3) == [1, 3, 0]
+
+
+def test_embed_for_matching_encodes_exactly_as_training_mines(tiny_model):
+    """The embedding section's settings give training's encoder vectors, and a local model gets an identity."""
+    from matchminer_ai.embedding.inference import _embedding_cache_identity, generate_embeddings
+    from matchminer_ai.embedding.trialspace_contract import model_prompts
+
+    config = dict(model_path=tiny_model, device="cpu", prompt_file="embedding.txt", max_seq_length=16,
+                  dtype="float32", autocast="bfloat16", prompt_profile="trialspace",
+                  default_prompt_name="SentenceSimilarity", include_prompt_in_pooling=True, batch_size=5)
+    mining = EncoderSettings(tiny_model, devices=("cpu",), batch_size=5, max_seq_length=16, dtype="float32",
+                             autocast="bfloat16", prompts=model_prompts("trialspace"),
+                             default_prompt_name="SentenceSimilarity", include_prompt_in_pooling=True)
+    with open_encoder(mining) as encoder:
+        for entity_type, prompt in (("patient", "patient_summary"), ("trial", "this_space")):
+            expected = encoder.encode(texts(), prompt)
+            actual, _ = generate_embeddings(texts(), embedding_config=config, entity_type=entity_type)
+            assert np.array_equal(np.asarray(actual, dtype=np.float32), expected)
+    identity = _embedding_cache_identity(config, {"model_name": tiny_model})
+    assert identity["encoder"] == encoder_identity(mining) and len(identity["loaded_weights_sha256"]) == 64

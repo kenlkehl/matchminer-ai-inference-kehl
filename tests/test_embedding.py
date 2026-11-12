@@ -284,12 +284,9 @@ def test_generate_embeddings_applies_configured_max_seq_length(monkeypatch):
             self.max_seq_length = None
             loaded_models.append(self)
 
-        def encode(
-            self, texts, prompt_name, batch_size, convert_to_tensor, normalize_embeddings
-        ):
+        def encode(self, texts, prompt_name, batch_size, normalize_embeddings, **kwargs):
             assert prompt_name == "query"
-            assert batch_size == 12
-            assert convert_to_tensor is True
+            assert batch_size == 12  # a configuration without batch_size keeps the earlier 12
             assert normalize_embeddings is True
             return torch.tensor([[float(len(text))] for text in texts])
 
@@ -344,11 +341,7 @@ def test_generate_embeddings_retries_cudnn_plan_failure_without_cudnn(
         def encode(self, texts, prompt_name, **kwargs):
             assert texts == ["abc"]
             assert prompt_name == "query"
-            assert kwargs == {
-                "batch_size": 12,
-                "convert_to_tensor": True,
-                "normalize_embeddings": True,
-            }
+            assert kwargs["batch_size"] == 12 and kwargs["normalize_embeddings"] is True
             self.cudnn_states.append(torch.backends.cuda.cudnn_sdp_enabled())
             if len(self.cudnn_states) == 1:
                 raise RuntimeError(
@@ -424,6 +417,25 @@ def test_generate_embeddings_does_not_mask_other_runtime_errors(monkeypatch):
                 "max_seq_length": 2500,
             },
         )
+
+
+def test_a_missing_local_model_fails_and_never_falls_back(monkeypatch, tmp_path):
+    """The default is a local directory on purpose: absent, nothing loads from anywhere else."""
+
+    class NeverLoaded:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("no model may be loaded in place of a missing directory")
+
+    embedding_inference._get_embedding_model.cache_clear()
+    monkeypatch.setitem(sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=NeverLoaded))
+    monkeypatch.setattr("matchminer_ai.embedding.inference.get_model_metadata",
+                        lambda *_args, **_kwargs: pytest.fail("no metadata lookup either"))
+    config = {"model_path": str(tmp_path / "trialspace_round2"), "device": "cpu",
+              "prompt_file": "embedding.txt", "max_seq_length": 4096}
+    for call in (lambda: generate_embeddings(["Age: 64."], embedding_config=config),
+                 lambda: embedding_inference.count_embedding_tokens(["Age: 64."], embedding_config=config)):
+        with pytest.raises(FileNotFoundError, match="nothing falls back"):
+            call()
 
 
 def test_count_embedding_tokens_uses_tokenizer_without_loading_model(monkeypatch):

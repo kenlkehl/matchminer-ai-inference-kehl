@@ -2,8 +2,37 @@
 
 Retrieval uses TrialSpace, a single-vector Sentence Transformer: each output row
 holds the input identifier and one normalized `embedding` vector, and
-`generate_candidate_matches` ranks by cosine similarity. The default model is
-`ksg-dfci/TrialSpace-0526` with `embedding.max_seq_length: 4096`.
+`generate_candidate_matches` ranks by cosine similarity.
+
+**The default model is, for now and on purpose, a local unpublished directory**
+(user, 2026-11-12): the n=5000 training run's round-2 TrialSpace,
+`google/embeddinggemma-2` fine-tuned for one epoch after round 2 by the training
+repository's `finetune_embedder.py` (stage receipt `d7ef7270…`), at
+`/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/trialspace/models/trialspace_round2`.
+Runs where it is missing or unreadable, such as off camus or its NFS mount,
+fail with `FileNotFoundError` rather than mix vectors from different models:
+nothing falls back to `ksg-dfci/TrialSpace-0526` or any Hub model. Loading it
+needs sentence-transformers 6.1 or later (the version that saved it).
+
+`embed_for_matching` loads and encodes with the functions training's mining uses
+(`embedding.encoder`; see below), so the default encodes exactly as training
+encoded this model:
+
+| Setting | Default | Training (`trialspace/mining.py` `encoder_settings`) |
+| --- | --- | --- |
+| Weights / compute | `dtype: float32`, `autocast: bfloat16` (CUDA only) | float32 weights, bf16 autocast |
+| Prompts | `prompt_profile: trialspace`: patients `patient_summary`, cohorts `this_space` | `model_prompts("trialspace")`, the same per-side prompts |
+| Pooling | `include_prompt_in_pooling: true` (mean pooling over prompt and text) | the same |
+| Model | `text_only: true` (no vision or audio towers) | the same |
+| Batches | `batch_size: 32` | `--encode-batch-size 32` |
+| Length | `max_seq_length: 4096` (the fit's cap) | the fit used 4,096; round-3 mining encoded at 8,192 (one synthetic cohort in 15,263 is longer than 4,096 tokens) |
+| Output | L2-normalized float32 | the same |
+
+On fabricated texts, the two paths give identical vectors on CPU and on CUDA.
+CPU vectors are float32 throughout (autocast is CUDA only), so they differ
+slightly from CUDA vectors (patient-cohort similarities by up to about 0.0015
+on those texts); the encoder identity records which was used, so they are not
+mixed either.
 
 Retrieval reads **key text** when it is there. Trial processing is kept in separate steps that
 callers may run or skip, so the cohort text depends on which ran: after `remove_boilerplate_criteria`
@@ -22,8 +51,8 @@ side, named `patient_summary` (patients) and `this_space` (cohorts), and the
 runtime encodes each side with its own prompt. `embedding.trialspace_contract`
 holds these names (`PATIENT_PROMPT`, `COHORT_PROMPT`) and the retrieval
 `INSTRUCTION` and `DIRECTIONS` shared with training. A model without side
-prompts, such as TrialSpace-0526, encodes both sides with its saved `query`
-instruction. Prompts are applied by name and prepended exactly, as in training
+prompts and no `prompt_profile`, such as the historical TrialSpace-0526, encodes
+both sides with its saved `query` instruction. Prompts are applied by name and prepended exactly, as in training
 and its evaluation scripts, and token counts (`count_embedding_tokens`) count
 that same text. Releases before November 2026 prepended the literal word
 "query" instead of 0526's instruction, so embeddings they stored are not
@@ -31,10 +60,11 @@ comparable with current ones; regenerate them. `embed_texts(texts,
 entity_type="patient" | "trial")` selects a side's prompt for plain strings;
 without `entity_type` the shared query prompt is used.
 
-TrialSpace-0526 was trained on historical `cancer_history_summary` and
-`clinical_space_summary` text. It accepts cohort key criteria but has not been
-evaluated on them; pair it with hierarchical trial extraction for the evaluated
-workflow, as described in the README.
+The historical `ksg-dfci/TrialSpace-0526` (Qwen3-Embedding-0.6B) was trained on
+`cancer_history_summary` and `clinical_space_summary` text. To use it, set
+`model_path` and remove the EmbeddingGemma 2 settings (`dtype`, `autocast`,
+`prompt_profile`, `default_prompt_name`, `include_prompt_in_pooling`,
+`text_only`), and never compare its vectors with the default model's.
 
 ```python
 from matchminer_ai import load_default_preset
@@ -53,7 +83,10 @@ Cosine similarity is a ranking score, not a probability or a determination of
 eligibility. Do not mix embeddings from different checkpoint generations; when
 changing the model, regenerate both sides. Use an immutable checkpoint
 path/revision, and restart the process when replacing a cached model at the
-same path.
+same path. Stored vectors are checked against the encoder that made them: a
+local directory is named by a digest of the weights actually loaded (and its
+training stage receipt), with the encoding settings, tokenizer, prompts and
+library versions.
 
 ::: matchminer_ai.embedding.embed
     options:
@@ -64,8 +97,8 @@ same path.
 ## Large encoding jobs: several GPUs or vLLM embedding servers
 
 `open_encoder(EncoderSettings(...))` encodes many texts at once and returns float32, L2-normalized NumPy
-vectors in input order. It is what the training repository mines with; `embed_for_matching` keeps its own
-configuration and defaults.
+vectors in input order. It is what the training repository mines with; `embed_for_matching` loads and encodes
+with the same functions on one device, its `embedding` configuration section giving the settings.
 
 - One device (`devices=("cuda:0",)`): the model's own `encode`.
 - Several devices (`devices=("cuda:0", "cuda:1", ...)`): one spawned worker process per device. The

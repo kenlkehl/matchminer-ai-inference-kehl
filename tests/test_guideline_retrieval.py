@@ -679,7 +679,7 @@ def cached_stages(model_stages, monkeypatch):
     original_preset = config_module.load_default_preset
     def sequence_preset():
         config = original_preset()
-        config.embedding = dict(backend='sequence', model_path='ksg-dfci/TrialSpace-0526',
+        config.embedding = dict(backend='sequence', model_path='example-org/TrialSpace-test',
             device='cpu', prompt_file='embedding.txt', max_seq_length=2500)
         return config
     monkeypatch.setattr(config_module, 'load_default_preset', sequence_preset)
@@ -694,7 +694,10 @@ def cached_stages(model_stages, monkeypatch):
             special_tokens_map={"pad_token": "[PAD]"},
         ),
     )
-    encoder = SimpleNamespace(_first_module=lambda: first, _modules={})
+    import torch
+
+    encoder = SimpleNamespace(_first_module=lambda: first, _modules={},
+                              state_dict=lambda: {"w": torch.ones(2)})
     monkeypatch.setattr(inference, "_get_embedding_model", lambda *args: encoder)
     return model_stages, revision, tokens
 
@@ -815,9 +818,10 @@ def test_unreadable_cache_does_not_prevent_fresh_retrieval(
     pd.testing.assert_frame_equal(first, second)
 
 
-def test_unversioned_local_encoder_bypasses_persistent_cache(
+def test_local_encoder_is_cached_under_its_loaded_weights(
     catalog_frame, patients, cached_stages, tmp_path
 ):
+    """A local directory can change in place, so the weights actually loaded name it."""
     from matchminer_ai.config import load_default_preset
 
     config = load_default_preset()
@@ -827,9 +831,11 @@ def test_unversioned_local_encoder_bypasses_persistent_cache(
     _, metadata = cached_retrieve(
         patients, catalog_frame, tmp_path / "cache", config=config
     )
-    assert metadata["guideline_embedding_cache"]["status"] == "unverified_encoder"
-    assert metadata["guideline_embedding_cache"]["path"] is None
-    assert not (tmp_path / "cache").exists()
+    assert metadata["guideline_embedding_cache"]["status"] == "ready"
+    hub = load_default_preset()
+    _, other = cached_retrieve(patients, catalog_frame, tmp_path / "cache", config=hub)
+    assert other["guideline_embedding_cache"]["path"] != metadata["guideline_embedding_cache"]["path"]
+    assert other["guideline_embedding_cache"]["cached_spaces"] == 0
 
 
 def test_review_issues_survive_ranking_and_report(catalog_frame, patients, model_stages, tmp_path):
@@ -864,7 +870,7 @@ def test_encoder_identity_digests_weights_when_no_revision_is_reported(monkeypat
         return SimpleNamespace(_first_module=lambda: first, _modules={},
                                state_dict=lambda: weights)
 
-    config = dict(model_path="ksg-dfci/TrialSpace-0526", device="cpu",
+    config = dict(model_path="example-org/TrialSpace-test", device="cpu",
                   prompt_file="embedding.txt", max_seq_length=2500)
     weights = {"w": torch.ones(2, 3), "b": torch.zeros(3, dtype=torch.bfloat16)}
     loaded = encoder(weights)

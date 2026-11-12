@@ -100,8 +100,19 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     ] == {"enable_thinking": True}
 
     assert config.embedding.get("backend", "sequence") == "sequence"
-    assert config.embedding["model_path"] == "ksg-dfci/TrialSpace-0526"
-    assert config.embedding["max_seq_length"] == 4096
+    # The round-2 TrialSpace, local on purpose (2026-11-12): absent, embedding fails. Encoded as
+    # training's mining encodes it (trialspace/mining.py encoder_settings), with the fit's 4,096-token cap.
+    from matchminer_ai.embedding.trialspace_contract import model_prompts
+    assert config.embedding["model_path"] == (
+        "/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/"
+        "trialspace/models/trialspace_round2")
+    assert {key: config.embedding[key] for key in (
+        "dtype", "autocast", "prompt_profile", "default_prompt_name", "include_prompt_in_pooling",
+        "text_only", "batch_size", "max_seq_length")} == dict(
+        dtype="float32", autocast="bfloat16", prompt_profile="trialspace",
+        default_prompt_name="SentenceSimilarity", include_prompt_in_pooling=True, text_only=True,
+        batch_size=32, max_seq_length=4096)
+    assert set(model_prompts("trialspace")) >= {"patient_summary", "this_space", "query"}
     from matchminer_ai.matching.decision_model import decision_settings
     decision = decision_settings(config)
     assert (decision["model_name"], decision["revision"]) == ("LiquidAI/d1-2B", "652f920e544ea37f81e4b0ce89b81d4ed0da90b1")

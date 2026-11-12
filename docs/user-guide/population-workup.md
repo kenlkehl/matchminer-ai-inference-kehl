@@ -66,13 +66,17 @@ selected, metadata = retrieve_guideline_patients(
 ```
 
 `PatientEmbeddings` holds float32 vectors in `patient_ids` order, each summary's
-SHA-256 and the verified TrialSpace encoder identity (loaded revision, tokenizer,
-configured and model-saved prompts, sequence length and library versions). Retrieval embeds only the guideline
+SHA-256 and the verified TrialSpace encoder identity (loaded revision, or for a local
+model directory a digest of the loaded weights and its training stage receipt;
+tokenizer, configured and model-saved prompts, sequence length, encoding settings such
+as precision, autocast and batch size, and library versions). Retrieval embeds only the guideline
 space and rejects the vectors if any requested patient is missing, any summary text
 changed, or the current encoder identity differs or cannot be verified; rebuild them
 in those cases. A subset of the embedded population may be searched. Nothing is
 written to disk: callers that persist vectors must store them as privately as the
-summaries they derive from.
+summaries they derive from. Before loading persisted vectors, compare their saved
+identity with `guideline_encoder_identity(config)`, the identity retrieval checks,
+to refuse vectors from another model up front.
 
 `PatientCohort` stages return new cohort objects, leaving the prior completed
 stage available on failure or cancellation. IDs are normalized to strings and

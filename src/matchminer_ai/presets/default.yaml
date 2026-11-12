@@ -343,9 +343,27 @@ synthetic_protocol_generation:
         enable_thinking: true
 embedding:
   # TrialSpace embeds key text only: cohort key criteria and patient key sections.
-  model_path: "ksg-dfci/TrialSpace-0526"
+  # The n=5000 run's round-2 TrialSpace (google/embeddinggemma-2 fine-tuned by the training
+  # repository's finetune_embedder.py; stage receipt d7ef7270...), a local, unpublished directory
+  # on purpose (user, 2026-11-12): where it is missing or unreadable, embedding fails rather than
+  # mix vectors from another model. Nothing falls back to TrialSpace-0526 or any Hub model.
+  # Loading it needs sentence-transformers >= 6.1, which saved it.
+  model_path: "/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/trialspace/models/trialspace_round2"
   device: cuda
+  # Encoded as training's mining encodes it (trialspace/mining.py encoder_settings): float32
+  # weights with bfloat16 autocast on CUDA, the trialspace prompt profile (patients get
+  # patient_summary, cohorts this_space), mean pooling over the prompt too, the text tower
+  # only, batches of 32, normalized vectors.
+  dtype: float32
+  autocast: bfloat16
+  prompt_profile: trialspace
+  default_prompt_name: SentenceSimilarity
+  include_prompt_in_pooling: true
+  text_only: true
+  batch_size: 32
+  # The query prompt for a model that saved none and has no prompt profile (unused here).
   prompt_file: embedding.txt
+  # The fit's token cap (finetune_embedder.py, max_tokens 4096).
   max_seq_length: 4096
 # The decision model answers the match, boilerplate and per-criterion yes/no questions
 # (matching/decision_model.py). Base LiquidAI/d1-2B (LFM Open License v1.0) at a pinned commit, or a

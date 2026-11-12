@@ -23,6 +23,7 @@ from .guidelines import retrieve_guideline_considerations
 from .guideline_patients import (
     PatientEmbeddings,
     embed_guideline_patients,
+    guideline_encoder_identity,
     retrieve_guideline_patients,
 )
 from .guideline_report import write_guideline_considerations_report
@@ -49,6 +50,7 @@ __all__ = [
     "retrieve_guideline_patients",
     "PatientEmbeddings",
     "embed_guideline_patients",
+    "guideline_encoder_identity",
     "write_guideline_considerations_report",
 ]
 

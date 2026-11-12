@@ -206,6 +206,14 @@ def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(
     assert cached.patient_ids == ("first", "second", "third")
     assert cached.vectors.dtype == np.float32 and cached.vectors.shape == (3, 2)
     assert cached.encoder_identity == identity
+    # Persisted vectors are checked against the identity retrieval compares.
+    from matchminer_ai.config import load_default_preset
+    from matchminer_ai.matching import guideline_encoder_identity
+
+    config = load_default_preset()
+    config.embedding["model_path"] = "example-org/TrialSpace-test"
+    monkeypatch.setattr("matchminer_ai.llm.backends.get_model_metadata", lambda *a, **k: {"model": "same"})
+    assert guideline_encoder_identity(config) == identity
     expected, _ = retrieve_guideline_patients(
         patients(), catalog_frame, space_trial_id="a", candidate_k=2
     )

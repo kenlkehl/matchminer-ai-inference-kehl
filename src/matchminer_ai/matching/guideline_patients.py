@@ -49,6 +49,23 @@ def _encoder_identity(config, embedding_model):
     return _embedding_cache_identity(config.embedding, embedding_model)
 
 
+def guideline_encoder_identity(config=None):
+    """The configured TrialSpace encoder's identity, as ``PatientEmbeddings`` record it.
+
+    Compare it with saved ``PatientEmbeddings.encoder_identity`` to refuse vectors
+    from another model or encoding before using them (retrieval checks again).
+    Loads the encoder; fails like embedding when its model is unavailable. None when
+    the encoder cannot be verified.
+    """
+    from matchminer_ai.embedding.inference import _embedding_runtime
+    from matchminer_ai.llm.backends import get_model_metadata
+
+    config = config or load_default_preset()
+    settings, _ = _embedding_runtime(config.embedding)
+    model = get_model_metadata(settings.model, cache_dir=config.model_metadata_cache_dir)
+    return _encoder_identity(config, model)
+
+
 def _embed_patients(patients, config, progress, batch_size):
     from matchminer_ai.embedding import embed_for_matching
 
@@ -83,10 +100,11 @@ def embed_guideline_patients(
     """Embed a population once for repeated ``retrieve_guideline_patients`` calls.
 
     Uses the same TrialSpace configuration and summary text as retrieval. The
-    result records each summary's SHA-256 and the verified encoder identity;
-    ``encoder_identity`` is None when a single-vector encoder's revision cannot be
-    verified (for example a mutable local model directory), and retrieval then
-    refuses to reuse the vectors. Nothing is written to disk here.
+    result records each summary's SHA-256 and the verified encoder identity (a
+    local model directory, which can change in place, is named by a digest of the
+    weights loaded); ``encoder_identity`` is None when the encoder cannot be
+    verified, and retrieval then refuses to reuse the vectors. Nothing is written
+    to disk here.
     """
     if type(batch_size) is not int or batch_size < 1:
         raise ValueError("batch_size must be a positive integer.")

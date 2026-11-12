@@ -187,13 +187,22 @@ summary and the cohort's tagged lines (`cohort_criteria_items`). Checks accept
 `cohort_trial_id` or `space_trial_id` pairs (exclusion checks also `trial_id`).
 
 Retrieval is TrialSpace only: one normalized vector per patient or cohort,
-ranked by cosine similarity in either direction. Every text is encoded with
-the model's own saved prompt, applied by name and prepended exactly, as in
-training: the default `ksg-dfci/TrialSpace-0526` uses its `query` instruction
-for both sides, and a TrialSpace model trained by `matchminer-ai-training` saves
-prompts named `patient_summary` and `this_space`, one per side (`embed_texts`
-takes `entity_type`). Releases before November 2026 prepended the literal word
-"query" instead of 0526's instruction; regenerate embeddings they stored. `embedding.max_seq_length` defaults to 4096. See
+ranked by cosine similarity in either direction. **For now the default
+`embedding.model_path` is a local, unpublished directory, on purpose** (user,
+2026-11-12): the n=5000 training run's round-2 TrialSpace
+(`google/embeddinggemma-2` fine-tuned by `matchminer-ai-training`'s
+`finetune_embedder.py`) at
+`/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/trialspace/models/trialspace_round2`.
+Where that directory is missing or unreadable (off camus or its NFS mount),
+embedding fails with `FileNotFoundError` instead of mixing its vectors with
+another model's; nothing falls back to `ksg-dfci/TrialSpace-0526` or any Hub
+model. It needs sentence-transformers 6.1 or later, which saved it. The
+`embedding` section encodes exactly as training's mining does: float32 weights
+with bfloat16 autocast on CUDA, the `trialspace` prompt profile (patients get
+`patient_summary`, cohorts `this_space`, prepended exactly), mean pooling over
+the prompt too, the text tower only, batches of 32, normalized vectors, and the
+fit's 4,096-token cap. Vectors stored by `TrialSpace-0526` cannot be compared
+with these; embed both sides again. See
 [embedding and bidirectional retrieval](docs/api/embedding.md).
 
 The match, boilerplate and per-criterion checks use one **decision model**

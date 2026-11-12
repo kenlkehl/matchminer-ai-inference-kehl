@@ -16,8 +16,9 @@ vectors in input order:
   and bf16 weights give vectors close to (about 0.999 cosine), not equal to, the local backends'.
 
 :func:`encoder_identity` names everything that changes the vectors and no paths, hosts or devices, so
-vectors made by different backends or settings are never mixed. This module is for large encoding jobs
-(training's mining); ``embed_for_matching`` keeps its own configuration and defaults.
+vectors made by different backends or settings are never mixed. Training's mining encodes with this module,
+and ``embed_for_matching`` loads and encodes with the same functions (one device), its ``embedding``
+configuration section giving the settings.
 """
 
 from __future__ import annotations
