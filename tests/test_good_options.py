@@ -1740,6 +1740,238 @@ def test_class_assignment_rejects_unusable_items_and_caps_the_list() -> None:
     ]
     assert records[0].support_ids == ("pubmed:1",)
     assert records[0].aliases == ("anti-PD-L1 antibody",)
+    assert {item.class_source for item in records} == {"llm"}
+    assert {item.assigned_by for item in records} == {"llm_new"}
+
+
+#: A tiny NCIt flat file in the real column layout: code, IRI, parents,
+#: synonyms, definition, display name, status, semantic types. The hierarchy
+#: has the real shape; the text is fabricated.
+_CVF = "Chemical Viewed Functionally"
+_NCIT_ROWS = (
+    ("C1908", "", "Drug, Food, Chemical or Biomedical Material", "", "", "", "Classification"),
+    ("C1909", "C1908", "Pharmacologic Substance|Drug", "", "", "", _CVF),
+    ("C274", "C1909", "Antineoplastic Agent", "", "", "", _CVF),
+    ("C471", "C1909", "Enzyme Inhibitor", "", "", "", _CVF),
+    ("C129820", "C274", "Antineoplastic Immunomodulating Agent", "", "", "", _CVF),
+    ("C129824", "C274", "Antineoplastic Protein Inhibitor", "", "", "", _CVF),
+    ("C1404", "C471", "Protein Kinase Inhibitor", "Inhibits protein kinases.", "", "", _CVF),
+    ("C1967", "C1404", "Tyrosine Kinase Inhibitor|TKI", "Inhibits tyrosine kinases.", "", "", _CVF),
+    ("C61074", "C1404", "Serine/Threonine Kinase Inhibitor", "Inhibits them.", "", "", _CVF),
+    ("C124800", "C1967", "FLT3 Inhibitor|FLT3 Inhibitors", "Inhibits FLT3.", "", "", _CVF),
+    ("C155700", "C1967", "BCR-ABL Inhibitor", "Inhibits BCR-ABL.", "BCR-ABL Inhibitor", "", _CVF),
+    ("C184956", "C61074|C129820", "IRAK4 Inhibitor", "Inhibits IRAK4.", "", "", _CVF),
+    ("C2843", "C1909", "Retired Kinase Class", "", "", "Retired_Concept", _CVF),
+    ("C1913", "C1908", "Drug or Chemical by Structure", "", "", "Header_Concept", "Classification"),
+    ("C718", "C1913", "Organic Chemical", "", "", "", "Organic Chemical"),
+    ("C148455", "C184956|C2843", "Emavusertib|CA-4948", "A synthetic inhibitor of IRAK4 and FLT3.", "Emavusertib", "", "Pharmacologic Substance"),
+    ("C114494", "C1967|C718", "Asciminib", "A synthetic BCR-ABL tyrosine kinase inhibitor.", "", "", "Pharmacologic Substance"),
+    ("C202207", "C129824", "BCL6 Degrader BMS-986458", "A synthetic BCL6 degrader.", "", "", "Pharmacologic Substance"),
+    # Classes are only the concepts above some drug.
+    ("C900001", "C124800", "Synthetic FLT3 Agent", "", "", "", "Pharmacologic Substance"),
+    ("C900002", "C155700", "Synthetic BCR-ABL Agent", "", "", "", "Pharmacologic Substance"),
+)
+
+
+def _ncit_fixture(tmp_path: Path):
+    import zipfile
+
+    from matchminer_ai.patients.ontology import NCIThesaurusDrugIndex
+
+    path = tmp_path / "Thesaurus.FLAT.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            "Thesaurus.txt",
+            "".join(
+                "\t".join((code, f"http://example.test/{code}", *fields)) + "\n"
+                for code, *fields in _NCIT_ROWS
+            ),
+        )
+    return NCIThesaurusDrugIndex.from_flat_zip(str(path))
+
+
+def _drug(index, code: str) -> DrugIdentity:
+    record = next(item for item in index.records if item.code == code)
+    return DrugIdentity(
+        drug_id=f"NCIT:{code}",
+        preferred_name=record.preferred_name,
+        ncit_code=code,
+        definition=record.definition or "",
+    )
+
+
+def test_ncit_classes_are_the_hierarchy_above_a_drug_below_the_umbrellas(
+    tmp_path: Path,
+) -> None:
+    index = _ncit_fixture(tmp_path)
+    classes = index.classes
+
+    # Umbrellas, retired concepts, chemical-structure branches, and drug
+    # concepts are never classes.
+    assert set(classes.classes) == {
+        "C1404", "C1967", "C61074", "C124800", "C155700", "C184956"
+    }
+    assert [item.code for item in classes.classes_above("C148455")] == [
+        "C184956", "C61074", "C1404"
+    ]
+    assert [item.code for item in classes.classes_above("C114494")] == [
+        "C1967", "C1404"
+    ]
+    assert classes.classes_above("C202207") == ()
+    # The name is NCIt's display name, or else its first synonym.
+    assert classes.get("C124800").preferred_name == "FLT3 Inhibitor"
+
+
+def test_class_step_adds_only_candidate_ncit_classes_with_their_ancestors(
+    tmp_path: Path,
+) -> None:
+    index = _ncit_fixture(tmp_path)
+    drug = _drug(index, "C148455")
+    evidence = catalog_module._ncit_definition_evidence(drug, ncit_version="test")
+    plan = catalog_module._plan_drug_classes(
+        drug, evidence, classes=index.classes, candidate_limit=25
+    )
+
+    assert [item.code for item in plan.hierarchy] == ["C184956", "C61074", "C1404"]
+    assert "C124800" in {item.code for item in plan.candidates}
+    assert not {"C184956", "C61074", "C1404"} & {item.code for item in plan.candidates}
+    assert not plan.allow_new
+
+    def answer(**item: Any) -> dict[str, Any]:
+        return {
+            "classes": [
+                {"name": "", "basis": "target", "target": "FLT3", "aliases": [],
+                 "confidence": "medium", "support_ids": ["P1"], **item}
+            ],
+            "__passage_id_map__": {"P1": evidence[0].evidence_id},
+        }
+
+    def error(value: dict[str, Any]) -> str:
+        return catalog_module._class_output_validation_error(
+            value, evidence=evidence, candidates=plan.candidates, allow_new=plan.allow_new
+        ) or ""
+
+    assert error(answer(ncit_code="C124800")) == ""
+    assert "not a listed candidate" in error(answer(ncit_code="C155700"))
+    assert "name no new class" in error(answer(ncit_code="", name="FLT3 degrader"))
+
+    rows = catalog_module._validate_drug_classes(
+        drug.drug_id,
+        answer(ncit_code="C124800"),
+        max_classes=3,
+        plan=plan,
+        classes=index.classes,
+    )
+    assigned = {item.class_id: (item.assigned_by, item.basis) for item in rows}
+    assert assigned == {
+        "NCIT:C184956": ("ncit_hierarchy", ""),
+        "NCIT:C61074": ("ncit_hierarchy", ""),
+        "NCIT:C1404": ("ncit_hierarchy", ""),
+        "NCIT:C124800": ("llm_added_ncit", "target"),
+        "NCIT:C1967": ("llm_added_ncit_ancestor", ""),
+    }
+    assert {item.class_source for item in rows} == {"ncit"}
+    flt3 = next(item for item in rows if item.ncit_code == "C124800")
+    assert flt3.class_name == "FLT3 Inhibitor"
+    assert flt3.support_ids == (evidence[0].evidence_id,)
+
+    # A code outside the candidates never becomes a class, and the hierarchy
+    # stays whatever the answer says.
+    rows = catalog_module._validate_drug_classes(
+        drug.drug_id,
+        answer(ncit_code="C155700"),
+        max_classes=3,
+        plan=plan,
+        classes=index.classes,
+    )
+    assert [item.class_id for item in rows] == [
+        "NCIT:C184956", "NCIT:C61074", "NCIT:C1404"
+    ]
+
+
+def test_class_prompt_carries_only_candidates_and_retries_unlisted_codes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = _ncit_fixture(tmp_path)
+    drug = _drug(index, "C148455")
+    evidence = list(catalog_module._ncit_definition_evidence(drug, ncit_version="t"))
+    plan = catalog_module._plan_drug_classes(
+        drug, evidence, classes=index.classes, candidate_limit=25
+    )
+    prompts: list[str] = []
+
+    def fake_run(messages_list, *, config, stage):
+        del config
+        assert stage == "class"
+        prompts.append(messages_list[0][-1]["content"])
+        code = "C155700" if len(prompts) == 1 else "C124800"
+        return [json.dumps({"classes": [
+            {"ncit_code": code, "name": "", "basis": "target", "target": "",
+             "aliases": [], "confidence": "low", "support_ids": ["P1"]}
+        ]})]
+
+    async def run_inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    monkeypatch.setattr(catalog_module.asyncio, "to_thread", run_inline)
+    result = asyncio.run(
+        catalog_module._default_classify_many(
+            [(drug, evidence, plan)], config=load_default_preset()
+        )
+    )
+
+    assert result[drug.drug_id]["classes"][0]["ncit_code"] == "C124800"
+    first = prompts[0]
+    payload = json.loads(first[first.index("{\n"):])
+    assert payload["ncit_classes"] == [item.preferred_name for item in plan.hierarchy]
+    assert {item["ncit_code"] for item in payload["candidate_classes"]} == {
+        item.code for item in plan.candidates
+    }
+    assert payload["new_class_allowed"] is False
+    # Only the hierarchy and candidate records reach the prompt.
+    assert "C155700" not in first and "Inhibits BCR-ABL." not in first
+    assert "C155700 is not a listed candidate" in prompts[1]
+
+
+def test_drug_without_ncit_classes_gets_candidate_or_new_model_classes(
+    tmp_path: Path,
+) -> None:
+    index = _ncit_fixture(tmp_path)
+    drug = _drug(index, "C202207")
+    evidence = catalog_module._ncit_definition_evidence(drug, ncit_version="test")
+    plan = catalog_module._plan_drug_classes(
+        drug, evidence, classes=index.classes, candidate_limit=25
+    )
+    assert plan.hierarchy == ()
+    assert plan.allow_new
+
+    value = {
+        "classes": [
+            {"ncit_code": "", "name": "BCL6 degrader", "basis": "target",
+             "target": "BCL6", "aliases": ["BCL6 PROTAC"], "confidence": "low",
+             "support_ids": ["P1"]},
+            # A new class spelled like an NCIt class is that NCIt class.
+            {"ncit_code": "", "name": "FLT3 inhibitors", "basis": "target",
+             "target": "FLT3", "aliases": [], "confidence": "low",
+             "support_ids": ["P1"]},
+        ],
+        "__passage_id_map__": {"P1": evidence[0].evidence_id},
+    }
+    assert catalog_module._class_output_validation_error(
+        value, evidence=evidence, candidates=plan.candidates, allow_new=True
+    ) is None
+    rows = catalog_module._validate_drug_classes(
+        drug.drug_id, value, max_classes=3, plan=plan, classes=index.classes
+    )
+    by_name = {item.class_name: item for item in rows}
+    new = by_name["BCL6 degrader"]
+    assert (new.class_id, new.class_source, new.assigned_by, new.ncit_code) == (
+        catalog_module.class_id_for("BCL6 degrader"), "llm", "llm_new", ""
+    )
+    assert new.aliases == ("BCL6 PROTAC",)
+    assert by_name["FLT3 Inhibitor"].class_id == "NCIT:C124800"
+    assert by_name["Tyrosine Kinase Inhibitor"].assigned_by == "llm_added_ncit_ancestor"
 
 
 def test_evidence_bounding_reserves_room_for_every_query_scope() -> None:
@@ -2203,6 +2435,97 @@ def test_catalog_retrieves_and_merges_class_and_indication_evidence(
     assert "[scope: class]" in prompt
 
     # Reloading re-runs every contract check over the new tables.
+    load_good_option_catalog(output)
+
+
+def test_catalog_classes_drugs_by_ncit_and_asks_only_about_additions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    names = ["Emavusertib", "Asciminib", "Synthetic FLT3 Agent"]
+    study = _arm_study(
+        [
+            {"type": "DRUG", "name": name, "armGroupLabels": ["Experimental"]}
+            for name in names
+        ],
+        [{"label": "Experimental", "type": "EXPERIMENTAL"}],
+    )
+
+    async def fake_fetch(_nct_id: str, *, client):
+        del client
+        return json.loads(json.dumps(study))
+
+    asked: list[str] = []
+
+    def classify(drug, _evidence):
+        asked.append(drug.preferred_name)
+        code = {"Emavusertib": "C124800", "Asciminib": "C155700"}[drug.preferred_name]
+        return {
+            "classes": [
+                {"ncit_code": code, "name": "", "basis": "target", "target": "",
+                 "aliases": [], "confidence": "medium", "support_ids": ["P1"]}
+            ]
+        }
+
+    def synthesize(_drug, evidence):
+        return {
+            "mechanism_and_targets": [
+                {"text": "Synthetic mechanism.", "support_ids": ["P1"]}
+            ]
+            if evidence
+            else [],
+            **{
+                category: []
+                for category in catalog_module._SYNTHESIS_CATEGORIES
+                if category != "mechanism_and_targets"
+            },
+        }
+
+    index = _ncit_fixture(tmp_path)
+    monkeypatch.setattr(catalog_module, "fetch_trial_study", fake_fetch)
+    monkeypatch.setattr(catalog_module, "load_ncit_drug_index", lambda _path: index)
+    output = tmp_path / "catalog"
+    catalog = asyncio.run(
+        build_good_option_catalog(
+            ["NCT12345678"],
+            output,
+            config=load_default_preset(),
+            sources=[_NamedEvidenceSource()],
+            settings=ResearchSettings(max_attempts=1),
+            role_resolver=lambda _trial, _items: {
+                str(position): _include([name]) for position, name in enumerate(names)
+            },
+            synthesizer=synthesize,
+            class_resolver=classify,
+        )
+    )
+
+    # The third drug's only classes are its NCIt hierarchy and no candidate
+    # turned up, so the class step never asks about it.
+    assert asked == ["Emavusertib", "Asciminib"]
+    rows = catalog.drug_classes.set_index(["drug_id", "class_id"])
+    assert rows.loc[("NCIT:C114494", "NCIT:C1967"), "assigned_by"] == "ncit_hierarchy"
+    assert rows.loc[("NCIT:C114494", "NCIT:C155700"), "assigned_by"] == "llm_added_ncit"
+    assert rows.loc[("NCIT:C148455", "NCIT:C1967"), "assigned_by"] == (
+        "llm_added_ncit_ancestor"
+    )
+    assert rows.loc[("NCIT:C900001", "NCIT:C124800"), "class_name"] == "FLT3 Inhibitor"
+    assert set(catalog.drug_classes["class_source"]) == {"ncit"}
+
+    # Each NCIt class's definition is a citable passage of its corpus.
+    definitions = catalog.class_evidence.loc[
+        catalog.class_evidence["source_type"].eq("ontology_definition")
+    ].set_index("class_id")
+    assert definitions.loc["NCIT:C124800", "evidence_id"] == "ncit_definition:C124800"
+    assert definitions.loc["NCIT:C124800", "passage"] == "Inhibits FLT3."
+
+    blocks = {item.class_name: item for item in catalog.class_evidence_for_trial("NCT12345678")}
+    assert set(blocks["FLT3 Inhibitor"].drug_names) == {"Emavusertib", "Synthetic FLT3 Agent"}
+    prompt = build_good_option_messages(
+        patient_summary="Synthetic patient",
+        drug_summaries=list(catalog.scoreable_summaries_for_trial("NCT12345678")),
+        class_evidence=tuple(blocks.values()),
+    )[1]["content"]
+    assert "DRUG CLASS EVIDENCE — FLT3 Inhibitor (covers:" in prompt
     load_good_option_catalog(output)
 
 
@@ -2678,16 +3001,17 @@ def test_catalog_answers_are_decoded_under_their_schemas_when_remote(
     config = load_default_preset()
     config.remote.update(enabled=True, server_urls=["http://gpu-host:8001/v1"])
     messages = [[{"role": "user", "content": "Synthetic."}]]
-    for stage in ("screening", "synthesis"):
+    for stage in ("screening", "class", "synthesis"):
         catalog_module._run_llm_messages(messages, config=config, stage=stage)
     config.good_option_catalog["structured_outputs"] = False
     catalog_module._run_llm_messages(messages, config=config, stage="screening")
 
-    screening, synthesis, unstructured = formats
-    assert screening["type"] == "json_schema"
+    screening, classes, synthesis, unstructured = formats
+    assert screening["type"] == classes["type"] == "json_schema"
     assert screening["json_schema"]["schema"] == (
         catalog_module.INTERVENTION_SCREENING_JSON_SCHEMA
     )
+    assert classes["json_schema"]["schema"] == catalog_module.DRUG_CLASS_JSON_SCHEMA
     assert synthesis is None
     assert unstructured is None
 

@@ -1,3 +1,3 @@
 {previous_content}
 
-RETRY {attempt}/{max_attempts}: The previous response was not usable because {previous_error}. Re-read the supplied passages, name every class they support in the canonical form, cite only P# identifiers, and return the complete concise JSON object.
+RETRY {attempt}/{max_attempts}: The previous response was not usable because {previous_error}. Re-read the supplied passages, choose candidate classes only by their listed ncit_code, name a new class only when new_class_allowed is true and no candidate fits, cite only P# identifiers, and return the complete concise JSON object.

@@ -32,6 +32,8 @@ from matchminer_ai.llm.backends import (
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
 from matchminer_ai.patients.ontology import (
+    NCItClassHierarchy,
+    NCItClassRecord,
     NCItDrugRecord,
     load_ncit_drug_index,
     normalize_ontology_text,
@@ -194,7 +196,26 @@ DRUG_CLASS_COLUMNS = (
     "aliases_json",
     "confidence",
     "support_ids_json",
+    "ncit_code",
+    "class_source",
+    "assigned_by",
 )
+#: Added with NCIt classes (2026-11-11); catalogs written before lack them.
+_NCIT_CLASS_COLUMNS = frozenset({"ncit_code", "class_source", "assigned_by"})
+#: ``ncit`` classes are NCIt concepts; ``llm`` classes were named by the model
+#: because no NCIt class fit.
+CLASS_SOURCES = frozenset({"ncit", "llm"})
+#: How a drug-class row was assigned: from the NCIt hierarchy above the drug's
+#: own concept, as an NCIt candidate class the model added, as an ancestor of
+#: such a class, or as a new class the model named.
+CLASS_ASSIGNMENTS = frozenset(
+    {"ncit_hierarchy", "llm_added_ncit", "llm_added_ncit_ancestor", "llm_new"}
+)
+#: Synonyms kept as aliases of an NCIt class; class research queries the first
+#: three after the name.
+_CLASS_ALIAS_LIMIT = 6
+#: Characters of an NCIt candidate's definition shown to the class step.
+_CANDIDATE_DEFINITION_CHARS = 400
 CLASS_SUMMARY_COLUMNS = (
     "class_id",
     "class_name",
@@ -772,9 +793,44 @@ def _find_json_mapping(
     return None
 
 
+#: Answer shape of the class step. ``ncit_code`` is a listed candidate's code,
+#: or empty for a new class.
+DRUG_CLASS_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["classes"],
+    "properties": {
+        "classes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "ncit_code",
+                    "name",
+                    "basis",
+                    "target",
+                    "aliases",
+                    "confidence",
+                    "support_ids",
+                ],
+                "properties": {
+                    "ncit_code": {"type": "string"},
+                    "name": {"type": "string"},
+                    "basis": _string_enum(CLASS_BASES),
+                    "target": {"type": "string"},
+                    "aliases": {"type": "array", "items": {"type": "string"}},
+                    "confidence": _string_enum(CONFIDENCE_LEVELS),
+                    "support_ids": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        }
+    },
+}
 #: Catalog stages whose answers are decoded under a JSON schema, by stage name.
 _STAGE_RESPONSE_SCHEMAS: dict[str, tuple[str, Mapping[str, Any]]] = {
     "screening": ("trial_drug_screen", INTERVENTION_SCREENING_JSON_SCHEMA),
+    "class": ("trial_drug_class", DRUG_CLASS_JSON_SCHEMA),
 }
 
 
@@ -2039,19 +2095,163 @@ def class_id_for(name: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
 
 
+def ncit_class_id(code: str) -> str:
+    """Return the identity of an NCIt class: its concept code."""
+
+    return f"NCIT:{code}"
+
+
+@dataclass(frozen=True)
+class _ClassPlan:
+    """What the class step may do for one drug.
+
+    ``hierarchy`` holds the NCIt classes above the drug's own concept, assigned
+    without asking the model. ``candidates`` are the NCIt classes that a local
+    search of class names and synonyms found in the drug's name, definition, and
+    evidence; the model may add only these, by code. ``allow_new`` is true when
+    NCIt gives the drug no class, so the model may name one where no candidate
+    fits.
+    """
+
+    hierarchy: tuple[NCItClassRecord, ...] = ()
+    candidates: tuple[NCItClassRecord, ...] = ()
+    allow_new: bool = True
+
+    @property
+    def needs_model(self) -> bool:
+        return bool(self.candidates) or self.allow_new
+
+    def checkpoint_value(self) -> dict[str, Any]:
+        return {
+            "hierarchy": [record.code for record in self.hierarchy],
+            "candidates": [record.code for record in self.candidates],
+            "allow_new": self.allow_new,
+        }
+
+
+def _class_hierarchy(ncit_index: Any) -> NCItClassHierarchy | None:
+    classes = getattr(ncit_index, "classes", None)
+    return classes if isinstance(classes, NCItClassHierarchy) else None
+
+
+def _plan_drug_classes(
+    drug: DrugIdentity,
+    evidence: Sequence[EvidencePassage],
+    *,
+    classes: NCItClassHierarchy | None,
+    candidate_limit: int,
+) -> _ClassPlan:
+    """Assign a drug's NCIt hierarchy and find the classes the model may add.
+
+    Without a class hierarchy (an index built without one) every class comes
+    from the model, as before NCIt classes.
+    """
+
+    if classes is None:
+        return _ClassPlan()
+    hierarchy = classes.classes_above(drug.ncit_code) if drug.ncit_code else ()
+    text = "\n".join(
+        (
+            drug.preferred_name,
+            *drug.aliases,
+            str(drug.definition or ""),
+            *(item.passage for item in evidence),
+        )
+    )
+    candidates = classes.search(
+        text,
+        exclude={record.code for record in hierarchy},
+        limit=candidate_limit,
+    )
+    return _ClassPlan(
+        hierarchy=hierarchy, candidates=tuple(candidates), allow_new=not hierarchy
+    )
+
+
+def _ncit_class_aliases(record: NCItClassRecord) -> tuple[str, ...]:
+    seen = {normalize_class_name(record.preferred_name)}
+    aliases: list[str] = []
+    for value in record.synonyms:
+        cleaned = clean_text(value, max_chars=200)
+        key = normalize_class_name(cleaned)
+        if key and key not in seen:
+            seen.add(key)
+            aliases.append(cleaned)
+    return tuple(aliases[:_CLASS_ALIAS_LIMIT])
+
+
+def _ncit_class_row(
+    drug_id: str, record: NCItClassRecord, *, assigned_by: str, **chosen: Any
+) -> DrugClass:
+    return DrugClass(
+        drug_id=drug_id,
+        class_id=ncit_class_id(record.code),
+        class_name=record.preferred_name,
+        aliases=_ncit_class_aliases(record),
+        ncit_code=record.code,
+        class_source="ncit",
+        assigned_by=assigned_by,
+        **chosen,
+    )
+
+
+@functools.lru_cache(maxsize=4)
+def _ncit_class_names(classes: NCItClassHierarchy) -> dict[str, NCItClassRecord]:
+    """NCIt classes by normalized name or synonym, where that names only one."""
+
+    codes_by_key: dict[str, set[str]] = {}
+    for record in classes.classes.values():
+        for value in (record.preferred_name, *record.synonyms):
+            if key := normalize_class_name(value):
+                codes_by_key.setdefault(key, set()).add(record.code)
+    return {
+        key: classes.classes[next(iter(codes))]
+        for key, codes in codes_by_key.items()
+        if len(codes) == 1
+    }
+
+
+def _named_ncit_class(
+    name: str,
+    *,
+    candidates: Sequence[NCItClassRecord],
+    classes: NCItClassHierarchy | None = None,
+) -> NCItClassRecord | None:
+    """The NCIt class a new class's name spells, among candidates, then anywhere."""
+
+    key = normalize_class_name(name)
+    if not key:
+        return None
+    for record in candidates:
+        if key in {
+            normalize_class_name(value)
+            for value in (record.preferred_name, *record.synonyms)
+        }:
+            return record
+    return _ncit_class_names(classes).get(key) if classes is not None else None
+
+
+def _ncit_code(value: Any) -> str:
+    return re.sub(r"^NCIT:", "", clean_text(value, max_chars=40).upper())
+
+
 def build_drug_class_messages(
     drug: DrugIdentity,
     evidence: Sequence[EvidencePassage],
     *,
     max_classes: int,
+    ncit_classes: Sequence[NCItClassRecord] = (),
+    candidates: Sequence[NCItClassRecord] = (),
+    allow_new: bool = True,
 ) -> list[dict[str, str]]:
-    """Build the class-assignment prompt from a drug's own mechanism evidence.
+    """Build the class prompt: NCIt classes so far, candidates, and evidence.
 
-    NCIt is not the source here. It has no entry, or a placeholder one, for the
-    first-in-human agents a phase I portfolio is made of, which are exactly the
-    drugs with too little evidence of their own to score on. The drug's retrieved
-    mechanism passages do describe them, so the class is read from those and the
-    ontology definition is offered only as a hint.
+    ``ncit_classes`` are already assigned from the NCIt hierarchy and stay.
+    The model may add ``candidates`` by code, a small list found by local
+    search, so only those NCIt records enter the prompt and never the ontology.
+    With ``allow_new`` it may name a class NCIt lacks, which first-in-human
+    agents often need: DCBY02 is a "CD93 monoclonal antibody" in its own
+    mechanism passages and in no NCIt class.
     """
 
     records = [
@@ -2071,7 +2271,19 @@ def build_drug_class_messages(
             {
                 "drug": drug.preferred_name,
                 "aliases": list(drug.aliases[:8]),
-                "ncit_definition_hint": clean_text(drug.definition, max_chars=2000),
+                "ncit_definition": clean_text(drug.definition, max_chars=2000),
+                "ncit_classes": [record.preferred_name for record in ncit_classes],
+                "candidate_classes": [
+                    {
+                        "ncit_code": record.code,
+                        "name": record.preferred_name,
+                        "definition": clean_text(
+                            record.definition, max_chars=_CANDIDATE_DEFINITION_CHARS
+                        ),
+                    }
+                    for record in candidates
+                ],
+                "new_class_allowed": allow_new,
                 "passages": records,
             },
             ensure_ascii=False,
@@ -2082,7 +2294,11 @@ def build_drug_class_messages(
 
 
 def _class_output_validation_error(
-    value: Mapping[str, Any], *, evidence: Sequence[EvidencePassage]
+    value: Mapping[str, Any],
+    *,
+    evidence: Sequence[EvidencePassage],
+    candidates: Sequence[NCItClassRecord] = (),
+    allow_new: bool = True,
 ) -> str | None:
     raw_classes = value.get("classes")
     if not isinstance(raw_classes, list):
@@ -2091,26 +2307,42 @@ def _class_output_validation_error(
         str(key): str(item)
         for key, item in (value.get("__passage_id_map__") or {}).items()
     }
+    candidate_codes = {record.code for record in candidates}
     invalid: list[str] = []
     for index, raw in enumerate(raw_classes):
         if not isinstance(raw, Mapping):
             invalid.append(f"item {index} is not an object")
             continue
+        code = _ncit_code(raw.get("ncit_code"))
         name = clean_text(raw.get("name"), max_chars=200)
-        if not name or not normalize_class_name(name):
+        if code:
+            if code not in candidate_codes:
+                invalid.append(
+                    f"{code} is not a listed candidate ncit_code; choose only from "
+                    "candidate_classes"
+                )
+                continue
+        elif not name or not normalize_class_name(name):
             invalid.append(f"item {index} has no usable name")
             continue
+        elif not allow_new and _named_ncit_class(name, candidates=candidates) is None:
+            invalid.append(
+                f"{name}: new_class_allowed is false, so name no new class; choose "
+                "only listed candidate ncit_code values"
+            )
+            continue
+        label = code or name
         if clean_text(raw.get("basis"), max_chars=40).casefold() not in CLASS_BASES:
-            invalid.append(f"{name}: basis must be target, mechanism, or modality")
+            invalid.append(f"{label}: basis must be target, mechanism, or modality")
         if (
             clean_text(raw.get("confidence"), max_chars=20).casefold()
             not in CONFIDENCE_LEVELS
         ):
-            invalid.append(f"{name}: confidence must be high, medium, or low")
+            invalid.append(f"{label}: confidence must be high, medium, or low")
         if evidence and not _supported_passage_ids(
             raw.get("support_ids", []), passage_id_map=passage_id_map
         ):
-            invalid.append(f"{name}: no supplied P# identifier supports it")
+            invalid.append(f"{label}: no supplied P# identifier supports it")
     if invalid:
         return "; ".join(invalid[:5])
     return None
@@ -2121,73 +2353,121 @@ def _validate_drug_classes(
     value: Mapping[str, Any],
     *,
     max_classes: int,
+    plan: _ClassPlan | None = None,
+    classes: NCItClassHierarchy | None = None,
 ) -> list[DrugClass]:
-    """Turn one validated class response into deduplicated catalog rows."""
+    """Turn one class answer into catalog rows, the NCIt hierarchy first.
 
+    The drug's hierarchy classes are always kept. Up to ``max_classes`` usable
+    answer items each add one class: a listed candidate, with every NCIt class
+    above it, or, when the plan allows, a new class. A new class whose name
+    spells an NCIt class is stored as that class.
+    """
+
+    resolved_plan = plan or _ClassPlan()
+    records: dict[str, DrugClass] = {
+        ncit_class_id(record.code): _ncit_class_row(
+            drug_id, record, assigned_by="ncit_hierarchy"
+        )
+        for record in resolved_plan.hierarchy
+    }
+    candidates = {record.code: record for record in resolved_plan.candidates}
     passage_id_map = {
         str(key): str(item)
         for key, item in (value.get("__passage_id_map__") or {}).items()
     }
-    records: dict[str, DrugClass] = {}
+    added = 0
     for raw in value.get("classes", []) or []:
+        if added >= max_classes:
+            break
         if not isinstance(raw, Mapping):
             continue
+        code = _ncit_code(raw.get("ncit_code"))
         name = clean_text(raw.get("name"), max_chars=200)
-        class_id = class_id_for(name)
-        if not class_id or class_id in records:
-            continue
-        support = [
-            passage_id_map[item]
-            for item in _supported_passage_ids(
-                raw.get("support_ids", []), passage_id_map=passage_id_map
+        if code:
+            record = candidates.get(code)
+            if record is None:
+                continue
+        else:
+            record = _named_ncit_class(
+                name,
+                candidates=resolved_plan.candidates,
+                classes=classes if resolved_plan.allow_new else None,
             )
-        ]
-        aliases = raw.get("aliases", [])
-        if not isinstance(aliases, Sequence) or isinstance(aliases, (str, bytes)):
-            aliases = []
-        records[class_id] = DrugClass(
-            drug_id=drug_id,
-            class_id=class_id,
-            class_name=name,
-            basis=clean_text(raw.get("basis"), max_chars=40).casefold(),
-            target=clean_text(raw.get("target"), max_chars=200),
-            aliases=tuple(
-                dict.fromkeys(
-                    cleaned
-                    for item in aliases
-                    if (cleaned := clean_text(item, max_chars=200))
+            if record is None and not (resolved_plan.allow_new and class_id_for(name)):
+                continue
+        chosen = {
+            "basis": clean_text(raw.get("basis"), max_chars=40).casefold(),
+            "target": clean_text(raw.get("target"), max_chars=200),
+            "confidence": clean_text(raw.get("confidence"), max_chars=20).casefold(),
+            "support_ids": tuple(
+                passage_id_map[item]
+                for item in _supported_passage_ids(
+                    raw.get("support_ids", []), passage_id_map=passage_id_map
                 )
-            )[:6],
-            confidence=clean_text(raw.get("confidence"), max_chars=20).casefold(),
-            support_ids=tuple(support),
-        )
-        if len(records) >= max_classes:
-            break
+            ),
+        }
+        if record is not None:
+            class_id = ncit_class_id(record.code)
+            existing = records.get(class_id)
+            if existing is not None and existing.assigned_by != "llm_added_ncit_ancestor":
+                continue
+            records[class_id] = _ncit_class_row(
+                drug_id, record, assigned_by="llm_added_ncit", **chosen
+            )
+            for ancestor in (
+                classes.classes_above(record.code) if classes is not None else ()
+            ):
+                records.setdefault(
+                    ncit_class_id(ancestor.code),
+                    _ncit_class_row(
+                        drug_id, ancestor, assigned_by="llm_added_ncit_ancestor"
+                    ),
+                )
+        else:
+            class_id = class_id_for(name)
+            if class_id in records:
+                continue
+            aliases = raw.get("aliases", [])
+            if not isinstance(aliases, Sequence) or isinstance(aliases, (str, bytes)):
+                aliases = []
+            records[class_id] = DrugClass(
+                drug_id=drug_id,
+                class_id=class_id,
+                class_name=name,
+                aliases=tuple(
+                    dict.fromkeys(
+                        cleaned
+                        for item in aliases
+                        if (cleaned := clean_text(item, max_chars=200))
+                    )
+                )[:_CLASS_ALIAS_LIMIT],
+                class_source="llm",
+                assigned_by="llm_new",
+                **chosen,
+            )
+        added += 1
     return list(records.values())
 
 
 async def _default_classify_many(
-    drugs_and_evidence: Sequence[tuple[DrugIdentity, Sequence[EvidencePassage]]],
+    drugs: Sequence[tuple[DrugIdentity, Sequence[EvidencePassage], _ClassPlan]],
     *,
     config: MMAIConfig,
 ) -> dict[str, Mapping[str, Any]]:
-    """Assign pharmacologic classes for a batch of drugs, with bounded retries."""
+    """Ask the model which classes a batch of drugs adds, with bounded retries.
 
-    if not drugs_and_evidence:
+    The evidence is already bounded by the caller, which searched the same
+    passages for each plan's candidates.
+    """
+
+    if not drugs:
         return {}
     catalog_config = config.good_option_catalog
     max_classes = max(1, int(catalog_config.get("class_max_per_drug", 3)))
-    character_limit = max(
-        4_000,
-        int(catalog_config.get("class_assignment_evidence_max_tokens", 40_000)) * 4,
-    )
-    bounded_inputs = [
-        (drug, bound_evidence(evidence, character_limit=character_limit))
-        for drug, evidence in drugs_and_evidence
-    ]
     parsed: dict[str, Mapping[str, Any]] = {}
     validation_errors: dict[str, str] = {}
-    pending = list(bounded_inputs)
+    pending = list(drugs)
     max_attempts = max(
         1, int(catalog_config.get("class_assignment_max_attempts", 3))
     )
@@ -2195,9 +2475,14 @@ async def _default_classify_many(
         if not pending:
             break
         messages_list: list[list[dict[str, str]]] = []
-        for drug, evidence in pending:
+        for drug, evidence, plan in pending:
             messages = build_drug_class_messages(
-                drug, evidence, max_classes=max_classes
+                drug,
+                evidence,
+                max_classes=max_classes,
+                ncit_classes=plan.hierarchy,
+                candidates=plan.candidates,
+                allow_new=plan.allow_new,
             )
             previous_error = validation_errors.get(drug.drug_id)
             if previous_error:
@@ -2214,15 +2499,15 @@ async def _default_classify_many(
         outputs = await asyncio.to_thread(
             _run_llm_messages, messages_list, config=config, stage="class"
         )
-        retry: list[tuple[DrugIdentity, Sequence[EvidencePassage]]] = []
-        for (drug, bounded_evidence), raw_output in zip(pending, outputs, strict=True):
+        retry: list[tuple[DrugIdentity, Sequence[EvidencePassage], _ClassPlan]] = []
+        for (drug, evidence, plan), raw_output in zip(pending, outputs, strict=True):
             output = _coerce_catalog_llm_output(raw_output)
             if _token_limited_finish_reason(output.finish_reason):
                 validation_errors[drug.drug_id] = (
                     "the response reached its output token limit "
                     f"(finish_reason={output.finish_reason})"
                 )
-                retry.append((drug, bounded_evidence))
+                retry.append((drug, evidence, plan))
                 continue
             raw_value = _find_json_mapping(output.text, "classes", allow_bare_array=True)
             if not isinstance(raw_value, Mapping):
@@ -2230,27 +2515,61 @@ async def _default_classify_many(
                     "the final response did not contain a JSON object with a classes "
                     "array"
                 )
-                retry.append((drug, bounded_evidence))
+                retry.append((drug, evidence, plan))
                 continue
             raw = dict(raw_value)
             raw["__passage_id_map__"] = {
                 f"P{index}": item.evidence_id
-                for index, item in enumerate(bounded_evidence, start=1)
+                for index, item in enumerate(evidence, start=1)
             }
-            error = _class_output_validation_error(raw, evidence=bounded_evidence)
+            error = _class_output_validation_error(
+                raw,
+                evidence=evidence,
+                candidates=plan.candidates,
+                allow_new=plan.allow_new,
+            )
             if error:
                 validation_errors[drug.drug_id] = error
-                retry.append((drug, bounded_evidence))
+                retry.append((drug, evidence, plan))
                 continue
             parsed[drug.drug_id] = raw
         pending = retry
-    for drug, _evidence in pending:
+    for drug, _evidence, _plan in pending:
         logging.warning(
             "Class assignment for %s failed validation on every attempt: %s",
             drug.preferred_name,
             validation_errors.get(drug.drug_id, "unknown error"),
         )
     return parsed
+
+
+def _ncit_class_definition_evidence(
+    class_id: str, record: NCItClassRecord, *, ncit_version: str
+) -> tuple[EvidencePassage, ...]:
+    """Materialize an NCIt class definition as citable class-ledger evidence."""
+
+    definition = clean_text(record.definition, max_chars=10_000)
+    if not definition:
+        return ()
+    return (
+        EvidencePassage(
+            evidence_id=f"ncit_definition:{record.code}",
+            drug_id="",
+            class_id=class_id,
+            query_scope="class",
+            facet="mechanism_targets",
+            source="ncit_ontology",
+            source_type="ontology_definition",
+            title=f"NCI Thesaurus definition for {record.preferred_name}",
+            passage=definition,
+            url="",
+            source_locator=f"NCIt {record.code}",
+            license="CC BY 4.0",
+            query="",
+            content_sha256=hashlib.sha256(definition.encode("utf-8")).hexdigest(),
+            attributes={"ncit_code": record.code, "ncit_version": ncit_version},
+        ),
+    )
 
 
 async def _synthesize_classes(
@@ -3445,25 +3764,92 @@ async def build_good_option_catalog(
 
     # Classification runs after research because it reads the drug's own
     # mechanism passages, and before class retrieval because it is what says
-    # which class corpora need retrieving at all.
+    # which class corpora need retrieving at all. A drug's NCIt hierarchy is
+    # assigned in code; the model only adds candidate NCIt classes, or names a
+    # class for a drug NCIt leaves unclassified.
     max_classes = max(1, int(catalog_config.get("class_max_per_drug", 3)))
-    classify_inputs: list[tuple[DrugIdentity, list[EvidencePassage]]] = []
+    class_hierarchy = _class_hierarchy(ncit_index)
+    candidate_limit = max(0, int(catalog_config.get("class_candidate_limit", 25)))
+    class_character_limit = max(
+        4_000,
+        int(catalog_config.get("class_assignment_evidence_max_tokens", 40_000)) * 4,
+    )
+    classify_inputs: list[tuple[DrugIdentity, list[EvidencePassage], _ClassPlan]] = []
     for drug in identities.values():
         if status_by_drug[drug.drug_id][0] != "complete":
             continue
         evidence = evidence_by_drug[drug.drug_id]
         mechanism = [item for item in evidence if item.facet == "mechanism_targets"]
-        classify_inputs.append((drug, mechanism or list(evidence)))
+        bounded = bound_evidence(
+            mechanism or list(evidence), character_limit=class_character_limit
+        )
+        classify_inputs.append(
+            (
+                drug,
+                bounded,
+                _plan_drug_classes(
+                    drug,
+                    bounded,
+                    classes=class_hierarchy,
+                    candidate_limit=candidate_limit,
+                ),
+            )
+        )
     classes_by_drug: dict[str, list[DrugClass]] = {}
-    pending_classify: list[tuple[DrugIdentity, list[EvidencePassage]]] = []
+    pending_classify: list[tuple[DrugIdentity, list[EvidencePassage], _ClassPlan]] = []
     classify_completed = 0
-    for drug, mechanism_evidence in classify_inputs:
-        checkpoint_input = {
+
+    def classify_checkpoint_input(
+        drug: DrugIdentity,
+        mechanism_evidence: Sequence[EvidencePassage],
+        plan: _ClassPlan,
+    ) -> dict[str, Any]:
+        return {
             "drug": asdict(drug),
             "evidence": [item.to_record() for item in mechanism_evidence],
             "max_classes": max_classes,
+            "classes": plan.checkpoint_value(),
         }
-        saved = checkpoint.load("classify", drug.drug_id, input_value=checkpoint_input)
+
+    def record_classes(
+        drug: DrugIdentity,
+        mechanism_evidence: Sequence[EvidencePassage],
+        plan: _ClassPlan,
+        value: Any,
+    ) -> None:
+        nonlocal classify_completed
+        # A failed answer still leaves the drug its NCIt hierarchy, and is not
+        # checkpointed, so a resumed build asks again.
+        records = _validate_drug_classes(
+            drug.drug_id,
+            value if isinstance(value, Mapping) else {"classes": []},
+            max_classes=max_classes,
+            plan=plan,
+            classes=class_hierarchy,
+        )
+        classes_by_drug[drug.drug_id] = records
+        if isinstance(value, Mapping):
+            checkpoint.save(
+                "classify",
+                drug.drug_id,
+                input_value=classify_checkpoint_input(drug, mechanism_evidence, plan),
+                data={"classes": [item.to_record() for item in records]},
+            )
+        classify_completed += 1
+        if progress_callback:
+            progress_callback(
+                "classify",
+                classify_completed,
+                len(classify_inputs),
+                drug.preferred_name,
+            )
+
+    for drug, mechanism_evidence, plan in classify_inputs:
+        saved = checkpoint.load(
+            "classify",
+            drug.drug_id,
+            input_value=classify_checkpoint_input(drug, mechanism_evidence, plan),
+        )
         raw_classes = saved.get("classes") if saved is not None else None
         if isinstance(raw_classes, list):
             classes_by_drug[drug.drug_id] = [
@@ -3479,52 +3865,23 @@ async def build_good_option_catalog(
                     len(classify_inputs),
                     f"{drug.preferred_name} (checkpoint)",
                 )
+        elif not plan.needs_model:
+            # NCIt classifies it and no candidate class turned up to add.
+            record_classes(drug, mechanism_evidence, plan, {"classes": []})
         else:
-            pending_classify.append((drug, mechanism_evidence))
+            pending_classify.append((drug, mechanism_evidence, plan))
     class_batch_size = max(1, int(catalog_config.get("class_checkpoint_batch_size", 64)))
-
-    def record_classes(
-        drug: DrugIdentity,
-        mechanism_evidence: Sequence[EvidencePassage],
-        value: Any,
-    ) -> None:
-        nonlocal classify_completed
-        records = (
-            _validate_drug_classes(drug.drug_id, value, max_classes=max_classes)
-            if isinstance(value, Mapping)
-            else []
-        )
-        classes_by_drug[drug.drug_id] = records
-        if isinstance(value, Mapping):
-            checkpoint.save(
-                "classify",
-                drug.drug_id,
-                input_value={
-                    "drug": asdict(drug),
-                    "evidence": [item.to_record() for item in mechanism_evidence],
-                    "max_classes": max_classes,
-                },
-                data={"classes": [item.to_record() for item in records]},
-            )
-        classify_completed += 1
-        if progress_callback:
-            progress_callback(
-                "classify",
-                classify_completed,
-                len(classify_inputs),
-                drug.preferred_name,
-            )
 
     if class_resolver is None:
         for start in range(0, len(pending_classify), class_batch_size):
             batch = pending_classify[start : start + class_batch_size]
             batch_outputs = await _default_classify_many(batch, config=resolved_config)
-            for drug, mechanism_evidence in batch:
+            for drug, mechanism_evidence, plan in batch:
                 record_classes(
-                    drug, mechanism_evidence, batch_outputs.get(drug.drug_id)
+                    drug, mechanism_evidence, plan, batch_outputs.get(drug.drug_id)
                 )
     else:
-        for drug, mechanism_evidence in pending_classify:
+        for drug, mechanism_evidence, plan in pending_classify:
             value = await _maybe_await(class_resolver(drug, mechanism_evidence))
             if isinstance(value, Mapping):
                 value = {
@@ -3534,18 +3891,28 @@ async def build_good_option_catalog(
                         for index, item in enumerate(mechanism_evidence, start=1)
                     },
                 }
-            record_classes(drug, mechanism_evidence, value)
+            record_classes(drug, mechanism_evidence, plan, value)
 
     # One corpus per class, not per drug: the classes collapse thousands of
     # agents onto a few hundred subjects, and every member reads the same block.
     class_subjects: dict[str, tuple[str, tuple[str, ...]]] = {}
+    class_definitions: dict[str, tuple[EvidencePassage, ...]] = {}
     for records in classes_by_drug.values():
         for record in records:
             name, aliases = class_subjects.get(record.class_id, (record.class_name, ()))
             class_subjects[record.class_id] = (
                 name,
-                tuple(dict.fromkeys((*aliases, *record.aliases)))[:6],
+                tuple(dict.fromkeys((*aliases, *record.aliases)))[:_CLASS_ALIAS_LIMIT],
             )
+            ncit_record = (
+                class_hierarchy.get(record.ncit_code)
+                if class_hierarchy is not None and record.class_source == "ncit"
+                else None
+            )
+            if ncit_record is not None and record.class_id not in class_definitions:
+                class_definitions[record.class_id] = _ncit_class_definition_evidence(
+                    record.class_id, ncit_record, ncit_version=ncit_version
+                )
     class_indications = indications_for_classes(
         classes_by_drug,
         assignments,
@@ -3630,7 +3997,11 @@ async def build_good_option_catalog(
     for class_id, (class_items, class_attempts) in zip(
         class_ids, class_results, strict=True
     ):
-        class_evidence_by_id[class_id] = class_items
+        # An NCIt class's definition joins its corpus as a citable passage, as a
+        # drug's does, so class synthesis can read and cite it.
+        class_evidence_by_id[class_id] = _merge_evidence(
+            class_definitions.get(class_id, ()), class_items
+        )
         attempts.extend(class_attempts)
 
     class_summary_records = await _synthesize_classes(
@@ -4315,7 +4686,9 @@ def _validate_class_tables(
 ) -> None:
     """Check the class axis: identities, membership, and fact provenance."""
 
-    missing_columns = sorted(set(DRUG_CLASS_COLUMNS) - set(drug_classes.columns))
+    missing_columns = sorted(
+        set(DRUG_CLASS_COLUMNS) - _NCIT_CLASS_COLUMNS - set(drug_classes.columns)
+    )
     if missing_columns:
         raise ValueError("drug_classes is missing columns: " + ", ".join(missing_columns))
     missing_columns = sorted(set(CLASS_SUMMARY_COLUMNS) - set(class_summaries.columns))
@@ -4334,6 +4707,24 @@ def _validate_class_tables(
         if unknown_bases:
             raise ValueError(f"drug_classes contains unknown bases: {unknown_bases}")
         for record in drug_classes.to_dict(orient="records"):
+            # Catalogs from before NCIt classes have neither column: every class
+            # there is model-named.
+            source = str(record.get("class_source") or "")
+            assigned_by = str(record.get("assigned_by") or "")
+            if source and source not in CLASS_SOURCES:
+                raise ValueError(f"drug_classes contains unknown class_source {source!r}")
+            if assigned_by and assigned_by not in CLASS_ASSIGNMENTS:
+                raise ValueError(
+                    f"drug_classes contains unknown assigned_by {assigned_by!r}"
+                )
+            if source == "ncit":
+                code = str(record.get("ncit_code") or "")
+                if not code or str(record.get("class_id")) != ncit_class_id(code):
+                    raise ValueError(
+                        "drug_classes NCIt class_id does not match its ncit_code: "
+                        f"{record.get('class_name')!r}"
+                    )
+                continue
             expected = class_id_for(str(record.get("class_name") or ""))
             if str(record.get("class_id")) != expected:
                 raise ValueError(
@@ -4462,7 +4853,11 @@ def _read_good_option_catalog(root: Path, *, validate: bool) -> GoodOptionCatalo
 
 __all__ = [
     "CATALOG_PROMPTS",
+    "CLASS_ASSIGNMENTS",
+    "CLASS_SOURCES",
+    "DRUG_CLASS_JSON_SCHEMA",
     "INTERVENTION_EXCLUSION_CATEGORIES",
+    "INTERVENTION_SCREENING_JSON_SCHEMA",
     "INTERVENTION_SCREENING_DISPOSITIONS",
     "EVIDENCE_GRANULARITIES",
     "ClassResolver",
@@ -4479,6 +4874,7 @@ __all__ = [
     "build_role_resolution_messages",
     "class_id_for",
     "load_good_option_catalog",
+    "ncit_class_id",
     "normalize_class_name",
     "render_fact_summary",
     "stamp_fact_scope",

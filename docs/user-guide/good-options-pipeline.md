@@ -76,19 +76,46 @@ downstream confuses drug-name evidence with disease-conditioned evidence.
 
 ### Step 2 — Work out each drug's pharmacologic class
 
-An LLM reads the drug's own mechanism passages, plus its name, aliases, and NCIt
-definition as a hint, and names up to `class_max_per_drug` classes: each with a
-basis (target, mechanism, or modality), a target, alternative names, a
-confidence, and citations to the passages that establish it.
+Classes come from the NCI Thesaurus hierarchy in the bundled snapshot. A class
+is an NCIt concept above some drug concept, in the Pharmacologic Substance
+branch, other than a fixed list of umbrellas too broad to group agents that act
+alike (`NCIT_UMBRELLA_CLASSES`: Pharmacologic Substance, Antineoplastic Agent,
+Immunotherapeutic Agent, Biological Agent, Enzyme Inhibitor, Signal
+Transduction Inhibitor, Targeted Therapy Agent, and the Antineoplastic
+Protein/Enzyme Inhibitor, Biological Agent, Antibody, and Immunomodulating Agent
+concepts). Everything below them is kept, from Protein Kinase Inhibitor and
+Monoclonal Antibody down to PD1 Inhibitor. The chemical-structure branch
+(Organic Chemical, Nitrogen Compound, ...) is not used.
 
-NCIt is deliberately not the source. It has nothing usable for the
-first-in-human agents that most need class evidence, which is why DCBY02
-resolves to "CD93 monoclonal antibody" and FHD-609 to "BRD9 degrader" from their
-retrieved mechanism text rather than from an ontology entry.
+A drug matched to NCIt gets every class above its concept, in code, with no LLM
+call: pembrolizumab gets Anti-PD1 Monoclonal Antibody, Monoclonal Antibody, PD1
+Inhibitor, Immune Checkpoint Inhibitor, and Immune Checkpoint Modulator. NCIt
+can leave a class out, so a local search of NCIt class names and synonyms
+against the drug's name, definition, and mechanism passages finds up to
+`class_candidate_limit` (25) candidate classes, and an LLM may add those the
+passages show the drug belongs to, by code: an FLT3 inhibitor class for
+emavusertib, which NCIt files only as an IRAK4 inhibitor. An added class brings
+its NCIt ancestors with it. The LLM never removes a hierarchy class, codes
+outside the candidates are rejected, and an NCIt-classified drug with no
+candidates is never sent to it.
 
-Class identity is a hash of the normalized class name, so "PD-L1 inhibitor",
-"PD-L1 Inhibitors", and "anti-PD-L1 inhibitor" collapse to one thing and two
-drugs landing on the same class share everything downstream.
+A drug NCIt does not classify — no match, or only umbrellas above it, which is
+common for first-in-human agents such as golcadomide or the BCL6 degrader
+BMS-986458 — gets its classes from the LLM: candidates first, and a new class,
+marked `class_source = "llm"`, only where no candidate fits. A new class is
+written in canonical form ("CD93 monoclonal antibody", "BRD9 degrader") and
+identified by a hash of its normalized name, so "PD-L1 inhibitor" and "PD-L1
+Inhibitors" collapse to one thing; a new name that spells an NCIt class is
+stored as that class. `class_max_per_drug` (3) caps the classes the LLM adds or
+names per drug, each with a basis (target, mechanism, or modality), a target,
+a confidence, and citations to the passages that establish it.
+
+An NCIt class's id is `NCIT:<code>`, its name NCIt's display or preferred name,
+and its aliases NCIt synonyms. Each `drug_classes` row records `class_source`
+(`ncit` or `llm`), `ncit_code`, and `assigned_by`: `ncit_hierarchy`,
+`llm_added_ncit`, `llm_added_ncit_ancestor`, or `llm_new`. Hierarchy rows carry
+no basis, target, confidence, or citations; the hierarchy is their evidence.
+Two drugs landing on the same class share everything downstream.
 
 ### Step 3 — Research each class
 
@@ -96,7 +123,8 @@ The same machinery as step 1, with the class name and aliases as the subject,
 run once per class rather than once per drug. Three facets, four query-driven
 sources, one round. The class is also paired with the diseases named by its
 member drugs' trials, searching the same three disease-specific facets,
-including biomarker prevalence.
+including biomarker prevalence. An NCIt class's definition joins its corpus as a
+citable passage, as a drug's does.
 
 ### Step 4 — Synthesize the drug evidence
 

@@ -111,13 +111,32 @@ the disease-specific prevalence searches need a fresh build to include them.
 
 The **class** axis retrieves literature for the pharmacologic classes a drug
 belongs to, once per class rather than once per drug, so agents that share a
-class share a corpus. A `classify` stage between `research` and `synthesis` reads
-each drug's mechanism passages and names its classes; NCIt is offered only as a
-hint, because it has nothing usable for the first-in-human agents that most need
-class evidence. Class identity is a hash of the normalized class name, so
-"PD-L1 inhibitor", "PD-L1 Inhibitors", and "anti-PD-L1 inhibitor" resolve to one
-corpus. Assignments are stored in `drug_classes.parquet` and the corpus in
-`class_evidence/`.
+class share a corpus. Classes are normalized to the bundled NCIt hierarchy. A
+class is an NCIt concept above a drug concept, in the Pharmacologic Substance
+branch, other than the fixed `NCIT_UMBRELLA_CLASSES` (Pharmacologic Substance,
+Antineoplastic Agent, Enzyme Inhibitor, and the like); the chemical-structure
+branch is not used. A `classify` stage between `research` and `synthesis`
+assigns an NCIt-matched drug every class above its concept in code. A local
+search of NCIt class names and synonyms against the drug's name, NCIt
+definition, and mechanism passages then finds up to `class_candidate_limit`
+candidate classes, and the LLM may add, by code, those the passages show the
+drug belongs to; an added class brings its NCIt ancestors, codes outside the
+candidates are rejected, the hierarchy is never removed, and an NCIt-classified
+drug with no candidates gets no LLM call. A drug NCIt leaves unclassified gets its classes
+from the LLM: candidates, or a new class (`class_source="llm"`) only where none
+fits. The answer is decoded under `DRUG_CLASS_JSON_SCHEMA` with a remote
+backend. Only the matched drug's record and its candidates' names and short
+definitions enter the prompt, never the ontology.
+
+An NCIt class's `class_id` is `NCIT:<code>`, its name NCIt's display or
+preferred name, and its aliases NCIt synonyms; its definition joins its corpus
+as a citable passage. A new class's identity is a hash of its normalized name,
+so "PD-L1 inhibitor" and "PD-L1 Inhibitors" resolve to one corpus, and a new
+name that spells an NCIt class is stored as that class. Assignments are stored
+in `drug_classes.parquet`, with `ncit_code`, `class_source` (`ncit` or `llm`),
+and `assigned_by` (`ncit_hierarchy`, `llm_added_ncit`,
+`llm_added_ncit_ancestor`, or `llm_new`); only LLM-chosen rows carry a basis,
+target, confidence, and support IDs. The corpus is stored in `class_evidence/`.
 
 The configured LLM synthesizes the evidence ledger into structured facts with
 validated passage support IDs. A matched bundled NCIt definition is materialized

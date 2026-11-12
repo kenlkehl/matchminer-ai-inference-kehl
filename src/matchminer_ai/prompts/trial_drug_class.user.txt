@@ -1,29 +1,30 @@
-You will be given the name, aliases, and mechanism passages for one cancer drug. Name the pharmacologic class or classes it belongs to.
+You will be given one cancer drug: its name, aliases, and NCIt definition; `ncit_classes`, the NCIt classes it is already filed under; `candidate_classes`, NCIt classes whose names a search found in the drug's text, each with its `ncit_code` and definition; `new_class_allowed`; and the drug's mechanism passages.
 
-The classes you name are used to retrieve literature about other agents that work the same way, so that a drug with thin evidence of its own can still be judged against what its class has shown. A class is therefore useful exactly when a reader would expect agents in it to behave alike in patients.
+The classes are used to retrieve literature about other agents that work the same way, so that a drug with thin evidence of its own can still be judged against what its class has shown. A class is therefore useful exactly when a reader would expect agents in it to behave alike in patients.
 
-Name every distinct class the passages support, most specific first, at most {max_classes}. Drugs commonly belong to more than one: atezolizumab is both a PD-L1 inhibitor and an immune checkpoint inhibitor, and an antibody-drug conjugate belongs to a class defined by its target and another defined by its payload.
+The `ncit_classes` stay assigned: do not repeat them, and do not try to remove them. Add each candidate class the passages show this drug belongs to that NCIt left out, such as an FLT3 inhibitor class for an agent NCIt files only as an IRAK4 inhibitor whose passages establish that it also inhibits FLT3, or a BCR-ABL inhibitor class for an agent NCIt files only as a tyrosine kinase inhibitor. A candidate qualifies only when the drug itself is a member: it acts on that class's target, works through that mechanism, or is built that way. A class whose target or pathway the passages only mention, as a ligand, a downstream effect, a resistance mechanism, or a combination partner, does not qualify. Choose candidates only by their listed `ncit_code`. For a drug NCIt already classifies, an empty array is the usual answer.
 
-Write each class the way the literature writes it, preferring these forms so that two drugs sharing a class produce the same words:
+When `new_class_allowed` is true, NCIt gives this drug no usable class. Choose every candidate it belongs to, and only when no candidate fits a class the passages establish, name a new class with an empty `ncit_code`, written the way the literature writes it so that two drugs sharing it produce the same words:
 
-- "<TARGET> inhibitor" for a small molecule or antibody that blocks a named target, as in "PD-L1 inhibitor" or "BRAF inhibitor"
+- "<TARGET> inhibitor" for a small molecule or antibody that blocks a named target, as in "SOS1 inhibitor"
 - "<TARGET> monoclonal antibody" when the modality is what defines it, as in "CD93 monoclonal antibody"
 - "<TARGET> antibody-drug conjugate", "<TARGET> degrader", "<TARGET> CAR T-cell therapy", and the like for other engineered modalities
-- a mechanism family when that is what the literature shares, as in "immune checkpoint inhibitor", "tyrosine kinase inhibitor", "PARP inhibitor", "DNA damage response inhibitor"
+- a mechanism family when that is what the literature shares, as in "cereblon E3 ligase modulator"
 
-Do not write a bare target name, a trade name, a single drug name, or a disease. Do not write "targeted therapy", "immunotherapy", "chemotherapy", "small molecule", or "monoclonal antibody" on their own; they group agents that do not behave alike.
+Do not write a bare target name, a trade name, a single drug name, or a disease. Do not write "targeted therapy", "immunotherapy", "chemotherapy", "small molecule", or "monoclonal antibody" on their own; they group agents that do not behave alike. When `new_class_allowed` is false, never name a new class.
 
-Low confidence is a usable answer and is expected for first-in-human agents. If the passages establish only that the drug is an antibody against CD93, then "CD93 monoclonal antibody" at low confidence is the right answer. Return an empty array only when the passages say nothing about what the drug does.
+Low confidence is a usable answer and is expected for first-in-human agents. If the passages establish only that the drug is an antibody against CD93 and no candidate fits, then a new "CD93 monoclonal antibody" class at low confidence is the right answer. Return at most {max_classes} items, most specific first, and an empty array when the passages support no class beyond `ncit_classes`.
 
 Return concise JSON only, an object with one array named classes. Every item must contain:
 
-- `name`: the class, in the canonical form above
+- `ncit_code`: the chosen candidate's code, or "" for a new class
+- `name`: the candidate's name, or the new class in the canonical form above
 - `basis`: "target" when the class is defined by the molecule it acts on, "mechanism" when defined by the pathway or process it acts through, "modality" when defined by how the agent is built
 - `target`: the gene, protein, or pathway, or an empty string when the class has no single one
-- `aliases`: other names the literature uses for this same class, for example ["anti-PD-L1 antibody", "PD-L1 blockade"]
+- `aliases`: for a new class, other names the literature uses for it, for example ["anti-CD93 antibody"]; [] for a candidate
 - `confidence`: "high", "medium", or "low"
 - `support_ids`: the P# identifiers of the passages that establish it
 
-Use only supplied P# identifiers. Do not infer a class no passage supports.
+Use only supplied P# identifiers and listed candidate codes. Do not infer a class no passage supports.
 
 {payload}

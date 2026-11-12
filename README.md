@@ -302,11 +302,12 @@ Optional source-grounded extensions can also:
   vectors across concurrent question processes against an authorized endpoint,
   and synthesizing a human-reviewable JSON result; and
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
-  LLM-screen ctgov entries for concrete agents with direct anticancer
-  treatment intent, deduplicate NCIt-normalized drugs across trials, synthesize
-  mechanism, efficacy, biomarker prevalence, biomarker-directed benefit, and
-  safety, then resume compatible atomic screening, research, and synthesis
-  checkpoints, and
+  LLM-screen ctgov entries for single concrete agents with direct anticancer
+  treatment intent (regimens split into their agents), deduplicate
+  NCIt-normalized drugs across trials, group them into NCIt drug classes,
+  synthesize mechanism, efficacy, biomarker prevalence, biomarker-directed
+  benefit, and safety for drugs and classes, then resume compatible atomic
+  screening, research, and synthesis checkpoints, and
   estimate patient-specific option quality with a four-point-per-drug LLM
   rubric over drug and class evidence packed to the teacher's context (the
   four-logit GoodOptionChecker is deprecated).
@@ -456,7 +457,10 @@ Without a scope, existing workflow behavior is unchanged.
 ## Ontology attribution
 
 The GoodOption catalog bundles and uses the following ontology snapshot locally
-to normalize drug names and cite their definitions:
+to normalize drug names, assign drug classes from its concept hierarchy, and
+cite drug and class definitions. The ontology is searched locally; only matched
+drugs' records and a short list of candidate classes per drug (names, codes,
+and definitions) reach the catalog's LLM prompts:
 
 - **NCI Thesaurus (NCIt) 26.07d**, produced by the National Cancer Institute
   Enterprise Vocabulary Services group, Center for Biomedical Informatics and
@@ -467,7 +471,9 @@ to normalize drug names and cite their definitions:
   [NCI Enterprise Vocabulary Services](https://evs.nci.nih.gov/ftp1/NCI_Thesaurus/).
 
 NCIt records remain attributable to their creators. The bundled snapshot is
-unmodified; MatchMiner-AI adds local search and output formatting around it. NCI
+unmodified; MatchMiner-AI adds local search, hierarchy traversal, and output
+formatting around it. Catalog class rows from NCIt carry their NCIt codes
+(`NCIT:<code>`), names, synonyms, and definitions. NCI
 Thesaurus is a trademark of the National Cancer Institute. MatchMiner-AI does
 not imply endorsement by NCI.
 

@@ -760,18 +760,23 @@ checkpointed throughout long catalog builds. Synthesis is not batched: each
 drug or class is its own chain of chunk calls, checkpointed as soon as that
 chain finishes, with up to `remote.max_concurrent_requests` chains in flight. Screening and synthesis LLM overrides inherit from
 `llm_good_option`. With a remote backend, `structured_outputs` (default `true`)
-decodes the screening answer under its JSON schema (`response_format`
-`json_schema`); set it to `false` for a server without that support, and the
-answer is parsed and validated from free text as before.
+decodes the screening and class answers under their JSON schemas
+(`response_format` `json_schema`); set it to `false` for a server without that
+support, and the answers are parsed and validated from free text as before.
 
 Evidence is also retrieved on two axes beside the drug's own name, and each has
 its own budget so that neither can evict the other.
 
-`class_max_per_drug` (default 3) caps how many pharmacologic classes the
-`classify` stage may assign to one drug; a drug legitimately holds more than one,
-since atezolizumab is both a PD-L1 inhibitor and an immune checkpoint inhibitor.
-`class_assignment_evidence_max_tokens` (40,000) bounds the mechanism passages
-that stage reads, and `class_llm` gives it its own completion budget.
+The `classify` stage gives an NCIt-matched drug every NCIt class above its
+concept, below the fixed umbrella concepts, without an LLM call; those are not
+capped. `class_max_per_drug` (default 3) caps the classes the LLM may add on
+top, or name for a drug NCIt leaves unclassified; an added NCIt class's own
+ancestors do not count against it. `class_candidate_limit` (default 25) bounds
+the NCIt candidate classes, found by local search of class names and synonyms
+in the drug's name, definition, and mechanism passages, that the LLM may choose
+from by code. `class_assignment_evidence_max_tokens` (40,000) bounds the
+mechanism passages that stage reads and searches, and `class_llm` gives it its
+own completion budget.
 `class_evidence_max_tokens` (60,000) bounds each chunk of the corpus that class
 *synthesis* reads. Class synthesis is a separate call from agent synthesis rather than a
 larger pooled one: 165 drugs already use more than half the agent budget and the

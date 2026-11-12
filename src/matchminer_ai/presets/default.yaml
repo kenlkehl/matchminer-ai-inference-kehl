@@ -424,13 +424,18 @@ good_option_catalog:
   # class corpus can never evict an agent's own passages.
   class_evidence_max_tokens: 60000
   class_assignment_evidence_max_tokens: 40000
+  # A drug's classes are the NCIt classes above its concept, assigned in code.
+  # The class step may add at most class_max_per_drug more: NCIt classes picked
+  # from up to class_candidate_limit candidates found by local search of class
+  # names in the drug's text, or, for a drug NCIt leaves unclassified, new ones.
   class_max_per_drug: 3
+  class_candidate_limit: 25
   screening_max_attempts: 3
   synthesis_max_attempts: 3
   class_assignment_max_attempts: 3
   screening_checkpoint_batch_size: 64
   class_checkpoint_batch_size: 64
-  # Remote screening answers are decoded under their JSON schema
+  # Remote screening and class answers are decoded under their JSON schemas
   # (response_format json_schema); set false for a server without that support.
   structured_outputs: true
   # Nemotron's reasoning left about 5% of screens without an answer at 8,000 (2026-11-11).

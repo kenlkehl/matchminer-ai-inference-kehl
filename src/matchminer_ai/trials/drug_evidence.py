@@ -112,12 +112,17 @@ class EvidencePassage:
 
 @dataclass(frozen=True)
 class DrugClass:
-    """One pharmacologic class a drug belongs to, derived from its own evidence.
+    """One pharmacologic class a drug belongs to.
 
-    A drug can hold several: atezolizumab is both a PD-L1 inhibitor and an immune
-    checkpoint inhibitor, and an antibody-drug conjugate has a target class and a
-    payload class. ``class_id`` is a hash of the normalized name, so two drugs
-    that land on the same class share one retrieved corpus.
+    A drug can hold several: pembrolizumab is an anti-PD1 monoclonal antibody, a
+    PD1 inhibitor, and an immune checkpoint inhibitor. Classes are NCIt concepts
+    (``class_source="ncit"``, ``class_id`` ``NCIT:<code>``) or, where NCIt has
+    none that fits, classes the LLM names (``class_source="llm"``, ``class_id``
+    a hash of the normalized name). Two drugs in one class share one retrieved
+    corpus. ``assigned_by`` says how the row came about: ``ncit_hierarchy``,
+    ``llm_added_ncit``, ``llm_added_ncit_ancestor``, or ``llm_new``. Only
+    LLM-chosen rows carry ``basis``, ``target``, ``confidence``, and
+    ``support_ids``; hierarchy rows leave them empty.
     """
 
     drug_id: str
@@ -128,6 +133,9 @@ class DrugClass:
     aliases: tuple[str, ...] = ()
     confidence: str = ""
     support_ids: tuple[str, ...] = ()
+    ncit_code: str = ""
+    class_source: str = ""
+    assigned_by: str = ""
 
     def to_record(self) -> dict[str, Any]:
         record = asdict(self)
@@ -154,6 +162,9 @@ class DrugClass:
             aliases=tuple(str(value) for value in (aliases or ())),
             confidence=str(record.get("confidence") or ""),
             support_ids=tuple(str(value) for value in (support or ())),
+            ncit_code=str(record.get("ncit_code") or ""),
+            class_source=str(record.get("class_source") or ""),
+            assigned_by=str(record.get("assigned_by") or ""),
         )
 
 

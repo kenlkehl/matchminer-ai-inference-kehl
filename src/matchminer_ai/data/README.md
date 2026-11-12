@@ -8,6 +8,8 @@
 
 License and source links are recorded in the repository's main `README.md`.
 
-The GoodOption catalog loads the NCIt file locally to normalize drug names. Only
-matched drugs' records reach its LLM prompts; the complete ontology never enters
-model context.
+The GoodOption catalog loads the NCIt file locally to normalize drug names and
+to assign drug classes from the concept hierarchy above each drug. Only matched
+drugs' records, and for each drug a short list (by default at most 25) of
+candidate classes found by local search, reach its LLM prompts; the complete
+ontology never enters model context.
