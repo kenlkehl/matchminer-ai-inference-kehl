@@ -527,9 +527,9 @@ is Nemotron 3.5 Super with its own sampling (`sampling_profile: auto`).
   from the bundled NCIt snapshot (`ncit_resource`, by default
   `good_option_catalog.ncit_resource`).
 
-The default completion budget is 40,000 tokens, reasoning included (Nemotron
-often reasons for 10,000-15,000 tokens before an answer whose quotes add more),
-in a 100,000-token local context.
+The default completion budget is 50,000 tokens, reasoning included (Nemotron
+often reasons for 10,000-15,000 tokens before an answer whose quotes add more;
+one synthetic molecular report took 29,867), in a 131,072-token local context.
 A remote completion of that length can take far longer than the default
 `remote.request_timeout` of 600 seconds on a busy server; raise it (for example
 to 7,200 seconds), since the endpoint pool retries timed-out requests from the
