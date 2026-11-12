@@ -301,6 +301,111 @@ def review_population_workup(
     )
 
 
+def check_population_workup_with_extractions(
+    cohort,
+    compiled,
+    *,
+    document_records=None,
+    patient_records=None,
+    reference_dates=None,
+    progress_callback=None,
+):
+    """Check every selected patient × workup item with structured extraction records.
+
+    No LLM calls: ``compiled`` holds one compiled query per item of the cohort
+    space's ``diagnostic_workup`` (``compile_workup_queries``), and code runs them
+    on each patient's records (``check_workup_with_extractions``). Records are
+    linked to the cohort's own notes by note id: document records of notes the
+    cohort does not hold are ignored, cohort notes without a document record make
+    a not-documented result unknown, and a patient-level record built from other
+    notes (its ``note_ids`` column, or else its ``note_count``) is ignored.
+    """
+    from matchminer_ai.patients.extraction.notes import note_ids
+    from matchminer_ai.patients.workup_queries import (
+        NOTICE as EXTRACTION_NOTICE,
+        check_workup_with_extractions,
+    )
+
+    ids = cohort.summaries.patient_id.tolist()
+    if not ids:
+        raise ValueError("Select a nonempty cohort first.")
+    recommendations = (cohort.space or {}).get("diagnostic_workup", [])
+    if not recommendations:
+        raise ValueError("Select a guideline space with workup recommendations.")
+    if len(compiled) != len(recommendations):
+        raise ValueError("Supply one compiled query per workup recommendation.")
+    progress = progress_callback or (lambda _: None)
+    notes = cohort.notes.assign(note_id=note_ids(cohort.notes))
+    held = {pid: set(group.note_id) for pid, group in notes.groupby("patient_id", sort=False)}
+    frames, counts = [], {"documents_used": 0, "documents_ignored": 0,
+                          "patient_records_used": 0, "patient_records_ignored": 0}
+    covered: dict[str, set] = {}
+    if document_records is not None and len(document_records):
+        documents = document_records.assign(patient_id=document_records.patient_id.astype(str))
+        keep = [
+            note in held.get(pid, ()) for pid, note in zip(documents.patient_id,
+                                                           documents.note_id, strict=True)
+        ]
+        used = documents.loc[keep]
+        counts["documents_used"] = len(used)
+        counts["documents_ignored"] = len(documents) - len(used)
+        for pid, note in zip(used.patient_id, used.note_id, strict=True):
+            covered.setdefault(pid, set()).add(note)
+        frames.append(used)
+    if patient_records is not None and len(patient_records):
+        records = patient_records.assign(patient_id=patient_records.patient_id.astype(str))
+        keep = []
+        for row in records.to_dict("records"):
+            pid = row["patient_id"]
+            if pid not in held:
+                keep.append(False)
+            elif row.get("note_ids") is not None and not isinstance(row["note_ids"], (str, float)):
+                keep.append(set(row["note_ids"]) == held[pid])
+            else:
+                count = (row.get("record") or {}).get("note_count", row.get("note_count"))
+                keep.append(count is None or int(count) == len(held[pid]))
+        used = records.loc[keep]
+        counts["patient_records_used"] = len(used)
+        counts["patient_records_ignored"] = len(records) - len(used)
+        frames.append(used.drop(columns=[c for c in ("note_ids",) if c in used]))
+    coverage = {}
+    if document_records is not None and len(document_records):
+        coverage = {pid: {"notes_without_records": len(held.get(pid, set()) - covered.get(pid, set()))}
+                    for pid in ids}
+        counts["notes_without_records"] = sum(c["notes_without_records"] for c in coverage.values())
+    progress(f"Checking {len(ids)} patients against {len(recommendations)} workup queries")
+    # Assessments keep the space's complete recommendations, as full-note reviews do.
+    linked = [{**entry, "requirement": copy.deepcopy(item)}
+              for entry, item in zip(compiled, recommendations, strict=True)]
+    result = check_workup_with_extractions(
+        frames, linked, patient_ids=ids, reference_dates=reference_dates, coverage=coverage,
+    )
+    check_cancelled()
+    progress(f"Checked {len(ids)}/{len(ids)} patients")
+    return replace(
+        cohort,
+        report={
+            "version": 2,
+            "method": "extraction_queries",
+            "note_source": "original",
+            "patient_count": len(ids),
+            "space": copy.deepcopy(cohort.space),
+            "aggregate": result["aggregate"],
+            "patients": result["patients"],
+            "notice": EXTRACTION_NOTICE + " Research use only; confirm applicability, timing "
+            "and findings with a clinician.",
+            "provenance": copy.deepcopy(cohort.provenance),
+            "extraction": counts,
+            "queries": [
+                {k: entry.get(k) for k in ("requirement", "cache_key", "status", "query",
+                                           "error", "attempt_count", "first_attempt_valid",
+                                           "cached", "model")}
+                for entry in compiled
+            ],
+        },
+    )
+
+
 def population_results_table(cohort):
     """One export row per patient × workup item, including failures and provenance."""
     if cohort.report is None:
@@ -446,8 +551,15 @@ def load_patient_cohort(path, *, max_uncompressed_bytes=16 * 1024**3):
                 p["patient_id"] for p in patients
             ] != cohort.summaries.patient_id.tolist():
                 raise ValueError("Review membership mismatch.")
-            aggregate = aggregate_population_workup(
-                patients, cohort.space["diagnostic_workup"]
-            )
+            if cohort.report.get("method") == "extraction_queries":
+                from matchminer_ai.patients.workup_queries import aggregate_extraction_workup
+
+                aggregate = aggregate_extraction_workup(
+                    patients, cohort.space["diagnostic_workup"]
+                )
+            else:
+                aggregate = aggregate_population_workup(
+                    patients, cohort.space["diagnostic_workup"]
+                )
             cohort = replace(cohort, report={**cohort.report, "aggregate": aggregate})
     return cohort

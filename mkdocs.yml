@@ -37,6 +37,7 @@ nav:
       - Trial Summarization: api/trials.md
       - Patient Summarization: api/patients.md
       - Structured Clinical Extraction: api/extraction.md
+      - Extraction-Based Workup Checks: api/workup-queries.md
       - Embedding: api/embedding.md
       - Candidate Matching: api/candidate-matching.md
       - Teacher Labeling: api/labeling.md

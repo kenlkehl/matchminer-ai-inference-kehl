@@ -163,7 +163,9 @@ rows. A month- or year-precision date is not a day; a query must decide how to
 treat it, and an undated study mentioned in a note (`previously_performed`
 with an `unknown` date) was done on or before that note's date. These are
 documentation signals for review, not determinations that a test was or was
-not done.
+not done. [Extraction-Based Workup Checks](workup-queries.md) compile guideline
+workup requirements into declarative queries that apply these rules, with
+deduplication of studies documented in several notes, in code.
 
 ## Validation, retries and failures
 

@@ -36,6 +36,7 @@ class MMAIConfig:
     guideline: dict[str, Any] = field(default_factory=dict)
     document_extraction: dict[str, Any] = field(default_factory=dict)
     patient_extraction: dict[str, Any] = field(default_factory=dict)
+    workup_query_compile: dict[str, Any] = field(default_factory=dict)
 
 
 def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
@@ -64,6 +65,7 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "guideline": deepcopy(config.guideline),
             "document_extraction": deepcopy(config.document_extraction),
             "patient_extraction": deepcopy(config.patient_extraction),
+            "workup_query_compile": deepcopy(config.workup_query_compile),
             "model_metadata_cache_dir": config.model_metadata_cache_dir,
         }
     )
@@ -102,6 +104,7 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
         guideline=dict(data.get("guideline", {})),
         document_extraction=dict(data.get("document_extraction", {})),
         patient_extraction=dict(data.get("patient_extraction", {})),
+        workup_query_compile=dict(data.get("workup_query_compile", {})),
         model_metadata_cache_dir=data["model_metadata_cache_dir"],
         raw=deepcopy(data),
     )

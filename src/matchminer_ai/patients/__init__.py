@@ -46,6 +46,12 @@ from .raw_note_qa import (
 from .summary_quality import check_patient_summary
 from .summarize import summarize_patient_notes
 from .workup import review_patient_workup
+from .workup_queries import (
+    check_workup_with_extractions,
+    compile_workup_queries,
+    evaluate_workup_query,
+    validate_workup_query,
+)
 from .workup_search import review_patient_workup_with_note_search
 from .workup_search_review import WorkupSearchReviewConfig
 
@@ -252,15 +258,19 @@ __all__ = [
     "answer_patient_questions",
     "answer_question_with_raw_patient_notes",
     "check_patient_summary",
+    "check_workup_with_extractions",
+    "compile_workup_queries",
     "compress_patient_note",
     "compress_patient_notes",
     "concatenate_patient_note_pdfs",
     "extract_document_records",
     "extract_patient_records",
+    "evaluate_workup_query",
     "extraction_items",
     "full_patient_screen",
     "review_patient_workup",
     "review_patient_workup_with_note_search",
     "summarize_patient_notes",
     "summarize_patients",
+    "validate_workup_query",
 ]
