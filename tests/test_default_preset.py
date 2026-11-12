@@ -5,7 +5,7 @@ LLM_SECTIONS = (
     "trial", "patient", "raw_patient_note_qa", "full_patient_screen",
     "trial_space_criteria_extraction", "protocol_cohort_extraction",
     "synthetic_protocol_generation", "llm_match_quality", "llm_exclusion_criteria",
-    "llm_good_option",
+    "llm_good_option", "document_extraction", "patient_extraction",
 )
 # Production vLLM settings for Nemotron 3.5 Super, as vllm.LLM keyword arguments.
 NEMOTRON_ENGINE = {

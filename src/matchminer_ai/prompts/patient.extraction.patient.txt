@@ -1,0 +1,34 @@
+You are building a structured research record of ONE patient's cancer history from all of their clinical notes. People will review every item against the notes, so record only what the notes state and quote the words that state it.
+
+HOW THIS WORKS
+The notes are given in parts, in date order. You see one part at a time, after the record built so far from the earlier parts. Return only the changes this part makes to the record:
+- a NEW item for each diagnosis, biomarker result, treatment, procedure, imaging study, event or other kind of item described under FIELDS that this part documents and the record does not yet contain;
+- an existing item, under its item_id, when this part adds to or corrects it. Return it with ALL of its fields as they should now read (copy the fields this part does not change); its evidence quotes this part.
+Do not return items this part leaves unchanged, and never drop or blank out information only because a later note does not repeat it. Return empty lists when this part changes nothing.
+
+ITEMS
+- One diagnosis per distinct primary cancer; a recurrence or metastasis is not a new diagnosis. One biomarker item per marker per test (a repeat test on a new specimen is a new item). One treatment item per systemic regimen or line (a change of agents for progression or toxicity starts a new item), operation, radiation course or local treatment. One procedure item per tissue or specimen procedure and site. One imaging study item per study, identified by its modality, regions and date, however many notes mention it.
+- Many notes mention the same study, specimen or regimen. Before adding an item, check whether the record already has it; if so, update that item instead.
+- A new item_id is the type's letter and the next unused number (the record so far shows every id in use). Ids never change once given.
+- status of an imaging study or procedure is performed when the notes say it was done, planned when it is only ordered or scheduled; update a planned item to performed when a later note documents it.
+- Never invent information. Use "" for text that is not stated, not_stated (where offered) for a choice the notes do not settle, 0 for an integer that is not stated, and [] for an empty list. Use the choices exactly as listed; when a choice field is other, its companion text field must name the value. Record treatments given or definitely scheduled, never options merely discussed.
+
+LINKING ITEMS TO CANCERS
+- Biomarkers, treatments, procedures and events carry cancer_ids: the item_ids of the diagnoses they concern. With one known cancer, use its id. With several, use the site, histology, dates and context: one id when the item clearly concerns one cancer, several when it genuinely concerns several, and [] when it is not clear. A new diagnosis returned in this same answer may be referenced by its new id. Fill in an earlier [] when this part makes the cancer clear.
+
+DATES
+- Write dates as YYYY-MM-DD, YYYY-MM or YYYY, exactly as precise as the notes state them, or "" when no date is given. When an item is the study, procedure or visit that a note itself documents and no other date is written, use the date in that note's header. A date written without its year may take its year from the note's date when that is unambiguous. Do not compute a date from a relative expression such as "two weeks ago".
+
+EVIDENCE
+- Every returned item has 1-4 evidence quotes from THIS part's notes. Each gives the note's number from its header and a quote copied exactly, character for character, from that note's text: the shortest span (a phrase or a sentence, at most 600 characters) that supports the item. Do not paraphrase, abbreviate, join passages, or quote the bracketed headers.
+
+FIELDS
+{field_guide}
+{extension_guidance}
+RECORD SO FAR (items from earlier parts, with the numbers of the notes that support them)
+{record}
+
+NOTES, PART {part} OF {parts}
+{notes}
+
+Return the JSON object of new and changed items for this part.

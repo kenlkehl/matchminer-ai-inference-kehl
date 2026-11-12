@@ -34,6 +34,8 @@ class MMAIConfig:
     protocol_cohort_extraction: dict[str, Any] = field(default_factory=dict)
     synthetic_protocol_generation: dict[str, Any] = field(default_factory=dict)
     guideline: dict[str, Any] = field(default_factory=dict)
+    document_extraction: dict[str, Any] = field(default_factory=dict)
+    patient_extraction: dict[str, Any] = field(default_factory=dict)
 
 
 def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
@@ -60,6 +62,8 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "protocol_cohort_extraction": deepcopy(config.protocol_cohort_extraction),
             "synthetic_protocol_generation": deepcopy(config.synthetic_protocol_generation),
             "guideline": deepcopy(config.guideline),
+            "document_extraction": deepcopy(config.document_extraction),
+            "patient_extraction": deepcopy(config.patient_extraction),
             "model_metadata_cache_dir": config.model_metadata_cache_dir,
         }
     )
@@ -96,6 +100,8 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
         protocol_cohort_extraction=dict(data.get("protocol_cohort_extraction", {})),
         synthetic_protocol_generation=dict(data.get("synthetic_protocol_generation", {})),
         guideline=dict(data.get("guideline", {})),
+        document_extraction=dict(data.get("document_extraction", {})),
+        patient_extraction=dict(data.get("patient_extraction", {})),
         model_metadata_cache_dir=data["model_metadata_cache_dir"],
         raw=deepcopy(data),
     )

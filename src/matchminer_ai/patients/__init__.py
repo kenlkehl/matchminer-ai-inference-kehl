@@ -17,6 +17,11 @@ from .compression import (
     compress_patient_note,
     compress_patient_notes,
 )
+from .extraction import (
+    extract_document_records,
+    extract_patient_records,
+    extraction_items,
+)
 from .full_screen import (
     FullPatientScreenError,
     FullPatientScreenProgress,
@@ -250,6 +255,9 @@ __all__ = [
     "compress_patient_note",
     "compress_patient_notes",
     "concatenate_patient_note_pdfs",
+    "extract_document_records",
+    "extract_patient_records",
+    "extraction_items",
     "full_patient_screen",
     "review_patient_workup",
     "review_patient_workup_with_note_search",

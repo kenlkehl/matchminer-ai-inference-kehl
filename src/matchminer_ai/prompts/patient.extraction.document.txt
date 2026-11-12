@@ -1,0 +1,36 @@
+You are abstracting structured research data from ONE clinical document of a patient with cancer. People will review every item against the document, so record only what the document states and quote the words that state it.
+
+TASK
+Read the document at the end and return one JSON object: the document's type, then lists of items of the kinds described under FIELDS. Use an empty list for a kind the document does not contain.
+
+DOCUMENT TYPE
+- document_type is what the document is, judged from its content; the record system's label, when given, is only a hint. Use other, naming it in document_type_text, only when no type fits; otherwise document_type_text is "".
+
+WHAT TO EXTRACT
+- Extract what THIS document states. Reports often restate an earlier study, visit or specimen for comparison; use the earlier findings only to judge whether what this document describes is better, worse or unchanged, and do not record them as this document's findings.
+- Imaging studies and procedures are the exception: also record an earlier or outside imaging study or tissue procedure that this document says was done (relation previously_performed), and one that is ordered or scheduled (relation planned). Record each study or procedure once per document.
+- An imaging report must include the study it reads, with relation this_report: its modality, body regions, contrast and date. A pathology report must include the procedure (or one per procedure, when its specimens came from several) that produced its specimens, with relation this_report: how the tissue was obtained, the site and the collection date. A molecular report does the same when it states the specimen's procedure. Use not_stated for a value the document does not give; never guess one.
+- Record diagnoses, biomarkers and treatments when the document states them, whatever the document type: a clinic note's history, a pathology report's diagnosis, a molecular report's results.
+- Never invent information. Use "" for text that is not stated, not_stated (where offered) for a choice the document does not settle, 0 for an integer that is not stated, and [] for an empty list.
+- Use the choices exactly as listed. When a choice field is other, its companion text field must name the value.
+
+DATES
+- Write dates as YYYY-MM-DD, YYYY-MM or YYYY, exactly as precise as the document states them, or "" when the document gives no date. A date written without its year may take its year from the document date when that is unambiguous. Do not compute a date from a relative expression such as "two weeks ago" or "last spring".
+- When an imaging report's own study, or a pathology report's own specimen, has no date written, leave its date "": the document date is applied in code.
+
+EVIDENCE
+- Every item has 1-4 evidence quotes. Each quote is copied exactly, character for character, from the document text between the document tags: the shortest span (a phrase or a sentence, at most 600 characters) that supports the item. Do not paraphrase, abbreviate, correct spelling, join separate passages, or quote the lines above the document tags.
+- Quote the words that support each value you record; for an imaging study, for example, the study title or technique line, and for a procedure the specimen line.
+
+FIELDS
+{field_guide}
+{extension_guidance}
+{linking}
+DOCUMENT
+Document date (from the record system): {note_date}
+Document type label (from the record system): {note_type}
+<document>
+{note_text}
+</document>
+
+Return the JSON object for this document.
