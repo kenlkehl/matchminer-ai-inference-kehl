@@ -62,7 +62,7 @@ strict and non-recursive (no `$ref`, `null`, `minLength` or `pattern`).
 | `criteria` | Up to 12 named matchers of one item type each: `id`, `label`, `item_type`, `status` (`performed`, `planned`, `any`), `filters`, `window`, `min_count`. |
 | `requirement` | What must be documented. |
 | `applies_when` | Documented facts that make a conditional step apply (`{"all_of": []}`: the whole population). |
-| `not_applicable_when` | Documented facts that make it not apply. |
+| `not_applicable_when` | Documented facts that make it not apply. It needs at least one criterion that is not negated: a step is never not applicable because something is undocumented. |
 
 Expressions are AND-of-OR: `{"all_of": [{"any_of": [{"criterion": "id",
 "negated": false}, ...]}, ...]}`. Alternatives are literals of one group;

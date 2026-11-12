@@ -502,6 +502,11 @@ def validate_workup_query(query, extensions: Iterable[str] | None = ()) -> list[
                                 "one group")
             elif literals and all(negated for _, negated in literals):
                 problems.append("requirement: needs at least one criterion that is not negated")
+        if name == "not_applicable_when" and literals and all(n for _, n in literals):
+            problems.append(
+                "not_applicable_when: needs a documented fact, a criterion that is not negated; "
+                "a step is not applicable only when documented facts say so, never because "
+                "something is not documented (leave it {\"all_of\": []} instead)")
     for cid in ids:
         if cid not in used:
             problems.append(f"criteria {cid!r}: not used by any expression or window anchor")

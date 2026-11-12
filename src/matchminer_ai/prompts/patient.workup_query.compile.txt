@@ -30,7 +30,7 @@ THE QUERY
 - requirement, applies_when, not_applicable_when: each {"all_of": [{"any_of": [{"criterion": id, "negated": false}, ...]}, ...]}: every all_of group must hold, and a group holds when any of its literals holds; a negated literal holds when its criterion does not.
   - requirement: what must be documented for the workup step to be done. Alternatives ("core or excisional biopsy", "MRI, or CT if MRI is not possible") are literals of one group. Components that are all required ("EGFR, ALK and ROS1 testing", "CT of chest and abdomen") are separate groups. It needs at least one criterion that is not negated.
   - applies_when: documented facts that make the step apply when the requirement is conditional within the guideline population ("if stage III-IV", "for superior sulcus tumors", "in nonsquamous histology"). {"all_of": []} means it applies to the whole population.
-  - not_applicable_when: documented facts that make the step not apply (for example a documented stage outside the condition). {"all_of": []} when none. A step is reported not applicable only when these facts are documented; leave it empty rather than guess.
+  - not_applicable_when: documented facts that make the step not apply (for example a documented stage outside the condition). {"all_of": []} when none. A step is reported not applicable only when these facts are documented, so not_applicable_when needs a criterion that is not negated: never mark a step not applicable because something is not documented, and leave it empty rather than guess.
 - Every criterion must be used by an expression or as another criterion's anchor.
 
 HOW CODE EVALUATES THE QUERY (do not encode these rules yourself)

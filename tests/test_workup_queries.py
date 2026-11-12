@@ -222,6 +222,9 @@ def test_prompt_examples_are_valid_queries():
                 for lit in group["any_of"]],
      "needs at least one criterion that is not negated"),
     (lambda q: q["requirement"].update(all_of=[]), "needs at least one group"),
+    (lambda q: q["not_applicable_when"].update(
+        all_of=[{"any_of": [{"criterion": "ct_chest", "negated": True}]}]),
+     "not_applicable_when: needs a documented fact"),
     (lambda q: q.update(expressible=False), "criteria: must be [] when expressible is false"),
     (lambda q: q["criteria"][0].update(min_count=0), "min_count: must be an integer from 1"),
     (lambda q: q["criteria"][0]["filters"][0].update(if_not_stated="maybe"), "if_not_stated"),
