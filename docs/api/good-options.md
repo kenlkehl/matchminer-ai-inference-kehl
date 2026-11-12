@@ -48,19 +48,34 @@ The catalog-build templates are listed in `CATALOG_PROMPTS`;
 ## Build the patient-free catalog
 
 `build_good_option_catalog` accepts a list of NCT IDs. It fetches each current
-ClinicalTrials.gov record, then uses the configured LLM to screen every `DRUG`
-and `BIOLOGICAL` entry in its public trial and arm context. Only concrete named
-agents with direct anticancer treatment intent proceed to normalization and
-research. Antitumor medicines, biologics, cell/gene therapies, therapeutic
-radiopharmaceuticals, and genuine named anticancer comparators are retained;
-supportive/procedural medicines, anesthetics, hemostatic agents, diagnostic
-tracers, prevention-only agents, dosing/cohort labels, and unnamed standard-of-
-care placeholders are excluded fail-closed. The screen also resolves retained
-agents' investigational, uncertain, control, background, or supportive roles.
+ClinicalTrials.gov record, then uses the configured LLM to screen every `DRUG`,
+`BIOLOGICAL`, and `COMBINATION_PRODUCT` entry in its public trial and arm
+context. Only concrete named agents with direct anticancer treatment intent
+proceed to normalization and research. Antitumor medicines, biologics, cell/gene
+therapies, therapeutic radiopharmaceuticals, and genuine named anticancer
+comparators are retained; supportive/procedural medicines (including toxicity
+protection such as sodium thiosulfate and GVHD prophylaxis such as tacrolimus,
+unless the trial uses them as anticancer therapy), anesthetics, hemostatic
+agents, diagnostic tracers, devices, prevention-only agents, dosing/cohort
+labels, and unnamed standard-of-care placeholders are excluded fail-closed. The
+screen also resolves retained agents' investigational, uncertain, control,
+background (given the same way to every participant), or supportive roles; an
+agent given only in a comparator arm is control.
+
+Each active entity is one agent named by its entry's own text (ctgov name,
+aliases, description, or the descriptions of its arms), or a component of a
+regimen named there: "Pemetrexed + Cisplatin /Carboplatin" becomes three agents,
+and a standard acronym such as FOLFIRI is expanded from knowledge into
+fluorouracil, leucovorin, and irinotecan, with the acronym listed in
+`regimen_names`. Validation rejects agent names absent from the entry's text
+unless such a regimen is listed, and a regimen name listed as an agent; a
+combination-spelled name or an ungrounded one gets one more attempt. With a
+remote backend the answer is decoded under `INTERVENTION_SCREENING_JSON_SCHEMA`
+(`good_option_catalog.structured_outputs`).
 
 Every decision is retained in `trial_intervention_screening.parquet`, including
-the disposition, exclusion category, confidence, rationale, and supported
-active-entity names. Excluded entries never enter `trial_drug_index.parquet`,
+the disposition, exclusion category, confidence, rationale, supported
+active-entity names, and expanded regimen names (`regimen_names_json`). Excluded entries never enter `trial_drug_index.parquet`,
 the unique-drug set, web queries, evidence retrieval, or synthesis. Retained
 identities are normalized with the bundled NCIt snapshot and deduplicated across
 the complete run.

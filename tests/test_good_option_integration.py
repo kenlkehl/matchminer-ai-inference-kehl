@@ -91,7 +91,7 @@ def test_prompts_match_snapshot():
     # change also changes catalog_prompts_sha256, so interrupted catalog runs
     # cannot resume across it.
     expected = {
-        "screen": "9bf591ab9e2ace2056d634362653ee11c82df22ce2bb3c02fad6109860d396bf",
+        "screen": "19771879b2c2715ea608f12a7a7de8e45ad6fda93ceb2d71fe6881f8d2ec4060",
         "scoring": "21d1254fff62df863ebb413b15afbf97b82e09b2705f47abfc8a2c2539aa36ae",
         "checker": "1123fd83802f67d38aa57b351b74516e8dfc14f8c7f1122ccb33e21f03281fc9",
         "retry": "be4026558080f5c0bf5b5ff7242ae91dea7c69a4b1e50f4ee74d04a7e534b8ab",
@@ -109,7 +109,7 @@ def test_prompts_match_snapshot():
 
 def test_catalog_retry_templates_match_pre_refactor_snapshot():
     expected = {
-        "trial_drug_screen.retry.txt": "e61e7a92822775f4d8030083a4e1e2a7f65eb662a27202a51f7170f0320b009a",
+        "trial_drug_screen.retry.txt": "2f9ba2678a2dba5ba2532e61c133ec31a4ac7b14a5c6d4e44095f7ef5fe852d9",
         "trial_drug_synthesis.delta_retry.txt": "76d931afd0ba71e25e4b6972acb01a0f6865dabf2b799017f2b316b924b712f9",
     }
     for filename, digest in expected.items():

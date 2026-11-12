@@ -430,6 +430,9 @@ good_option_catalog:
   class_assignment_max_attempts: 3
   screening_checkpoint_batch_size: 64
   class_checkpoint_batch_size: 64
+  # Remote screening answers are decoded under their JSON schema
+  # (response_format json_schema); set false for a server without that support.
+  structured_outputs: true
   # Nemotron's reasoning left about 5% of screens without an answer at 8,000 (2026-11-11).
   screening_llm:
     local:

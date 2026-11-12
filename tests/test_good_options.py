@@ -2516,6 +2516,182 @@ def test_intervention_screen_accepts_active_entities_explicit_in_description() -
     assert catalog_module._role_output_is_complete(short_name_intervention, output)
 
 
+def _arm_study(interventions: list[dict[str, Any]], arms: list[dict[str, Any]]):
+    study = json.loads(json.dumps(STUDY))
+    module = study["protocolSection"]["armsInterventionsModule"]
+    module["armGroups"] = arms
+    module["interventions"] = interventions
+    return study
+
+
+def _include(names: list[str], **extra: Any) -> dict[str, Any]:
+    return {
+        "research_disposition": "include",
+        "exclusion_category": "none",
+        "role": "investigational",
+        "confidence": "high",
+        "rationale": "The entry's own text names the agents under test.",
+        "active_entity_names": names,
+        **extra,
+    }
+
+
+def test_screen_takes_agents_from_an_arm_labelled_entrys_own_text() -> None:
+    study = _arm_study(
+        [
+            {
+                "type": "DRUG",
+                "name": "Phase I Arm A",
+                "description": "Participants receive GDC-7035 orally once daily.",
+                "armGroupLabels": ["Arm A"],
+            },
+            {
+                "type": "DRUG",
+                "name": "Preoperative chemotherapy",
+                "armGroupLabels": ["Arm B"],
+            },
+            {
+                "type": "COMBINATION_PRODUCT",
+                "name": "5-ALA HCl + LIDU SDT",
+                "armGroupLabels": ["Arm A"],
+            },
+            {"type": "DEVICE", "name": "Ultrasound device", "armGroupLabels": ["Arm A"]},
+        ],
+        [
+            {"label": "Arm A", "type": "EXPERIMENTAL"},
+            {
+                "label": "Arm B",
+                "type": "EXPERIMENTAL",
+                "description": "Doxorubicin and ifosfamide before surgery.",
+            },
+        ],
+    )
+    interventions = catalog_module._extract_ctgov_interventions("NCT12345678", study)
+
+    # COMBINATION_PRODUCT is screened; a DEVICE entry still is not.
+    assert [item.ctgov_name for item in interventions] == [
+        "Phase I Arm A",
+        "Preoperative chemotherapy",
+        "5-ALA HCl + LIDU SDT",
+    ]
+    output = {
+        "0": _include(["GDC-7035"]),
+        "1": _include(["Doxorubicin", "Ifosfamide"]),
+        "2": _include(["5-ALA HCl"]),
+    }
+    assert catalog_module._role_output_validation_error(interventions, output) is None
+
+    # A name absent from the entry's own text is still never accepted.
+    output["0"] = _include(["Invented Agent"])
+    assert "ctgov name, aliases, or descriptions" in (
+        catalog_module._role_output_validation_error(interventions, output) or ""
+    )
+
+
+def test_screen_lists_regimen_components_as_separate_agents() -> None:
+    interventions = catalog_module._extract_ctgov_interventions(
+        "NCT12345678",
+        _arm_study(
+            [
+                {
+                    "type": "DRUG",
+                    "name": "FOLFIRI",
+                    "otherNames": ["FOLFIRI regimen"],
+                    "armGroupLabels": ["Control"],
+                }
+            ],
+            [{"label": "Control", "type": "EXPERIMENTAL"}],
+        ),
+    )
+    components = ["Fluorouracil", "Leucovorin", "Irinotecan"]
+
+    # Expanding an acronym is allowed only when the acronym is declared, and it
+    # must be the entry's own text.
+    expanded = {"0": _include(components, regimen_names=["FOLFIRI"])}
+    assert catalog_module._role_output_validation_error(interventions, expanded) is None
+    undeclared = {"0": _include(components)}
+    assert "no active entity name supported" in (
+        catalog_module._role_output_validation_error(interventions, undeclared) or ""
+    )
+    partial = {"0": _include(["FOLFIRI regimen", *components])}
+    assert catalog_module._role_output_validation_error(interventions, partial) is None
+    assert "not named in their entry's text" in (
+        catalog_module._role_output_soft_warning(interventions, partial) or ""
+    )
+    invented = {"0": _include(components, regimen_names=["FOLFOXIRI"])}
+    assert "do not appear" in (
+        catalog_module._role_output_validation_error(interventions, invented) or ""
+    )
+    kept_whole = {"0": _include(["FOLFIRI"], regimen_names=["FOLFIRI"])}
+    assert "list its component agents" in (
+        catalog_module._role_output_validation_error(interventions, kept_whole) or ""
+    )
+
+    identities, assignments, rows = catalog_module.derive_trial_assignments(
+        {"NCT12345678": interventions},
+        {"NCT12345678": expanded},
+        ncit_index=_NoNCIt(),
+    )
+    assert sorted(item.preferred_name for item in assignments) == sorted(components)
+    assert {item.role for item in assignments} == {"investigational"}
+    # The entry's aliases name the regimen, not any one of its agents.
+    assert all(not item.aliases for item in identities.values())
+    assert json.loads(rows[0]["regimen_names_json"]) == ["FOLFIRI"]
+
+
+def test_screen_retries_a_combination_named_as_one_agent_once() -> None:
+    interventions = catalog_module._extract_ctgov_interventions(
+        "NCT12345678",
+        _arm_study(
+            [
+                {
+                    "type": "DRUG",
+                    "name": "Pemetrexed + Cisplatin /Carboplatin",
+                    "armGroupLabels": ["Experimental"],
+                }
+            ],
+            [{"label": "Experimental", "type": "EXPERIMENTAL"}],
+        ),
+    )
+    whole = {"0": _include(["Pemetrexed + Cisplatin /Carboplatin"])}
+    assert catalog_module._role_output_validation_error(interventions, whole) is None
+    assert "names a combination" in (
+        catalog_module._role_output_soft_warning(interventions, whole) or ""
+    )
+    split = {"0": _include(["Pemetrexed", "Cisplatin", "Carboplatin"])}
+    assert catalog_module._role_output_soft_warning(interventions, split) is None
+
+
+def test_catalog_answers_are_decoded_under_their_schemas_when_remote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    formats: list[Any] = []
+
+    class RecordingBackend:
+        def generate_llm_outputs(self, *, prompt_list, llm_config, **_):
+            formats.append(llm_config["remote"]["request_params"].get("response_format"))
+            return SimpleNamespace(
+                final_outputs=["{}"], finish_reasons=["stop"], reasoning_outputs=[""]
+            )
+
+    monkeypatch.setattr(catalog_module, "get_llm_backend", lambda _c: RecordingBackend())
+    config = load_default_preset()
+    config.remote.update(enabled=True, server_urls=["http://gpu-host:8001/v1"])
+    messages = [[{"role": "user", "content": "Synthetic."}]]
+    for stage in ("screening", "synthesis"):
+        catalog_module._run_llm_messages(messages, config=config, stage=stage)
+    config.good_option_catalog["structured_outputs"] = False
+    catalog_module._run_llm_messages(messages, config=config, stage="screening")
+
+    screening, synthesis, unstructured = formats
+    assert screening["type"] == "json_schema"
+    assert screening["json_schema"]["schema"] == (
+        catalog_module.INTERVENTION_SCREENING_JSON_SCHEMA
+    )
+    assert synthesis is None
+    assert unstructured is None
+
+
 def test_catalog_fails_closed_invalid_screen_item_and_continues(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

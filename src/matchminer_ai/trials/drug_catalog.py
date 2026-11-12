@@ -74,7 +74,9 @@ if TYPE_CHECKING:
 CONTROL_ARM_TYPES = frozenset(
     {"ACTIVE_COMPARATOR", "PLACEBO_COMPARATOR", "SHAM_COMPARATOR", "NO_INTERVENTION"}
 )
-ACTIVE_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL"})
+#: ctgov intervention types screened for agents. COMBINATION_PRODUCT can pair a
+#: drug with a device ("5-ALA HCl + LIDU SDT"); the screen keeps only the agent.
+ACTIVE_INTERVENTION_TYPES = frozenset({"DRUG", "BIOLOGICAL", "COMBINATION_PRODUCT"})
 #: Prompt templates that shape catalog content. Their text, not a hand-kept
 #: label, decides whether an interrupted run's checkpoints can be reused.
 CATALOG_PROMPTS = (
@@ -104,6 +106,55 @@ INTERVENTION_EXCLUSION_CATEGORIES = frozenset(
         "other",
     }
 )
+
+
+def _string_enum(values: frozenset[str]) -> dict[str, Any]:
+    return {"type": "string", "enum": sorted(values)}
+
+
+#: Answer shape of the intervention screen, decoded under it where the backend
+#: supports structured outputs (``good_option_catalog.structured_outputs``).
+INTERVENTION_SCREENING_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["interventions"],
+    "properties": {
+        "interventions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "index",
+                    "research_disposition",
+                    "exclusion_category",
+                    "role",
+                    "confidence",
+                    "rationale",
+                    "regimen_names",
+                    "active_entity_names",
+                ],
+                "properties": {
+                    "index": {"type": "integer"},
+                    "research_disposition": _string_enum(
+                        INTERVENTION_SCREENING_DISPOSITIONS
+                    ),
+                    "exclusion_category": _string_enum(
+                        INTERVENTION_EXCLUSION_CATEGORIES
+                    ),
+                    "role": _string_enum(DRUG_ROLES),
+                    "confidence": _string_enum(CONFIDENCE_LEVELS),
+                    "rationale": {"type": "string"},
+                    "regimen_names": {"type": "array", "items": {"type": "string"}},
+                    "active_entity_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+            },
+        }
+    },
+}
 #: Large enough that bound_evidence orders without dropping. Chunking keeps
 #: everything, so the only job left for the bounding pass is interleaving.
 _UNBOUNDED_CHARACTERS = 1 << 40
@@ -721,6 +772,12 @@ def _find_json_mapping(
     return None
 
 
+#: Catalog stages whose answers are decoded under a JSON schema, by stage name.
+_STAGE_RESPONSE_SCHEMAS: dict[str, tuple[str, Mapping[str, Any]]] = {
+    "screening": ("trial_drug_screen", INTERVENTION_SCREENING_JSON_SCHEMA),
+}
+
+
 def _run_llm_messages(
     messages_list: Sequence[Sequence[Mapping[str, str]]],
     *,
@@ -754,6 +811,18 @@ def _run_llm_messages(
     runtime = build_llm_runtime_config("llm_good_option", llm_config, config=config)
     if remote_enabled(config):
         runtime["use_endpoint_pool"] = True
+    schema = _STAGE_RESPONSE_SCHEMAS.get(stage)
+    if (
+        schema is not None
+        and runtime["backend_mode"] == "remote"
+        and config.good_option_catalog.get("structured_outputs", True)
+    ):
+        # Free-text JSON from reasoning models drops quotes and brackets; the
+        # answer is decoded under its schema instead, as cohort extraction does.
+        runtime["remote"]["request_params"]["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {"name": schema[0], "strict": True, "schema": schema[1]},
+        }
     prompts = build_prompt_list(
         [list(messages) for messages in messages_list], llm_config=runtime
     )
@@ -891,32 +960,63 @@ async def _maybe_await(value: Any) -> Any:
     return await value if inspect.isawaitable(value) else value
 
 
-def _supported_active_names(
-    intervention: _CtgovIntervention, raw_names: Any
-) -> tuple[str, ...]:
+def _name_list(raw_names: Any) -> list[str]:
     if not isinstance(raw_names, Sequence) or isinstance(raw_names, (str, bytes)):
-        raw_names = []
-    support_fields = (
-        intervention.ctgov_name,
-        *intervention.aliases,
-        intervention.description,
-        *intervention.arm_descriptions,
-    )
+        return []
+    return [name for value in raw_names if (name := clean_text(value, max_chars=300))]
+
+
+def _compact_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", normalize_ontology_text(value))
+
+
+def _entry_text_supports(intervention: _CtgovIntervention, name: str) -> bool:
+    """Whether a name is a span of this entry's own ctgov text.
+
+    The entry's text is its name, aliases, description, and the descriptions of
+    the arms it belongs to: an entry named "Phase I Arm A" names its agent only
+    in its description.
+    """
+
     compact_support = tuple(
-        re.sub(r"[^a-z0-9]+", "", normalize_ontology_text(value))
-        for value in support_fields
+        _compact_name(value)
+        for value in (
+            intervention.ctgov_name,
+            *intervention.aliases,
+            intervention.description,
+            *intervention.arm_descriptions,
+        )
         if value
     )
-    accepted: list[str] = []
-    for value in raw_names:
-        name = clean_text(value, max_chars=300)
-        key = re.sub(r"[^a-z0-9]+", "", normalize_ontology_text(name))
-        exact_field_match = bool(key) and key in compact_support
-        supported_span = len(key) >= 3 and any(
-            key in candidate for candidate in compact_support
-        )
-        if exact_field_match or supported_span:
-            accepted.append(name)
+    key = _compact_name(name)
+    return (bool(key) and key in compact_support) or (
+        len(key) >= 3 and any(key in candidate for candidate in compact_support)
+    )
+
+
+def _supported_active_names(
+    intervention: _CtgovIntervention, raw_names: Any, regimen_names: Any = ()
+) -> tuple[str, ...]:
+    """The returned agent names the trial record grounds.
+
+    A name must be a span of the entry's own text, or a component of a regimen
+    named there: the screen expands "FOLFIRI" to fluorouracil, leucovorin, and
+    irinotecan from knowledge, since the acronym names those agents. The regimen
+    name itself is never an agent.
+    """
+
+    regimens = [
+        name
+        for name in _name_list(regimen_names)
+        if _entry_text_supports(intervention, name)
+    ]
+    regimen_keys = {_compact_name(name) for name in regimens}
+    accepted = [
+        name
+        for name in _name_list(raw_names)
+        if _compact_name(name) not in regimen_keys
+        and (regimens or _entry_text_supports(intervention, name))
+    ]
     return tuple(dict.fromkeys(accepted))
 
 
@@ -2579,6 +2679,12 @@ def _role_output_validation_error(
             return f"intervention {index} has no rationale"
         if not isinstance(raw_names, Sequence) or isinstance(raw_names, (str, bytes)):
             return f"intervention {index} active_entity_names is not an array"
+        # Optional, so custom screens written before it keep validating.
+        raw_regimens = item.get("regimen_names", [])
+        if not isinstance(raw_regimens, Sequence) or isinstance(
+            raw_regimens, (str, bytes)
+        ):
+            return f"intervention {index} regimen_names is not an array"
         if disposition == "include":
             if role == "supportive":
                 return f"intervention {index} includes a supportive agent"
@@ -2587,10 +2693,30 @@ def _role_output_validation_error(
                     f"intervention {index} is included with exclusion_category "
                     f"{category!r}"
                 )
-            if not _supported_active_names(interventions[int(index)], raw_names):
-                returned_names = [
-                    clean_text(value, max_chars=300) for value in raw_names
-                ]
+            intervention = interventions[int(index)]
+            unsupported_regimens = [
+                name
+                for name in _name_list(raw_regimens)
+                if not _entry_text_supports(intervention, name)
+            ]
+            if unsupported_regimens:
+                return (
+                    f"intervention {index} regimen_names {unsupported_regimens!r} "
+                    "do not appear in its ctgov name, aliases, or descriptions"
+                )
+            regimen_keys = {_compact_name(name) for name in _name_list(raw_regimens)}
+            listed_regimens = [
+                name
+                for name in _name_list(raw_names)
+                if _compact_name(name) in regimen_keys
+            ]
+            if listed_regimens:
+                return (
+                    f"intervention {index} lists the regimen {listed_regimens[0]!r} "
+                    "in active_entity_names; list its component agents instead"
+                )
+            if not _supported_active_names(intervention, raw_names, raw_regimens):
+                returned_names = _name_list(raw_names)
                 return (
                     f"intervention {index} has no active entity name supported by "
                     "its ctgov name, aliases, or descriptions: "
@@ -2609,6 +2735,12 @@ def _role_output_validation_error(
     return None
 
 
+#: A name joining agents with "+", "/", "plus", "and", "or", or "with".
+_COMBINATION_NAME = re.compile(
+    r"\+|(?<=[a-z])\s*/\s*(?=[a-z])|\b(?:plus|and|or|with)\b", re.IGNORECASE
+)
+
+
 def _role_output_soft_warning(
     interventions: Sequence[_CtgovIntervention],
     output: Mapping[str, Mapping[str, Any]],
@@ -2621,11 +2753,17 @@ def _role_output_soft_warning(
     standard regimens genuinely has no investigational arm. So this prompts a
     retry and the second answer stands, rather than failing the trial closed and
     discarding every agent in it.
+
+    Two more are flagged the same way. An active entity spelled as a
+    combination ("Pemetrexed + Cisplatin /Carboplatin") is usually a regimen
+    kept whole, but a fixed-dose product can be one agent. An entity its entry's
+    text does not name would be dropped, and is usually a regimen component
+    expanded without listing the regimen.
     """
 
     included = [
-        item
-        for index, item in enumerate(interventions)
+        index
+        for index in range(len(interventions))
         if clean_text(
             output.get(str(index), {}).get("research_disposition"), max_chars=40
         ).casefold()
@@ -2633,17 +2771,47 @@ def _role_output_soft_warning(
     ]
     if not included:
         return None
+    warnings: list[str] = []
+    ungrounded = [
+        name
+        for index in included
+        for name in _name_list(output.get(str(index), {}).get("active_entity_names"))
+        if name
+        not in _supported_active_names(
+            interventions[index],
+            [name],
+            output.get(str(index), {}).get("regimen_names", []),
+        )
+    ]
+    if ungrounded:
+        warnings.append(
+            f"active entities {ungrounded!r} are not named in their entry's text and "
+            "would be dropped; name each agent as the entry's text does, or list the "
+            "regimen acronym it comes from in regimen_names"
+        )
+    combinations = [
+        name
+        for index in included
+        for name in _name_list(output.get(str(index), {}).get("active_entity_names"))
+        if _COMBINATION_NAME.search(name)
+    ]
+    if combinations:
+        warnings.append(
+            f"active entity {combinations[0]!r} names a combination; list each "
+            "component agent as its own active entity unless it is one fixed-dose "
+            "product"
+        )
     roles = {
         clean_text(output.get(str(index), {}).get("role"), max_chars=40).casefold()
-        for index, item in enumerate(interventions)
-        if item in included
+        for index in included
     }
-    if roles & SCOREABLE_ROLES:
-        return None
-    return (
-        "every included agent was marked background, control, or supportive, so "
-        "the trial has no agent under study; identify what this trial is testing"
-    )
+    if not roles & SCOREABLE_ROLES:
+        warnings.append(
+            "every included agent was marked background, control, or supportive, "
+            "so the trial has no agent under study; identify what this trial is "
+            "testing"
+        )
+    return "; ".join(warnings) or None
 
 
 def _role_output_is_complete(
@@ -2751,9 +2919,20 @@ def derive_trial_assignments(
                     "Intervention screening did not return a complete valid result; "
                     "the entry was excluded fail-closed."
                 )
+            regimen_names = (
+                tuple(
+                    name
+                    for name in _name_list(role_output.get("regimen_names", []))
+                    if _entry_text_supports(intervention, name)
+                )
+                if disposition == "include"
+                else ()
+            )
             active_names = (
                 _supported_active_names(
-                    intervention, role_output.get("active_entity_names", [])
+                    intervention,
+                    role_output.get("active_entity_names", []),
+                    regimen_names,
                 )
                 if disposition == "include"
                 else ()
@@ -2786,13 +2965,20 @@ def derive_trial_assignments(
                     "arm_types_json": json.dumps(
                         intervention.arm_types, ensure_ascii=False
                     ),
+                    "regimen_names_json": json.dumps(
+                        regimen_names if active_names else (), ensure_ascii=False
+                    ),
                 }
             )
             if disposition != "include":
                 continue
+            # An entry's aliases name the entry. When it holds several agents
+            # (an arm, a regimen), they belong to none of them, and matching one
+            # agent's name through them could resolve it to another agent.
+            entry_aliases = intervention.aliases if len(active_names) == 1 else ()
             for active_name in active_names:
                 identity = _canonicalize_drug(
-                    active_name, intervention.aliases, ncit_index=ncit_index
+                    active_name, entry_aliases, ncit_index=ncit_index
                 )
                 existing = identities.get(identity.drug_id)
                 if existing is not None:
@@ -3658,6 +3844,7 @@ async def build_good_option_catalog(
             "active_entity_names_json",
             "arm_labels_json",
             "arm_types_json",
+            "regimen_names_json",
         ],
     )
     trial_drug_index = pd.DataFrame(

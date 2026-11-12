@@ -759,7 +759,10 @@ screening and classify LLM batches so successfully returned batches can be
 checkpointed throughout long catalog builds. Synthesis is not batched: each
 drug or class is its own chain of chunk calls, checkpointed as soon as that
 chain finishes, with up to `remote.max_concurrent_requests` chains in flight. Screening and synthesis LLM overrides inherit from
-`llm_good_option`.
+`llm_good_option`. With a remote backend, `structured_outputs` (default `true`)
+decodes the screening answer under its JSON schema (`response_format`
+`json_schema`); set it to `false` for a server without that support, and the
+answer is parsed and validated from free text as before.
 
 Evidence is also retrieved on two axes beside the drug's own name, and each has
 its own budget so that neither can evict the other.

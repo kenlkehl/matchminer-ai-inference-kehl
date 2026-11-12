@@ -12,12 +12,26 @@ For the settings named below see [Configuration](../reference/configuration.md).
 ### What feeds the research step
 
 You supply a list of NCT numbers. The build downloads each trial's full
-ClinicalTrials.gov record, then uses an LLM to read every `DRUG` and
-`BIOLOGICAL` intervention in its arm context and decide which are actual
-anticancer agents under test — dropping placebos, premedications, imaging
-tracers, and unnamed standard-of-care placeholders. Each survivor gets a role:
-investigational, control, background, supportive, or uncertain. Only
-investigational and uncertain drugs are ever scored.
+ClinicalTrials.gov record, then uses an LLM to read every `DRUG`, `BIOLOGICAL`,
+and `COMBINATION_PRODUCT` intervention in its arm context and decide which are
+actual anticancer agents under test — dropping placebos, premedications,
+imaging tracers, devices, unnamed standard-of-care placeholders, and drugs that
+protect against toxicity or transplant complications (sodium thiosulfate for
+ototoxicity, tacrolimus or mycophenolate as GVHD prophylaxis) unless the trial
+uses them against the cancer. Each survivor gets a role: investigational,
+control, background, supportive, or uncertain. Background means given the same
+way to every participant; an agent given only in a comparator arm is control,
+even when it is standard of care. Only investigational and uncertain drugs are
+ever scored.
+
+Each agent's name must come from its entry's own text: the ctgov name, aliases,
+description, or the descriptions of its arms, so an entry named "Phase I Arm A"
+contributes the agent its description names. Every agent is one drug: a regimen
+is listed as its components ("Pemetrexed + Cisplatin /Carboplatin" is three
+drugs), and a standard acronym such as FOLFIRI is expanded into its agents from
+knowledge, with the acronym recorded in `regimen_names`. Code rejects names the
+entry's text does not contain unless they expand a regimen that text names, and
+asks once more about names spelled as combinations.
 
 Surviving agent names are matched against the bundled NCI Thesaurus snapshot for
 a canonical name, synonyms, and definition, then deduplicated across the whole
