@@ -11,6 +11,7 @@ ITEMS
 - Many notes mention the same study, specimen or regimen. Before adding an item, check whether the record already has it; if so, update that item instead.
 - A new item_id is the type's letter and the next unused number (the record so far shows every id in use). Ids never change once given.
 - status of an imaging study or procedure is performed when the notes say it was done, planned when it is only ordered or scheduled; update a planned item to performed when a later note documents it.
+- Return an item only for something the notes state, with a quote that states it. Never add an item only to record that something is absent, unknown or not stated.
 - Never invent information. Use "" for text that is not stated, not_stated (where offered) for a choice the notes do not settle, 0 for an integer that is not stated, and [] for an empty list. Use the choices exactly as listed; when a choice field is other, its companion text field must name the value. Record treatments given or definitely scheduled, never options merely discussed.
 
 LINKING ITEMS TO CANCERS

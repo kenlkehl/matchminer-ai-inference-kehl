@@ -862,9 +862,9 @@ def check_item(
             if not isinstance(quote, dict) or set(quote) != keys:
                 problems.append(Problem(where, f"{where}: must have exactly {sorted(keys)}",
                                         f"{where}: wrong fields"))
-            elif not isinstance(quote["quote"], str) or not quote["quote"].strip():
-                problems.append(Problem(where, f"{where}: quote must be nonempty text",
-                                        f"{where}: empty quote"))
+            elif not isinstance(quote["quote"], str):
+                problems.append(Problem(where, f"{where}: quote must be text",
+                                        f"{where}: quote not text"))
             elif len(quote["quote"]) > MAX_QUOTE_CHARACTERS:
                 reason = (f"quote must be at most {MAX_QUOTE_CHARACTERS} characters; quote "
                           "the shortest exact span that supports the item")
@@ -988,7 +988,11 @@ def check_items(
                 continue
             resolved = []
             for number, quote in enumerate(entry["evidence"]):
-                found, reason = locate(quote, f"{path}.evidence[{number}]")
+                if not quote["quote"].strip():
+                    # No quote, no support: the item is ungrounded like an invented one.
+                    found, reason = None, "the quote is empty; quote the source or remove the item"
+                else:
+                    found, reason = locate(quote, f"{path}.evidence[{number}]")
                 if found is None:
                     where = f"{path}.evidence[{number}]"
                     snippet = quote["quote"][:120]

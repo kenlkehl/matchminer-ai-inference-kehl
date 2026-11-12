@@ -273,6 +273,14 @@ def test_quotes_must_occur_in_the_note():
     check = check_document_answer(document_answer("pathology_report", procedures=[invented]),
                                   note, item_types, linking=False, known_ids=set())
     assert check.grounding and not check.structural and check.dropped[0]["item_type"] == "procedure"
+    # A placeholder item with an empty quote is unsupported, like an invented one.
+    placeholder = {"evidence": [{"quote": ""}], "scale": "ecog", "score": 0}
+    check = check_document_answer(document_answer("pathology_report", procedures=[procedure()],
+                                                  performance_status=[placeholder]),
+                                  note, item_types, linking=False, known_ids=set())
+    assert not check.structural and check.dropped == [{
+        "item_type": "performance_status", "index": 0,
+        "reason": "no evidence quote was found in the source"}]
     # Only layout may differ (whitespace, case, markdown marks, list markers,
     # typographic dashes); the record keeps the note's own text at the span.
     assert locate_quote("A  B\nC", "A B C") == (0, 6)
