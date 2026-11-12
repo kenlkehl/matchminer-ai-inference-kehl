@@ -609,6 +609,7 @@ def test_compile_retries_malformed_and_invalid_queries_then_caches(config, monke
     assert runtime["sampling_params"]["response_format"]["json_schema"]["schema"] == \
         lang.query_response_schema()
     assert metadata["requests"] == 3 and metadata["first_attempt_valid"] == 0
+    assert metadata["compiled_by"] == [config.workup_query_compile["remote"]["model_name"]]
     assert seen[-1] == (1, 1)
     key = workup_query_cache_key(REQUIREMENT, "Fabricated population")
     assert set(cache) == {key} and entry["cache_key"] == key

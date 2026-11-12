@@ -278,6 +278,9 @@ def compile_workup_queries(
     metadata = {
         "contract": contract,
         "model": model,
+        # Cached queries keep the model that compiled them, which may differ from model.
+        "compiled_by": sorted({entries[key]["model"] for key in set(keys)
+                               if entries[key].get("model")}),
         "structured_outputs": settings.structured,
         "requirements": len(texts),
         "distinct": total,
