@@ -29,9 +29,13 @@ description, or the descriptions of its arms, so an entry named "Phase I Arm A"
 contributes the agent its description names. Every agent is one drug: a regimen
 is listed as its components ("Pemetrexed + Cisplatin /Carboplatin" is three
 drugs), and a standard acronym such as FOLFIRI is expanded into its agents from
-knowledge, with the acronym recorded in `regimen_names`. Code rejects names the
-entry's text does not contain unless they expand a regimen that text names, and
-asks once more about names spelled as combinations.
+knowledge, with the acronym recorded in `regimen_names`. Each agent is named by
+its generic name (INN/USAN) or development code, so "LV" is leucovorin and
+"5-Flurouracil" fluorouracil, with the entry's own spelling also recorded in
+`regimen_names`; a treatment category such as "adjuvant chemotherapy" is never an
+agent. Code rejects names the entry's text does not contain unless they expand a
+regimen or spelling that text names, and asks once more about names spelled as
+combinations.
 
 Surviving agent names are matched against the bundled NCI Thesaurus snapshot for
 a canonical name, synonyms, and definition, then deduplicated across the whole

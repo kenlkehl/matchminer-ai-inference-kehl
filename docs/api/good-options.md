@@ -67,8 +67,12 @@ aliases, description, or the descriptions of its arms), or a component of a
 regimen named there: "Pemetrexed + Cisplatin /Carboplatin" becomes three agents,
 and a standard acronym such as FOLFIRI is expanded from knowledge into
 fluorouracil, leucovorin, and irinotecan, with the acronym listed in
-`regimen_names`. Validation rejects agent names absent from the entry's text
-unless such a regimen is listed, and a regimen name listed as an agent; a
+`regimen_names`. Agents are named by generic name (INN/USAN) or development
+code, never by a treatment category; an abbreviation, misspelling, or brand or
+shortened name that a generic name replaces ("LV", "5-Flurouracil") is listed in
+`regimen_names` the same way. Validation rejects agent names absent from the
+entry's text unless such a regimen or spelling is listed, and a regimen name
+listed as an agent; a
 combination-spelled name or an ungrounded one gets one more attempt. With a
 remote backend the answer is decoded under `INTERVENTION_SCREENING_JSON_SCHEMA`
 (`good_option_catalog.structured_outputs`).

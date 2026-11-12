@@ -1059,7 +1059,8 @@ def _supported_active_names(
     A name must be a span of the entry's own text, or a component of a regimen
     named there: the screen expands "FOLFIRI" to fluorouracil, leucovorin, and
     irinotecan from knowledge, since the acronym names those agents. The regimen
-    name itself is never an agent.
+    name itself is never an agent. An abbreviation or misspelling the screen
+    replaces with a generic name ("LV" for leucovorin) is listed the same way.
     """
 
     regimens = [
@@ -3134,8 +3135,9 @@ def _role_output_soft_warning(
     if ungrounded:
         warnings.append(
             f"active entities {ungrounded!r} are not named in their entry's text and "
-            "would be dropped; name each agent as the entry's text does, or list the "
-            "regimen acronym it comes from in regimen_names"
+            "would be dropped; list in regimen_names the regimen acronym, or the "
+            "entry's own abbreviation or spelling of the agent, exactly as the "
+            "entry writes it"
         )
     combinations = [
         name
