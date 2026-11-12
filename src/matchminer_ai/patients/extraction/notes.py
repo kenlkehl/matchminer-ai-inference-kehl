@@ -42,14 +42,19 @@ def normalize_notes(notes: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         frame["note_type"] = None
     if any(not pd.isna(t) and not isinstance(t, str) for t in frame.note_type):
         raise ValueError("note_type must contain strings or missing values.")
-    frame["note_type"] = [
-        None if pd.isna(t) or not str(t).strip() else str(t).strip() for t in frame.note_type
-    ]
+    # Object columns: pandas 3 would store None in a str column as NaN.
+    frame["note_type"] = pd.Series(
+        [None if pd.isna(t) or not str(t).strip() else str(t).strip() for t in frame.note_type],
+        index=frame.index, dtype=object,
+    )
     supplied = frame.note_date.notna() & frame.note_date.astype(str).str.strip().ne("")
     parsed = pd.to_datetime(frame.note_date.where(supplied), errors="coerce", format="mixed")
     if (parsed.isna() & supplied).any():
         raise ValueError("Invalid note_date; leave unavailable dates empty.")
-    frame["note_date"] = [None if pd.isna(d) else d.strftime("%Y-%m-%d") for d in parsed]
+    frame["note_date"] = pd.Series(
+        [None if pd.isna(d) else d.strftime("%Y-%m-%d") for d in parsed],
+        index=frame.index, dtype=object,
+    )
     if "note_id" in frame:
         ids = frame.note_id
         if ids.isna().any() or ids.astype(str).str.strip().eq("").any():
@@ -60,9 +65,7 @@ def normalize_notes(notes: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         counts["duplicate_notes"] = 0
     else:
         frame["note_id"] = [
-            "note-" + hashlib.sha256(
-                "\x1f".join([p, d or "", t or "", x]).encode("utf-8")
-            ).hexdigest()[:16]
+            note_id(p, d, t, x)
             for p, d, t, x in zip(
                 frame.patient_id, frame.note_date, frame.note_type, frame.note_text,
                 strict=True,
@@ -76,6 +79,41 @@ def normalize_notes(notes: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         ["patient_id", "note_date", "_order"], kind="stable", na_position="last"
     ).drop(columns="_order")
     return frame.reset_index(drop=True), counts
+
+
+def note_id(patient_id: str, note_date: str | None, note_type: str | None, text: str) -> str:
+    """The code-derived id of a note without a supplied ``note_id``: a hash of its
+    patient, ``YYYY-MM-DD`` date, stripped type and exact text."""
+    return "note-" + hashlib.sha256(
+        "\x1f".join([patient_id, note_date or "", note_type or "", text]).encode("utf-8")
+    ).hexdigest()[:16]
+
+
+def note_ids(notes: pd.DataFrame) -> list[str]:
+    """Each row's extraction note id, in row order, as the extraction stages assign it.
+
+    A supplied ``note_id`` column is used as is; otherwise the id is
+    :func:`note_id` of the row's normalized patient, date, type and text, so a
+    caller holding the same note table can link evidence back to its notes.
+    """
+    if not isinstance(notes, pd.DataFrame):
+        raise TypeError("notes must be a pandas DataFrame")
+    if "note_id" in notes:
+        return [str(v).strip() for v in notes.note_id]
+    dates = pd.to_datetime(
+        notes.note_date.where(
+            notes.note_date.notna() & notes.note_date.astype(str).str.strip().ne("")
+        ) if "note_date" in notes else pd.Series([None] * len(notes), index=notes.index),
+        errors="coerce", format="mixed",
+    )
+    types = notes.note_type if "note_type" in notes else [None] * len(notes)
+    return [
+        note_id(
+            str(p), None if pd.isna(d) else d.strftime("%Y-%m-%d"),
+            None if t is None or pd.isna(t) or not str(t).strip() else str(t).strip(), x,
+        )
+        for p, d, t, x in zip(notes.patient_id, dates, types, notes.note_text, strict=True)
+    ]
 
 
 def patient_note_list(group: pd.DataFrame) -> list[dict]:
@@ -153,6 +191,8 @@ def render_chunk(chunk: Sequence[dict]) -> str:
 
 __all__ = [
     "normalize_notes",
+    "note_id",
+    "note_ids",
     "note_fragments",
     "note_header",
     "pack_fragments",

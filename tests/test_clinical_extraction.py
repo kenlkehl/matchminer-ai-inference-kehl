@@ -22,6 +22,7 @@ from matchminer_ai.patients.extraction.common import fill, parse_answer
 from matchminer_ai.patients.extraction.documents import check_document_answer
 from matchminer_ai.patients.extraction.evidence import locate_quote
 from matchminer_ai.patients.extraction.extensions import THORACIC
+from matchminer_ai.patients.extraction.notes import normalize_notes, note_ids
 
 MODEL = "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"
 CT_REPORT = (
@@ -492,3 +493,15 @@ def test_preset_sections_use_nemotron_structured_outputs_and_room_to_reason():
     # Nemotron's own sampling.
     assert runtime["remote"]["request_params"]["temperature"] == 1.0
     assert runtime["remote"]["extra_body"]["top_k"] == -1
+
+
+def test_note_ids_match_the_extraction_stages():
+    notes = pd.DataFrame({"patient_id": ["p1", "p1"], "note_text": ["First.", "Second."],
+                          "note_date": ["2024-03-02T00:00:00+00:00", None],
+                          "note_type": [" Imaging ", None]})
+    frame, _ = normalize_notes(notes)
+    # Missing dates and types stay None (pandas 3 would make them NaN in a str column).
+    assert frame.note_date.tolist() == ["2024-03-02", None]
+    assert frame.note_type.tolist() == ["Imaging", None]
+    expected = dict(zip(frame.note_text, frame.note_id, strict=True))
+    assert note_ids(notes) == [expected["First."], expected["Second."]]
