@@ -386,6 +386,8 @@ Token margin reserved when truncating patient chunks before prompt rendering.
 ### `patient.local`
 
 Local in-process vLLM runtime settings. See `trial.local`.
+The patient context (`engine.max_model_len`, 200,000 tokens) also bounds remote
+requests: each one's output budget (`max_tokens`, 50,000) is reduced to what fits after its prompt.
 
 ### `patient.prompt_files`
 

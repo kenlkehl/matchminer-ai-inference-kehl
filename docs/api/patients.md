@@ -292,7 +292,7 @@ Requires one OpenAI-compatible remote endpoint with `/tokenize` and advertised
 `max_model_len`, or explicit `patient.context_window`; `patient.tokenizer_mode=bytes`
 is an explicit conservative fallback for providers without `/tokenize`.
 The full advertised context is available, reserving the configured patient
-`remote.request_params.max_tokens` (20,000 by default). Chunk size/overlap default
+`remote.request_params.max_tokens` (50,000 by default). Chunk size/overlap default
 to patient settings (50,000/500); optional function overrides and
 `recommendation_batch_size=6` bound each serial request. Oversized prompts split
 note packets further, never silently truncate notes or reduce output capacity.

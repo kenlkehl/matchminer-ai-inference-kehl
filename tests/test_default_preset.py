@@ -23,10 +23,11 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     assert config.patient["local"]["model_name"] == "google/gemma-4-31B-it"
     assert config.patient["remote"]["model_name"] == "google/gemma-4-31B-it"
     assert config.patient["remote"]["tokenizer_name"] == "google/gemma-4-31B-it"
-    assert config.patient["local"]["engine"]["max_model_len"] == 100000
+    assert config.patient["local"]["engine"]["max_model_len"] == 200000
     assert config.patient["chunk_size"] == 50000
     assert config.patient["chunk_overlap"] == 500
-    assert config.patient["local"]["generation"]["max_tokens"] == 20000
+    assert config.patient["local"]["generation"]["max_tokens"] == 50000
+    assert config.patient["remote"]["request_params"]["max_tokens"] == 50000
     assert config.raw_patient_note_qa["embedding_model_name"] == (
         "Qwen/Qwen3-Embedding-0.6B"
     )
