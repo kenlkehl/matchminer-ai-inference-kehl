@@ -103,12 +103,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help=(
-            "Subjects per screening and classify checkpoint batch. A batch "
-            "waits on its slowest subject, so larger batches keep a slow "
-            "reasoning model saturated. Synthesis is not batched: each subject "
-            "is checkpointed when its own chain finishes, with up to "
-            "--max-concurrent-requests chains in flight. Part of the checkpoint "
-            "fingerprint."
+            "Trials screened, and drugs classified, at once (preset: 64). Each "
+            "is checkpointed as soon as it finishes and the next starts in its "
+            "place, so a slow answer holds one slot rather than a batch; the "
+            "endpoint still runs at most --max-concurrent-requests, and the "
+            "rest wait for it. Synthesis likewise checkpoints each subject when "
+            "its own chain finishes, with up to --max-concurrent-requests chains "
+            "in flight. Part of the checkpoint fingerprint."
         ),
     )
     parser.add_argument("--research-concurrency", type=int, default=None)

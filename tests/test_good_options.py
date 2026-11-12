@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import threading
 import time
+from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -28,6 +31,7 @@ from matchminer_ai.matching import (
     score_good_options_with_llm,
 )
 from matchminer_ai.trials import (
+    DrugClass,
     DrugIdentity,
     DrugSummary,
     EvidencePassage,
@@ -3483,3 +3487,538 @@ def test_catalog_tables_written_before_the_ctgov_rename_still_load(tmp_path):
     assert ctgov.to_dict("records") == [dict(trial_id="NCT1", ctgov_name="Fabricated agent", ctgov_status="ok")]
     evidence = catalog_module._read_table(tmp_path, "evidence.parquet")
     assert evidence.source_type.tolist() == ["trial_ctgov"] and evidence.facet.tolist() == ["trial_ctgov"]
+
+
+# Continuous screening and classify scheduling. Each trial or drug is its own
+# unit: it is checkpointed when it finishes and never waits on a slow sibling.
+
+_SCHEDULED_TRIALS = [f"NCT0000000{index}" for index in range(1, 6)]
+
+
+def _valid_screen() -> str:
+    return json.dumps(
+        {
+            "interventions": [
+                {"index": int(index), **value}
+                for index, value in _screening_result().items()
+            ]
+        }
+    )
+
+
+def _scripted_screen(trial_id: str, attempt: int) -> Any:
+    """Fabricated answers: two retried trials and two that fail closed."""
+
+    if trial_id == "NCT00000002" and attempt == 1:
+        return "not valid screening JSON"
+    if trial_id == "NCT00000003" and attempt == 1:
+        return catalog_module._CatalogLLMOutput(text="", finish_reason="length")
+    if trial_id == "NCT00000004":
+        # Agent 0 stays valid and agent 1 never does, so only agent 1 fails closed.
+        answer = json.loads(_valid_screen())
+        answer["interventions"][1]["role"] = "bogus"
+        return json.dumps(answer)
+    if trial_id == "NCT00000005":
+        return "still not screening JSON"
+    return _valid_screen()
+
+
+def _screened_trial(messages: list[dict[str, str]]) -> str:
+    return re.search(r'"nct_id": "(NCT\d{8})"', messages[-1]["content"]).group(1)
+
+
+def _classified_drug(messages: list[dict[str, str]]) -> str:
+    return re.search(r'"drug": "([^"]+)"', messages[-1]["content"]).group(1)
+
+
+def _wait_for(condition, timeout: float = 10.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        time.sleep(0.01)
+    return bool(condition())
+
+
+def _checkpoint_count(root: Path, stage: str) -> int:
+    return len(list((root / stage).glob("*.json")))
+
+
+def _checkpoint_records(root: Path, stage: str) -> dict[str, dict[str, Any]]:
+    """A stage's checkpoints by file name, without the run fingerprint or time."""
+
+    records: dict[str, dict[str, Any]] = {}
+    for path in sorted((root / stage).glob("*.json")):
+        value = json.loads(path.read_text(encoding="utf-8"))
+        del value["run_fingerprint_sha256"], value["saved_at_utc"]
+        records[path.name] = value
+    return records
+
+
+def _scheduling_config(*, remote: bool, in_flight: int):
+    config = load_default_preset()
+    config.remote["enabled"] = remote
+    # The build reads these from the raw section, the fingerprint from the copy.
+    for section in (config.good_option_catalog, config.raw["good_option_catalog"]):
+        section["screening_checkpoint_batch_size"] = in_flight
+        section["class_checkpoint_batch_size"] = in_flight
+    return config
+
+
+def _mechanism_passage(drug: DrugIdentity) -> EvidencePassage:
+    return EvidencePassage(
+        evidence_id=f"{drug.drug_id}:mechanism_targets",
+        drug_id=drug.drug_id,
+        facet="mechanism_targets",
+        source="fake",
+        source_type="authoritative",
+        title="Synthetic evidence",
+        passage=f"{drug.preferred_name} inhibits a fabricated kinase.",
+        url="https://example.test/source",
+        source_locator="mechanism_targets",
+        content_sha256=f"{drug.drug_id}:mechanism_targets",
+    )
+
+
+def _empty_synthesis(_drug, _evidence):
+    return {category: [] for category in catalog_module._SYNTHESIS_CATEGORIES}
+
+
+def _patch_catalog_sources(
+    monkeypatch: pytest.MonkeyPatch, study: dict[str, Any] = STUDY
+) -> None:
+    async def fake_fetch(_nct_id: str, *, client):
+        del client
+        return json.loads(json.dumps(study))
+
+    async def fake_research(drug, **_kwargs):
+        return [_mechanism_passage(drug)], [], "complete", []
+
+    async def fake_class_research(*_args, **_kwargs):
+        return [], [], "complete", []
+
+    monkeypatch.setattr(catalog_module, "fetch_trial_study", fake_fetch)
+    monkeypatch.setattr(catalog_module, "load_ncit_drug_index", lambda _path: _NoNCIt())
+    monkeypatch.setattr(catalog_module, "research_drug", fake_research)
+    monkeypatch.setattr(catalog_module, "research_class", fake_class_research)
+
+
+def _scheduled_build(
+    root: Path,
+    nct_ids: list[str],
+    config,
+    progress: list[tuple[str, int, str]],
+    **arguments: Any,
+):
+    return asyncio.run(
+        build_good_option_catalog(
+            nct_ids,
+            root / "catalog",
+            checkpoint_path=root / "checkpoints",
+            config=config,
+            sources=[_EvidenceSource()],
+            settings=ResearchSettings(max_attempts=1),
+            synthesizer=_empty_synthesis,
+            progress_callback=lambda stage, done, _total, label: progress.append(
+                (stage, done, label)
+            ),
+            **arguments,
+        )
+    )
+
+
+def test_remote_screening_checkpoints_each_trial_without_waiting_for_a_slow_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_catalog_sources(monkeypatch)
+    checkpoints = tmp_path / "checkpoints"
+    slow = _SCHEDULED_TRIALS[0]
+    lock = threading.Lock()
+    in_flight = peak = 0
+    others_checkpointed_first: list[bool] = []
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        nonlocal in_flight, peak
+        del config, reasoning_off
+        assert stage == "screening" and len(messages_list) == 1
+        with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+        try:
+            if _screened_trial(messages_list[0]) == slow:
+                others_checkpointed_first.append(
+                    _wait_for(
+                        lambda: _checkpoint_count(checkpoints, "intervention_screening")
+                        == 4
+                    )
+                )
+            return [_valid_screen()]
+        finally:
+            with lock:
+                in_flight -= 1
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    progress: list[tuple[str, int, str]] = []
+    catalog = _scheduled_build(
+        tmp_path,
+        _SCHEDULED_TRIALS,
+        _scheduling_config(remote=True, in_flight=2),
+        progress,
+        class_resolver=no_classes,
+    )
+
+    # The slow trial held one slot; the other four passed through the second
+    # and were checkpointed before it answered, and the stage ended with it.
+    assert others_checkpointed_first == [True]
+    assert peak == 2
+    screening = [(done, label) for stage, done, label in progress if stage == "screening"]
+    assert [done for done, _label in screening] == [1, 2, 3, 4, 5]
+    assert screening[-1] == (5, slow)
+    assert _checkpoint_count(checkpoints, "intervention_screening") == 5
+    assert set(catalog.trial_intervention_screening["trial_id"]) == set(
+        _SCHEDULED_TRIALS
+    )
+
+
+def _scripted_screening_build(
+    root: Path, monkeypatch: pytest.MonkeyPatch, *, remote: bool
+):
+    _patch_catalog_sources(monkeypatch)
+    lock = threading.Lock()
+    attempts: Counter[str] = Counter()
+    prompts: list[tuple[str, str]] = []
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        del config, reasoning_off
+        assert stage == "screening"
+        outputs = []
+        for messages in messages_list:
+            trial_id = _screened_trial(messages)
+            with lock:
+                attempts[trial_id] += 1
+                attempt = attempts[trial_id]
+                prompts.append((trial_id, messages[-1]["content"]))
+            outputs.append(_scripted_screen(trial_id, attempt))
+        return outputs
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    progress: list[tuple[str, int, str]] = []
+    catalog = _scheduled_build(
+        root,
+        _SCHEDULED_TRIALS,
+        _scheduling_config(remote=remote, in_flight=2),
+        progress,
+        class_resolver=no_classes,
+    )
+    return catalog, progress, prompts
+
+
+def test_remote_screening_matches_the_grouped_screen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A local engine still screens in groups of the batch size, as every
+    # build did before; remote builds screen each trial as its own unit.
+    grouped, grouped_progress, grouped_prompts = _scripted_screening_build(
+        tmp_path / "grouped", monkeypatch, remote=False
+    )
+    continuous, progress, prompts = _scripted_screening_build(
+        tmp_path / "continuous", monkeypatch, remote=True
+    )
+
+    for table in ("trial_intervention_screening", "trial_drug_index"):
+        pd.testing.assert_frame_equal(getattr(grouped, table), getattr(continuous, table))
+    assert _checkpoint_records(
+        tmp_path / "continuous" / "checkpoints", "intervention_screening"
+    ) == _checkpoint_records(tmp_path / "grouped" / "checkpoints", "intervention_screening")
+    # The same prompts, retry prompts included, and the same progress messages,
+    # though not necessarily in the same order.
+    assert Counter(prompts) == Counter(grouped_prompts)
+    assert Counter((stage, label) for stage, _done, label in progress) == Counter(
+        (stage, label) for stage, _done, label in grouped_progress
+    )
+    assert sorted(done for stage, done, _ in progress if stage == "screening") == [
+        1, 2, 3, 4, 5
+    ]
+
+    assert Counter(trial_id for trial_id, _prompt in prompts) == {
+        "NCT00000001": 1,
+        "NCT00000002": 2,
+        "NCT00000003": 2,
+        "NCT00000004": 3,
+        "NCT00000005": 3,
+    }
+    assert "output token limit" in [
+        prompt for trial_id, prompt in prompts if trial_id == "NCT00000003"
+    ][1]
+    labels = [label for stage, _done, label in progress if stage == "screening"]
+    assert sorted(label for label in labels if "(fail-closed:" in label)[0].startswith(
+        "NCT00000004 (fail-closed: intervention 1 has invalid role 'bogus'"
+    )
+    assert sum("(fail-closed:" in label for label in labels) == 2
+    # Fail-closed trials are not checkpointed, so a resumed build asks again.
+    assert (
+        _checkpoint_count(tmp_path / "continuous" / "checkpoints", "intervention_screening")
+        == 3
+    )
+    rows = continuous.trial_intervention_screening.set_index(["trial_id", "ctgov_name"])
+    assert bool(rows.loc[("NCT00000004", "Novel Agent"), "included"])
+    assert not bool(rows.loc[("NCT00000004", "Control Agent"), "included"])
+    assert not rows.loc["NCT00000005", "included"].any()
+
+
+def test_remote_screening_error_lets_in_flight_trials_checkpoint_then_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    _patch_catalog_sources(monkeypatch)
+    raised = threading.Event()
+    asked: list[str] = []
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        del config, stage, reasoning_off
+        trial_id = _screened_trial(messages_list[0])
+        asked.append(trial_id)
+        if trial_id == "NCT00000002":
+            raised.set()
+            raise RuntimeError("fabricated non-retryable endpoint error")
+        # Still in flight when its sibling raises, and for a while after.
+        assert raised.wait(timeout=10)
+        time.sleep(0.5)
+        return [_valid_screen()]
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    progress: list[tuple[str, int, str]] = []
+    with pytest.raises(RuntimeError, match="fabricated non-retryable"):
+        _scheduled_build(
+            tmp_path,
+            _SCHEDULED_TRIALS,
+            _scheduling_config(remote=True, in_flight=2),
+            progress,
+            class_resolver=no_classes,
+        )
+
+    # The trial in flight finished and was checkpointed; none started after.
+    assert sorted(asked) == ["NCT00000001", "NCT00000002"]
+    assert [label for stage, _done, label in progress if stage == "screening"] == [
+        "NCT00000001"
+    ]
+    assert _checkpoint_count(tmp_path / "checkpoints", "intervention_screening") == 1
+    assert (
+        "Catalog screening stopped: 1 of 5 units raised, 1 finished, 3 never started"
+        in caplog.text
+    )
+
+
+_CLASSIFIED_AGENTS = ["Alpha Agent", "Beta Agent", "Gamma Agent", "Delta Agent"]
+
+
+def _class_answer(drug_name: str, code: str = "") -> str:
+    return json.dumps(
+        {
+            "classes": [
+                {
+                    "ncit_code": code,
+                    "name": f"{drug_name.split()[0]} kinase inhibitor",
+                    "basis": "target",
+                    "target": "",
+                    "aliases": [],
+                    "confidence": "low",
+                    "support_ids": ["P1"],
+                }
+            ]
+        }
+    )
+
+
+def _scripted_class(drug_name: str, attempt: int) -> Any:
+    """Fabricated answers: two retried drugs and one that never validates."""
+
+    if drug_name == "Beta Agent" and attempt == 1:
+        return _class_answer(drug_name, code="C999999")
+    if drug_name == "Gamma Agent":
+        return "no classes JSON here"
+    if drug_name == "Delta Agent" and attempt == 1:
+        return catalog_module._CatalogLLMOutput(text="", finish_reason="length")
+    return _class_answer(drug_name)
+
+
+def _classify_study() -> dict[str, Any]:
+    return _arm_study(
+        [
+            {"type": "DRUG", "name": name, "armGroupLabels": ["Experimental"]}
+            for name in _CLASSIFIED_AGENTS
+        ],
+        [{"label": "Experimental", "type": "EXPERIMENTAL"}],
+    )
+
+
+def _include_classified_agents(_trial_id, _interventions):
+    return {
+        str(position): _include([name])
+        for position, name in enumerate(_CLASSIFIED_AGENTS)
+    }
+
+
+def test_remote_classify_checkpoints_each_drug_and_matches_the_grouped_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_catalog_sources(monkeypatch, _classify_study())
+
+    def scripted_build(root: Path, *, remote: bool):
+        checkpoints = root / "checkpoints"
+        lock = threading.Lock()
+        attempts: Counter[str] = Counter()
+        prompts: list[tuple[str, str]] = []
+        progress: list[tuple[str, int, str]] = []
+        others_first: list[bool] = []
+
+        def others_done() -> bool:
+            labels = {label for stage, _done, label in progress if stage == "classify"}
+            return {"Beta Agent", "Gamma Agent", "Delta Agent"} <= labels and (
+                _checkpoint_count(checkpoints, "classify") == 2
+            )
+
+        def fake_run(messages_list, *, config, stage, reasoning_off=False):
+            del config, reasoning_off
+            assert stage == "class"
+            outputs = []
+            for messages in messages_list:
+                drug_name = _classified_drug(messages)
+                with lock:
+                    attempts[drug_name] += 1
+                    attempt = attempts[drug_name]
+                    prompts.append((drug_name, messages[-1]["content"]))
+                if remote and drug_name == "Alpha Agent":
+                    others_first.append(_wait_for(others_done))
+                outputs.append(_scripted_class(drug_name, attempt))
+            return outputs
+
+        monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+        catalog = _scheduled_build(
+            root,
+            ["NCT12345678"],
+            _scheduling_config(remote=remote, in_flight=2),
+            progress,
+            role_resolver=_include_classified_agents,
+        )
+        return catalog, progress, prompts, others_first
+
+    grouped, grouped_progress, grouped_prompts, _ = scripted_build(
+        tmp_path / "grouped", remote=False
+    )
+    continuous, progress, prompts, others_first = scripted_build(
+        tmp_path / "continuous", remote=True
+    )
+
+    # Alpha answered last, after the others were recorded and checkpointed.
+    assert others_first == [True]
+    classify = [(done, label) for stage, done, label in progress if stage == "classify"]
+    assert classify[-1] == (4, "Alpha Agent")
+    # The tables keep input order however the answers arrived.
+    pd.testing.assert_frame_equal(grouped.drug_classes, continuous.drug_classes)
+    assert continuous.drug_classes["class_name"].tolist() == [
+        "Alpha kinase inhibitor",
+        "Beta kinase inhibitor",
+        "Delta kinase inhibitor",
+    ]
+    assert _checkpoint_records(
+        tmp_path / "continuous" / "checkpoints", "classify"
+    ) == _checkpoint_records(tmp_path / "grouped" / "checkpoints", "classify")
+    # Gamma never validated, so it keeps no class and no checkpoint.
+    assert _checkpoint_count(tmp_path / "continuous" / "checkpoints", "classify") == 3
+    assert Counter(prompts) == Counter(grouped_prompts)
+    assert Counter(drug for drug, _prompt in prompts) == {
+        "Alpha Agent": 1,
+        "Beta Agent": 2,
+        "Gamma Agent": 3,
+        "Delta Agent": 2,
+    }
+    assert "C999999 is not a listed candidate" in [
+        prompt for drug, prompt in prompts if drug == "Beta Agent"
+    ][1]
+    assert Counter((stage, label) for stage, _done, label in progress) == Counter(
+        (stage, label) for stage, _done, label in grouped_progress
+    )
+
+
+def test_remote_stages_resume_checkpoints_written_by_the_grouped_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class SimulatedDisconnect(BaseException):
+        pass
+
+    async def disconnected_fetch(_nct_id: str, *, client):
+        del client
+        raise SimulatedDisconnect()
+
+    root = tmp_path
+    config = _scheduling_config(remote=True, in_flight=64)
+    _patch_catalog_sources(monkeypatch)
+    monkeypatch.setattr(catalog_module, "fetch_trial_study", disconnected_fetch)
+    with pytest.raises(SimulatedDisconnect):
+        _scheduled_build(root, ["NCT12345678"], config, [])
+
+    # Write a screen and a class answer exactly as the grouped code saved them:
+    # the same stages, keys, input values and data.
+    manifest = json.loads((root / "checkpoints" / "manifest.json").read_text())
+    store = catalog_module._CatalogCheckpointStore.open(
+        root / "checkpoints", run_spec=manifest["run_spec"], reset=False
+    )
+    interventions = catalog_module._extract_ctgov_interventions("NCT12345678", STUDY)
+    store.save(
+        "intervention_screening",
+        "NCT12345678",
+        input_value={
+            "trial_id": "NCT12345678",
+            "interventions": [asdict(item) for item in interventions],
+        },
+        data={
+            "output": {
+                str(item["index"]): item
+                for item in json.loads(_valid_screen())["interventions"]
+            }
+        },
+    )
+    drug = catalog_module._canonicalize_drug("Novel Agent", (), ncit_index=_NoNCIt())
+    passage = _mechanism_passage(drug)
+    saved_class = DrugClass(
+        drug_id=drug.drug_id,
+        class_id=catalog_module.class_id_for("Checkpointed kinase inhibitor"),
+        class_name="Checkpointed kinase inhibitor",
+        basis="target",
+        confidence="low",
+        support_ids=(passage.evidence_id,),
+        class_source="llm",
+        assigned_by="llm_new",
+    )
+    store.save(
+        "classify",
+        drug.drug_id,
+        input_value={
+            "drug": asdict(drug),
+            "evidence": [passage.to_record()],
+            "max_classes": 3,
+            "classes": {"hierarchy": [], "candidates": [], "allow_new": True},
+        },
+        data={"classes": [saved_class.to_record()]},
+    )
+
+    _patch_catalog_sources(monkeypatch)
+    asked: list[tuple[str, str]] = []
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        del config, reasoning_off
+        asked.extend((stage, _classified_drug(messages)) for messages in messages_list)
+        assert stage == "class"
+        return [_class_answer(_classified_drug(messages)) for messages in messages_list]
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    progress: list[tuple[str, int, str]] = []
+    catalog = _scheduled_build(root, ["NCT12345678"], config, progress)
+
+    assert asked == [("class", "Control Agent")]
+    labels = {(stage, label) for stage, _done, label in progress}
+    assert ("screening", "NCT12345678 (checkpoint)") in labels
+    assert ("classify", "Novel Agent (checkpoint)") in labels
+    classes = catalog.drug_classes.set_index("drug_id")["class_name"]
+    assert classes[drug.drug_id] == "Checkpointed kinase inhibitor"
+    assert set(catalog.trial_intervention_screening["included"]) == {True}

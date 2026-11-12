@@ -880,9 +880,15 @@ the budget mid-trace returns an empty answer with `finish_reason=length`, which
 is retried rather than silently accepted, and if every ordinary attempt ends
 that way the final attempt disables thinking.
 `screening_max_attempts` and `synthesis_max_attempts` control structured-output retries.
-`screening_checkpoint_batch_size` and `class_checkpoint_batch_size` bound the
-screening and classify LLM batches so successfully returned batches can be
-checkpointed throughout long catalog builds. Synthesis is not batched: each
+`screening_checkpoint_batch_size` and `class_checkpoint_batch_size` (default 64
+each) are how many trials are screened, and drugs classified, at once. With a
+remote backend each trial or drug is its own request and retries, validated and
+checkpointed as soon as it finishes, and the next waiting one starts in its
+place, so one slow answer holds one slot instead of a batch; the endpoint pool
+still caps each server's concurrent requests, and units beyond that wait for
+it. A local engine, which batches prompts itself and is not thread-safe, gets
+groups of these sizes instead, checkpointed when each group returns. Both keys
+are part of the checkpoint fingerprint. Synthesis is not batched either: each
 drug or class is its own chain of chunk calls, checkpointed as soon as that
 chain finishes, with up to `remote.max_concurrent_requests` chains in flight. Screening and synthesis LLM overrides inherit from
 `llm_good_option`. With a remote backend, `structured_outputs` (default `true`)

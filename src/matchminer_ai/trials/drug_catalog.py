@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import functools
 import hashlib
 import inspect
@@ -16,7 +17,7 @@ import tempfile
 import threading
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -920,97 +921,186 @@ def _token_limited_finish_reason(value: str) -> bool:
     return str(value or "").strip().casefold() in {"length", "max_tokens"}
 
 
+#: Runs one batch of catalog prompts and returns their outputs in order.
+_MessagesRunner = Callable[[list[list[dict[str, str]]]], Awaitable[Sequence[Any]]]
+
+
+def _executor_llm_runner(
+    executor: ThreadPoolExecutor, *, config: MMAIConfig, stage: str
+) -> _MessagesRunner:
+    """Send catalog prompts from ``executor``'s threads, one call per batch.
+
+    The default executor stops at 32 threads, which would cap the units in
+    flight below their configured limit. The caller's context is carried into
+    the thread, as ``asyncio.to_thread`` does.
+    """
+
+    loop = asyncio.get_running_loop()
+
+    async def run(messages_list: list[list[dict[str, str]]]) -> Sequence[Any]:
+        context = contextvars.copy_context()
+        return await loop.run_in_executor(
+            executor,
+            functools.partial(
+                context.run,
+                _run_llm_messages,
+                messages_list,
+                config=config,
+                stage=stage,
+            ),
+        )
+
+    return run
+
+
+def _single_output(outputs: Sequence[Any]) -> Any:
+    if len(outputs) != 1:
+        raise RuntimeError("LLM returned a different number of outputs than prompts.")
+    return outputs[0]
+
+
+def _screening_max_attempts(config: MMAIConfig) -> int:
+    return max(1, int(config.good_option_catalog.get("screening_max_attempts", 3)))
+
+
+@dataclass
+class _ScreeningAttempts:
+    """One trial's screening answers, attempt by attempt.
+
+    ``output`` is the last parsed answer, kept even when invalid so the builder
+    can report the exact validation failure after retries are exhausted, and
+    ``error`` is the failure the next attempt's retry prompt quotes. A soft
+    warning is retried once: the first validation failure of either kind ends
+    that check, so a repeated soft-warned answer stands. The grouped and the
+    continuous schedulers both use this, so a trial is asked and retried the
+    same way under either.
+    """
+
+    trial_id: str
+    interventions: Sequence[_CtgovIntervention]
+    output: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    error: str | None = None
+    soft_warned: bool = False
+
+    def messages(self, attempt: int, max_attempts: int) -> list[dict[str, str]]:
+        messages = build_intervention_screening_messages(
+            self.trial_id, self.interventions
+        )
+        if self.error:
+            messages[-1] = {
+                **messages[-1],
+                "content": (
+                    load_prompt_text("trial_drug_screen.retry.txt").format(
+                        previous_content=messages[-1]["content"],
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                        previous_error=self.error,
+                    )
+                ),
+            }
+        return messages
+
+    def observe(self, raw_output: Any) -> bool:
+        """Record one answer and return whether to ask again."""
+
+        output = _coerce_catalog_llm_output(raw_output)
+        if _token_limited_finish_reason(output.finish_reason):
+            self.output = {}
+            self.error = (
+                "the response reached its output token limit "
+                f"(finish_reason={output.finish_reason})"
+            )
+            return True
+        if not output.text.strip():
+            self.output = {}
+            self.error = "the final response was blank"
+            return True
+        parsed = (
+            _find_json_mapping(output.text, "interventions", allow_bare_array=True)
+            or {}
+        )
+        records: dict[str, Mapping[str, Any]] = {}
+        for item in parsed.get("interventions", []) or []:
+            if not isinstance(item, Mapping):
+                continue
+            raw_index = item.get("index")
+            if isinstance(raw_index, bool):
+                continue
+            if isinstance(raw_index, int) or str(raw_index).isdigit():
+                records[str(int(raw_index))] = item
+        self.output = records
+        validation_error = _role_output_validation_error(
+            self.interventions, records
+        ) or (
+            # Soft: retried once, but the answer stands if it is repeated.
+            _role_output_soft_warning(self.interventions, records)
+            if not self.soft_warned
+            else None
+        )
+        if validation_error is None:
+            return False
+        self.error = validation_error
+        self.soft_warned = True
+        return True
+
+
 async def _resolve_roles_with_default_llm(
     by_trial: Mapping[str, Sequence[_CtgovIntervention]], *, config: MMAIConfig
 ) -> dict[str, Mapping[str, Mapping[str, Any]]]:
-    """Return the last parsed output for each attempted trial.
+    """Screen a group of trials together, one LLM call per attempt.
 
-    Invalid outputs are retained so the catalog builder can report the exact
-    validation failure after retries are exhausted.
+    Returns the last parsed output for each attempted trial; invalid outputs are
+    retained so the catalog builder can report the exact validation failure
+    after retries are exhausted. A local engine batches the group's prompts
+    itself; remote builds screen each trial on its own instead
+    (:func:`_resolve_trial_roles_with_default_llm`).
     """
 
     trial_ids = [trial_id for trial_id, items in by_trial.items() if items]
     if not trial_ids:
         return {}
-    outputs_by_trial: dict[str, Mapping[str, Mapping[str, Any]]] = {}
-    validation_errors: dict[str, str] = {}
-    soft_warned: set[str] = set()
+    trials = {
+        trial_id: _ScreeningAttempts(trial_id, by_trial[trial_id])
+        for trial_id in trial_ids
+    }
     pending = list(trial_ids)
-    max_attempts = max(
-        1, int(config.good_option_catalog.get("screening_max_attempts", 3))
-    )
-    for _attempt in range(1, max_attempts + 1):
+    max_attempts = _screening_max_attempts(config)
+    for attempt in range(1, max_attempts + 1):
         if not pending:
             break
-        messages_list = []
-        for trial_id in pending:
-            messages = build_intervention_screening_messages(
-                trial_id, by_trial[trial_id]
-            )
-            previous_error = validation_errors.get(trial_id)
-            if previous_error:
-                messages[-1] = {
-                    **messages[-1],
-                    "content": (
-                        load_prompt_text("trial_drug_screen.retry.txt").format(
-                            previous_content=messages[-1]["content"],
-                            attempt=_attempt,
-                            max_attempts=max_attempts,
-                            previous_error=previous_error,
-                        )
-                    ),
-                }
-            messages_list.append(messages)
         outputs = await asyncio.to_thread(
             _run_llm_messages,
-            messages_list,
+            [trials[trial_id].messages(attempt, max_attempts) for trial_id in pending],
             config=config,
             stage="screening",
         )
-        retry: list[str] = []
-        for trial_id, raw_output in zip(pending, outputs, strict=True):
-            output = _coerce_catalog_llm_output(raw_output)
-            if _token_limited_finish_reason(output.finish_reason):
-                outputs_by_trial[trial_id] = {}
-                validation_errors[trial_id] = (
-                    "the response reached its output token limit "
-                    f"(finish_reason={output.finish_reason})"
-                )
-                retry.append(trial_id)
-                continue
-            if not output.text.strip():
-                outputs_by_trial[trial_id] = {}
-                validation_errors[trial_id] = "the final response was blank"
-                retry.append(trial_id)
-                continue
-            parsed = (
-                _find_json_mapping(output.text, "interventions", allow_bare_array=True)
-                or {}
-            )
-            records: dict[str, Mapping[str, Any]] = {}
-            for item in parsed.get("interventions", []) or []:
-                if not isinstance(item, Mapping):
-                    continue
-                raw_index = item.get("index")
-                if isinstance(raw_index, bool):
-                    continue
-                if isinstance(raw_index, int) or str(raw_index).isdigit():
-                    records[str(int(raw_index))] = item
-            outputs_by_trial[trial_id] = records
-            validation_error = _role_output_validation_error(
-                by_trial[trial_id], records
-            ) or (
-                # Soft: retried once, but the answer stands if it is repeated.
-                _role_output_soft_warning(by_trial[trial_id], records)
-                if trial_id not in soft_warned
-                else None
-            )
-            if validation_error is not None:
-                validation_errors[trial_id] = validation_error
-                soft_warned.add(trial_id)
-                retry.append(trial_id)
-        pending = retry
-    return outputs_by_trial
+        pending = [
+            trial_id
+            for trial_id, raw_output in zip(pending, outputs, strict=True)
+            if trials[trial_id].observe(raw_output)
+        ]
+    return {trial_id: trials[trial_id].output for trial_id in trial_ids}
+
+
+async def _resolve_trial_roles_with_default_llm(
+    trial_id: str,
+    interventions: Sequence[_CtgovIntervention],
+    *,
+    config: MMAIConfig,
+    run_messages: _MessagesRunner,
+) -> Mapping[str, Mapping[str, Any]]:
+    """Screen one trial on its own, retrying as the grouped screen does.
+
+    Returns the last parsed output, valid or not.
+    """
+
+    trial = _ScreeningAttempts(trial_id, interventions)
+    max_attempts = _screening_max_attempts(config)
+    for attempt in range(1, max_attempts + 1):
+        outputs = await run_messages([trial.messages(attempt, max_attempts)])
+        if not trial.observe(_single_output(outputs)):
+            break
+    return trial.output
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -2480,97 +2570,160 @@ def _validate_drug_classes(
     return list(records.values())
 
 
+@dataclass
+class _ClassAttempts:
+    """One drug's class answers, attempt by attempt.
+
+    ``parsed`` is the first answer that validates, with its passage-ID map, and
+    ``error`` the failure the next attempt's retry prompt quotes. The grouped
+    and the continuous schedulers both use this, so a drug is asked and retried
+    the same way under either.
+    """
+
+    drug: DrugIdentity
+    evidence: Sequence[EvidencePassage]
+    plan: _ClassPlan
+    max_classes: int
+    error: str | None = None
+    parsed: dict[str, Any] | None = None
+
+    def messages(self, attempt: int, max_attempts: int) -> list[dict[str, str]]:
+        messages = build_drug_class_messages(
+            self.drug,
+            self.evidence,
+            max_classes=self.max_classes,
+            ncit_classes=self.plan.hierarchy,
+            candidates=self.plan.candidates,
+            allow_new=self.plan.allow_new,
+        )
+        if self.error:
+            messages[-1] = {
+                **messages[-1],
+                "content": load_prompt_text("trial_drug_class.retry.txt").format(
+                    previous_content=messages[-1]["content"],
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    previous_error=self.error,
+                ),
+            }
+        return messages
+
+    def observe(self, raw_output: Any) -> bool:
+        """Record one answer and return whether to ask again."""
+
+        output = _coerce_catalog_llm_output(raw_output)
+        if _token_limited_finish_reason(output.finish_reason):
+            self.error = (
+                "the response reached its output token limit "
+                f"(finish_reason={output.finish_reason})"
+            )
+            return True
+        raw_value = _find_json_mapping(output.text, "classes", allow_bare_array=True)
+        if not isinstance(raw_value, Mapping):
+            self.error = (
+                "the final response did not contain a JSON object with a classes "
+                "array"
+            )
+            return True
+        raw = dict(raw_value)
+        raw["__passage_id_map__"] = {
+            f"P{index}": item.evidence_id
+            for index, item in enumerate(self.evidence, start=1)
+        }
+        error = _class_output_validation_error(
+            raw,
+            evidence=self.evidence,
+            candidates=self.plan.candidates,
+            allow_new=self.plan.allow_new,
+        )
+        if error:
+            self.error = error
+            return True
+        self.parsed = raw
+        return False
+
+    def warn_if_failed(self) -> None:
+        if self.parsed is None:
+            logging.warning(
+                "Class assignment for %s failed validation on every attempt: %s",
+                self.drug.preferred_name,
+                self.error or "unknown error",
+            )
+
+
+def _class_attempt_settings(config: MMAIConfig) -> tuple[int, int]:
+    """The class step's (max_classes, max_attempts)."""
+
+    catalog_config = config.good_option_catalog
+    return (
+        max(1, int(catalog_config.get("class_max_per_drug", 3))),
+        max(1, int(catalog_config.get("class_assignment_max_attempts", 3))),
+    )
+
+
 async def _default_classify_many(
     drugs: Sequence[tuple[DrugIdentity, Sequence[EvidencePassage], _ClassPlan]],
     *,
     config: MMAIConfig,
 ) -> dict[str, Mapping[str, Any]]:
-    """Ask the model which classes a batch of drugs adds, with bounded retries.
+    """Ask the model which classes a group of drugs adds, with bounded retries.
 
-    The evidence is already bounded by the caller, which searched the same
-    passages for each plan's candidates.
+    The group shares one LLM call per attempt, which a local engine batches
+    itself; remote builds classify each drug on its own instead
+    (:func:`_default_classify_one`). The evidence is already bounded by the
+    caller, which searched the same passages for each plan's candidates.
     """
 
     if not drugs:
         return {}
-    catalog_config = config.good_option_catalog
-    max_classes = max(1, int(catalog_config.get("class_max_per_drug", 3)))
+    max_classes, max_attempts = _class_attempt_settings(config)
+    pending = [
+        _ClassAttempts(drug, evidence, plan, max_classes)
+        for drug, evidence, plan in drugs
+    ]
     parsed: dict[str, Mapping[str, Any]] = {}
-    validation_errors: dict[str, str] = {}
-    pending = list(drugs)
-    max_attempts = max(
-        1, int(catalog_config.get("class_assignment_max_attempts", 3))
-    )
-    for _attempt in range(1, max_attempts + 1):
+    for attempt in range(1, max_attempts + 1):
         if not pending:
             break
-        messages_list: list[list[dict[str, str]]] = []
-        for drug, evidence, plan in pending:
-            messages = build_drug_class_messages(
-                drug,
-                evidence,
-                max_classes=max_classes,
-                ncit_classes=plan.hierarchy,
-                candidates=plan.candidates,
-                allow_new=plan.allow_new,
-            )
-            previous_error = validation_errors.get(drug.drug_id)
-            if previous_error:
-                messages[-1] = {
-                    **messages[-1],
-                    "content": load_prompt_text("trial_drug_class.retry.txt").format(
-                        previous_content=messages[-1]["content"],
-                        attempt=_attempt,
-                        max_attempts=max_attempts,
-                        previous_error=previous_error,
-                    ),
-                }
-            messages_list.append(messages)
         outputs = await asyncio.to_thread(
-            _run_llm_messages, messages_list, config=config, stage="class"
+            _run_llm_messages,
+            [item.messages(attempt, max_attempts) for item in pending],
+            config=config,
+            stage="class",
         )
-        retry: list[tuple[DrugIdentity, Sequence[EvidencePassage], _ClassPlan]] = []
-        for (drug, evidence, plan), raw_output in zip(pending, outputs, strict=True):
-            output = _coerce_catalog_llm_output(raw_output)
-            if _token_limited_finish_reason(output.finish_reason):
-                validation_errors[drug.drug_id] = (
-                    "the response reached its output token limit "
-                    f"(finish_reason={output.finish_reason})"
-                )
-                retry.append((drug, evidence, plan))
-                continue
-            raw_value = _find_json_mapping(output.text, "classes", allow_bare_array=True)
-            if not isinstance(raw_value, Mapping):
-                validation_errors[drug.drug_id] = (
-                    "the final response did not contain a JSON object with a classes "
-                    "array"
-                )
-                retry.append((drug, evidence, plan))
-                continue
-            raw = dict(raw_value)
-            raw["__passage_id_map__"] = {
-                f"P{index}": item.evidence_id
-                for index, item in enumerate(evidence, start=1)
-            }
-            error = _class_output_validation_error(
-                raw,
-                evidence=evidence,
-                candidates=plan.candidates,
-                allow_new=plan.allow_new,
-            )
-            if error:
-                validation_errors[drug.drug_id] = error
-                retry.append((drug, evidence, plan))
-                continue
-            parsed[drug.drug_id] = raw
+        retry: list[_ClassAttempts] = []
+        for item, raw_output in zip(pending, outputs, strict=True):
+            if item.observe(raw_output):
+                retry.append(item)
+            else:
+                parsed[item.drug.drug_id] = item.parsed
         pending = retry
-    for drug, _evidence, _plan in pending:
-        logging.warning(
-            "Class assignment for %s failed validation on every attempt: %s",
-            drug.preferred_name,
-            validation_errors.get(drug.drug_id, "unknown error"),
-        )
+    for item in pending:
+        item.warn_if_failed()
     return parsed
+
+
+async def _default_classify_one(
+    drug: DrugIdentity,
+    evidence: Sequence[EvidencePassage],
+    plan: _ClassPlan,
+    *,
+    config: MMAIConfig,
+    run_messages: _MessagesRunner,
+) -> Mapping[str, Any] | None:
+    """Ask which classes one drug adds, retrying as the grouped step does.
+
+    Returns the validated answer, or ``None`` when no attempt validates.
+    """
+
+    max_classes, max_attempts = _class_attempt_settings(config)
+    item = _ClassAttempts(drug, evidence, plan, max_classes)
+    for attempt in range(1, max_attempts + 1):
+        outputs = await run_messages([item.messages(attempt, max_attempts)])
+        if not item.observe(_single_output(outputs)):
+            break
+    item.warn_if_failed()
+    return item.parsed
 
 
 def _ncit_class_definition_evidence(
@@ -3405,6 +3558,53 @@ async def _gather_bounded(
     return [task.result() for task in tasks]
 
 
+async def _gather_units_continuously(
+    items: Sequence[Any],
+    run: Callable[[Any], Awaitable[Any]],
+    *,
+    limit: int,
+    stage: str,
+) -> list[Any]:
+    """Run one LLM unit per item, at most ``limit`` in flight, in input order.
+
+    Each unit validates and checkpoints its own result when it finishes, and the
+    next waiting item starts in its slot, so a slow answer holds one slot rather
+    than a whole group. An exception in one unit cancels none of the others:
+    no further unit starts, the units already in flight finish and checkpoint,
+    and then the first exception is raised, as the grouped call raised it.
+    Cancellation and interrupts still stop every unit at once.
+    """
+
+    failures: list[Exception] = []
+    finished = 0
+
+    async def run_unless_failed(item: Any) -> Any:
+        nonlocal finished
+        if failures:
+            return None
+        try:
+            result = await run(item)
+        except Exception as error:
+            failures.append(error)
+            return None
+        finished += 1
+        return result
+
+    results = await _gather_bounded(items, run_unless_failed, limit=limit)
+    if failures:
+        logging.warning(
+            "Catalog %s stopped: %d of %d units raised, %d finished, %d never "
+            "started. Units without a checkpoint run again when the build resumes.",
+            stage,
+            len(failures),
+            len(items),
+            finished,
+            len(items) - finished - len(failures),
+        )
+        raise failures[0]
+    return results
+
+
 async def build_good_option_catalog(
     nct_ids: Sequence[str],
     output_path: str | Path,
@@ -3428,6 +3628,13 @@ async def build_good_option_catalog(
     ``subject_concurrency`` drugs (and later classes) are researched at once.
     It and ``web_search_concurrency`` only schedule work, so they are left out
     of the checkpoint fingerprint and may change between resumed runs.
+
+    With a remote backend, each trial is screened and each drug classified on
+    its own, checkpointed as soon as it finishes, with up to
+    ``good_option_catalog.screening_checkpoint_batch_size`` trials and
+    ``class_checkpoint_batch_size`` drugs in flight; the endpoint pool still
+    caps the requests each server runs. A local engine, which batches prompts
+    itself and is not thread-safe, gets groups of those sizes instead.
     """
 
     normalized_ids = tuple(dict.fromkeys(normalize_nct_id(value) for value in nct_ids))
@@ -3577,60 +3784,99 @@ async def build_good_option_catalog(
                 )
         else:
             pending_roles[trial_id] = items
+
+    def record_screening(
+        trial_id: str, output_value: Mapping[str, Mapping[str, Any]]
+    ) -> Mapping[str, Mapping[str, Any]]:
+        """Checkpoint a valid screen, or fail it closed; return what stands."""
+
+        nonlocal screening_completed
+        items = pending_roles[trial_id]
+        if _role_output_is_complete(items, output_value):
+            checkpoint.save(
+                "intervention_screening",
+                trial_id,
+                input_value={
+                    "trial_id": trial_id,
+                    "interventions": [asdict(item) for item in items],
+                },
+                data={"output": dict(output_value)},
+            )
+            screening_completed += 1
+            if progress_callback:
+                progress_callback(
+                    "screening", screening_completed, len(screening_inputs), trial_id
+                )
+            return output_value
+        # Not checkpointed, so a resumed build screens the trial again.
+        validation_error = _role_output_validation_error(items, output_value)
+        fallback_output = _fail_closed_role_output(
+            items,
+            output_value,
+            validation_error=validation_error or "no parsed result",
+        )
+        screening_completed += 1
+        if progress_callback:
+            progress_callback(
+                "screening",
+                screening_completed,
+                len(screening_inputs),
+                f"{trial_id} (fail-closed: "
+                f"{validation_error or 'no parsed result'})",
+            )
+        return fallback_output
+
     if role_resolver is None:
-        pending_role_items = list(pending_roles.items())
+        # Trials in flight with a remote backend; the group size with a local one.
         role_batch_size = max(
             1, int(catalog_config.get("screening_checkpoint_batch_size", 64))
         )
-        for start in range(0, len(pending_role_items), role_batch_size):
-            role_batch = dict(pending_role_items[start : start + role_batch_size])
-            new_role_outputs = await _resolve_roles_with_default_llm(
-                role_batch, config=resolved_config
+        if remote_enabled(resolved_config):
+            screening_executor = ThreadPoolExecutor(
+                max_workers=role_batch_size, thread_name_prefix="catalog-screening"
             )
-            completed_screening: set[str] = set()
-            for trial_id, output_value in new_role_outputs.items():
-                if not _role_output_is_complete(pending_roles[trial_id], output_value):
-                    continue
-                checkpoint_input = {
-                    "trial_id": trial_id,
-                    "interventions": [asdict(item) for item in pending_roles[trial_id]],
-                }
-                checkpoint.save(
-                    "intervention_screening",
+            run_screening = _executor_llm_runner(
+                screening_executor, config=resolved_config, stage="screening"
+            )
+
+            async def screen_one(trial_id: str) -> Mapping[str, Mapping[str, Any]]:
+                output_value = await _resolve_trial_roles_with_default_llm(
                     trial_id,
-                    input_value=checkpoint_input,
-                    data={"output": dict(output_value)},
-                )
-                role_outputs[trial_id] = output_value
-                completed_screening.add(trial_id)
-                screening_completed += 1
-                if progress_callback:
-                    progress_callback(
-                        "screening",
-                        screening_completed,
-                        len(screening_inputs),
-                        trial_id,
-                    )
-            missing_screening = sorted(set(role_batch) - completed_screening)
-            for trial_id in missing_screening:
-                output_value = new_role_outputs.get(trial_id, {})
-                validation_error = _role_output_validation_error(
-                    pending_roles[trial_id], output_value
-                )
-                fallback_output = _fail_closed_role_output(
                     pending_roles[trial_id],
-                    output_value,
-                    validation_error=validation_error or "no parsed result",
+                    config=resolved_config,
+                    run_messages=run_screening,
                 )
-                role_outputs[trial_id] = fallback_output
-                screening_completed += 1
-                if progress_callback:
-                    progress_callback(
-                        "screening",
-                        screening_completed,
-                        len(screening_inputs),
-                        f"{trial_id} (fail-closed: "
-                        f"{validation_error or 'no parsed result'})",
+                return record_screening(trial_id, output_value)
+
+            try:
+                screened = await _gather_units_continuously(
+                    list(pending_roles),
+                    screen_one,
+                    limit=role_batch_size,
+                    stage="screening",
+                )
+            finally:
+                # A cancelled build must not wait for in-flight answers.
+                screening_executor.shutdown(wait=False, cancel_futures=True)
+            role_outputs.update(zip(pending_roles, screened, strict=True))
+        else:
+            pending_role_items = list(pending_roles.items())
+            for start in range(0, len(pending_role_items), role_batch_size):
+                role_batch = dict(pending_role_items[start : start + role_batch_size])
+                new_role_outputs = await _resolve_roles_with_default_llm(
+                    role_batch, config=resolved_config
+                )
+                completed_screening: set[str] = set()
+                for trial_id, output_value in new_role_outputs.items():
+                    if not _role_output_is_complete(
+                        pending_roles[trial_id], output_value
+                    ):
+                        continue
+                    role_outputs[trial_id] = record_screening(trial_id, output_value)
+                    completed_screening.add(trial_id)
+                for trial_id in sorted(set(role_batch) - completed_screening):
+                    role_outputs[trial_id] = record_screening(
+                        trial_id, new_role_outputs.get(trial_id, {})
                     )
     else:
         for trial_id, items in pending_roles.items():
@@ -3842,12 +4088,12 @@ async def build_good_option_catalog(
             "classes": plan.checkpoint_value(),
         }
 
-    def record_classes(
+    def save_classes(
         drug: DrugIdentity,
         mechanism_evidence: Sequence[EvidencePassage],
         plan: _ClassPlan,
         value: Any,
-    ) -> None:
+    ) -> list[DrugClass]:
         nonlocal classify_completed
         # A failed answer still leaves the drug its NCIt hierarchy, and is not
         # checkpointed, so a resumed build asks again.
@@ -3858,7 +4104,6 @@ async def build_good_option_catalog(
             plan=plan,
             classes=class_hierarchy,
         )
-        classes_by_drug[drug.drug_id] = records
         if isinstance(value, Mapping):
             checkpoint.save(
                 "classify",
@@ -3874,6 +4119,17 @@ async def build_good_option_catalog(
                 len(classify_inputs),
                 drug.preferred_name,
             )
+        return records
+
+    def record_classes(
+        drug: DrugIdentity,
+        mechanism_evidence: Sequence[EvidencePassage],
+        plan: _ClassPlan,
+        value: Any,
+    ) -> None:
+        classes_by_drug[drug.drug_id] = save_classes(
+            drug, mechanism_evidence, plan, value
+        )
 
     for drug, mechanism_evidence, plan in classify_inputs:
         saved = checkpoint.load(
@@ -3901,9 +4157,47 @@ async def build_good_option_catalog(
             record_classes(drug, mechanism_evidence, plan, {"classes": []})
         else:
             pending_classify.append((drug, mechanism_evidence, plan))
+    # Drugs in flight with a remote backend; the group size with a local one.
     class_batch_size = max(1, int(catalog_config.get("class_checkpoint_batch_size", 64)))
 
-    if class_resolver is None:
+    if class_resolver is None and remote_enabled(resolved_config):
+        class_executor = ThreadPoolExecutor(
+            max_workers=class_batch_size, thread_name_prefix="catalog-classify"
+        )
+        run_class = _executor_llm_runner(
+            class_executor, config=resolved_config, stage="class"
+        )
+
+        async def classify_one(
+            entry: tuple[DrugIdentity, list[EvidencePassage], _ClassPlan],
+        ) -> list[DrugClass]:
+            drug, mechanism_evidence, plan = entry
+            value = await _default_classify_one(
+                drug,
+                mechanism_evidence,
+                plan,
+                config=resolved_config,
+                run_messages=run_class,
+            )
+            return save_classes(drug, mechanism_evidence, plan, value)
+
+        try:
+            classified = await _gather_units_continuously(
+                pending_classify,
+                classify_one,
+                limit=class_batch_size,
+                stage="classify",
+            )
+        finally:
+            # A cancelled build must not wait for in-flight answers.
+            class_executor.shutdown(wait=False, cancel_futures=True)
+        # Input order, as the grouped step recorded them: the drug_classes
+        # table and the class corpora follow this order.
+        for (drug, _evidence, _plan), records in zip(
+            pending_classify, classified, strict=True
+        ):
+            classes_by_drug[drug.drug_id] = records
+    elif class_resolver is None:
         for start in range(0, len(pending_classify), class_batch_size):
             batch = pending_classify[start : start + class_batch_size]
             batch_outputs = await _default_classify_many(batch, config=resolved_config)

@@ -626,6 +626,8 @@ good_option_catalog:
   screening_max_attempts: 3
   synthesis_max_attempts: 3
   class_assignment_max_attempts: 3
+  # Trials screened and drugs classified at once, each checkpointed as soon as
+  # it finishes (remote backends); a local engine gets groups of these sizes.
   screening_checkpoint_batch_size: 64
   class_checkpoint_batch_size: 64
   # Remote screening and class answers are decoded under their JSON schemas
