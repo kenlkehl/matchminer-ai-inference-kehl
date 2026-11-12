@@ -189,8 +189,12 @@ documented, or the facts conflict). Not applicable always needs documented facts
 Each result also carries a machine-made `bottom_line` (for example "Met: CT
 chest: CT (chest, abdomen, pelvis), with contrast, 2024-03-02 (day precision,
 dated by its report, note note-1a2b)"), every criterion's certain and possible
-counts and anchor, the matching clusters with their dates and mentions, and the
-`evidence` quotes with their `note_id`, `note_date` and character offsets.
+counts and anchor, the matching clusters with their dates and mentions, the
+`closest_non_matches` (items of the same kind, such as the same modality or
+marker, that failed only some filters or the window, with what differed; a
+not-documented explanation names the closest one), and the `evidence` quotes
+with their `note_id`, `note_date` and character offsets. Matches are listed
+certain first, then precisely dated before undated mentions, then most recent.
 `aggregate_extraction_workup` counts statuses, applicability and reasons per
 requirement; *met / applicable assessed* counts met among patients it applies to
 whose result is met or not met.

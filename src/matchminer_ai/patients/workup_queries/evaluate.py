@@ -91,6 +91,16 @@ _MODALITY = {
     "nuclear_medicine_other": "Nuclear medicine study", "fluoroscopy": "Fluoroscopy",
     "bone_densitometry": "DXA",
 }
+#: Fields that say what an item is; a near miss must agree on every one a criterion tests.
+IDENTITY_FIELDS = {
+    "imaging_study": {"modality"},
+    "procedure": {"procedure_type", "procedure_group"},
+    "biomarker": {"biomarker"},
+    "treatment": {"treatment_type", "regimen", "agents"},
+    "diagnosis": {"primary_site", "histology"},
+    "event": {"event_type"},
+    "performance_status": {"scale"},
+}
 _STAGE = re.compile(r"(?:^|\bstage\s*)(iv|iii|ii|i|0|[1-4])(?=[abc]?[0-9]?(?:\b|$))")
 _ROMAN = {"1": "I", "2": "II", "3": "III", "4": "IV"}
 
@@ -486,10 +496,19 @@ class Cluster:
         return self.members[0]
 
 
+def _tightness(view: ItemView) -> float:
+    """Among open-ended intervals, the earlier upper bound (or later lower bound) first."""
+    if view.lo == -INF and view.hi < INF:
+        return view.hi
+    if view.hi == INF and view.lo > -INF:
+        return -view.lo
+    return 0
+
+
 def _precision_rank(view: ItemView) -> tuple:
     source = {"document_text": 0, "note_date": 1, "evidence_note_date": 2, "unknown": 3}
     return (view.width, view.relation != "this_report", source.get(view.source, 3),
-            view.level != "document", -(view.hi if view.hi != INF else 0))
+            view.level != "document", _tightness(view))
 
 
 def cluster_items(views: Sequence[ItemView]) -> list[Cluster]:
@@ -536,6 +555,8 @@ class CriterionResult:
     other_status: list[ClusterResult]
     anchor: dict | None
     reasons: list[str]
+    # The closest items that did not match: (cluster, the fields or window they failed).
+    near: list[tuple] = field(default_factory=list)
 
 
 @dataclass
@@ -594,7 +615,9 @@ def describe_item(view: ItemView) -> str:
         if stage:
             text += f", {stage}" if stage.casefold().startswith("stage") else f", stage {stage}"
     elif kind == "biomarker":
-        text = " ".join(x for x in (item.get("biomarker"), item.get("alteration")) if x)
+        name, alteration = item.get("biomarker") or "", item.get("alteration") or ""
+        repeated = alteration and canonical_text(alteration) in canonical_text(name)
+        text = name if repeated else " ".join(x for x in (name, alteration) if x)
         if item.get("result") and item["result"] != "not_stated":
             text += f" {item['result']}"
         if item.get("value"):
@@ -711,7 +734,7 @@ def evaluate_criterion(ctx: Context, cid: str) -> CriterionResult:
         else:
             bounds = _bounds(interval, window)
     clusters = ctx.clusters(criterion["item_type"])
-    matches, other = [], []
+    matches, other, near = [], [], []
     for cluster in clusters:
         member_states = []
         for view in cluster.members:
@@ -735,17 +758,23 @@ def evaluate_criterion(ctx: Context, cid: str) -> CriterionResult:
             unstated = sorted({u for s, us, _ in member_states if s == MAYBE for u in us})
         else:
             field_state, unstated = NO, []
-        if field_state == NO:
-            continue
         rep = cluster.rep
+        status = criterion["status"]
+        wrong_status = status != "any" and item_type.name in STATUS_TYPES and rep.status != status
+        if field_state == NO:
+            failed = [e["field"] for e in criterion["filters"]
+                      if filter_state(e, fields[e["field"]], rep)[0] == NO]
+            identity = IDENTITY_FIELDS.get(item_type.name, set())
+            if (not wrong_status and len(failed) < len(criterion["filters"])
+                    and not identity & set(failed)):
+                near.append((cluster, failed))
+            continue
         if window["anchor"] == "any_time":
             date_state = YES
         elif anchor_missing:
             date_state = MAYBE
         else:
             date_state = _window_state(rep, bounds)
-        status = criterion["status"]
-        wrong_status = status != "any" and item_type.name in STATUS_TYPES and rep.status != status
         cluster_reasons = []
         if unstated:
             cluster_reasons.append("not stated: " + ", ".join(unstated))
@@ -755,6 +784,8 @@ def evaluate_criterion(ctx: Context, cid: str) -> CriterionResult:
         result = ClusterResult(cluster, min(field_state, date_state), field_state, date_state,
                                cluster_reasons)
         if result.state == NO:
+            if not wrong_status:
+                near.append((cluster, ["date (outside the window)"]))
             continue
         (other if wrong_status else matches).append(result)
     definite = sum(m.state == YES for m in matches)
@@ -764,10 +795,14 @@ def evaluate_criterion(ctx: Context, cid: str) -> CriterionResult:
     candidates = sum(len(c.members) for c in clusters)
     for m in matches:
         reasons.extend(m.reasons)
-    order = sorted(matches, key=lambda m: (-m.state, -(m.cluster.rep.hi if m.cluster.rep.hi < INF
-                                                       else m.cluster.rep.lo)))
+    def recent(view):
+        return view.hi if view.hi < INF else view.lo
+
+    order = sorted(matches, key=lambda m: (-m.state, m.cluster.rep.width > 0,
+                                           -recent(m.cluster.rep)))
+    near.sort(key=lambda n: (len(n[1]), n[0].rep.width > 0, -recent(n[0].rep)))
     result = CriterionResult(criterion, state, definite, possible, candidates, order, other,
-                             anchor_info, sorted(set(reasons)))
+                             anchor_info, sorted(set(reasons)), near[:2])
     ctx.results[cid] = result
     return result
 
@@ -837,6 +872,12 @@ def _criterion_entry(result: CriterionResult) -> dict:
         "anchor": result.anchor,
         "reasons": result.reasons,
         "matches": [_cluster_entry(m, c["label"]) for m in result.matches[:MAX_CLUSTERS_SHOWN]],
+        "closest_non_matches": [
+            {"description": describe_item(cluster.rep), "date_text": _date_text(cluster.rep),
+             "differs_in": failed, "note_ids": sorted({v.note_id for v in cluster.members
+                                                       if v.note_id})}
+            for cluster, failed in result.near
+        ],
         "other_status": [_cluster_entry(m, c["label"])
                          for m in result.other_status[:MAX_CLUSTERS_SHOWN]],
     }
@@ -853,6 +894,10 @@ def _phrase(ctx: Context, literal: dict, state: int) -> str:
             return f"{label}: {describe_item(best.cluster.rep)}, {_date_text(best.cluster.rep)}"
         return f"{label} possibly documented" if best else f"no {label} documented"
     if best is None:
+        if result.near and not literal["negated"]:
+            cluster, failed = result.near[0]
+            return (f"no {label} found (closest: {describe_item(cluster.rep)}, "
+                    f"{_date_text(cluster.rep)}, which differs in {', '.join(failed)})")
         return f"no {label} found"
     text = f"{label}: {describe_item(best.cluster.rep)}, {_date_text(best.cluster.rep)}"
     if result.criterion["min_count"] > 1:

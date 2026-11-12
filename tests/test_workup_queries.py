@@ -323,7 +323,11 @@ def test_the_report_decides_fields_a_mention_contradicts():
                                                   relation="previously_performed", date=None)])
     contrast = query([criterion("ct", "imaging_study", [
         *CT, ("contrast", "in", ["with_contrast"], "unknown")])], [[("ct", False)]])
-    assert run([report, mention], contrast)[0]["status"] == "not_met"
+    result = run([report, mention], contrast)[0]
+    assert result["status"] == "not_met"
+    # A reviewer sees the closest item that did not match, and why.
+    assert "closest: CT (chest), without contrast, 2024-03-02" in result["bottom_line"]
+    assert result["criteria"][0]["closest_non_matches"][0]["differs_in"] == ["contrast"]
     unstated = run([mention], contrast)[0]
     assert unstated["status"] == "unknown" and unstated["reason"] == "fields_not_stated"
     strict = query([criterion("ct", "imaging_study", [
@@ -421,6 +425,13 @@ def test_text_matching_stage_parsing_and_counts():
                                                    "no_match")], status="any")],
                  [[("pdl1", False)]])
     assert run([ok], pdl1)[0]["status"] == "met"
+    repeated = document("n1", "2024-03-01", [{**biomarker("n1", "2024-03-01",
+                                                          "EGFR exon 19 deletion"),
+                                               "alteration": "exon 19 deletion"}])
+    egfr = query([criterion("egfr", "biomarker", [("biomarker", "text_contains_any", ["EGFR"],
+                                                   "no_match")], status="any")],
+                 [[("egfr", False)]])
+    assert "EGFR exon 19 deletion negative" in run([repeated], egfr)[0]["bottom_line"]
     assert [stage_group(s) for s in ("IIIA", "Stage IVB", "4", "pathologic stage IIA", "IB",
                                      "extensive stage", "", "0")] == [
         "III", "IV", "IV", "II", "I", None, None, "0"]
