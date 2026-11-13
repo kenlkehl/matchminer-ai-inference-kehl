@@ -69,7 +69,8 @@ DailyMed, cancer.gov, and a general web search that also downloads and extracts
 the text of the pages it finds. Each source gets a query written in its own
 syntax — boolean for the two literature indexes, prose for the web ones. The
 ctgov, label, and curation sources search by exact agent name and ignore the
-query.
+query, so each of their requests is sent once per drug and its response read by
+every facet and round.
 
 Three adaptive rounds run: the first searches everything, later rounds re-search
 only facets that came back nearly empty, with broadened phrasing. Failures retry

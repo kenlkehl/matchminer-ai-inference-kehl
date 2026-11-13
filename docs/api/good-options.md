@@ -215,8 +215,9 @@ overrides a default, and `--ncbi-api-key-file` supplies an NCBI API key for the
 higher E-utilities rate (see
 [`good_option_catalog`](../reference/configuration.md#good_option_catalog)). The
 command prints the rates it uses and whether a key is set, never the key.
-Neither option is part of the checkpoint fingerprint, so a build can resume with
-different values.
+`--llm-batch-size` sets how many trials are screened, and drugs classified, at
+once (`build_good_option_catalog(llm_batch_size=...)`). None of these options is
+part of the checkpoint fingerprint, so a build can resume with different values.
 
 ## Score a patient-trial candidate
 

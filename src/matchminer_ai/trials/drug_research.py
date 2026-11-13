@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import hashlib
 import html
 import io
@@ -450,6 +451,55 @@ class DrugEvidenceSource(Protocol):
         """Return zero or more bounded passages; raise on technical failure."""
 
 
+class _ReusedResponses:
+    """Successful responses of one subject's research, by request."""
+
+    def __init__(self) -> None:
+        self.responses: dict[str, httpx.Response] = {}
+        self.turns: dict[str, asyncio.Lock] = {}
+
+
+#: Set for the length of one research_drug or research_class call, so every
+#: facet, round and axis of that subject's research shares its responses.
+_REUSED_RESPONSES: contextvars.ContextVar[_ReusedResponses | None] = (
+    contextvars.ContextVar("matchminer_research_responses", default=None)
+)
+
+
+def _reuse_responses() -> contextvars.Token:
+    """Start sharing responses, joining an enclosing research call's if any."""
+
+    return _REUSED_RESPONSES.set(_REUSED_RESPONSES.get() or _ReusedResponses())
+
+
+async def _request_once(
+    client: httpx.AsyncClient, method: str, url: str, **arguments: Any
+) -> httpx.Response:
+    """Send a request once per subject's research and reuse its success.
+
+    For the sources whose request ignores the facet query (ctgov, DailyMed,
+    CIViC), which would otherwise send the same request for each facet and
+    again in later rounds. Each caller still parses the response itself, so
+    each facet's passages keep their fields and order. Concurrent callers wait
+    for the first; a failed response or an error is not kept, so the next caller
+    sends the request again, as it always did. Outside a research call it is a
+    plain request.
+    """
+
+    send = getattr(client, method)
+    reused = _REUSED_RESPONSES.get()
+    if reused is None:
+        return await send(url, **arguments)
+    key = json.dumps([method, url, arguments], sort_keys=True, default=str)
+    async with reused.turns.setdefault(key, asyncio.Lock()):
+        response = reused.responses.get(key)
+        if response is None:
+            response = await send(url, **arguments)
+            if response.is_success:
+                reused.responses[key] = response
+    return response
+
+
 class _MainTextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -705,7 +755,9 @@ class ClinicalTrialsDrugSource:
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
         del query
-        response = await client.get(
+        response = await _request_once(
+            client,
+            "get",
             "https://clinicaltrials.gov/api/v2/studies",
             params={
                 "query.intr": drug.preferred_name,
@@ -864,7 +916,9 @@ class DailyMedDrugSource:
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
         del query
-        response = await client.get(
+        response = await _request_once(
+            client,
+            "get",
             "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json",
             params={
                 "drug_name": drug.preferred_name,
@@ -885,8 +939,10 @@ class DailyMedDrugSource:
             set_id = str(record.get("setid") or "").strip()
             if not set_id:
                 continue
-            label = await client.get(
-                f"https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/{set_id}.xml"
+            label = await _request_once(
+                client,
+                "get",
+                f"https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/{set_id}.xml",
             )
             label.raise_for_status()
             text = _daily_med_sections(label.text, max_chars=settings.max_passage_chars)
@@ -940,7 +996,9 @@ class CIViCDrugSource:
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
         del query
-        response = await client.post(
+        response = await _request_once(
+            client,
+            "post",
             "https://civicdb.org/api/graphql",
             json={
                 "query": self._QUERY,
@@ -1421,7 +1479,9 @@ async def research_class(
 
     Only the query-driven sources run here. The ctgov, label, and curation
     adapters search by exact agent name, so a class name returns nothing from
-    them and asking costs a request per class for no evidence.
+    them and asking costs a request per class for no evidence. Configured in
+    anyway, each of their requests is sent once per call, as in
+    :func:`research_drug`.
     """
 
     resolved_settings = settings or ResearchSettings()
@@ -1437,6 +1497,7 @@ async def research_class(
             follow_redirects=True,
             headers={"Accept": "application/json, text/html, application/xml"},
         )
+    reuse = _reuse_responses()
     try:
         evidence, attempts, failures = await research_subject(
             subject_for_class(class_id, class_name, aliases),
@@ -1512,6 +1573,7 @@ async def research_class(
             list(dict.fromkeys(failures)),
         )
     finally:
+        _REUSED_RESPONSES.reset(reuse)
         if owns_client:
             await client.aclose()
 
@@ -1616,6 +1678,10 @@ async def research_drug(
     When ``indications`` are supplied, each also gets its own bounded pass with
     the disease as a required clause. The catalog is still patient-free: those
     diseases come from the ctgov records of the trials the drug appears in.
+
+    The ctgov, label, and curation sources ignore the facet query, so each of
+    their requests is sent once per call and its response read by every facet,
+    round and axis that asks again.
     """
 
     resolved_settings = settings or ResearchSettings()
@@ -1627,6 +1693,7 @@ async def research_drug(
             follow_redirects=True,
             headers={"Accept": "application/json, text/html, application/xml"},
         )
+    reuse = _reuse_responses()
     try:
         evidence, attempts, failures = await research_subject(
             subject_for_drug(drug),
@@ -1672,6 +1739,7 @@ async def research_drug(
             list(dict.fromkeys(failures)),
         )
     finally:
+        _REUSED_RESPONSES.reset(reuse)
         if owns_client:
             await client.aclose()
 

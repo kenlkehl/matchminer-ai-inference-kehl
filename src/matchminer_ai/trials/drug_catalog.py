@@ -3725,6 +3725,7 @@ async def build_good_option_catalog(
     web_search_concurrency: int = 12,
     host_requests_per_second: Mapping[str, float] | None = None,
     ncbi_api_key_file: str | Path | None = None,
+    llm_batch_size: int | None = None,
 ) -> GoodOptionCatalog:
     """Screen and research cancer-treatment agents with public-only checkpoints.
 
@@ -3742,6 +3743,11 @@ async def build_good_option_catalog(
     ``class_checkpoint_batch_size`` drugs in flight; the endpoint pool still
     caps the requests each server runs. A local engine, which batches prompts
     itself and is not thread-safe, gets groups of those sizes instead.
+    ``llm_batch_size`` replaces both sizes for this run. Remote or local, each
+    trial and drug gets its own prompts, retries and checkpoint, recorded in
+    input order, so the sizes only schedule: the override is left out of the
+    fingerprint like ``subject_concurrency`` and may change between resumed
+    runs. The two keys themselves stay in it, as they always were.
     """
 
     normalized_ids = tuple(dict.fromkeys(normalize_nct_id(value) for value in nct_ids))
@@ -3752,7 +3758,12 @@ async def build_good_option_catalog(
         raise FileExistsError(f"Catalog output already exists: {output}")
     resolved_config = config or load_default_preset()
     resolved_settings = settings or ResearchSettings()
-    catalog_config = dict(resolved_config.raw.get("good_option_catalog", {}))
+    # The section the checkpoint fingerprint hashes, so that a value set on it
+    # takes effect; a copy, so the batch-size override stays out of the hash.
+    catalog_config = dict(resolved_config.good_option_catalog)
+    if llm_batch_size is not None:
+        for stage in ("screening", "class"):
+            catalog_config[f"{stage}_checkpoint_batch_size"] = llm_batch_size
     ncit_resource = str(catalog_config.get("ncit_resource") or "")
     ncit_version = str(catalog_config.get("ncit_version") or "unknown")
     if not ncit_resource:

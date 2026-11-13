@@ -913,8 +913,13 @@ checkpointed as soon as it finishes, and the next waiting one starts in its
 place, so one slow answer holds one slot instead of a batch; the endpoint pool
 still caps each server's concurrent requests, and units beyond that wait for
 it. A local engine, which batches prompts itself and is not thread-safe, gets
-groups of these sizes instead, checkpointed when each group returns. Both keys
-are part of the checkpoint fingerprint. Synthesis is not batched either: each
+groups of these sizes instead, checkpointed when each group returns. Either
+way each trial or drug gets its own prompts, retries and checkpoint, recorded in
+input order, so the sizes only schedule. Both keys are still part of the
+checkpoint fingerprint, as they always were, so changing them here starts a new
+checkpoint directory; the command line's `--llm-batch-size` overrides both for
+one run without entering the fingerprint, so a build can resume with another
+value. Synthesis is not batched either: each
 drug or class is its own chain of chunk calls, checkpointed as soon as that
 chain finishes, with up to `remote.max_concurrent_requests` chains in flight. Screening and synthesis LLM overrides inherit from
 `llm_good_option`. With a remote backend, `structured_outputs` (default `true`)

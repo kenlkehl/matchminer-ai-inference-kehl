@@ -18,6 +18,8 @@ import pandas as pd
 import pytest
 
 import matchminer_ai.trials.drug_catalog as catalog_module
+import matchminer_ai.trials.drug_research as research_module
+from matchminer_ai.cli import build_good_option_catalog as catalog_cli
 from matchminer_ai.config import config_snapshot, load_default_preset
 from matchminer_ai.llm.model_profiles import apply_model_profile
 from matchminer_ai.matching import (
@@ -46,6 +48,9 @@ from matchminer_ai.trials import (
     validate_good_option_catalog,
 )
 from matchminer_ai.trials.drug_research import (
+    CIViCDrugSource,
+    ClinicalTrialsDrugSource,
+    DailyMedDrugSource,
     GeneralWebEvidenceSource,
     HostRateLimiter,
     PubMedDrugSource,
@@ -3646,6 +3651,115 @@ def test_ncbi_api_key_rides_in_eutils_bodies_and_never_in_saved_text(
     assert planted not in caplog.text
 
 
+def _query_free_response(request: httpx.Request) -> httpx.Response:
+    """Fabricated ctgov, DailyMed and CIViC answers; CIViC's first is a 429."""
+
+    if request.url.host == "clinicaltrials.gov":
+        study = {
+            "protocolSection": {
+                "identificationModule": {
+                    "nctId": "NCT12345678",
+                    "briefTitle": "Novel agent study",
+                },
+                "descriptionModule": {"briefSummary": "A synthetic public trial."},
+            }
+        }
+        return httpx.Response(200, json={"studies": [study]})
+    if request.url.path.endswith("spls.json"):
+        return httpx.Response(200, json={"data": [{"setid": "S1", "title": "Label"}]})
+    if request.url.host == "dailymed.nlm.nih.gov":
+        # No requested section, so no passage: each facet has one passage after
+        # the first round and is searched again in the second.
+        return httpx.Response(
+            200,
+            text="<document><section><title>DESCRIPTION</title>"
+            "<text>Synthetic.</text></section></document>",
+        )
+    return httpx.Response(200, json={"data": {"evidenceItems": {"nodes": []}}})
+
+
+def test_query_free_sources_send_each_request_once_and_record_the_same_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(research_module, "utc_now", lambda: "2026-11-13T00:00:00+00:00")
+    recorded: list[tuple[str, list[dict[str, Any]], list[dict[str, Any]]]] = []
+    research_subject = research_module.research_subject
+
+    async def recording_subject(subject, **arguments):
+        evidence, attempts, failures = await research_subject(subject, **arguments)
+        recorded.append(
+            (
+                subject.query_scope,
+                [item.to_record() for item in evidence],
+                [item.to_record() for item in attempts],
+            )
+        )
+        return evidence, attempts, failures
+
+    monkeypatch.setattr(research_module, "research_subject", recording_subject)
+
+    async def no_sleep(_seconds: float) -> None:
+        return None
+
+    def run() -> tuple[Counter[tuple[str, str]], list, tuple]:
+        requests: Counter[tuple[str, str]] = Counter()
+        civic_calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal civic_calls
+            requests[(request.method, str(request.url))] += 1
+            if request.url.host == "civicdb.org":
+                civic_calls += 1
+                if civic_calls == 1:
+                    return httpx.Response(429, headers={"Retry-After": "0"})
+            return _query_free_response(request)
+
+        async def research():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                return await research_drug(
+                    DrugIdentity("D1", "Novel Agent"),
+                    sources=[
+                        ClinicalTrialsDrugSource(),
+                        DailyMedDrugSource(),
+                        CIViCDrugSource(),
+                    ],
+                    client=client,
+                    sleep=no_sleep,
+                )
+
+        recorded.clear()
+        evidence, attempts, status, failures = asyncio.run(research())
+        result = (
+            [item.to_record() for item in evidence],
+            [item.to_record() for item in attempts],
+            status,
+            failures,
+        )
+        return requests, list(recorded), result
+
+    reused_requests, reused_subjects, reused_result = run()
+
+    async def plain_request(client, method, url, **arguments):
+        return await getattr(client, method)(url, **arguments)
+
+    monkeypatch.setattr(research_module, "_request_once", plain_request)
+    plain_requests, plain_subjects, plain_result = run()
+
+    # 5 facets x 2 rounds asked each source the same thing, plus one CIViC 429.
+    assert set(plain_requests) == set(reused_requests)
+    assert len(plain_requests) == 4
+    assert sum(plain_requests.values()) == 41
+    # Now each request is sent once; the 429 is not reused but asked again.
+    assert sorted(reused_requests.values()) == [1, 1, 1, 2]
+    # Every facet and round records the same passages and attempts as before.
+    assert reused_subjects == plain_subjects
+    assert reused_result == plain_result
+    (_scope, evidence, attempts), = reused_subjects
+    assert len(evidence) == 10 and len(attempts) == 31
+    assert len({item["evidence_id"] for item in evidence}) == 5  # one per facet
+    assert reused_result[2] == "complete"
+
+
 def test_catalog_pacing_and_ncbi_key_stay_out_of_fingerprint_and_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3892,10 +4006,8 @@ def _checkpoint_records(root: Path, stage: str) -> dict[str, dict[str, Any]]:
 def _scheduling_config(*, remote: bool, in_flight: int):
     config = load_default_preset()
     config.remote["enabled"] = remote
-    # The build reads these from the raw section, the fingerprint from the copy.
-    for section in (config.good_option_catalog, config.raw["good_option_catalog"]):
-        section["screening_checkpoint_batch_size"] = in_flight
-        section["class_checkpoint_batch_size"] = in_flight
+    config.good_option_catalog["screening_checkpoint_batch_size"] = in_flight
+    config.good_option_catalog["class_checkpoint_batch_size"] = in_flight
     return config
 
 
@@ -4012,6 +4124,78 @@ def test_remote_screening_checkpoints_each_trial_without_waiting_for_a_slow_one(
     assert set(catalog.trial_intervention_screening["trial_id"]) == set(
         _SCHEDULED_TRIALS
     )
+
+
+def test_llm_batch_size_flag_caps_trials_in_flight_outside_the_fingerprint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The command line hands the flag to the build and leaves the config alone.
+    builds: list[tuple[Any, dict[str, Any]]] = []
+
+    async def fake_build(_nct_ids, output, *, config, **arguments):
+        builds.append((config, arguments))
+        return SimpleNamespace(path=output)
+
+    monkeypatch.setattr(catalog_cli, "build_good_option_catalog", fake_build)
+    monkeypatch.setattr(
+        catalog_cli, "configure_served_model", lambda *_args, **_kw: ("served", None)
+    )
+    monkeypatch.setattr(
+        catalog_cli, "validate_good_option_catalog", lambda _path: {"counts": {}}
+    )
+    command = [
+        "--nct-id", "NCT12345678",
+        "--output", str(tmp_path / "cli"),
+        "--server-url", "http://endpoint.test/v1",
+    ]
+    assert catalog_cli.main(command) == 0
+    assert catalog_cli.main([*command, "--llm-batch-size", "2"]) == 0
+    (plain_config, plain), (flagged_config, flagged) = builds
+    assert plain["llm_batch_size"] is None and flagged["llm_batch_size"] == 2
+    assert flagged_config.good_option_catalog == plain_config.good_option_catalog
+
+    # The build screens that many at once though its section still says 64, and
+    # fingerprints exactly as it does without the override.
+    _patch_catalog_sources(monkeypatch)
+    lock = threading.Lock()
+    started = in_flight = peak = 0
+    first_two_together = threading.Barrier(2, timeout=10)
+
+    def fake_run(messages_list, *, config, stage, reasoning_off=False):
+        nonlocal started, in_flight, peak
+        del messages_list, config, stage, reasoning_off
+        with lock:
+            started += 1
+            first_two = started <= 2
+            in_flight += 1
+            peak = max(peak, in_flight)
+        try:
+            if first_two:
+                first_two_together.wait()
+            return [_valid_screen()]
+        finally:
+            with lock:
+                in_flight -= 1
+
+    monkeypatch.setattr(catalog_module, "_run_llm_messages", fake_run)
+    for name, arguments in (("flag", {"llm_batch_size": 2}), ("plain", {})):
+        _scheduled_build(
+            tmp_path / name,
+            _SCHEDULED_TRIALS,
+            _scheduling_config(remote=True, in_flight=64),
+            [],
+            class_resolver=no_classes,
+            **arguments,
+        )
+        if name == "flag":
+            assert peak == 2
+    fingerprints = {
+        json.loads((tmp_path / name / "checkpoints" / "manifest.json").read_text())[
+            "run_fingerprint_sha256"
+        ]
+        for name in ("flag", "plain")
+    }
+    assert len(fingerprints) == 1
 
 
 def _scripted_screening_build(

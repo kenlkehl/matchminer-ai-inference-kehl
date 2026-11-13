@@ -127,7 +127,9 @@ def build_parser() -> argparse.ArgumentParser:
             "endpoint still runs at most --max-concurrent-requests, and the "
             "rest wait for it. Synthesis likewise checkpoints each subject when "
             "its own chain finishes, with up to --max-concurrent-requests chains "
-            "in flight. Part of the checkpoint fingerprint."
+            "in flight. Overrides good_option_catalog.screening_checkpoint_"
+            "batch_size and class_checkpoint_batch_size. Scheduling only: not "
+            "part of the checkpoint fingerprint, so it can change on resume."
         ),
     )
     parser.add_argument("--research-concurrency", type=int, default=None)
@@ -201,11 +203,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         model_name=args.model or None,
     )
     config.remote["max_concurrent_requests"] = args.max_concurrent_requests
-    if args.llm_batch_size is not None:
-        for stage in ("screening", "class"):
-            config.good_option_catalog[f"{stage}_checkpoint_batch_size"] = (
-                args.llm_batch_size
-            )
     config.remote["request_timeout"] = args.llm_request_timeout
     remote = config.llm_good_option["remote"]
     print(
@@ -261,6 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             web_search_concurrency=args.web_search_concurrency,
             host_requests_per_second=host_rates,
             ncbi_api_key_file=args.ncbi_api_key_file or None,
+            llm_batch_size=args.llm_batch_size,
         )
     )
     manifest = validate_good_option_catalog(catalog.path)

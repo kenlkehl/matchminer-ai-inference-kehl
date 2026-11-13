@@ -676,6 +676,7 @@ good_option_catalog:
   class_assignment_max_attempts: 3
   # Trials screened and drugs classified at once, each checkpointed as soon as
   # it finishes (remote backends); a local engine gets groups of these sizes.
+  # Fingerprinted here; --llm-batch-size overrides both outside the fingerprint.
   screening_checkpoint_batch_size: 64
   class_checkpoint_batch_size: 64
   # Remote screening and class answers are decoded under their JSON schemas
