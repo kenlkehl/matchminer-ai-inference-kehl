@@ -30,7 +30,12 @@ from matchminer_ai.good_options import ResearchSettings
 from matchminer_ai.llm.model_profiles import configure_served_model
 from matchminer_ai.trials.drug_catalog import (
     build_good_option_catalog,
+    catalog_research_pacing,
     validate_good_option_catalog,
+)
+from matchminer_ai.trials.drug_research import (
+    DEFAULT_HOST_REQUESTS_PER_SECOND,
+    NCBI_API_KEY_REQUESTS_PER_SECOND,
 )
 
 _NCT_PATTERN = re.compile(r"NCT\d{8}")
@@ -63,6 +68,19 @@ def catalog_llm_sections(config: MMAIConfig) -> tuple[str, ...]:
     """The base GoodOption LLM section plus each catalog stage override."""
     stages = sorted(key for key in config.good_option_catalog if key.endswith("_llm"))
     return ("llm_good_option", *(f"good_option_catalog.{key}" for key in stages))
+
+
+def host_rate(value: str) -> tuple[str, float]:
+    """Parse one ``HOST=REQUESTS_PER_SECOND`` override."""
+    host, separator, rate = value.partition("=")
+    try:
+        if separator and host.strip():
+            return host.strip(), float(rate)
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError(
+        f"expected HOST=REQUESTS_PER_SECOND, got {value!r}"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -128,6 +146,34 @@ def build_parser() -> argparse.ArgumentParser:
         default=12,
         help="General-web searches in flight across all subjects.",
     )
+    parser.add_argument(
+        "--host-requests-per-second",
+        type=host_rate,
+        action="append",
+        default=[],
+        metavar="HOST=RATE",
+        help=(
+            "Pace one host's research requests, shared by every subject; repeat "
+            "per host, 0 leaves it unpaced. Overrides "
+            "good_option_catalog.host_requests_per_second and the defaults ("
+            + ", ".join(
+                f"{host} {rate:g}"
+                for host, rate in sorted(DEFAULT_HOST_REQUESTS_PER_SECOND.items())
+            )
+            + f"; E-utilities {NCBI_API_KEY_REQUESTS_PER_SECOND:g} with an NCBI "
+            "API key). Scheduling only: not part of the checkpoint fingerprint."
+        ),
+    )
+    parser.add_argument(
+        "--ncbi-api-key-file",
+        default="",
+        help=(
+            "File holding an NCBI API key, sent with PubMed requests for NCBI's "
+            "higher E-utilities rate. Overrides good_option_catalog."
+            "ncbi_api_key_file and the NCBI_API_KEY environment variable. Not "
+            "part of the checkpoint fingerprint."
+        ),
+    )
     parser.add_argument("--research-request-timeout", type=float, default=None)
     parser.add_argument("--reset-checkpoints", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
@@ -183,6 +229,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         if value is not None
     }
     settings = dataclasses.replace(ResearchSettings(), **overrides)
+    host_rates = dict(args.host_requests_per_second)
+    rates, api_key = catalog_research_pacing(
+        config,
+        host_requests_per_second=host_rates,
+        ncbi_api_key_file=args.ncbi_api_key_file or None,
+    )
+    print(
+        "Research requests per second: "
+        + ", ".join(f"{host} {rate:g}" for host, rate in sorted(rates.items()))
+        + f"; NCBI API key {'set' if api_key else 'not set'}",
+        flush=True,
+    )
     started = time.monotonic()
 
     def progress(stage: str, completed: int, total: int, label: str) -> None:
@@ -201,6 +259,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             progress_callback=progress,
             subject_concurrency=args.subject_concurrency,
             web_search_concurrency=args.web_search_concurrency,
+            host_requests_per_second=host_rates,
+            ncbi_api_key_file=args.ncbi_api_key_file or None,
         )
     )
     manifest = validate_good_option_catalog(catalog.path)

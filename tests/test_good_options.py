@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import threading
 import time
@@ -10,13 +11,14 @@ from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs
 
 import httpx
 import pandas as pd
 import pytest
 
 import matchminer_ai.trials.drug_catalog as catalog_module
-from matchminer_ai.config import load_default_preset
+from matchminer_ai.config import config_snapshot, load_default_preset
 from matchminer_ai.llm.model_profiles import apply_model_profile
 from matchminer_ai.matching import (
     RUBRIC_CRITERIA,
@@ -46,7 +48,12 @@ from matchminer_ai.trials import (
 from matchminer_ai.trials.drug_research import (
     GeneralWebEvidenceSource,
     HostRateLimiter,
+    PubMedDrugSource,
     build_facet_query,
+    default_host_rates,
+    ncbi_api_key,
+    paced_client,
+    resolve_host_rates,
 )
 
 
@@ -3489,6 +3496,228 @@ def test_host_rate_limiter_paces_only_the_configured_host() -> None:
     assert all(later - earlier >= 0.045 for earlier, later in zip(paced, paced[1:]))
     unpaced = started["example.test"]
     assert max(unpaced) - min(unpaced) < 0.045
+
+
+_PUBMED_XML = (
+    "<PubmedArticleSet>"
+    + "".join(
+        f"<PubmedArticle><MedlineCitation><PMID>{pmid}</PMID><Article>"
+        f"<ArticleTitle>Synthetic article {pmid}</ArticleTitle><Abstract>"
+        f"<AbstractText>Synthetic abstract {pmid}.</AbstractText></Abstract>"
+        "</Article></MedlineCitation></PubmedArticle>"
+        for pmid in ("1", "2")
+    )
+    + "</PubmedArticleSet>"
+)
+
+
+def _eutils_response(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("esearch.fcgi"):
+        return httpx.Response(200, json={"esearchresult": {"idlist": ["1", "2"]}})
+    return httpx.Response(200, text=_PUBMED_XML)
+
+
+def test_default_host_rates_pace_ctgov_dailymed_and_eutils_by_ncbi_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("NCBI_API_KEY", raising=False)
+    # About 70% of each per-IP ceiling: ~50/minute, none published, 3/second.
+    assert default_host_rates() == {
+        "clinicaltrials.gov": 0.6,
+        "dailymed.nlm.nih.gov": 1.0,
+        "eutils.ncbi.nlm.nih.gov": 2.0,
+    }
+    monkeypatch.setenv("NCBI_API_KEY", "synthetic-ncbi-key")
+    assert default_host_rates()["eutils.ncbi.nlm.nih.gov"] == 7.0  # of 10/second
+    rates = resolve_host_rates(
+        {"ClinicalTrials.gov": 0.25, "dailymed.nlm.nih.gov": 0}, has_ncbi_api_key=False
+    )
+    assert rates["clinicaltrials.gov"] == 0.25
+    assert rates["eutils.ncbi.nlm.nih.gov"] == 2.0
+    assert "dailymed.nlm.nih.gov" not in HostRateLimiter(rates)._intervals
+    for bad in ({"https://clinicaltrials.gov": 1}, {"clinicaltrials.gov": -1}):
+        with pytest.raises(ValueError, match="Invalid request rate"):
+            resolve_host_rates(bad)
+
+
+def test_paced_client_spaces_one_host_across_concurrent_subjects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Subjects share one budget, spaced from when each request actually left.
+
+    The handler holds up the event loop as page and PDF parsing does; requests
+    whose turns came up meanwhile must not then leave together.
+    """
+
+    interval = 0.02
+    arrivals: list[float] = []
+    transports: dict[str, set[int]] = {}
+
+    async def serve(self, request: httpx.Request) -> httpx.Response:
+        transports.setdefault(request.url.host, set()).add(id(self))
+        if request.url.host != "eutils.ncbi.nlm.nih.gov":
+            return httpx.Response(200)
+        arrivals.append(asyncio.get_running_loop().time())
+        if request.url.path.endswith("esearch.fcgi"):
+            time.sleep(2.5 * interval)
+        return _eutils_response(request)
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", serve)
+
+    async def run() -> list[str]:
+        limiter = HostRateLimiter({"eutils.ncbi.nlm.nih.gov": 1 / interval})
+        async with paced_client(limiter, timeout=httpx.Timeout(5.0)) as client:
+            await client.get("https://example.test/page")
+            results = await asyncio.gather(
+                *(
+                    research_drug(
+                        DrugIdentity(f"D{index}", name),
+                        sources=[PubMedDrugSource(api_key="")],
+                        client=client,
+                    )
+                    for index, name in enumerate(("Alpha", "Beta", "Gamma"))
+                )
+            )
+        return [status for _evidence, _attempts, status, _failures in results]
+
+    assert asyncio.run(run()) == ["complete"] * 3
+    assert len(arrivals) == 30  # 3 subjects x 5 facets x (esearch + efetch)
+    gaps = [later - earlier for earlier, later in zip(arrivals, arrivals[1:])]
+    assert min(gaps) >= 0.9 * interval
+    # Paced requests use a connection pool of their own, not the shared one.
+    assert transports["eutils.ncbi.nlm.nih.gov"].isdisjoint(transports["example.test"])
+
+
+def test_ncbi_api_key_rides_in_eutils_bodies_and_never_in_saved_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    planted = "fakefakefakefake"  # a placeholder NCBI API key
+    key_file = tmp_path / "ncbi.key"
+    key_file.write_text(f"{planted}\n", encoding="utf-8")
+    monkeypatch.delenv("NCBI_API_KEY", raising=False)
+    assert ncbi_api_key() == ""
+    assert ncbi_api_key(key_file) == planted
+    with pytest.raises(ValueError) as unreadable:
+        ncbi_api_key(tmp_path / "missing.key")
+    assert "missing.key" in str(unreadable.value)
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) == 1:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return _eutils_response(request)
+
+    async def no_sleep(_seconds: float) -> None:
+        return None
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await research_drug(
+                DrugIdentity("D1", "Novel Agent"),
+                sources=[PubMedDrugSource(api_key=ncbi_api_key(key_file))],
+                client=client,
+                sleep=no_sleep,
+            )
+
+    with caplog.at_level(logging.DEBUG):
+        evidence, attempts, status, _failures = asyncio.run(run())
+
+    assert status == "complete"
+    assert "429" in attempts[0].error_message
+    assert all(
+        request.method == "POST" and not request.url.query for request in requests
+    )
+    for request in requests:
+        body = parse_qs(request.content.decode())
+        assert body["api_key"] == [planted] and body["tool"] == ["matchminer-ai"]
+        assert "email" not in body
+    assert any("HTTP Request: POST https://eutils" in line for line in caplog.messages)
+    saved = json.dumps(
+        [
+            *(item.to_record() for item in attempts),
+            *(item.to_record() for item in evidence),
+        ]
+    )
+    assert planted not in saved
+    assert planted not in caplog.text
+
+
+def test_catalog_pacing_and_ncbi_key_stay_out_of_fingerprint_and_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    planted = "fakefakefakefake"  # a placeholder NCBI API key
+    key_file = tmp_path / "ncbi.key"
+    key_file.write_text(planted, encoding="utf-8")
+    monkeypatch.delenv("NCBI_API_KEY", raising=False)
+    pubmed_keys: list[str | None] = []
+
+    async def fake_fetch(_nct_id: str, *, client):
+        del client
+        return json.loads(json.dumps(STUDY))
+
+    async def fake_research(_drug, *, sources, **_kwargs):
+        pubmed_keys.extend(
+            source._api_key for source in sources if source.name == "pubmed"
+        )
+        return [], [], "complete", []
+
+    def synthesize(_drug, _evidence):
+        return {category: [] for category in catalog_module._SYNTHESIS_CATEGORIES}
+
+    monkeypatch.setattr(catalog_module, "fetch_trial_study", fake_fetch)
+    monkeypatch.setattr(catalog_module, "load_ncit_drug_index", lambda _path: _NoNCIt())
+    monkeypatch.setattr(catalog_module, "research_drug", fake_research)
+
+    def build(name: str, config, **pacing) -> str:
+        asyncio.run(
+            build_good_option_catalog(
+                ["NCT12345678"],
+                tmp_path / name,
+                config=config,
+                settings=ResearchSettings(max_attempts=1),
+                role_resolver=lambda _trial_id, _items: _screening_result(),
+                synthesizer=synthesize,
+                class_resolver=no_classes,
+                **pacing,
+            )
+        )
+        manifest = json.loads(
+            (tmp_path / f"{name}_checkpoints" / "manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        return manifest["run_fingerprint_sha256"]
+
+    plain = build("plain", load_default_preset())
+    assert pubmed_keys == ["", ""]
+
+    config = load_default_preset()
+    config.good_option_catalog["host_requests_per_second"] = {"clinicaltrials.gov": 0.3}
+    config.good_option_catalog["ncbi_api_key_file"] = str(key_file)
+    rates, _key = catalog_module.catalog_research_pacing(
+        config, host_requests_per_second={"dailymed.nlm.nih.gov": 0.5}
+    )
+    assert rates == {
+        "clinicaltrials.gov": 0.3,
+        "dailymed.nlm.nih.gov": 0.5,
+        "eutils.ncbi.nlm.nih.gov": 7.0,
+    }
+    paced = build(
+        "paced",
+        config,
+        host_requests_per_second={"dailymed.nlm.nih.gov": 0.5},
+        ncbi_api_key_file=key_file,
+    )
+    assert pubmed_keys[2:] == [planted, planted]
+    # Scheduling settings: an existing checkpoint directory resumes unchanged.
+    assert paced == plain
+    assert planted not in json.dumps(config_snapshot(config))
+    for path in tmp_path.rglob("*.json"):
+        assert planted not in path.read_text(encoding="utf-8"), path
 
 
 def test_catalog_resumes_completed_drug_synthesis(

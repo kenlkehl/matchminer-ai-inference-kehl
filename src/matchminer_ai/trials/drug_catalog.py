@@ -64,10 +64,12 @@ from .drug_research import (
     ResearchSettings,
     clean_indication,
     clean_text,
-    default_host_rates,
     default_sources,
+    ncbi_api_key,
+    paced_client,
     research_class,
     research_drug,
+    resolve_host_rates,
     utc_now,
 )
 
@@ -314,6 +316,43 @@ def _callable_identity(value: Any, *, default: str) -> str:
     return f"{module}.{getattr(target, '__qualname__', '')}"
 
 
+#: ``good_option_catalog`` keys that only schedule research requests. They are
+#: left out of the checkpoint fingerprint, so changing them resumes a build.
+CATALOG_SCHEDULING_KEYS = ("host_requests_per_second", "ncbi_api_key_file")
+
+
+def catalog_research_pacing(
+    config: MMAIConfig,
+    *,
+    host_requests_per_second: Mapping[str, float] | None = None,
+    ncbi_api_key_file: str | Path | None = None,
+) -> tuple[dict[str, float], str]:
+    """The per-host request rates and NCBI API key a catalog build researches with.
+
+    ``host_requests_per_second`` overrides the section's
+    ``host_requests_per_second``, which overrides the defaults; with an NCBI API
+    key, E-utilities defaults to NCBI's keyed rate. ``ncbi_api_key_file``
+    overrides the section's ``ncbi_api_key_file``, which overrides
+    ``NCBI_API_KEY``. The key is returned for the PubMed source only.
+    """
+
+    section = config.good_option_catalog
+    configured = section.get("host_requests_per_second") or {}
+    if not isinstance(configured, Mapping):
+        raise ValueError(
+            "good_option_catalog.host_requests_per_second must map host names "
+            "to requests per second."
+        )
+    api_key = ncbi_api_key(
+        ncbi_api_key_file or section.get("ncbi_api_key_file") or None
+    )
+    rates = resolve_host_rates(
+        {**configured, **(host_requests_per_second or {})},
+        has_ncbi_api_key=bool(api_key),
+    )
+    return rates, api_key
+
+
 def _checkpoint_run_spec(
     *,
     nct_ids: Sequence[str],
@@ -331,7 +370,11 @@ def _checkpoint_run_spec(
             "remote_enabled": bool(config.remote.get("enabled", False)),
             "remote_provider": str(config.remote.get("provider") or ""),
             "llm_good_option": config.llm_good_option,
-            "good_option_catalog": config.good_option_catalog,
+            "good_option_catalog": {
+                key: value
+                for key, value in config.good_option_catalog.items()
+                if key not in CATALOG_SCHEDULING_KEYS
+            },
         }
     )
     return {
@@ -3680,12 +3723,18 @@ async def build_good_option_catalog(
     progress_callback: Callable[[str, int, int, str], None] | None = None,
     subject_concurrency: int = 1,
     web_search_concurrency: int = 12,
+    host_requests_per_second: Mapping[str, float] | None = None,
+    ncbi_api_key_file: str | Path | None = None,
 ) -> GoodOptionCatalog:
     """Screen and research cancer-treatment agents with public-only checkpoints.
 
     ``subject_concurrency`` drugs (and later classes) are researched at once.
     It and ``web_search_concurrency`` only schedule work, so they are left out
-    of the checkpoint fingerprint and may change between resumed runs.
+    of the checkpoint fingerprint and may change between resumed runs. So do
+    ``host_requests_per_second``, which paces each host across every subject
+    and every stage, and ``ncbi_api_key_file``, which unlocks NCBI's higher
+    E-utilities rate for the built-in PubMed source; both override their
+    ``good_option_catalog`` keys (see :func:`catalog_research_pacing`).
 
     With a remote backend, each trial is screened and each drug classified on
     its own, checkpointed as soon as it finishes, with up to
@@ -3709,7 +3758,14 @@ async def build_good_option_catalog(
     if not ncit_resource:
         raise ValueError("GoodOption catalog configuration is missing ncit_resource.")
     ncit_index = load_ncit_drug_index(ncit_resource)
-    resolved_sources = tuple(sources or default_sources(web_provider))
+    host_rates, api_key = catalog_research_pacing(
+        resolved_config,
+        host_requests_per_second=host_requests_per_second,
+        ncbi_api_key_file=ncbi_api_key_file,
+    )
+    resolved_sources = tuple(
+        sources or default_sources(web_provider, ncbi_api_key=api_key)
+    )
     resolved_checkpoint_path = (
         Path(checkpoint_path).expanduser().resolve()
         if checkpoint_path is not None
@@ -3740,11 +3796,14 @@ async def build_good_option_catalog(
         reset=reset_checkpoint,
     )
     timeout = httpx.Timeout(max(1.0, resolved_settings.request_timeout))
+    # Request limits are per IP, so every stage and every concurrent subject
+    # draws on one shared budget per host rather than pacing itself.
+    host_limiter = HostRateLimiter(host_rates)
     ctgov_rows: list[dict[str, Any]] = []
     attempts: list[ResearchAttempt] = []
     studies: dict[str, Mapping[str, Any]] = {}
     interventions_by_trial: dict[str, tuple[_CtgovIntervention, ...]] = {}
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with paced_client(host_limiter, timeout=timeout) as client:
         for index, trial_id in enumerate(normalized_ids, start=1):
             checkpoint_input = {"trial_id": trial_id}
             saved = checkpoint.load("ctgov", trial_id, input_value=checkpoint_input)
@@ -3979,9 +4038,6 @@ async def build_good_option_catalog(
         assignments, studies, limit=resolved_settings.indication_terms_per_drug
     )
 
-    # Web search and E-utilities limits are per IP, so every concurrent subject
-    # draws on one shared budget rather than pacing itself.
-    host_limiter = HostRateLimiter(default_host_rates())
     if sources is None:
         for source in resolved_sources:
             if isinstance(source, GeneralWebEvidenceSource):
@@ -3990,11 +4046,7 @@ async def build_good_option_catalog(
     evidence_by_drug: dict[str, list[EvidencePassage]] = {}
     status_by_drug: dict[str, tuple[str, list[str]]] = {}
     research_completed = 0
-    async with httpx.AsyncClient(
-        timeout=timeout,
-        follow_redirects=True,
-        event_hooks={"request": [host_limiter]},
-    ) as client:
+    async with paced_client(host_limiter, timeout=timeout) as client:
 
         async def research_one(
             drug: DrugIdentity,
@@ -4304,11 +4356,7 @@ async def build_good_option_catalog(
     )
     class_evidence_by_id: dict[str, list[EvidencePassage]] = {}
     class_research_completed = 0
-    async with httpx.AsyncClient(
-        timeout=timeout,
-        follow_redirects=True,
-        event_hooks={"request": [host_limiter]},
-    ) as client:
+    async with paced_client(host_limiter, timeout=timeout) as client:
 
         async def research_one_class(
             class_id: str,
@@ -5236,6 +5284,7 @@ def _read_good_option_catalog(root: Path, *, validate: bool) -> GoodOptionCatalo
 
 __all__ = [
     "CATALOG_PROMPTS",
+    "CATALOG_SCHEDULING_KEYS",
     "CLASS_ASSIGNMENTS",
     "CLASS_SOURCES",
     "DRUG_CLASS_JSON_SCHEMA",
@@ -5252,6 +5301,7 @@ __all__ = [
     "build_synthesis_delta_messages",
     "catalog_content_id",
     "catalog_prompts_sha256",
+    "catalog_research_pacing",
     "build_good_option_catalog",
     "build_intervention_screening_messages",
     "build_role_resolution_messages",

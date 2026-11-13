@@ -209,6 +209,15 @@ applied to `llm_good_option` and every `good_option_catalog.*_llm` stage
 override. Checkpoints default to `<output>_checkpoints`; rerun the same command
 to resume.
 
+Research requests to ClinicalTrials.gov, DailyMed, and the NCBI E-utilities are
+paced per host across every subject; `--host-requests-per-second HOST=RATE`
+overrides a default, and `--ncbi-api-key-file` supplies an NCBI API key for the
+higher E-utilities rate (see
+[`good_option_catalog`](../reference/configuration.md#good_option_catalog)). The
+command prints the rates it uses and whether a key is set, never the key.
+Neither option is part of the checkpoint fingerprint, so a build can resume with
+different values.
+
 ## Score a patient-trial candidate
 
 `evaluate_good_options` and `score_good_options_with_llm` require a loaded

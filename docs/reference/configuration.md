@@ -957,8 +957,41 @@ name.
 `indication_facets` defaults to `efficacy_by_tumor`, `biomarker_prevalence`, and
 `biomarker_directed_efficacy` for both drug–disease and class–disease retrieval.
 
-PubMed requests read an optional `NCBI_API_KEY` from the environment, never from
-configuration snapshots. Without it, the NCBI API works at its lower public rate limit.
+Research requests are paced per host, in one budget shared by every subject
+researched at once and by every stage, the ctgov record fetch included;
+retries and redirects count against it. Requests to a host take turns, each a
+full interval after the previous one actually left, over a connection pool of
+the host's own, so neither a busy event loop nor page downloads to other hosts
+can release them in bursts. The defaults keep each service about 30% under its
+per-IP ceiling:
+
+| Host | Requests per second | Ceiling |
+| --- | --- | --- |
+| `clinicaltrials.gov` | 0.6 (36 a minute) | none published; about 50 a minute per IP is the commonly reported limit |
+| `dailymed.nlm.nih.gov` | 1.0 | none published; its 429s carry `Retry-After: 60` |
+| `eutils.ncbi.nlm.nih.gov` | 2.0, or 7.0 with an NCBI API key | 3 a second per IP without a key, 10 with one |
+
+The 2026-11-12 catalog rerun paced only E-utilities, at 2.5 a second in the
+client's shared connection pool. A quarter of its ClinicalTrials.gov requests
+came back 429, in research and in the serial record fetch (about 74 a minute),
+as did 8% of its saved PubMed attempts and 4% of DailyMed's. Europe PMC, CIViC
+and cancer.gov returned none and stay unpaced; general-web searches are bounded
+by `--web-search-concurrency` instead.
+
+- `host_requests_per_second` (default `{}`): per-host overrides of these
+  defaults, for example `{eutils.ncbi.nlm.nih.gov: 1.5}`; `0` leaves a host
+  unpaced. The command line's `--host-requests-per-second HOST=RATE` overrides
+  it. A limit is per IP, so two builds on one machine should split it.
+- `ncbi_api_key_file` (default `null`): a file holding an NCBI API key, sent
+  with PubMed's E-utilities requests and raising their default rate to 7 a
+  second. `--ncbi-api-key-file` overrides it, and either overrides the
+  `NCBI_API_KEY` environment variable, which is read when neither is set. The
+  key travels only in request bodies, never in a URL, log line, error message,
+  research attempt, checkpoint or manifest.
+
+Both keys only schedule requests, so they are left out of the checkpoint
+fingerprint: an existing checkpoint directory resumes with new rates, or with a
+key added or removed.
 
 ## `good_option_prompt`
 

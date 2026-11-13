@@ -681,6 +681,14 @@ good_option_catalog:
   # Remote screening and class answers are decoded under their JSON schemas
   # (response_format json_schema); set false for a server without that support.
   structured_outputs: true
+  # Research pacing, shared by every subject researched at once. Scheduling
+  # only: neither key is part of the checkpoint fingerprint. Per-host overrides
+  # of the default requests per second (clinicaltrials.gov 0.6,
+  # dailymed.nlm.nih.gov 1.0, eutils.ncbi.nlm.nih.gov 2.0 or 7.0 with an NCBI
+  # API key), e.g. {eutils.ncbi.nlm.nih.gov: 1.5}; 0 leaves a host unpaced.
+  host_requests_per_second: {}
+  # A file holding an NCBI API key for PubMed; null reads NCBI_API_KEY.
+  ncbi_api_key_file: null
   # Nemotron's reasoning left about 5% of screens without an answer at 8,000 (2026-11-11).
   screening_llm:
     local:

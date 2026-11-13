@@ -77,6 +77,16 @@ with `Retry-After` or exponential backoff, and a successful empty search stays
 distinct from an exhausted technical failure. If every source fails on a facet
 across all rounds the drug is marked blocked and never synthesized.
 
+Many drugs are researched at once (`--subject-concurrency`), so requests to
+ClinicalTrials.gov, DailyMed, and the NCBI E-utilities behind PubMed are paced
+per host in one shared budget, retries included: by default 0.6, 1.0, and 2.0
+requests a second, about 30% under each service's per-IP limit. An NCBI API key
+raises E-utilities to 7 a second; give it as a file with `--ncbi-api-key-file`
+(or `good_option_catalog.ncbi_api_key_file`), or in the `NCBI_API_KEY`
+environment variable. Rates and key only schedule requests, so a checkpointed
+build resumes after either changes. See
+[`good_option_catalog`](../reference/configuration.md#good_option_catalog).
+
 Each result becomes a *passage*: up to 5,000 characters of text plus its source,
 URL, license, the query that found it, and a content hash. The drug's NCIt
 definition is materialized as a passage too, so the model can cite it like

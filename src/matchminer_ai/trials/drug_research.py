@@ -12,12 +12,14 @@ import math
 import os
 import random
 import re
+import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
 
@@ -282,6 +284,15 @@ class HostRateLimiter:
     Installed as an httpx request hook, so it also paces retries and redirects.
     Without it, subjects running in parallel each back off on their own and
     most E-utilities calls come back 429.
+
+    Requests to a host take turns, and each waits a full interval after the
+    previous one actually left. Booking start times ahead instead let requests
+    whose sleeps ended while the event loop was busy (parsing a page or a PDF)
+    leave together. The hook also runs before httpx takes a connection, so a
+    client should mount :meth:`transports` (as :func:`paced_client` does): in
+    the client's shared pool of 100 connections, slow page downloads to other
+    hosts can hold every connection, and paced requests queued behind them
+    would leave together as connections free up.
     """
 
     def __init__(self, requests_per_second: Mapping[str, float]) -> None:
@@ -290,28 +301,131 @@ class HostRateLimiter:
             for host, rate in requests_per_second.items()
             if rate > 0
         }
-        self._next_start: dict[str, float] = {}
+        self._turns: dict[str, asyncio.Lock] = {}
+        self._last_start: dict[str, float] = {}
 
     async def __call__(self, request: httpx.Request) -> None:
         host = request.url.host.casefold()
         interval = self._intervals.get(host)
         if interval is None:
             return
-        now = asyncio.get_running_loop().time()
-        start = max(now, self._next_start.get(host, now))
-        self._next_start[host] = start + interval
-        if start > now:
-            await asyncio.sleep(start - now)
+        loop = asyncio.get_running_loop()
+        async with self._turns.setdefault(host, asyncio.Lock()):
+            wait = self._last_start.get(host, -math.inf) + interval - loop.time()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_start[host] = loop.time()
+
+    def transports(self) -> dict[str, httpx.AsyncBaseTransport]:
+        """A connection pool of its own for each paced host, keyed for ``mounts``.
+
+        Honors ``HTTPS_PROXY``/``ALL_PROXY`` and ``NO_PROXY`` as the client's
+        default transport does. Each call returns new transports, for one client.
+        """
+
+        proxies = urllib.request.getproxies_environment()
+        proxy = proxies.get("https") or proxies.get("all") or None
+        return {
+            f"all://{host}": httpx.AsyncHTTPTransport(
+                proxy=None
+                if proxy is None or urllib.request.proxy_bypass_environment(host)
+                else proxy
+            )
+            for host in self._intervals
+        }
 
 
-def ncbi_api_key() -> str:
-    return os.environ.get("NCBI_API_KEY", "").strip()
+def paced_client(
+    limiter: HostRateLimiter, *, timeout: httpx.Timeout
+) -> httpx.AsyncClient:
+    """An async client whose requests to the limiter's hosts are paced on the wire."""
+
+    return httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        event_hooks={"request": [limiter]},
+        mounts=limiter.transports(),
+    )
 
 
-def default_host_rates() -> dict[str, float]:
-    """Published per-IP ceilings, kept just under the limit."""
+#: Environment variable read for an NCBI API key when no key file is given.
+NCBI_API_KEY_ENV = "NCBI_API_KEY"
 
-    return {"eutils.ncbi.nlm.nih.gov": 8.0 if ncbi_api_key() else 2.5}
+#: Requests per second per host for one catalog build, about 70% of each
+#: service's per-IP ceiling: every subject researched at once, and every retry,
+#: draws on one allowance, which other users of the same IP share.
+DEFAULT_HOST_REQUESTS_PER_SECOND: Mapping[str, float] = {
+    # ClinicalTrials.gov publishes no number; about 50 requests a minute per IP
+    # is the commonly reported limit. In the 2026-11-12 rerun the serial record
+    # fetch ran at about 74 a minute and a quarter of its requests came back
+    # 429, as did a third or more in research minutes above 60 requests.
+    "clinicaltrials.gov": 0.6,
+    # DailyMed publishes no limit; its 429s say Retry-After: 60. In that rerun
+    # minutes of up to about 80 requests had almost none, minutes of 180 or
+    # more many.
+    "dailymed.nlm.nih.gov": 1.0,
+    # NCBI allows 3 requests a second per IP without an API key.
+    "eutils.ncbi.nlm.nih.gov": 2.0,
+}
+#: E-utilities rate with an NCBI API key, which NCBI allows 10 a second.
+NCBI_API_KEY_REQUESTS_PER_SECOND = 7.0
+
+
+def ncbi_api_key(key_file: str | os.PathLike[str] | None = None) -> str:
+    """The NCBI API key in ``key_file``, else ``NCBI_API_KEY``; "" without one.
+
+    PubMed sends it only in E-utilities request bodies, so it never reaches a
+    URL, log line or error message. Errors here name the file, not its contents.
+    """
+
+    if not key_file:
+        return os.environ.get(NCBI_API_KEY_ENV, "").strip()
+    path = Path(key_file).expanduser()
+    try:
+        key = path.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        raise ValueError(
+            f"Cannot read the NCBI API key file {path}: {error.strerror}"
+        ) from None
+    except UnicodeDecodeError:
+        key = ""
+    if not key or any(character.isspace() for character in key):
+        raise ValueError(f"The NCBI API key file {path} must hold exactly one key.")
+    return key
+
+
+def default_host_rates(*, has_ncbi_api_key: bool | None = None) -> dict[str, float]:
+    """Requests per second per paced host; ``None`` checks ``NCBI_API_KEY``."""
+
+    if has_ncbi_api_key is None:
+        has_ncbi_api_key = bool(ncbi_api_key())
+    rates = dict(DEFAULT_HOST_REQUESTS_PER_SECOND)
+    if has_ncbi_api_key:
+        rates["eutils.ncbi.nlm.nih.gov"] = NCBI_API_KEY_REQUESTS_PER_SECOND
+    return rates
+
+
+def resolve_host_rates(
+    overrides: Mapping[str, Any] | None = None,
+    *,
+    has_ncbi_api_key: bool | None = None,
+) -> dict[str, float]:
+    """The default rates with per-host overrides; 0 leaves a host unpaced."""
+
+    rates = default_host_rates(has_ncbi_api_key=has_ncbi_api_key)
+    for host, value in (overrides or {}).items():
+        name = str(host).strip().casefold()
+        try:
+            rate = float(value)
+        except (TypeError, ValueError):
+            rate = math.nan
+        if not name or "/" in name or not math.isfinite(rate) or rate < 0:
+            raise ValueError(
+                f"Invalid request rate {value!r} for host {host!r}: expected a "
+                "bare host name and requests per second >= 0."
+            )
+        rates[name] = rate
+    return rates
 
 
 class RetryableResearchError(RuntimeError):
@@ -491,8 +605,19 @@ def _xml_text(node: ET.Element | None, *, max_chars: int = 6000) -> str:
 
 
 class PubMedDrugSource:
+    """PubMed abstracts through the E-utilities.
+
+    ``api_key`` is an NCBI API key; ``None`` reads ``NCBI_API_KEY`` at request
+    time and "" sends none. Parameters go in POST bodies, which E-utilities
+    accept, so the key never appears in a URL: httpx puts URLs in its log lines
+    and error messages, and error messages are saved with research attempts.
+    """
+
     name = "pubmed"
     source_type = "literature_abstract"
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key
 
     async def fetch(
         self,
@@ -504,33 +629,30 @@ class PubMedDrugSource:
         settings: ResearchSettings,
     ) -> list[EvidencePassage]:
         term = str(query or "") or build_pubmed_term(subject_for_drug(drug), facet)
-        params: dict[str, Any] = {
-            "db": "pubmed",
-            "term": term,
-            "retmode": "json",
-            "retmax": settings.max_pubmed_records,
-            "sort": "relevance",
-            "tool": "matchminer-ai",
-        }
-        api_key = ncbi_api_key()
-        if api_key:
-            params["api_key"] = api_key
-        search = await client.get(
+        api_key = ncbi_api_key() if self._api_key is None else self._api_key.strip()
+        common = {"tool": "matchminer-ai", **({"api_key": api_key} if api_key else {})}
+        search = await client.post(
             "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-            params=params,
+            data={
+                "db": "pubmed",
+                "term": term,
+                "retmode": "json",
+                "retmax": settings.max_pubmed_records,
+                "sort": "relevance",
+                **common,
+            },
         )
         search.raise_for_status()
         ids = search.json().get("esearchresult", {}).get("idlist", [])
         if not ids:
             return []
-        fetched = await client.get(
+        fetched = await client.post(
             "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
-            params={
+            data={
                 "db": "pubmed",
                 "id": ",".join(str(value) for value in ids),
                 "retmode": "xml",
-                "tool": "matchminer-ai",
-                **({"api_key": api_key} if api_key else {}),
+                **common,
             },
         )
         fetched.raise_for_status()
@@ -924,12 +1046,17 @@ class NCIDrugSource:
 
 def default_sources(
     web_provider: GeneralWebProvider | None = None,
+    *,
+    ncbi_api_key: str | None = None,
 ) -> tuple[DrugEvidenceSource, ...]:
-    """Return authoritative adapters plus the configured general-web provider."""
+    """Return authoritative adapters plus the configured general-web provider.
+
+    ``ncbi_api_key`` goes to PubMed; ``None`` leaves it reading ``NCBI_API_KEY``.
+    """
 
     return (
         ClinicalTrialsDrugSource(),
-        PubMedDrugSource(),
+        PubMedDrugSource(api_key=ncbi_api_key),
         EuropePMCDrugSource(),
         CIViCDrugSource(),
         DailyMedDrugSource(),
@@ -1066,6 +1193,15 @@ def _retry_after_seconds(error: Exception) -> float | None:
             return None
 
 
+_API_KEY_PARAMETER = re.compile(r"(\bapi_key=)[^&\s'\"]+", re.IGNORECASE)
+
+
+def _redact_api_keys(text: str) -> str:
+    """Mask an ``api_key=`` value that a source put in a URL, before it is saved."""
+
+    return _API_KEY_PARAMETER.sub(r"\1[redacted]", text)
+
+
 def _retryable(error: Exception) -> bool:
     if isinstance(
         error,
@@ -1121,7 +1257,7 @@ async def _run_source_with_retries(
                     started_at=started,
                     finished_at=finished,
                     error_type=type(error).__name__,
-                    error_message=clean_text(error, max_chars=1000),
+                    error_message=_redact_api_keys(clean_text(error, max_chars=1000)),
                     retry_after_seconds=retry_after,
                 )
             )
@@ -1544,6 +1680,7 @@ __all__ = [
     "CIViCDrugSource",
     "ClinicalTrialsDrugSource",
     "DDGSWebProvider",
+    "DEFAULT_HOST_REQUESTS_PER_SECOND",
     "DailyMedDrugSource",
     "DrugEvidenceSource",
     "EuropePMCDrugSource",
@@ -1551,6 +1688,8 @@ __all__ = [
     "GeneralWebEvidenceSource",
     "GeneralWebProvider",
     "HostRateLimiter",
+    "NCBI_API_KEY_ENV",
+    "NCBI_API_KEY_REQUESTS_PER_SECOND",
     "NCIDrugSource",
     "PubMedDrugSource",
     "ResearchSettings",
@@ -1565,10 +1704,13 @@ __all__ = [
     "clean_text",
     "default_host_rates",
     "default_sources",
+    "ncbi_api_key",
+    "paced_client",
     "research_class",
     "research_drug",
     "research_indications",
     "research_subject",
+    "resolve_host_rates",
     "source_matches",
     "subject_for_class",
     "subject_for_drug",
