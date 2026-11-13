@@ -70,9 +70,13 @@ fluorouracil, leucovorin, and irinotecan, with the acronym listed in
 `regimen_names`. Agents are named by generic name (INN/USAN) or development
 code, never by a treatment category; an abbreviation, misspelling, or brand or
 shortened name that a generic name replaces ("LV", "5-Flurouracil") is listed in
-`regimen_names` the same way. Validation rejects agent names absent from the
-entry's text unless such a regimen or spelling is listed, and a regimen name
-listed as an agent; a
+`regimen_names` the same way. A name of three or more letters and digits may
+be any part of the entry's text with spacing and punctuation removed; a
+two-character one ("SG", "LV") must be whole words of it, and a single character
+a whole field. Validation rejects agent names absent from the entry's text
+unless such a regimen or spelling is listed, and a regimen name listed as an
+agent; a listed regimen name the text does not contain is dropped with a logged
+count rather than failing the trial, and grounds no agent. A
 combination-spelled name or an ungrounded one gets one more attempt. With a
 remote backend the answer is decoded under `INTERVENTION_SCREENING_JSON_SCHEMA`
 (`good_option_catalog.structured_outputs`).

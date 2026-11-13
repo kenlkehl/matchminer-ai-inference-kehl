@@ -1117,16 +1117,36 @@ def _compact_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", normalize_ontology_text(value))
 
 
+def _whole_words_spell(key: str, text: str) -> bool:
+    """Whether consecutive whole words of ``text`` compact to ``key``."""
+
+    words = normalize_ontology_text(text).split()
+    for start in range(len(words)):
+        joined = ""
+        for word in words[start:]:
+            joined += word
+            if len(joined) >= len(key):
+                break
+        if joined == key:
+            return True
+    return False
+
+
 def _entry_text_supports(intervention: _CtgovIntervention, name: str) -> bool:
     """Whether a name is a span of this entry's own ctgov text.
 
     The entry's text is its name, aliases, description, and the descriptions of
     the arms it belongs to: an entry named "Phase I Arm A" names its agent only
-    in its description.
+    in its description. A name of three or more letters and digits may be any
+    part of that text with spacing and punctuation removed. A two-character
+    name must be whole words of it, as "SG" is of "Sacituzumab govitecan-hziy
+    (SG)" and "LV" of "YL242; 5-FU; LV", never part of a longer word such as
+    the "lv" of "solvent". A single character must be a whole field: as a word
+    it mostly labels an arm or part ("Arm A").
     """
 
-    compact_support = tuple(
-        _compact_name(value)
+    texts = tuple(
+        value
         for value in (
             intervention.ctgov_name,
             *intervention.aliases,
@@ -1135,10 +1155,32 @@ def _entry_text_supports(intervention: _CtgovIntervention, name: str) -> bool:
         )
         if value
     )
+    compact_support = tuple(_compact_name(value) for value in texts)
     key = _compact_name(name)
-    return (bool(key) and key in compact_support) or (
-        len(key) >= 3 and any(key in candidate for candidate in compact_support)
-    )
+    if not key:
+        return False
+    if key in compact_support:
+        return True
+    if len(key) >= 3:
+        return any(key in candidate for candidate in compact_support)
+    return len(key) == 2 and any(_whole_words_spell(key, value) for value in texts)
+
+
+def _supported_regimen_names(
+    intervention: _CtgovIntervention, regimen_names: Any
+) -> list[str]:
+    """The listed regimen names this entry's own text contains.
+
+    An unsupported one is dropped rather than failing the trial: it only ever
+    widened which agents the entry grounds, so without it each agent must be
+    grounded on its own or by another listed regimen.
+    """
+
+    return [
+        name
+        for name in _name_list(regimen_names)
+        if _entry_text_supports(intervention, name)
+    ]
 
 
 def _supported_active_names(
@@ -1151,13 +1193,10 @@ def _supported_active_names(
     irinotecan from knowledge, since the acronym names those agents. The regimen
     name itself is never an agent. An abbreviation or misspelling the screen
     replaces with a generic name ("LV" for leucovorin) is listed the same way.
+    A listed regimen name the entry's text does not contain grounds nothing.
     """
 
-    regimens = [
-        name
-        for name in _name_list(regimen_names)
-        if _entry_text_supports(intervention, name)
-    ]
+    regimens = _supported_regimen_names(intervention, regimen_names)
     regimen_keys = {_compact_name(name) for name in regimens}
     accepted = [
         name
@@ -3196,17 +3235,10 @@ def _role_output_validation_error(
                     f"{category!r}"
                 )
             intervention = interventions[int(index)]
-            unsupported_regimens = [
-                name
-                for name in _name_list(raw_regimens)
-                if not _entry_text_supports(intervention, name)
-            ]
-            if unsupported_regimens:
-                return (
-                    f"intervention {index} regimen_names {unsupported_regimens!r} "
-                    "do not appear in its ctgov name, aliases, or descriptions"
-                )
-            regimen_keys = {_compact_name(name) for name in _name_list(raw_regimens)}
+            # A regimen name the entry does not contain is dropped, not failed:
+            # each agent then has to be grounded without it.
+            regimens = _supported_regimen_names(intervention, raw_regimens)
+            regimen_keys = {_compact_name(name) for name in regimens}
             listed_regimens = [
                 name
                 for name in _name_list(raw_names)
@@ -3217,12 +3249,20 @@ def _role_output_validation_error(
                     f"intervention {index} lists the regimen {listed_regimens[0]!r} "
                     "in active_entity_names; list its component agents instead"
                 )
-            if not _supported_active_names(intervention, raw_names, raw_regimens):
+            if not _supported_active_names(intervention, raw_names, regimens):
                 returned_names = _name_list(raw_names)
+                unsupported_regimens = [
+                    name for name in _name_list(raw_regimens) if name not in regimens
+                ]
                 return (
                     f"intervention {index} has no active entity name supported by "
                     "its ctgov name, aliases, or descriptions: "
                     f"{returned_names!r}"
+                ) + (
+                    f", and its regimen_names {unsupported_regimens!r} do not "
+                    "appear there either"
+                    if unsupported_regimens
+                    else ""
                 )
         elif category == "none":
             return (
@@ -3376,6 +3416,7 @@ def derive_trial_assignments(
     identities: dict[str, DrugIdentity] = {}
     assignment_candidates: list[TrialDrugAssignment] = []
     screening_rows: list[dict[str, Any]] = []
+    dropped_regimens: dict[str, int] = {}
     for trial_id, interventions in interventions_by_trial.items():
         outputs = role_outputs.get(trial_id, {})
         for intervention_index, intervention in enumerate(interventions):
@@ -3424,13 +3465,20 @@ def derive_trial_assignments(
                 )
             regimen_names = (
                 tuple(
-                    name
-                    for name in _name_list(role_output.get("regimen_names", []))
-                    if _entry_text_supports(intervention, name)
+                    _supported_regimen_names(
+                        intervention, role_output.get("regimen_names", [])
+                    )
                 )
                 if disposition == "include"
                 else ()
             )
+            if disposition == "include":
+                listed = _name_list(role_output.get("regimen_names", []))
+                dropped = len(listed) - len(regimen_names)
+                if dropped:
+                    dropped_regimens[trial_id] = (
+                        dropped_regimens.get(trial_id, 0) + dropped
+                    )
             active_names = (
                 _supported_active_names(
                     intervention,
@@ -3528,6 +3576,16 @@ def derive_trial_assignments(
         ):
             assignments_by_key[key] = assignment
     assignments = tuple(assignments_by_key.values())
+    if dropped_regimens:
+        logging.warning(
+            "Dropped %d screened regimen_names that their entry's ctgov text does "
+            "not contain, in %d trials (%s); their entries' agents stand only "
+            "where otherwise grounded.",
+            sum(dropped_regimens.values()),
+            len(dropped_regimens),
+            ", ".join(sorted(dropped_regimens)[:10])
+            + (", ..." if len(dropped_regimens) > 10 else ""),
+        )
     return identities, assignments, screening_rows
 
 

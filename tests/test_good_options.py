@@ -3026,10 +3026,11 @@ def test_screen_lists_regimen_components_as_separate_agents() -> None:
     assert "not named in their entry's text" in (
         catalog_module._role_output_soft_warning(interventions, partial) or ""
     )
+    # An invented acronym is dropped, so it grounds none of the components.
     invented = {"0": _include(components, regimen_names=["FOLFOXIRI"])}
-    assert "do not appear" in (
-        catalog_module._role_output_validation_error(interventions, invented) or ""
-    )
+    error = catalog_module._role_output_validation_error(interventions, invented)
+    assert "no active entity name supported" in (error or "")
+    assert "['FOLFOXIRI'] do not appear" in (error or "")
     kept_whole = {"0": _include(["FOLFIRI"], regimen_names=["FOLFIRI"])}
     assert "list its component agents" in (
         catalog_module._role_output_validation_error(interventions, kept_whole) or ""
@@ -3045,6 +3046,110 @@ def test_screen_lists_regimen_components_as_separate_agents() -> None:
     # The entry's aliases name the regimen, not any one of its agents.
     assert all(not item.aliases for item in identities.values())
     assert json.loads(rows[0]["regimen_names_json"]) == ["FOLFIRI"]
+
+
+def test_screen_grounds_two_character_names_as_whole_words_only() -> None:
+    interventions = catalog_module._extract_ctgov_interventions(
+        "NCT12345678",
+        _arm_study(
+            [
+                {
+                    "type": "DRUG",
+                    "name": "Sacituzumab govitecan-hziy (SG)",
+                    "description": "Administered intravenously",
+                    "armGroupLabels": ["Experimental"],
+                },
+                {
+                    "type": "DRUG",
+                    "name": "YL242; 5-FU; LV",
+                    "armGroupLabels": ["Experimental"],
+                },
+                {
+                    "type": "DRUG",
+                    "name": "Paclitaxel in solvent",
+                    "armGroupLabels": ["Control"],
+                },
+            ],
+            [
+                {"label": "Experimental", "type": "EXPERIMENTAL"},
+                {"label": "Control", "type": "ACTIVE_COMPARATOR"},
+            ],
+        ),
+    )
+    sacituzumab, combination, solvent = interventions
+    assert catalog_module._entry_text_supports(sacituzumab, "SG")
+    assert catalog_module._entry_text_supports(combination, "LV")
+    # Part of a longer word is not the abbreviation.
+    assert not catalog_module._entry_text_supports(solvent, "LV")
+    assert not catalog_module._entry_text_supports(sacituzumab, "GO")
+
+    output = {
+        "0": _include(["Sacituzumab govitecan"], regimen_names=["SG"]),
+        "1": _include(
+            ["YL242", "Fluorouracil", "Leucovorin"], regimen_names=["5-FU", "LV"]
+        ),
+        "2": _include(["Paclitaxel"]),
+    }
+    assert catalog_module._role_output_validation_error(interventions, output) is None
+    _identities, assignments, _rows = catalog_module.derive_trial_assignments(
+        {"NCT12345678": interventions},
+        {"NCT12345678": output},
+        ncit_index=_NoNCIt(),
+    )
+    assert sorted(item.preferred_name for item in assignments) == [
+        "Fluorouracil",
+        "Leucovorin",
+        "Paclitaxel",
+        "Sacituzumab govitecan",
+        "YL242",
+    ]
+
+    # "LV" inside "solvent" grounds nothing, so leucovorin is still rejected.
+    output["2"] = _include(["Leucovorin"], regimen_names=["LV"])
+    error = catalog_module._role_output_validation_error(interventions, output)
+    assert "no active entity name supported" in (error or "")
+    assert "['LV'] do not appear" in (error or "")
+
+
+def test_screen_drops_an_unsupported_regimen_name_and_keeps_grounded_agents(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    interventions = catalog_module._extract_ctgov_interventions(
+        "NCT12345678",
+        _arm_study(
+            [
+                {
+                    "type": "DRUG",
+                    "name": "Paclitaxel in solvent",
+                    "armGroupLabels": ["Experimental"],
+                }
+            ],
+            [{"label": "Experimental", "type": "EXPERIMENTAL"}],
+        ),
+    )
+    output = {"0": _include(["Paclitaxel", "Carboplatin"], regimen_names=["TC"])}
+
+    # Not a failure: the regimen is dropped and the grounded agent stands.
+    assert catalog_module._role_output_validation_error(interventions, output) is None
+    # The agent "TC" would have grounded is not in the entry's text.
+    assert "['Carboplatin'] are not named" in (
+        catalog_module._role_output_soft_warning(interventions, output) or ""
+    )
+    with caplog.at_level("WARNING"):
+        _identities, assignments, rows = catalog_module.derive_trial_assignments(
+            {"NCT12345678": interventions},
+            {"NCT12345678": output},
+            ncit_index=_NoNCIt(),
+        )
+    assert [item.preferred_name for item in assignments] == ["Paclitaxel"]
+    assert json.loads(rows[0]["regimen_names_json"]) == []
+    assert "Dropped 1 screened regimen_names" in caplog.text
+
+    # An agent with no grounding at all still fails the trial.
+    output["0"] = _include(["Carboplatin"], regimen_names=["TC"])
+    assert "no active entity name supported" in (
+        catalog_module._role_output_validation_error(interventions, output) or ""
+    )
 
 
 def test_screen_retries_a_combination_named_as_one_agent_once() -> None:

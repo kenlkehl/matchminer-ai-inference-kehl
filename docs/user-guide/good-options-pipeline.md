@@ -35,7 +35,10 @@ its generic name (INN/USAN) or development code, so "LV" is leucovorin and
 `regimen_names`; a treatment category such as "adjuvant chemotherapy" is never an
 agent. Code rejects names the entry's text does not contain unless they expand a
 regimen or spelling that text names, and asks once more about names spelled as
-combinations.
+combinations. A two-character name such as "SG" or "LV" counts as contained
+only as whole words of the text, never as part of a longer word. A listed
+regimen name the text does not contain is dropped, not failed, so the entry's
+other grounded agents are kept.
 
 Surviving agent names are matched against the bundled NCI Thesaurus snapshot for
 a canonical name, synonyms, and definition, then deduplicated across the whole
