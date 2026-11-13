@@ -14,7 +14,9 @@
   ``matchminer_ai.matching.decision_model``): the complete patient summary, the cohort's complete
   numbered criteria and the line restated with its inclusion/exclusion type. The answer is the
   decision model's target: **yes = the patient does not clearly fail the line; no = an inclusion
-  line clearly not met or an exclusion line clearly met**, with the literal ``criterion_status``.
+  line clearly not met or an exclusion line clearly met**, with the ``criterion_status`` of the line as it binds
+  the patient (since 2026-11-13 a line judged in its role: an alternative, a requirement for only some patients
+  or a branch that does not bind this patient is ``not_applicable``).
 """
 import hashlib
 import json

@@ -30,7 +30,9 @@ def test_label_identities_change_only_deliberately():
     # Label directories resume only under the same contracts; a prompt or schema change must update these.
     assert contract_hash('match') == 'edbff87086e7f2dfb79d5fb0ae0de9e5b2ecd48d3a02b19c4c23fe1e79b3a405'
     assert contract_hash('boilerplate') == 'f0fc2d3c948b4ebec618d70aacb8108d7e47ada0524010a25fed350c74f8cf23'
-    assert contract_hash('criteria') == '2728713a2f83dcad8828f4c73a6e433383d9869f7b6afbae6a6711b2173198f6'
+    # criteria: 2728713a... (rounds 1-3 of the n=5000 run) -> 7a7eb230... on 2026-11-13, when the per-criterion
+    # state, question and teacher prompt began judging a line in its role (alternatives, conditionals, branches).
+    assert contract_hash('criteria') == '7a7eb230af1f502010a5e1707d6bb46a547d1a4618d4859efc1983bb22590afc'
     assert score_contract() == '6ac402b126c9a08abe10a7e1758695318d2cc38cc8a42b5bfe8627050183c9e5'
 
 
@@ -96,6 +98,14 @@ def test_criteria_labels_ask_one_tagged_line_with_the_complete_summary():
     assert parse_judgment('criteria', yes, 'inclusion')['criterion']['criterion_status'] == 'insufficient_information'
     with pytest.raises(ValueError):  # "no" (clearly fails) an exclusion line needs the exclusion to be met
         parse_judgment('criteria', json.dumps(dict(answer='no', criterion_status='not_met', reason='x')), 'exclusion')
+    with pytest.raises(ValueError):  # a line that does not bind the patient (not_applicable) cannot fail them
+        parse_judgment('criteria', json.dumps(dict(answer='no', criterion_status='not_applicable', reason='x')), 'inclusion')
+    # the state carries the role rules once per packed sequence; each question points to them
+    from matchminer_ai.matching.decision_model import criteria_state, criterion_question
+    state = criteria_state('Key: metastatic lung cancer.', ITEMS)
+    assert 'every alternative of its group' in state and 'only some of the patients the criteria admit' in state
+    assert 'an alternative fails only with its whole group' in criterion_question(ITEMS[1])
+    assert criterion_question(ITEMS[1]) in user
     validate_row('criteria', dict(criterion=json.loads(fails), criterion_type='exclusion'))
     with pytest.raises(ValueError):  # a line whose type differs from the corpus is not asked
         list(questions([dict(rows[0], criterion_type='exclusion')], patients, cohorts, task='criteria'))

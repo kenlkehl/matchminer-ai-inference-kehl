@@ -21,8 +21,14 @@ The seven families, and what **yes** means for each:
      patient summary and the cohort's complete numbered criteria (:func:`criteria_state`,
      :func:`criterion_question`; the question restates the line with its number and its
      inclusion/exclusion type). **Yes: the patient does not clearly fail this line** (it is met,
-     or its information is missing, or the patient could meet it by waiting). **No: the patient
-     clearly fails it: an inclusion line clearly not met, or an exclusion line clearly met.**
+     or its information is missing, or the patient could meet it by waiting, or it does not bind
+     this patient). **No: the patient clearly fails it: an inclusion line clearly not met, or an
+     exclusion line clearly met.** A line is judged in its role in the criteria (the state states
+     the rules, 2026-11-13): an alternative fails only when the patient clearly fails every
+     alternative of its group, and then all of them fail; an introducing line fails as its lines
+     fail together; a requirement for only some of the patients the criteria admit fails only when
+     it clearly applies; branches that together define who may enroll fail a patient who fits none;
+     and a standalone requirement fails a patient who lacks what it requires.
 
 These builders are the only definition of the states and questions: the training repository
 renders its training examples with them, so inference reads exactly what the model learned.
@@ -172,7 +178,10 @@ def _numbered(items: Sequence[Mapping[str, Any]]) -> str:
 
 def criteria_state(patient_summary: str, items: Sequence[Mapping[str, Any]]) -> str:
     """The state of question 7: the complete patient summary (key section, then ``Other relevant
-    history:``) and the cohort's complete criteria, numbered as the boilerplate step numbers them."""
+    history:``) and the cohort's complete criteria, numbered as the boilerplate step numbers them.
+    The state also states how a line binds the patient through its role (alternatives, introducing
+    lines, requirements for only some patients, branches, standalone requirements): read once per
+    packed sequence rather than once per question, so the decision model's questions stay short."""
     return _fill(_prompt("criterion_state"), patient_summary=patient_summary.strip(), numbered_criteria=_numbered(items))[0]
 
 
@@ -213,7 +222,10 @@ def criterion_teacher_messages(patient_summary: str, items: Sequence[Mapping[str
 def parse_criterion_label(text: str, criterion_type: str, finish_reason: str = "stop") -> dict[str, str]:
     """The teacher's answer for one line: ``answer`` ("yes" = does not clearly fail the line, the
     question-7 target), ``criterion_status`` and ``reason``. An answer of "no" must name the failing
-    status (``not_met`` for an inclusion line, ``met`` for an exclusion line); anything else raises."""
+    status (``not_met`` for an inclusion line, ``met`` for an exclusion line); anything else raises.
+    ``not_applicable`` (since 2026-11-13 also a line that does not bind this patient: a requirement
+    whose condition does not apply, or an alternative another alternative of its group satisfies)
+    therefore always goes with "yes"; labels written before that keep validating unchanged."""
     from matchminer_ai.trials.cohort_schema import _unique_keys, unwrap_json_fence
     if finish_reason != "stop":
         raise ValueError(f"Incomplete response: {finish_reason}")
@@ -233,7 +245,7 @@ def parse_criterion_label(text: str, criterion_type: str, finish_reason: str = "
     failing = "not_met" if _criterion_label(criterion_type) == "Inclusion" else "met"
     if value["answer"] == "no" and value["criterion_status"] != failing:
         raise ValueError(f'answer "no" (clearly fails) on an {criterion_type} criterion requires criterion_status '
-                         f'"{failing}"')
+                         f'"{failing}" (a line that does not bind the patient is not_applicable and answers "yes")')
     return value
 
 
