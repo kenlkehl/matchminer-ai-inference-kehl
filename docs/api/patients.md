@@ -337,36 +337,72 @@ concordance determination**. Not documented does not mean not done. Conditional
 indications, compound items, alternatives, historical tests, timing and conflicting
 evidence need clinical review. Treatment-concordance assessment is not included.
 
+## Scheduling patient summarization
+
+Each patient's chunks are summarized in order, each prompt carrying the summary
+accepted for that patient's previous chunk. `patient.scheduling` chooses how
+patients share the backend:
+
+- `continuous` (the default): with a remote backend, each patient's next chunk
+  is sent as soon as the previous one is final (after its quality retries), so
+  the endpoints keep their full request capacity in flight and a long record
+  does not hold back the rest of its batch. Waiting patients start longest
+  remaining chain first. A local engine, which batches prompts itself, runs in
+  rounds instead.
+- `rounds`: every patient's first chunk is sent as one batch, then every
+  patient's second chunk, and so on; each round waits for its slowest patient.
+
+Both send the same prompts with the same quality checks and retries, and give
+the same output rows, metadata and QC counts. See
+[`patient.scheduling`](../reference/configuration.md#patientscheduling).
+
 ## Resuming patient summarization
 
 Pass a run-specific filesystem directory as `checkpoint_dir` to save progress
-during patient summarization. If processing is interrupted, call
-`summarize_patients` again with the same directory to continue from the last
-saved point.
+during patient summarization. Each chunk's result is saved as soon as it is
+final, so an interrupted run loses only the requests it had in flight. Call
+`summarize_patients` again with the same directory to continue each patient
+from their last saved chunk, under either scheduling.
 
 Omit `checkpoint_dir` to run without writing checkpoint files.
 
 ### Checkpoint files
 
-When `checkpoint_dir` is supplied, patient summarization writes these
-Parquet files to that directory:
+When `checkpoint_dir` is supplied, patient summarization writes these files to
+that directory:
 
 - `prepared_chunks.parquet` — the patient note chunks prepared for
-  summarization, saved once before the first round runs.
-- `round_0000.parquet`, `round_0001.parquet`, ... — one file per
-  summarization round, each holding every patient's result for that round.
+  summarization, saved once before the first chunk is summarized.
+- `chunk_journal.jsonl` — one JSON line per finished (patient, chunk) result,
+  appended and synced to disk as each result is final (a round's results
+  together, under `rounds`).
 
-Each round checkpoint has the following columns:
+Runs before the journal wrote `round_0000.parquet`, `round_0001.parquet`, ...
+instead, one Parquet file per round with every patient's result for that round.
+Those files are still read, so such a directory resumes too, and a directory
+with both round files and a journal resumes from both. New runs write only the
+journal.
+
+A journal line and a round file row have the following columns; the journal adds
+`chunk_index`, which a round file has in its name:
 
 | Column | Description |
 | --- | --- |
 | `patient_id` | Patient identifier. |
-| `prior_summary` | The summary carried into this round, before this round's chunk was incorporated. |
-| `patient_reasoning_text` | The model's reasoning trace for this round. |
-| `patient_answer_text` | The model's summary output for this round. |
+| `chunk_index` | The patient's chunk, counting from 0 (journal only). |
+| `prior_summary` | The summary carried into this chunk, before it was incorporated. |
+| `patient_reasoning_text` | The model's reasoning trace for this chunk. |
+| `patient_answer_text` | The model's summary output for this chunk. |
 | `finish_reason` | Generation finish reason, e.g. `"stop"` or `"error"`. |
 
+On resume, round files are read in round order and then the journal in the
+order it was written. A result is used only when it is the patient's next chunk
+and, after the first chunk, its `prior_summary` is the summary the patient's
+saved chain has reached, so every patient continues one consistent chain. A
+last journal line that an interrupted write left unfinished is skipped and then
+removed.
+
 `"error"` marks a patient whose summary still failed after
-`patient.summary_quality_max_attempts` attempts; that patient is excluded from
-later rounds, including after resuming. Checkpoint files contain patient note
+`patient.summary_quality_max_attempts` attempts; that patient's later chunks are
+skipped, including after resuming. Checkpoint files contain patient note
 text and summaries, so store them under the same controls as the input notes.

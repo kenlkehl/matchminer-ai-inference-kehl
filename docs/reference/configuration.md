@@ -396,6 +396,32 @@ Character overlap between adjacent patient-note chunks.
 
 Token margin reserved when truncating patient chunks before prompt rendering.
 
+### `patient.scheduling`
+
+How serial summarization shares the backend among patients: `continuous`
+(default) or `rounds`. Each patient's chunks are always summarized in order, each
+prompt carrying the summary accepted for the previous chunk.
+
+- `continuous`: with a remote backend, each patient's next chunk is sent as soon
+  as the previous one is final, after its quality retries. Up to the endpoints'
+  request capacity is in flight: each listed server's
+  `remote.max_concurrent_requests`, or with an endpoint pool the sum of its
+  registry's per-server ceilings (`upstream_concurrency`), reread while it runs;
+  an adaptive pool's requests above its current limits wait for its slots.
+  Waiting patients start longest remaining chain first, so a patient with many
+  chunks starts early instead of finishing last. A local engine, which batches
+  prompts itself, uses `rounds`.
+- `rounds`: the first chunk of every patient is sent as one batch, then every
+  second chunk, and so on, so each round waits for its slowest patient.
+
+Prompts are built in `patient.prompt_build_workers` processes under both. The
+two give the same prompts, quality checks, retries and results, and either can
+resume the other's `checkpoint_dir`, including round files from runs before
+the chunk journal (see [Resuming patient summarization](../api/patients.md#resuming-patient-summarization)).
+Under an endpoint pool, `rounds` also reports its first round's per-request
+endpoints in `model_metadata["responses"]`; `continuous` reports where each
+request ran only in the debug attempt traces.
+
 ### `patient.local`
 
 Local in-process vLLM runtime settings. See `trial.local`.

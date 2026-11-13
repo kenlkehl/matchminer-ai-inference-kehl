@@ -37,9 +37,16 @@ and incomplete completions trigger regeneration from the original notes and last
 accepted prior. Matching only the core cancer fields remains a review signal and
 does not force regeneration. `config.patient["summary_quality_max_attempts"]`
 defaults to 3. A patient whose summary still fails after the last attempt is
-dropped from the output and later rounds and counted in the QC report's
-`patients_failed_inference` metric; a `checkpoint_dir` records the failure so a
-resumed run does not retry it.
+dropped from the output, their later chunks are skipped, and they are counted in
+the QC report's `patients_failed_inference` metric; a `checkpoint_dir` records
+the failure so a resumed run does not retry it.
+With a remote backend, each patient's chunks advance on their own
+(`patient.scheduling: continuous`, the default): a patient's next chunk is sent
+as soon as the previous one is final, longest remaining record first, so a long
+record no longer holds back every other patient's next chunk. A local engine
+summarizes all patients' Nth chunks together, round by round. A `checkpoint_dir`
+saves each chunk's result as it finishes (`chunk_journal.jsonl`) and still
+resumes from the round files of earlier runs.
 Set `config.patient["summary_quality_trace_dir"]` to a local directory to retain
 every prompt, answer and separate reasoning trace, including rejected attempts.
 Debug output also includes `patient_summary_attempts`; metadata reports attempt

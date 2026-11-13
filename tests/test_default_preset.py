@@ -222,6 +222,8 @@ def test_default_local_engine_settings_reach_vllm(monkeypatch):
     assert kwargs["model"] == MODEL
     assert {key: kwargs[key] for key in NEMOTRON_ENGINE} == NEMOTRON_ENGINE
     assert kwargs["max_model_len"] == 200000
+    # Summarization's own settings are not vLLM engine arguments.
+    assert {"scheduling", "prompt_build_workers"}.isdisjoint(kwargs)
     assert mock_vllm.SamplingParams.call_args.kwargs["max_tokens"] == 50000
     assert mock_vllm.SamplingParams.call_args.kwargs["top_k"] == -1
 

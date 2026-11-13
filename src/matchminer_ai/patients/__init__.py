@@ -104,9 +104,10 @@ def summarize_patients(
         patient_summary : str
             Existing full patient summary text to update.
     checkpoint_dir : str or pathlib.Path, optional
-        Directory used to save progress during patient summarization. Reusing
-        the same directory on retry continues from the last saved point. The
-        caller is responsible for supplying a directory specific to this
+        Directory used to save progress during patient summarization: each
+        chunk's result is saved as soon as it is final. Reusing the same
+        directory on retry continues each patient from their last saved chunk.
+        The caller is responsible for supplying a directory specific to this
         input and run.
     return_metadata : bool, optional
         When True, also return a metadata dict containing the config snapshot
@@ -150,14 +151,14 @@ def summarize_patients(
         -------------------------------------------------------------
         patient_answer_text : str
             Text the package treated as the LLM answer and used for
-            postprocessing. Reflects only the final summarization round for
-            each patient; reasoning and answer text from earlier rounds are
-            not retained here. If checkpoint_dir was supplied, per-round
-            values can be found in that round's checkpoint file.
+            postprocessing. Reflects only each patient's final chunk;
+            reasoning and answer text from earlier chunks are not retained
+            here. If checkpoint_dir was supplied, per-chunk values can be
+            found in its chunk journal.
         patient_reasoning_text : str
             Optional separate reasoning trace returned by the backend or
             extracted by the configured reasoning parser. Reflects only the
-            final summarization round for each patient; see
+            final chunk for each patient; see
             patient_answer_text above.
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus a metadata dict.

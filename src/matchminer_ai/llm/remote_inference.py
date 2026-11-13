@@ -416,6 +416,18 @@ class RemoteRequestSession:
                 self.slots.put_nowait(client)
         return self
 
+    def request_capacity(self):
+        """Requests the endpoints take at once: each server's ceiling, summed.
+
+        An endpoint pool's registry can change during a run, so it is read on
+        every call. An adaptive pool may run below these ceilings; requests
+        above its current limits wait for its slots, which is the saturation
+        it needs to see before it grows.
+        """
+        if self.pool is None:
+            return self.capacity
+        return sum(server["maximum"] for server in self.pool.snapshot()["servers"].values())
+
     def _prepare_request(self, prompt, llm_config):
         params, extra = build_remote_request_config(llm_config)
         messages = prepare_messages_for_provider(

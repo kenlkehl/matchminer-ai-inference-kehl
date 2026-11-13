@@ -10,6 +10,7 @@ from matchminer_ai.llm.prompt_rendering import Prompt
 from matchminer_ai.llm.remote_inference import generate_remote_llm_outputs
 from matchminer_ai.patients import summarize_patients
 from matchminer_ai.patients.checkpoints import (
+    load_chunk_journal,
     load_prepared_chunks,
     load_round_checkpoints,
     save_prepared_chunks,
@@ -513,8 +514,9 @@ def test_summarize_patient_notes_resumes_after_interrupted_round(
             checkpoint_dir=tmp_path,
         )
 
-    assert (tmp_path / "round_0000.parquet").exists()
-    assert not (tmp_path / "round_0001.parquet").exists()
+    assert [(row["chunk_index"], row["prior_summary"]) for row in load_chunk_journal(tmp_path)] == [
+        (0, None)
+    ]
     fail_second_round = False
     seen_work_items.clear()
     existing_summaries = pd.DataFrame(
@@ -535,8 +537,8 @@ def test_summarize_patient_notes_resumes_after_interrupted_round(
     )
     assert metadata["model_metadata"]["model_sha"] == "sha"
     assert (tmp_path / "prepared_chunks.parquet").exists()
-    assert (tmp_path / "round_0001.parquet").exists()
-    assert "Loaded 1 completed patient summarization round(s)" in caplog.text
+    assert [row["chunk_index"] for row in load_chunk_journal(tmp_path)] == [0, 1]
+    assert "Loaded 1 patient summarization chunk result(s)" in caplog.text
     assert "Resuming patient summarization at round 2 of 2" in caplog.text
 
     caplog.clear()
@@ -624,8 +626,9 @@ def test_summarize_patient_notes_excludes_failed_patient(
     ]
     assert result["patient_id"].tolist() == ["P1"]
     assert qc_kwargs["failed_inference_qc_artifact"]["ids"] == ["P2"]
-    round_one = load_round_checkpoints(tmp_path)[0].set_index("patient_id")
-    assert round_one.loc["P2", "finish_reason"] == "error"
+    journal = {(row["patient_id"], row["chunk_index"]): row for row in load_chunk_journal(tmp_path)}
+    assert sorted(journal) == [("P1", 0), ("P1", 1), ("P2", 0)]
+    assert journal["P2", 0]["finish_reason"] == "error"
     assert (
         "Filtering 1 patient(s) whose summary failed every attempt in round 1"
         in caplog.text
