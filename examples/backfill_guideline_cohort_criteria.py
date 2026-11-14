@@ -37,7 +37,8 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--model")
-    parser.add_argument("--concurrency", type=int, default=128, help="Requests in flight across all diseases")
+    parser.add_argument("--concurrency", type=int, default=128,
+                        help="Requests in flight to the endpoint, shared by all diseases")
     parser.add_argument("--disease-workers", type=int, default=8)
     parser.add_argument("--disease", action="append", default=[])
     args = parser.parse_args()
@@ -52,9 +53,10 @@ def main():
         if unknown:
             parser.error(f"No completed catalog for: {sorted(unknown)}")
         catalogs = {d: catalogs[d] for d in args.disease}
-    per_disease = max(1, args.concurrency // min(args.disease_workers, max(1, len(catalogs))))
+    # The structured client's request slots are shared per endpoint across every disease in this process
+    # (llm.request_limits.endpoint_slot), so this is the total cap, not a per-disease share.
     config = load_default_preset()
-    config.remote.update(enabled=True, server_urls=[args.endpoint], max_concurrent_requests=per_disease,
+    config.remote.update(enabled=True, server_urls=[args.endpoint], max_concurrent_requests=args.concurrency,
                          request_timeout=7200)
     config.guideline["remote"]["model_name"] = args.model
     output.mkdir(parents=True, exist_ok=True)
