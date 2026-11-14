@@ -444,7 +444,37 @@ print(record.iloc[0]["treatment_options"])
 
 ### Key criteria
 
-Every loaded record also has `cohort_key_criteria`: its nine fields in the layout of a
+Since 2026-11-14 every catalog has cohort-style key criteria written by the endpoint. After canonicalization
+fixes each space, one request per space (jobs `cohort-criteria-NNNN`, prompts `guideline.cohort_criteria*.txt`)
+writes what a trial protocol would state for that population. The request shows:
+- the space's name and nine fields;
+- the guideline lines its evidence cites, as context only;
+- style examples from trial protocols in other cancers.
+
+What it must write:
+- every non-NA field expressed, nothing the fields do not contain;
+- one criterion per sentence, Boolean logic in words, no generic trial requirements;
+- each criterion naming the fields it expresses, which code checks.
+
+Records gain `key_criteria`, the rendered text that `load_guideline_catalog` returns as `cohort_key_criteria`,
+and `key_criteria_items` (`[{type, text, fields}]`). The audit ties each to an accepted provider response. For
+a fabricated space, a stored record reads like:
+
+```text
+Inclusion criteria:
+The participant is aged 18 years or older.
+The participant has fictional cancer with metastatic disease.
+The participant has Marker X-positive disease.
+Exclusion criteria:
+The participant has received a prior fictional inhibitor.
+```
+
+`add_guideline_cohort_criteria(catalog_dir, output_dir=...)` upgrades a catalog extracted before then:
+- It writes a derived edition: the same records plus these fields, with a derived-edition audit.
+- The base directory is only read.
+- `examples/backfill_guideline_cohort_criteria.py` does this for a whole run directory.
+
+A record without `key_criteria` (an older catalog) gets `cohort_key_criteria` from its nine fields in the layout of a
 trial cohort's key criteria (`cohort_key_criteria` from `remove_boilerplate_criteria`,
 built with the same `gather_criteria`). The seven required fields come under
 "Inclusion criteria:", then `prior_treatment_excluded` and `biomarkers_excluded`
@@ -465,9 +495,9 @@ Prior treatment excluded: Prior fictional inhibitor.
 
 Guideline spaces have no boilerplate, so this is the text TrialSpace retrieval and
 the decision model's match questions read, as they read a cohort's key criteria
-(`retrieve_guideline_considerations`, `retrieve_guideline_patients`). It is derived
-from `space` on every load, never written to a catalog, and not part of
-`catalog_sha256`; exports and `clinical_space_summary` are unchanged, and lookup and
+(`retrieve_guideline_considerations`, `retrieve_guideline_patients`). The derived layout is computed
+from `space` on every load and is not part of `catalog_sha256` (a stored `key_criteria` is part of its record
+and hash); `clinical_space_summary` is unchanged, and lookup and
 the workup review's population context still use `clinical_space_summary`. Guideline
 vectors embedded from the earlier one-line text are stale: regenerate any you store
 yourself (the persistent cache below re-embeds them automatically).

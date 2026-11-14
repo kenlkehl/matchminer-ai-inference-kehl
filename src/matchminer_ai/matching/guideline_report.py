@@ -162,11 +162,12 @@ def write_guideline_considerations_report(
                 "**Catalog population key criteria**",
                 "",
             ]
-            # One line per field, under the headings, as in a cohort's key criteria.
-            lines += [
-                _text(line) + "  "
-                for line in format_key_criteria(row["space"]).splitlines()
-            ]
+            # The criteria retrieval and scoring read: the catalog's stored cohort-style
+            # criteria, else one line per field under the headings.
+            key_criteria = row.get("cohort_key_criteria")
+            if not isinstance(key_criteria, str) or not key_criteria.strip():
+                key_criteria = format_key_criteria(row["space"])
+            lines += [_text(line) + "  " for line in key_criteria.splitlines()]
             lines.append("")
             if source.get("source_kind") == "nci_pdq":
                 lines += [

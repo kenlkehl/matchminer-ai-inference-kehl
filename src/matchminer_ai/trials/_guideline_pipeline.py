@@ -25,6 +25,9 @@ from . import _guideline_prompts as prompts
 from ._guideline_canonical import SELECT_TASK, consolidate
 from ._guideline_canonical import TASK as CATALOG_TASK
 from ._guideline_canonical import VERSION as CATALOG_VERSION
+from ._guideline_cohort_criteria import PROMPT_FILES as COHORT_CRITERIA_PROMPT_FILES
+from ._guideline_cohort_criteria import VERSION as COHORT_CRITERIA_VERSION
+from ._guideline_cohort_criteria import write_cohort_criteria
 from ._guideline_completeness import PROMPT_FILES as COVERAGE_PROMPT_FILES
 from ._guideline_completeness import VERSION as COVERAGE_VERSION
 from ._guideline_context import pack_messages
@@ -217,7 +220,9 @@ def _run(
             # extraction/consolidation/detail requests. Reuse them only after
             # all old settings match and the new guard revalidates consolidation.
             # Changes to an existing prompt, model, source or budget still fail.
-            for name in (*COVERAGE_PROMPT_FILES, *QUOTE_REPAIR_PROMPT_FILES):
+            # Likewise the cohort-style criteria step (2026-11-14) runs after details
+            # and leaves every earlier request unchanged.
+            for name in (*COVERAGE_PROMPT_FILES, *QUOTE_REPAIR_PROMPT_FILES, *COHORT_CRITERIA_PROMPT_FILES):
                 if name not in old_identity["prompt_resources_sha256"]:
                     compatible_identity["prompt_resources_sha256"].pop(name, None)
             # These explicitly named prompts only guide rejected responses;
@@ -284,6 +289,7 @@ def _run(
                 "json_normalization": JSON_NORMALIZATION_VERSION,
                 "detail_citations": QUOTE_VERSION,
                 "detail_citation_repairs": QUOTE_REPAIR_VERSION,
+                "cohort_criteria": COHORT_CRITERIA_VERSION,
             },
         },
     )
@@ -641,6 +647,11 @@ def _run(
             raise RuntimeError(
                 "Duplicate canonical definitions; inspect canonical_groups.json before export"
             )
+        status.update(stage="cohort_criteria", updated_utc=now())
+        atomic_json(output / "status.json", status)
+        rows = write_cohort_criteria(
+            client, rows, metadata["title"], run_jobs, workers, notify=notify
+        )
         export(output, rows)
         status.update(
             status="running" if audit_pending else "complete",
@@ -703,6 +714,9 @@ def export(output, rows):
                 "",
             ]
         )
+        if row.get("key_criteria"):
+            lines.extend(["**Cohort key criteria:**", "",
+                          *[line + "  " for line in row["key_criteria"].splitlines()], ""])
         if row.get("citation_review", {}).get("issues"):
             lines.extend(["**Population source support unresolved:**", "",
                           *[f"- {s}" for s in row["citation_review"]["issues"]], ""])

@@ -162,7 +162,7 @@ def test_public_roundtrip_wire_settings_exports_provenance_and_offline_resume(
     assert result.iloc[0]["diagnostic_workup"][0]["name"] == "Synthetic test A"
     assert list(qc.columns) == ["metric", "value", "denominator", "percent", "ids"]
     assert metadata["validation"]["status"] == "passed"
-    assert metadata["validation"]["verified_raw_provider_responses"] == 3
+    assert metadata["validation"]["verified_raw_provider_responses"] == 4  # + the cohort-criteria request
     assert (
         metadata["model_metadata"]["guideline_summarizer"]["context_window"] == 262144
     )

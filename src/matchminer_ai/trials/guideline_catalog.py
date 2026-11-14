@@ -34,9 +34,20 @@ _CATALOG_CACHE_MAX_FILES = 128
 # A full guideline collection exceeds 64 MiB. A smaller-than-collection LRU
 # evicts early files during each sequential scan and gets no hits next time.
 _CATALOG_CACHE_MAX_BYTES = 512 * 1024 * 1024
-# Derived from each record's nine-field space on every load; never stored in a catalog.
-# The same column a cohort's key criteria use (cohort_boilerplate.KEY_COLUMN).
+# The same column a cohort's key criteria use (cohort_boilerplate.KEY_COLUMN). Set on every load: from
+# the record's stored cohort-style criteria (STORED_KEY_CRITERIA_FIELD, written by the endpoint since
+# 2026-11-14) when it has them, else derived from its nine-field space (format_key_criteria).
 KEY_CRITERIA_COLUMN = "cohort_key_criteria"
+STORED_KEY_CRITERIA_FIELD = "key_criteria"
+
+
+def _key_criteria(row):
+    from ._guideline_schema import format_key_criteria
+
+    stored = row.get(STORED_KEY_CRITERIA_FIELD)
+    if isinstance(stored, str) and stored.strip():
+        return stored
+    return format_key_criteria(row["space"])
 
 
 def _file_signature(path, *, required=False):
@@ -173,6 +184,11 @@ def _validate_catalog(frame):
             raise ValueError(
                 "Catalog clinical_space_summary differs from its stored nine-field space."
             )
+        stored = row.get(STORED_KEY_CRITERIA_FIELD)
+        if isinstance(stored, str) and not stored.startswith("Inclusion criteria:\n"):
+            raise ValueError(
+                "Catalog key_criteria must be cohort criteria starting with 'Inclusion criteria:'."
+            )
         if not isinstance(row["source"], dict) or not all(
             isinstance(row["source"].get(k), str) and row["source"][k]
             for k in (
@@ -267,12 +283,15 @@ def load_guideline_catalog(
     pd.DataFrame or tuple[pd.DataFrame, dict]
         Complete, validated catalog records. Stored clinical text, conditions,
         categories, evidence, and uncertainties are preserved without rewriting.
-        Each record also gets ``cohort_key_criteria``: its nine-field space laid
-        out as a trial cohort's key criteria (one "Label: value." line per field
-        under "Inclusion criteria:" and "Exclusion criteria:", NA fields left out).
-        TrialSpace retrieval and the decision model's match questions read it.
-        It is derived on every load, never stored, and excluded from
-        ``catalog_sha256``; a supplied column of that name is recomputed.
+        Each record also gets ``cohort_key_criteria``, which TrialSpace retrieval
+        and the decision model's match questions read: the record's stored
+        cohort-style ``key_criteria`` (protocol-style sentences the endpoint wrote
+        for the space, since 2026-11-14) when present, else its nine-field space
+        laid out as a trial cohort's key criteria (one "Label: value." line per
+        field under "Inclusion criteria:" and "Exclusion criteria:", NA fields
+        left out). The column itself is set on every load and excluded from
+        ``catalog_sha256`` (a stored ``key_criteria`` is part of the record and
+        its hash); a supplied column of that name is recomputed.
 
     Notes
     -----
@@ -417,7 +436,7 @@ def load_guideline_catalog(
         },
     }
     frame = frame.reset_index(drop=True)
-    frame[KEY_CRITERIA_COLUMN] = [format_key_criteria(space) for space in frame["space"]]
+    frame[KEY_CRITERIA_COLUMN] = [_key_criteria(row) for row in frame.to_dict("records")]
     if artifacts and not isinstance(catalog, pd.DataFrame):
         progress(
             f"Guideline catalogs ready: reused {cached_files} validated catalogs; "

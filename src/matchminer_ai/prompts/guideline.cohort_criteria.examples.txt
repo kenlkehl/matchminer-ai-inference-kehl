@@ -1,0 +1,46 @@
+STYLE EXAMPLES: key eligibility criteria of real trial cohorts, written as protocols state them.
+
+Example 1 (a trial cohort in another cancer; copy the style, never the content):
+Inclusion criteria:
+The participant is aged 18 years or older.
+The participant has a documented diagnosis of multiple myeloma, established by bone marrow biopsy or plasmacytoma biopsy, consistent with International Myeloma Working Group diagnostic criteria.
+The participant has received at least 1 but not more than 3 prior lines of anti-myeloma therapy. A line of therapy is defined as a distinct treatment regimen or regimen combination; dose modifications within a regimen do not constitute a new line.
+The participant has received prior treatment with lenalidomide for at least 2 consecutive cycles.
+The participant has received prior treatment with an anti-CD38 monoclonal antibody for at least 2 consecutive cycles.
+The participant achieved minimal response or better to at least 1 prior anti-myeloma therapy, as assessed by the investigator using International Myeloma Working Group criteria.
+The participant has documented progressive disease during or after their last anti-myeloma therapy, or failure to achieve response to their last anti-myeloma therapy, as assessed by the investigator.
+Exclusion criteria:
+The participant has received prior BCMA-targeted T-cell engager therapy or BCMA-targeted chimeric antigen receptor T-cell therapy.
+The participant has received allogeneic stem cell transplantation at any time.
+The participant has received autologous stem cell transplantation within 3 months before initiating study intervention.
+The participant has prior treatment with alnuctamab or any other BCMA-targeted bispecific antibody.
+
+Example 2 (a trial cohort in another cancer; copy the style, never the content):
+Inclusion criteria:
+The participant is 18 years of age or older on the day of informed consent.
+The participant has histologically or cytologically confirmed metastatic or unresectable renal cell carcinoma (clear cell or papillary carcinoma).
+The participant has received at least one prior systemic anticancer regimen for advanced or metastatic disease, or has disease for which no standard systemic therapy exists or for which standard therapy is not appropriate, as determined by the investigator. Prior treatment with a vascular endothelial growth factor (VEGF)-targeted tyrosine kinase inhibitor or immune checkpoint inhibitor, unless contraindicated or declined.
+Exclusion criteria:
+The participant has received prior therapy with an ENPP3-targeted agent, a CD3-targeted bispecific antibody, or any other T-cell engager.
+
+Example 3 (a trial cohort in another cancer; copy the style, never the content):
+Inclusion criteria:
+The participant is a male or female adult aged 18 years or older.
+The participant has histologically or cytologically confirmed unresectable locally advanced or metastatic gastric or gastroesophageal junction adenocarcinoma with central laboratory CDH17 immunohistochemistry (IHC) H-score ≥ 150.
+The participant has an archival tumor tissue sample (formalin-fixed paraffin-embedded) available, or is willing to undergo a fresh biopsy collection, for central EGFR and CDH17 immunohistochemistry testing. The specimen must be adequate for biomarker testing and must demonstrate CDH17 immunohistochemistry H-score ≥ 150.
+The participant has disease progression after, or is intolerant of, at least one prior systemic regimen for advanced disease, or has no standard therapy available that is expected to confer clinical benefit. Prior treatment with an antibody-drug conjugate is permitted except as specified in Exclusion Criteria 4 and 5. Washout requirements: at least 21 days (or 5 half-lives, whichever is longer) from the last dose of any prior systemic anticancer therapy, immunotherapy, or investigational agent; at least 14 days from prior radiotherapy to a limited field (excluding palliative radiotherapy to bone, which requires at least 7 days); at least 4 weeks from major surgery. Acute toxic effects of prior therapy must have resolved to Grade ≤ 1 (excluding alopecia and Grade 2 fatigue that is stable).
+Exclusion criteria:
+Prior treatment with VBC117 or any other antibody-drug conjugate targeting EGFR and CDH17 (bispecific EGFR × CDH17 ADC).
+Prior treatment with any antibody-drug conjugate carrying a topoisomerase I inhibitor payload, including but not limited to deruxtecan- or govitecan-based ADCs.
+
+Example 4 (a trial cohort in another cancer; copy the style, never the content):
+Inclusion criteria:
+The participant is aged 18 years or older on the day of informed consent.
+The participant has a histologically or cytologically confirmed diagnosis of platinum-resistant or refractory ovarian cancer (including ovarian carcinosarcoma).
+The participant has FAP-positive disease as determined by central review of a FAP-targeting positron emission tomography/computed tomography (PET/CT) scan. FAP positivity is defined as at least one measurable lesion with a maximum standardized uptake value (SUVmax) of 8.0 or greater and uptake visually greater than surrounding background tissue. The PET/CT must be performed at a nuclear medicine facility accredited by a recognized national accreditation body (e.g., Intersocietal Accreditation Commission, European Accreditation Council, or equivalent), using a validated FAP-targeting radiotracer, and interpreted by a central nuclear medicine physician. Histologic confirmation of tumor type is performed at a local laboratory accredited under the Clinical Laboratory Improvement Amendments (CLIA), College of American Pathologists (CAP), or equivalent standard.
+The participant has advanced or metastatic solid tumors and has received at least one prior line of systemic therapy.
+Exclusion criteria:
+The participant has received previous hemi-body or total-body radiation.
+The participant has received previous adoptive T-cell therapy (e.g., chimeric antigen receptor T-cell [CAR-T] therapy, T-cell receptor [TCR] therapy).
+The participant has received prior radioligand therapy with LY4337713 or any other FAP-targeting radioligand.
+The participant has received a blood transfusion within 14 days prior to screening that would confound hematologic baseline values.

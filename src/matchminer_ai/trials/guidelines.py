@@ -311,3 +311,73 @@ def review_guideline_citations(
                 "model_metadata": model_metadata, "output_directory": str(output),
                 "run_config": read_json(output / "run_config.json")}
     return (result, metadata) if return_metadata else result
+
+
+def add_guideline_cohort_criteria(
+    catalog_dir: str | Path,
+    *,
+    output_dir: str | Path,
+    config: MMAIConfig | None = None,
+    return_metadata: bool = False,
+    progress_callback: Callable[[str], None] | None = None,
+) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
+    """Add cohort-style key criteria to a completed guideline catalog, as a new edition.
+
+    New catalogs from :func:`summarize_guidelines` already carry them (since 2026-11-14). For a catalog extracted
+    before that, this sends one request per space to the configured guideline endpoint, the pipeline's own
+    cohort-criteria step, and writes the base catalog's records, unchanged, plus ``key_criteria`` (protocol-style
+    inclusion and exclusion sentences) and ``key_criteria_items`` to ``output_dir``. The base directory is only
+    read. Rerunning resumes from checkpoints.
+
+    Parameters
+    ----------
+    catalog_dir : str or Path
+        A completed catalog directory (``paradigms.jsonl`` with a passing ``validation.json``).
+    output_dir : str or Path
+        A new directory for the derived edition.
+    config : MMAIConfig, optional
+        Its ``guideline`` stage and ``remote`` settings choose the endpoint, as for
+        :func:`summarize_guidelines`.
+    return_metadata : bool
+        Also return the derived edition's audit.
+    progress_callback : callable, optional
+        Receives progress messages.
+
+    Returns
+    -------
+    pd.DataFrame or tuple[pd.DataFrame, dict]
+        The derived edition as :func:`load_guideline_catalog` reads it, whose ``cohort_key_criteria`` is the stored
+        text, and optionally its audit.
+
+    Notes
+    -----
+    Each space's criteria must express every non-NA field and nothing the fields do not contain; code checks the
+    field coverage and generic-requirement wording, and the audit ties each record to its accepted provider response.
+    Clinical correctness is not established. Human source review remains required.
+    """
+    from matchminer_ai.llm.backends import build_llm_runtime_config
+    from matchminer_ai.llm.structured import resolve_structured_config
+    from ._guideline_cohort_backfill import backfill_cohort_criteria
+    from ._guideline_generation import Client
+    from .guideline_catalog import load_guideline_catalog
+
+    resolved = load_default_preset() if config is None else config
+    if not isinstance(resolved, MMAIConfig):
+        raise TypeError("config must be an MMAIConfig instance or None.")
+    if not resolved.remote.get("enabled", False):
+        raise ValueError("add_guideline_cohort_criteria requires config.remote['enabled'] = True.")
+    stage = resolved.guideline
+    if not stage or "remote" not in stage:
+        raise ValueError("Configure the guideline stage (see load_default_preset()).")
+    workers = resolved.remote.get("max_concurrent_requests", 16)
+    if type(workers) is not int or workers < 1:
+        raise ValueError("max_concurrent_requests must be a positive integer.")
+    if progress_callback is not None and not callable(progress_callback):
+        raise TypeError("progress_callback must be callable or None.")
+    output = Path(output_dir).resolve()
+    runtime = build_llm_runtime_config("guideline", dict(stage), config=resolved)
+    llm, _ = resolve_structured_config(runtime, cache_dir=output / "checkpoints", client_type=Client)
+    notify = progress_callback or (lambda message: None)
+    _, audit = backfill_cohort_criteria(catalog_dir, output, llm, Client, workers=workers, notify=notify)
+    frame = load_guideline_catalog(output / "paradigms.jsonl", refresh=True)
+    return (frame, audit) if return_metadata else frame

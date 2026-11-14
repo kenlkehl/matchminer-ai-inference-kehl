@@ -69,6 +69,35 @@ from matchminer_ai.trials._guideline_specificity import (
 TEXT = "Fictional disease state alpha. Consider synthetic test A when finding B is present."
 
 
+def cohort_criteria(space):
+    """A valid cohort-criteria response for ``space``: one criterion per non-NA field."""
+    import re
+
+    from matchminer_ai.trials._guideline_schema import EXCLUSION_FIELDS
+
+    items = []
+    for key, value in space.items():
+        if str(value).strip().rstrip(".").casefold() in {"na", "n/a"}:
+            continue
+        text = re.sub(r"\bAND\b", "and", re.sub(r"\bOR\b", "or", re.sub(r"[()]", "", value))).strip()
+        kind = "exclusion" if key in EXCLUSION_FIELDS else "inclusion"
+        items.append({"type": kind, "text": f"The participant has {text}.", "fields": [key]})
+    return {"criteria": items}
+
+
+def is_cohort_criteria_request(messages):
+    from matchminer_ai.trials._guideline_cohort_criteria import SYSTEM as COHORT_SYSTEM
+
+    return bool(messages) and messages[0].get("content") == COHORT_SYSTEM
+
+
+def cohort_criteria_from_messages(messages):
+    """The cohort-criteria response for the space a cohort-criteria request shows."""
+    user = messages[-1]["content"]
+    block = user.split("FIELDS (the definition; NA = no restriction):\n", 1)[1]
+    return cohort_criteria(json.loads(block.split("\n\n", 1)[0]))
+
+
 def state():
     fields = dict.fromkeys(FIELDS, "NA")
     fields.update(
@@ -1675,7 +1704,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                 workers=1,
             )
         self.assertEqual(calls, ["extract", "extract"])
-        self.assertEqual(audit_catalog(g, output)["accepted_requests"], 3)
+        self.assertEqual(audit_catalog(g, output)["accepted_requests"], 4)  # + the cohort-criteria request
 
     def test_detail_frozen_errors_precede_repairable_citations(self):
         g = load_guideline(self.root, "fictional")
@@ -1724,7 +1753,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
                         workers=1,
                     )
                 self.assertEqual(calls, ["detail", "detail"])
-                self.assertEqual(audit_catalog(g, output)["accepted_requests"], 3)
+                self.assertEqual(audit_catalog(g, output)["accepted_requests"], 4)  # + the cohort-criteria request
 
     def test_identical_definitions_union_lineage_without_collapsing_distinct_states(
         self,
@@ -1765,6 +1794,8 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
             if schema == EXTRACTION
             else catalog()
             if schema == CATALOG
+            else cohort_criteria_from_messages(messages)
+            if is_cohort_criteria_request(messages)
             else quoted_state()
         )
         validator(response)
@@ -2070,7 +2101,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
             )
         result = audit_catalog(g, output)
         self.assertEqual(result["verified_evidence_items"], 2)
-        self.assertEqual(result["accepted_requests"], 3)
+        self.assertEqual(result["accepted_requests"], 4)  # + the cohort-criteria request
         original_ledger = read_json(output / "extraction_ownership.json")
         tampered_ledger = copy.deepcopy(original_ledger)
         tampered_ledger["branches"][0]["owner_job"] = "other-owner"
@@ -2179,7 +2210,7 @@ class PipelineTests(LibraryFixture, unittest.TestCase):
         self.assertTrue(
             next(a for a in accepted if a["job"] == "extract-0001")["repair_applied"]
         )
-        self.assertEqual(audit_catalog(g, output)["accepted_requests"], 4)
+        self.assertEqual(audit_catalog(g, output)["accepted_requests"], 5)  # + the cohort-criteria request
         attempts = len(list((output / "checkpoints").glob("*/attempt-*.json")))
         with patch.object(
             Client,

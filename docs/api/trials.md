@@ -13,6 +13,7 @@
         - screen_trials
         - list_guidelines
         - summarize_guidelines
+        - add_guideline_cohort_criteria
         - prepare_pdq_library
         - summarize_pdq
         - audit_guideline_catalog
@@ -243,9 +244,12 @@ Both steps are optional at inference. They take `section="trial"` (ctgov
 listings) or `"protocol_cohort_extraction"` (protocols) for their LLM settings;
 training runs the merge first, then the boilerplate step.
 
-Guideline catalog spaces have no boilerplate; `load_guideline_catalog` lays their nine
-population fields out the same way, as `cohort_key_criteria` (see the
-[guideline extraction guide](../user-guide/guideline-extraction.md#key-criteria)).
+Guideline catalog spaces have no boilerplate. Their `cohort_key_criteria` come from one of two sources:
+- **Since 2026-11-14:** the endpoint writes protocol-style criteria for each space and stores them as
+  `key_criteria`. For an older catalog, `add_guideline_cohort_criteria` writes a derived edition that has them.
+- **Older catalogs:** `load_guideline_catalog` lays the nine population fields out the same way.
+
+See the [guideline extraction guide](../user-guide/guideline-extraction.md#key-criteria).
 
 ## Cancer-treatment screen only
 

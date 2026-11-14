@@ -164,6 +164,15 @@ def main():
             for a in metadata["artifacts"]
         ):
             parser.error(f"A completed catalog requires a passing stored audit: {path}")
+        # Since 2026-11-14 every catalog carries cohort-style key criteria. Reuse an older one only
+        # after add_guideline_cohort_criteria (examples/backfill_guideline_cohort_criteria.py) adds them.
+        if "key_criteria" not in frame or not frame["key_criteria"].map(
+            lambda text: isinstance(text, str) and bool(text.strip())
+        ).all():
+            parser.error(
+                f"A completed catalog needs cohort-style key criteria; add them with "
+                f"backfill_guideline_cohort_criteria.py first: {path}"
+            )
         for source in frame.source:
             completed[(source["disease"], source["source_sha256"])] = str(
                 path.resolve()

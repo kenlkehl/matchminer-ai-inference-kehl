@@ -218,3 +218,77 @@ def cohort_backend(monkeypatch):
                    "matchminer_ai.trials.cohort_screen"):
         monkeypatch.setattr(f"{module}.get_llm_backend", lambda _config: backend)
     return backend
+
+
+@pytest.fixture(autouse=True)
+def fake_cohort_criteria_endpoint(request):
+    """Answer the guideline pipeline's cohort-criteria requests (2026-11-14) with valid criteria.
+
+    Guideline tests fake the endpoint's extraction, canonical and detail responses; this answers the step
+    that follows them, one criterion per non-NA field of the space the request shows, below
+    ``StructuredClient.complete`` so checkpoints and audits run as in production. Tests of the step
+    itself opt out with ``@pytest.mark.real_cohort_criteria``.
+    """
+    import json
+
+    from matchminer_ai.llm.structured import StructuredClient
+    from matchminer_ai.trials import _guideline_cohort_criteria as step
+    from matchminer_ai.trials._guideline_schema import EXCLUSION_FIELDS
+
+    if request.node.get_closest_marker("real_cohort_criteria"):
+        yield
+        return
+    import threading
+
+    original = StructuredClient.complete
+    # The step's jobs may run in parallel on one client; swap its transport for one request at a time.
+    lock = threading.Lock()
+
+    def criteria(messages):
+        import re
+
+        user = messages[-1]["content"]
+        block = user.split("FIELDS (the definition; NA = no restriction):\n", 1)[1]
+        items = []
+        for key, value in json.loads(block.split("\n\n", 1)[0]).items():
+            if str(value).strip().rstrip(".").casefold() in {"na", "n/a"}:
+                continue
+            text = re.sub(r"\bAND\b", "and", re.sub(r"\bOR\b", "or", re.sub(r"[()]", "", value))).strip()
+            kind = "exclusion" if key in EXCLUSION_FIELDS else "inclusion"
+            items.append({"type": kind, "text": f"The participant has {text}.", "fields": [key]})
+        return {"criteria": items}
+
+    def complete(self, job, messages, schema, validator, *args, **kwargs):
+        if not (str(job).startswith(step.JOB_PREFIX) and messages and messages[0].get("content") == step.SYSTEM):
+            return original(self, job, messages, schema, validator, *args, **kwargs)
+        with lock:
+            patched = "_http" in self.__dict__
+            previous = self._http
+
+            def http(endpoint, body=None, **options):
+                if endpoint != "/chat/completions":
+                    return previous(endpoint, body, **options)
+                content = json.dumps(criteria(body["messages"]))
+                message = {"content": content, "reasoning": "Synthetic reasoning."}
+                return {"choices": [{"finish_reason": "stop", "message": message}]}
+
+            self._http = http
+            try:
+                return original(self, job, messages, schema, validator, *args, **kwargs)
+            finally:
+                if patched:
+                    self._http = previous
+                else:
+                    del self._http
+
+    StructuredClient.complete = complete
+    try:
+        yield
+    finally:
+        StructuredClient.complete = original
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "real_cohort_criteria: run the guideline cohort-criteria step against the test's own fake"
+    )

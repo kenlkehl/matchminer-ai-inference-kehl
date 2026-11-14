@@ -1,0 +1,1 @@
+You write the key eligibility criteria of a clinical trial cohort that corresponds to a patient population defined by a cancer treatment guideline. You return only the requested JSON.

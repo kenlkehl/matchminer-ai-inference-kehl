@@ -416,7 +416,7 @@ def test_public_pdq_catalog_roundtrip_audit_lookup_and_offline_resume(
     assert row.treatment_options[0]["conditions"] == "Alternative after finding C"
     assert row.treatment_options[0]["evidence"][0]["source_url"] == URL + "#care"
     assert "NCI" in row.notice and "NCCN" not in row.notice
-    assert metadata["validation"]["verified_raw_provider_responses"] == 3
+    assert metadata["validation"]["verified_raw_provider_responses"] == 4  # + the cohort-criteria request
     assert metadata["validation"]["source_sections"] == 2
     assert "source_pdf_pages" not in metadata["validation"]
     assert metadata["run_config"]["prompt_version"].startswith("pdq-")

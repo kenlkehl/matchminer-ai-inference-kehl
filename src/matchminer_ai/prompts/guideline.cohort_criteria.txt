@@ -1,0 +1,17 @@
+Rewrite the guideline population below as a clinical trial cohort's key eligibility criteria, written the way a trial protocol states them.
+
+WHAT TO WRITE
+- Inclusion criteria and, where the population excludes something, exclusion criteria. One criterion per item, each a complete sentence in protocol style, for example "The participant is aged 18 years or older." or "The participant has histologically confirmed metastatic ...".
+- Express every field that is not NA, and nothing else. A field that is NA places no restriction: write no criterion for it. For each criterion, list the field keys it expresses.
+- Key criteria only: age, sex, cancer type, histology, stage, extent, risk group or other disease state, prior treatment that is required or excluded, and biomarkers that are required or excluded. Never add generic trial requirements (consent, performance status, organ function, measurable disease, life expectancy, contraception) or any restriction the fields do not contain.
+
+HOW TO WRITE IT
+- Keep every qualifier exactly: numbers, units, thresholds, timing, treatment setting (for example adjuvant, metastatic, first-line), response or progression, and negations. Do not broaden or narrow a field.
+- Turn Boolean expressions into plain clinical sentences. Never use parentheses for grouping or the words AND/OR in capitals. State alternatives in words ("either ... or ...", "one of the following: ..."). Write independent requirements that are joined by AND as separate criteria when they read naturally that way; keep conditions that only make sense together in one sentence.
+- Required prior treatment: an inclusion criterion such as "The participant has received ...". Excluded prior treatment: an exclusion criterion stating the treatment that excludes, such as "The participant has received prior ...".
+- Required biomarkers: an inclusion criterion stating the finding. Excluded biomarkers: an exclusion criterion stating the finding that excludes.
+- Expand abbreviations on first use where the meaning is standard (for example "estrogen receptor (ER)-positive").
+- The population name is context; it never adds a restriction that the fields do not contain.
+
+SOURCE LINES
+- The guideline source lines that define this population are supplied for context. Use them only to understand and phrase the fields correctly: what a field's wording refers to, which decision point the population is at, what an abbreviation means. The fields remain the definition: never add a restriction that appears only in the source lines, and never drop a restriction that the fields contain.

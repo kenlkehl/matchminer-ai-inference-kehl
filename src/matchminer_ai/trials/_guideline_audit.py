@@ -18,6 +18,9 @@ from ._guideline_canonical import (
 from ._guideline_batching import validate_ledger
 from matchminer_ai.llm.structured import JSON_NORMALIZATION_VERSION, parse_model_json
 from ._guideline_generation import clinical_content
+from ._guideline_cohort_criteria import JOB_PREFIX as COHORT_CRITERIA_JOB_PREFIX
+from ._guideline_cohort_criteria import VERSION as COHORT_CRITERIA_VERSION
+from ._guideline_cohort_criteria import audit_cohort_criteria
 from ._guideline_completeness import VERSION as COVERAGE_VERSION
 from ._guideline_completeness import validate_report as validate_coverage_report
 from ._guideline_ownership import VERSION as OWNERSHIP_VERSION
@@ -510,9 +513,26 @@ def audit_catalog(guideline, output):
                 <= settings["context_window"],
                 "Retry exceeds full context window",
             )
+    # Cohort-style key criteria (2026-11-14): every row's are an accepted response of
+    # this run, still validate against its space and render to its key_criteria.
+    cohort_criteria = (
+        config.get("stage_versions", {}).get("cohort_criteria") == COHORT_CRITERIA_VERSION
+    )
+    if cohort_criteria:
+        audit_cohort_criteria(rows, [
+            read_json(path)["result"]
+            for path in (output / "checkpoints").glob("*/accepted.json")
+            if read_json(path)["job"].startswith(COHORT_CRITERIA_JOB_PREFIX)
+        ])
+    else:
+        require(
+            not any("key_criteria" in row or "key_criteria_items" in row for row in rows),
+            "Cohort-style key criteria without the run's cohort-criteria stage",
+        )
     return {
         "status": "passed",
         "paradigms": len(rows),
+        "cohort_criteria": COHORT_CRITERIA_VERSION if cohort_criteria else "derived_from_space",
         "diagnostic_workup_items": workup_count,
         "extraction_ownership": OWNERSHIP_VERSION
         if owns_branches

@@ -386,9 +386,16 @@ Existing catalogs can also be queried by exact space using
 `matching.retrieve_guideline_considerations` (TrialSpace retrieval followed by
 match-quality ranking). These APIs return the stored diagnostic and treatment
 menus with their conditions, citations, and uncertainties. Loaded spaces carry
-`cohort_key_criteria`, their nine population fields laid out as a trial cohort's key
-criteria ("Inclusion criteria:" / "Exclusion criteria:", one field per line, NA fields
-omitted); TrialSpace and the decision model read that text.
+`cohort_key_criteria`, which TrialSpace and the decision model read.
+- **New extractions and upgraded catalogs:** since 2026-11-14, each space's cohort-style key criteria. After
+  canonicalization, one request per space writes protocol-style inclusion and exclusion sentences that express
+  every non-NA field and nothing else. They are stored as `key_criteria` and `key_criteria_items`, and the audit
+  ties them to the accepted responses.
+- **Older catalogs:** their nine population fields laid out as a trial cohort's key criteria ("Inclusion
+  criteria:" / "Exclusion criteria:", one field per line, NA fields omitted).
+- **Upgrading an older catalog:** `trials.add_guideline_cohort_criteria` (or
+  `examples/backfill_guideline_cohort_criteria.py` for a whole run directory) writes a derived edition with the
+  criteria added. The base catalog is unchanged, and discovery prefers the newer edition.
 Pass `embedding_cache_dir` to the retrieval API to persist and reuse compatible
 guideline embeddings across requests and restarts; patient vectors are not cached.
 Guideline vectors made from the earlier one-line nine-field text must be regenerated;
