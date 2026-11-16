@@ -526,3 +526,22 @@ def test_document_extraction_reports_progress(config, monkeypatch):
     extract_document_records(notes, config=config,
                              progress_callback=lambda done, total: calls.append((done, total)))
     assert calls[0] == (0, 1) and calls[-1] == (1, 1)
+
+
+def test_remote_extraction_keeps_the_request_cap_in_flight():
+    """remote.max_concurrent_requests alone sets a remote run's concurrency; local batching is unchanged."""
+    from matchminer_ai.patients.extraction.common import section_settings
+
+    def shape(section, enabled=True, **remote):
+        config = load_default_preset()
+        config.remote.update(enabled=enabled, **remote)
+        return section_settings(config, section, "x", None).queue_shape
+
+    two = ["http://a:8000/v1", "http://b:8000/v1"]
+    assert shape("patient_extraction", server_urls=two, max_concurrent_requests=300) == (600, 1)
+    assert shape("document_extraction", server_urls=two[:1], max_concurrent_requests=1024) == (1024, 1)
+    # A smaller cap keeps the batch window; the endpoint slots then hold requests to the cap.
+    assert shape("patient_extraction", server_urls=two[:1], max_concurrent_requests=32) == (128, 1)
+    assert shape("patient_extraction", server_urls=[], server_urls_file="/registry.json",
+                 max_concurrent_requests=300) == (64, 2)
+    assert shape("patient_extraction", enabled=False) == (64, 2)

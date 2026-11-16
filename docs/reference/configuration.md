@@ -545,8 +545,13 @@ is Nemotron 3.5 Super with its own sampling (`sampling_profile: auto`).
   carries the record's strict JSON schema as `response_format` (vLLM structured
   outputs).
 - `batch_size` (default 256) and `batches_in_flight` (default 2, at most 16): a
-  remote backend keeps `batch_size * batches_in_flight` requests in flight, each
-  sent as another returns; a local backend gets batches of `batch_size`.
+  local backend gets batches of `batch_size`, `batches_in_flight` at once. A
+  remote backend keeps as many requests in flight as its servers take,
+  `remote.max_concurrent_requests` for each listed server, each sent as another
+  returns, so that cap alone sets a run's concurrency; it is never fewer than
+  `batch_size * batches_in_flight`, which also applies to servers from a
+  registry file (`remote.server_urls_file`, whose own ceilings then limit each
+  server).
 - `extensions` (default `[]`): disease-specific item types and guidance by name;
   the package provides `thoracic`.
 - `ncit_agent_codes` (default false): add each treatment agent's NCIt concept
@@ -576,8 +581,10 @@ above except `max_document_characters`, plus:
   fit; a patient whose next prompt would not fit fails rather than being
   truncated.
 
-The default batch is 64 requests, the completion budget 60,000 tokens and the
-local context 200,000 tokens.
+The default local batch is 64 requests, the completion budget 60,000 tokens
+and the local context 200,000 tokens. A remote backend keeps
+`remote.max_concurrent_requests` requests per server in flight, as for
+`document_extraction`; each patient's chunks still run one after another.
 
 ## `trial_space_criteria_extraction`
 

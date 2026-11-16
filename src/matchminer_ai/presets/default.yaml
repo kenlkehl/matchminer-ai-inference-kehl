@@ -233,8 +233,9 @@ document_extraction:
   reasoning_off_fallback: true
   # Constrain each remote answer to the record's JSON schema (vLLM structured outputs).
   structured_outputs: true
-  # A remote backend keeps batch_size * batches_in_flight requests in flight, each sent
-  # as another returns; a local one gets batches of batch_size.
+  # A local backend gets batches of batch_size, batches_in_flight at once. A remote one
+  # keeps remote.max_concurrent_requests requests per server in flight (at least
+  # batch_size * batches_in_flight), each sent as another returns.
   batch_size: 256
   batches_in_flight: 2
   # Disease-specific item types and guidance, by name (packaged: thoracic).
@@ -285,6 +286,9 @@ patient_extraction:
   max_attempts: 3
   reasoning_off_fallback: true
   structured_outputs: true
+  # As in document_extraction: local batches of batch_size; a remote backend keeps
+  # remote.max_concurrent_requests requests per server in flight (at least
+  # batch_size * batches_in_flight).
   batch_size: 64
   batches_in_flight: 2
   extensions: []

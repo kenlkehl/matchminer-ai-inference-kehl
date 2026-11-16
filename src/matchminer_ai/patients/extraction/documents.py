@@ -358,9 +358,10 @@ def extract_document_records(
 
     model_metadata: dict[str, Any] = {}
     if pending:
+        chunk_size, chunks_in_flight = settings.queue_shape
         queue = RequestQueue(
-            get_llm_backend(resolved), settings.runtimes, chunk_size=settings.batch_size,
-            chunks_in_flight=settings.batches_in_flight,
+            get_llm_backend(resolved), settings.runtimes, chunk_size=chunk_size,
+            chunks_in_flight=chunks_in_flight,
             model_metadata_cache_dir=resolved.model_metadata_cache_dir,
         )
         # Prompts are built as requests are sent, so a large run never holds
@@ -373,7 +374,7 @@ def extract_document_records(
                 original = messages(note)
                 queue.add((note["note_id"], 1, original), original, "main")
 
-        for _ in range(2 * settings.batch_size * settings.batches_in_flight):
+        for _ in range(2 * chunk_size * chunks_in_flight):
             feed()
 
         def record(item, answer, reasoning, finish_reason, provenance):

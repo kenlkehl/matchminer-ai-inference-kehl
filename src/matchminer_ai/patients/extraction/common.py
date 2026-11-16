@@ -11,6 +11,7 @@ from typing import Any
 from matchminer_ai._qc.common import build_qc_artifact, qc_artifact_to_report_row
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.llm.backends import build_llm_runtime_config
+from matchminer_ai.llm.remote_inference import normalize_remote_server_urls
 
 from .extensions import Extension, resolve_extensions
 from .schema import Problem, response_format
@@ -42,6 +43,24 @@ class SectionSettings:
         if self.fallback_runtime is not None:
             groups["fallback"] = self.fallback_runtime
         return groups
+
+    @property
+    def queue_shape(self) -> tuple[int, int]:
+        """RequestQueue's ``(chunk_size, chunks_in_flight)``.
+
+        A local backend gets batches of ``batch_size``, ``batches_in_flight`` at once. A
+        remote backend keeps as many requests in flight as its servers take,
+        ``remote.max_concurrent_requests`` for each listed server, so that cap alone sets
+        a run's concurrency. That is never fewer than ``batch_size * batches_in_flight``,
+        which also applies when the servers come from a registry file (the endpoint
+        pool's own ceilings then limit each server).
+        """
+        window = self.batch_size * self.batches_in_flight
+        if self.runtime["backend_mode"] != "remote" or self.runtime.get("server_urls_file"):
+            return self.batch_size, self.batches_in_flight
+        servers = len(normalize_remote_server_urls(self.runtime))
+        cap = servers * max(1, int(self.runtime.get("max_concurrent_requests") or 1))
+        return max(window, cap), 1
 
     @property
     def total_attempts(self) -> int:

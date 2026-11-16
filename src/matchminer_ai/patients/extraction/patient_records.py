@@ -394,9 +394,10 @@ def extract_patient_records(
 
     model_metadata: dict[str, Any] = {}
     if pending:
+        chunk_size, chunks_in_flight = settings.queue_shape
         queue = RequestQueue(
-            get_llm_backend(resolved), settings.runtimes, chunk_size=settings.batch_size,
-            chunks_in_flight=settings.batches_in_flight,
+            get_llm_backend(resolved), settings.runtimes, chunk_size=chunk_size,
+            chunks_in_flight=chunks_in_flight,
             model_metadata_cache_dir=resolved.model_metadata_cache_dir,
         )
 
