@@ -59,7 +59,9 @@ from .language import (
 NO, MAYBE, YES = 0, 1, 2
 STATE_NAMES = {NO: "no", MAYBE: "unknown", YES: "yes"}
 INF = math.inf
-STATUSES = ("met", "not_met", "unknown", "not_applicable")
+#: done_not_recommended: a step the guideline advises against ("not routinely
+#: indicated", "not recommended") is documented as done. Only the SQL agent reports it.
+STATUSES = ("met", "not_met", "unknown", "not_applicable", "done_not_recommended")
 APPLICABILITY = ("applies", "not_applicable", "uncertain")
 REASONS = (
     "documented",
@@ -73,6 +75,7 @@ REASONS = (
     "not_expressible",
     "query_unavailable",
     "documented_not_applicable",
+    "documented_not_recommended",
 )
 NOTICE = (
     "Structured-extraction workup check for human review, not a determination. "
@@ -100,6 +103,8 @@ IDENTITY_FIELDS = {
     "diagnosis": {"primary_site", "histology"},
     "event": {"event_type"},
     "performance_status": {"scale"},
+    "lab_test": {"lab_test"},
+    "counseling": {"topic"},
 }
 _STAGE = re.compile(r"(?:^|\bstage\s*)(iv|iii|ii|i|0|[1-4])(?=[abc]?[0-9]?(?:\b|$))")
 _ROMAN = {"1": "I", "2": "II", "3": "III", "4": "IV"}
@@ -187,8 +192,12 @@ def _all_extensions() -> list[str]:
     return list(registered_extensions())
 
 
+#: Item types whose items say whether they were performed or planned (``status``).
+OCCURRENCE_TYPES = frozenset({"imaging_study", "procedure", "lab_test", "counseling"})
+
+
 def _status(item: dict) -> str:
-    if item["item_type"] in {"imaging_study", "procedure"}:
+    if item["item_type"] in OCCURRENCE_TYPES:
         return item.get("status") or "performed"
     if item["item_type"] == "treatment":
         return "planned" if item.get("treatment_status") == "planned" else "performed"
@@ -469,6 +478,12 @@ def cluster_key(view: ItemView) -> tuple:
         return (kind, item.get("event_type"))
     if kind == "performance_status":
         return (kind, item.get("scale"), item.get("score"))
+    if kind == "lab_test":
+        named = _norm(item.get("lab_text")) if item.get("lab_test") == "other" else ""
+        return (kind, view.status, item.get("lab_test"), named)
+    if kind == "counseling":
+        named = _norm(item.get("topic_text")) if item.get("topic") == "other" else ""
+        return (kind, view.status, item.get("topic"), item.get("counseling_kind"), named)
     if kind == "disease_assessment":
         return (kind, view.note_id, id(item))
     rest = {k: x for k, x in item.items() if k not in {"evidence", "item_id", "cancer_ids"}
@@ -630,6 +645,20 @@ def describe_item(view: ItemView) -> str:
         text += ")"
     elif kind == "performance_status":
         text = f"{(item.get('scale') or '').upper()} {item.get('score')}"
+    elif kind == "lab_test":
+        code = item.get("lab_test") or "lab test"
+        text = item.get("lab_text") or code.replace("_", " ")
+        if code not in {"other", None} and item.get("lab_text"):
+            text = f"{code.replace('_', ' ').upper() if len(code) <= 4 else code.replace('_', ' ')}" \
+                   f" ({item['lab_text']})"
+        if item.get("result_flag") and item["result_flag"] != "not_stated":
+            text += f", {item['result_flag']}"
+    elif kind == "counseling":
+        topic = item.get("topic_text") if item.get("topic") == "other" else (
+            item.get("topic") or "counseling").replace("_", " ")
+        kind_text = (item.get("counseling_kind") or "").replace("_", " ")
+        text = f"{topic} {kind_text}".strip() if kind_text and kind_text != "not stated" \
+            else topic
     elif kind == "disease_assessment":
         text = (item.get("disease_status") or "").replace("_", " ")
         if item.get("disease_sites"):
@@ -1194,6 +1223,9 @@ def aggregate_extraction_workup(reviews: Sequence[dict], requirements: Sequence[
     ``completed_applicable / applicable_assessed`` is met / (met + not met) among
     patients the requirement applies to: unknown and not-applicable results stay
     out of the denominator. It is a documentation fraction, not a concordance rate.
+    A requirement that advises against a step (its assessments say
+    ``recommends_against``) has no completion fraction: its ``done_not_recommended``
+    count says how many patients had the step anyway.
     """
     rows = []
     for number, requirement in enumerate(requirements):
@@ -1201,6 +1233,7 @@ def aggregate_extraction_workup(reviews: Sequence[dict], requirements: Sequence[
         applicability = {a: 0 for a in APPLICABILITY}
         reasons = {r: 0 for r in REASONS}
         met = assessed = 0
+        against = False
         for patient in reviews:
             items = patient["review"]["assessments"]
             if len(items) != len(requirements):
@@ -1212,9 +1245,12 @@ def aggregate_extraction_workup(reviews: Sequence[dict], requirements: Sequence[
             applicability[row["applicability"]] += 1
             reason = row.get("reason") or "not_documented"
             reasons[reason] = reasons.get(reason, 0) + 1
+            against |= bool(row.get("recommends_against"))
             if row["applicability"] == "applies" and row["status"] in {"met", "not_met"}:
                 assessed += 1
                 met += row["status"] == "met"
+        if against:
+            met = assessed = 0
         rows.append({
             "recommendation_index": number,
             "recommendation": copy.deepcopy(requirement),
@@ -1225,6 +1261,7 @@ def aggregate_extraction_workup(reviews: Sequence[dict], requirements: Sequence[
             "applicable_assessed": assessed,
             "completed_applicable": met,
             "documented_completion_fraction": met / assessed if assessed else None,
+            "recommends_against": against,
         })
     return rows
 

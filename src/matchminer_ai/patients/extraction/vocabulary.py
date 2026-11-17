@@ -532,19 +532,110 @@ EVENT_TYPES = _vocabulary(
     unknown=None,
 )
 
-#: How an imaging study or procedure relates to the document that mentions it.
+LAB_TESTS = _vocabulary(
+    "lab_test",
+    "The laboratory test or panel (blood, urine or another body fluid).",
+    [
+        ("cbc", "Complete blood count, with or without differential; hemoglobin, white "
+         "count or platelets reported together.", "hematology"),
+        ("platelet_count", "A platelet count reported alone.", "hematology"),
+        ("cmp", "Comprehensive metabolic panel or a chemistry profile.", "chemistry"),
+        ("bmp", "Basic metabolic panel.", "chemistry"),
+        ("electrolytes", "Electrolytes reported alone (sodium, potassium, chloride, "
+         "bicarbonate).", "chemistry"),
+        ("renal_function", "Creatinine, BUN or eGFR reported alone.", "chemistry"),
+        ("liver_function", "Liver function tests: AST, ALT, bilirubin, alkaline phosphatase "
+         "or albumin.", "chemistry"),
+        ("calcium", "Serum calcium.", "chemistry"),
+        ("magnesium_phosphate", "Magnesium or phosphate.", "chemistry"),
+        ("glucose_hba1c", "Glucose or hemoglobin A1c.", "chemistry"),
+        ("ldh", "Lactate dehydrogenase.", "chemistry"),
+        ("coagulation", "Coagulation tests: PT/INR, PTT, fibrinogen.", "hematology"),
+        ("iron_studies", "Iron, ferritin, transferrin saturation, B12 or folate.", "hematology"),
+        ("thyroid_function", "TSH or thyroid hormones.", "endocrine"),
+        ("hormone_levels", "Sex or pituitary hormones: estradiol, FSH, LH, testosterone, "
+         "prolactin.", "endocrine"),
+        ("pregnancy_test", "Urine or serum pregnancy test (hCG for pregnancy).", "other_labs"),
+        ("infectious_serology", "Hepatitis B or C, HIV or other infection screening.",
+         "other_labs"),
+        ("protein_electrophoresis", "Serum or urine protein electrophoresis, "
+         "immunofixation or serum free light chains.", "other_labs"),
+        ("lipid_panel", "Lipid panel.", "other_labs"),
+        ("urinalysis", "Urinalysis.", "other_labs"),
+        ("other", "Another laboratory test; name it.", "other_labs"),
+    ],
+    unknown=None,
+)
+
+LAB_RESULT_FLAGS = _vocabulary(
+    "lab_result_flag",
+    "Whether the document calls the result normal or abnormal.",
+    [
+        ("normal", "Stated to be normal or within normal limits."),
+        ("abnormal", "Stated to be abnormal, high, low or out of range."),
+        ("not_stated", "No result, or no judgment of it."),
+    ],
+    other=None,
+)
+
+COUNSELING_TOPICS = _vocabulary(
+    "counseling_topic",
+    "What the counseling, discussion, screening or referral is about.",
+    [
+        ("smoking_cessation", "Tobacco or smoking cessation, including pharmacotherapy."),
+        ("genetic_counseling", "Hereditary cancer risk, family history or genetic counseling."),
+        ("fertility", "Fertility risk or preservation, oncofertility."),
+        ("sexual_health", "Sexual health or function."),
+        ("contraception_pregnancy", "Contraception or pregnancy during treatment."),
+        ("psychosocial_distress", "Distress, mood, coping, psychology, psychiatry or social "
+         "work."),
+        ("palliative_care", "Palliative or supportive care, symptom management services."),
+        ("advance_care_planning", "Goals of care, advance directives, code status, hospice "
+         "discussion."),
+        ("nutrition", "Nutrition or dietitian."),
+        ("exercise_rehabilitation", "Exercise, physical or occupational therapy, "
+         "rehabilitation."),
+        ("lymphedema", "Lymphedema risk, screening or therapy."),
+        ("survivorship", "Survivorship care or follow-up planning."),
+        ("financial_social_needs", "Financial, transport or other social needs."),
+        ("substance_use", "Alcohol or other substance use."),
+        ("other", "Another topic; name it."),
+    ],
+    unknown=None,
+)
+
+COUNSELING_KINDS = _vocabulary(
+    "counseling_kind",
+    "What happened.",
+    [
+        ("counseling", "Counseling, advice or education given to the patient."),
+        ("discussion", "The topic was discussed with the patient."),
+        ("screening", "A screening or assessment of the topic (for example a distress "
+         "thermometer or a lymphedema measurement)."),
+        ("referral", "A referral to a service or specialist for the topic."),
+        ("consultation", "A visit with the service or specialist for the topic."),
+        ("not_stated", "Not stated."),
+    ],
+    other=None,
+)
+
+#: How an imaging study, procedure, lab test or counseling item relates to the document
+#: that mentions it.
 DOCUMENT_RELATIONS = _vocabulary(
     "document_relation",
-    "How an imaging study or procedure relates to this document.",
+    "How an imaging study, procedure, lab test or counseling item relates to this document.",
     [
         (
             "this_report",
-            "The study this imaging report reads, or the procedure that produced "
-            "the specimen this pathology or molecular report examines.",
+            "The study this imaging report reads, the procedure that produced the "
+            "specimen this pathology or molecular report examines, a lab result this "
+            "document reports, or counseling, a screening or a referral this document "
+            "records as given or made.",
         ),
         (
             "previously_performed",
-            "An earlier or outside study or procedure that this document says was done.",
+            "An earlier or outside study, procedure, test or counseling that this "
+            "document says was done.",
         ),
         ("planned", "Ordered, scheduled or recommended, not yet done."),
     ],
@@ -555,7 +646,7 @@ DOCUMENT_RELATIONS = _vocabulary(
 #: Patient-level counterpart of DOCUMENT_RELATIONS.
 OCCURRENCE_STATUSES = _vocabulary(
     "occurrence_status",
-    "Whether an imaging study or procedure was done.",
+    "Whether an imaging study, procedure, lab test or counseling item was done.",
     [
         ("performed", "Done (on the date given, when one is known)."),
         ("planned", "Ordered or scheduled and not documented as done."),
@@ -591,6 +682,10 @@ VOCABULARIES: dict[str, Vocabulary] = {
         DISEASE_STATUSES,
         PERFORMANCE_SCALES,
         EVENT_TYPES,
+        LAB_TESTS,
+        LAB_RESULT_FLAGS,
+        COUNSELING_TOPICS,
+        COUNSELING_KINDS,
         DOCUMENT_RELATIONS,
         OCCURRENCE_STATUSES,
     )
@@ -602,6 +697,8 @@ __all__ = [
     "BIOMARKER_TYPES",
     "BODY_REGIONS",
     "CONTRAST",
+    "COUNSELING_KINDS",
+    "COUNSELING_TOPICS",
     "DATE_PRECISIONS",
     "DISEASE_EXTENTS",
     "DISEASE_STATUSES",
@@ -610,6 +707,8 @@ __all__ = [
     "EVENT_TYPES",
     "IMAGE_GUIDANCE",
     "IMAGING_MODALITIES",
+    "LAB_RESULT_FLAGS",
+    "LAB_TESTS",
     "LATERALITY",
     "OCCURRENCE_STATUSES",
     "PATHOLOGY_PROCEDURES",

@@ -94,7 +94,8 @@ def llm():
 def action(kind, sql="", **values):
     return {"action": kind, "purpose": values.get("purpose", kind), "sql": sql,
             "summary": values.get("summary", ""), "approximations": values.get("approximations", []),
-            "not_expressible_reason": values.get("reason", ""), "memory": values.get("memory", "")}
+            "not_expressible_reason": values.get("reason", ""),
+            "recommends_against": values.get("against", False), "memory": values.get("memory", "")}
 
 
 def script(monkeypatch, actions):
@@ -370,7 +371,7 @@ def test_check_workup_with_sql_runs_once_over_the_cohort(monkeypatch):
     assert "failed on this cohort" in by_patient[PID][3]["bottom_line"]
     assert report["queries"][3] == {"status": "failed", "problem": "error"}
     assert report["aggregate"][0]["statuses"] == {"met": 1, "not_met": 1, "unknown": 2,
-                                                  "not_applicable": 0}
+                                                  "not_applicable": 0, "done_not_recommended": 0}
     assert report["patients"][0]["review"]["metadata"]["method"] == "extraction_sql"
 
 
@@ -441,3 +442,82 @@ def test_sandbox_never_runs_without_linux_isolation(monkeypatch, database):
     with pytest.raises(SQLSandboxError):
         SQLSandbox(database=database)
     assert os.name == "posix"
+
+
+# Lab tests, counseling, older records and steps the guideline advises against -----------
+
+
+def lab(note_id, note_date, test="cbc", relation="this_report"):
+    return {"item_type": "lab_test", "relation": relation,
+            "source_of_document": relation == "this_report",
+            "status": "planned" if relation == "planned" else "performed",
+            "lab_test": test, "lab_text": test.upper(), "result_text": "", "result_flag":
+            "normal", "collection_date": when(note_date, "note_date"),
+            "evidence": [{"note_id": note_id, "note_date": note_date, "quote": "CBC", "start": 0,
+                          "end": 3}]}
+
+
+def lab_document(note_id, note_date, items, patient, version="mmai-clinical-extraction-v2"):
+    row = document(note_id, note_date, [], patient=patient)
+    row["record"]["schema_version"] = version
+    row["record"]["items"]["lab_tests"] = items
+    row["record"]["items"]["counseling"] = []
+    return row
+
+
+LAB_SQL = """
+SELECT p.patient_key,
+  CASE WHEN l.k IS NOT NULL THEN 'met' ELSE 'not_met' END AS status, 'applies' AS applicability,
+  CASE WHEN l.k IS NOT NULL THEN 'documented' ELSE 'not_documented' END AS reason,
+  COALESCE(l.k, []::BIGINT[]) AS evidence_item_keys, '' AS detail
+FROM patients p LEFT JOIN (SELECT patient_key, list(item_key) AS k FROM lab_tests
+  WHERE lab_test = 'cbc' AND occurrence = 'performed' GROUP BY 1) l USING (patient_key)
+"""
+
+
+def test_lab_counseling_tables_and_older_records():
+    rows = pd.DataFrame([
+        lab_document("n1", "2024-03-01", [lab("n1", "2024-03-01")], "v2-done"),
+        lab_document("n2", "2024-03-02", [], "v2-none"),
+        lab_document("n3", "2024-03-03", [], "v1-none", version="mmai-clinical-extraction-v1"),
+    ])
+    database = build_extraction_database(rows)
+    assert {"lab_tests", "counseling", "extraction_coverage"} <= set(database.tables)
+    labs = database.tables["lab_tests"].to_pylist()
+    assert labs[0]["lab_test"] == "cbc" and labs[0]["date_lo"] == date(2024, 3, 1)
+    coverage = {r["item_type"]: r["patients_covered"]
+                for r in database.tables["extraction_coverage"].to_pylist()}
+    assert coverage["lab_test"] == 2 and coverage["imaging_study"] == 3
+    patients = database.tables["patients"].to_pylist()
+    assert "lab_test" not in patients[database.patient_ids.index("v1-none")]["extracted_item_types"]
+    report = check_workup_with_sql(rows, compiled_entries({"sql": LAB_SQL}))
+    by = {p["patient_id"]: p["review"]["assessments"][0] for p in report["patients"]}
+    assert by["v2-done"]["status"] == "met"
+    assert (by["v2-none"]["status"], by["v2-none"]["reason"]) == ("not_met", "not_documented")
+    # The older record could not contain lab tests: not documented becomes unknown.
+    assert (by["v1-none"]["status"], by["v1-none"]["reason"]) == ("unknown",
+                                                                  "incomplete_extraction")
+    assert "without lab_tests" in by["v1-none"]["bottom_line"]
+
+
+AGAINST_SQL = CT_SQL.replace("THEN 'met'", "THEN 'done_not_recommended'").replace(
+    "THEN 'documented'", "THEN 'documented_not_recommended'")
+
+
+def test_steps_the_guideline_advises_against(database):
+    limits = WorkupSQLLimits()
+    with SQLSandbox(database=database) as box:
+        assert run_final_query(box, AGAINST_SQL, 4, limits, recommends_against=True).problems == []
+        met = run_final_query(box, CT_SQL, 4, limits, recommends_against=True)
+        assert any("never met" in p for p in met.problems)
+        done = run_final_query(box, AGAINST_SQL, 4, limits)
+        assert any("only for a requirement that advises against" in p for p in done.problems)
+    entries = compiled_entries({"sql": AGAINST_SQL, "recommends_against": True}, {"sql": CT_SQL})
+    report = check_workup_with_sql(rows(), entries, patient_ids=[PID, "p2", "p3", "p4"])
+    first = report["patients"][0]["review"]["assessments"][0]
+    assert first["status"] == "done_not_recommended" and first["recommends_against"] is True
+    assert first["bottom_line"].startswith("Done though the guideline advises against it")
+    against, normal = report["aggregate"]
+    assert against["statuses"]["done_not_recommended"] == 1 and against["recommends_against"]
+    assert against["documented_completion_fraction"] is None and against["applicable_assessed"] == 0
+    assert normal["recommends_against"] is False and normal["documented_completion_fraction"] == 0.5

@@ -12,8 +12,8 @@ one data model:
 
 | Function | One record per | Content |
 | --- | --- | --- |
-| `extract_document_records` | note | The document type; for an imaging report the study that produced it; for a pathology report the procedure that produced its specimen; and the diagnoses, biomarkers, treatments, disease assessments and performance status the note states. |
-| `extract_patient_records` | patient | Cancer diagnoses with site, histology, dates and stage; biomarkers; treatment lines and regimens with agents, dates and best response; tissue procedures; imaging history; key dated events. |
+| `extract_document_records` | note | The document type; for an imaging report the study that produced it; for a pathology report the procedure that produced its specimen; and the diagnoses, biomarkers, treatments, disease assessments, performance status, lab tests and counseling the note states. |
+| `extract_patient_records` | patient | Cancer diagnoses with site, histology, dates and stage; biomarkers; treatment lines and regimens with agents, dates and best response; tissue procedures; imaging history; lab tests; counseling, screenings and referrals; key dated events. |
 
 Both accept the note table `summarize_patients` takes: `patient_id`,
 `note_text` and `note_date`, plus optional `note_id` (unique) and `note_type`
@@ -48,7 +48,8 @@ this generalizes did after its patient pass.
 
 ## Records
 
-Every record carries `schema_version` (`mmai-clinical-extraction-v1`), its
+Every record carries `schema_version` (`mmai-clinical-extraction-v2`; v1 records, built
+before lab tests and counseling were added on 2026-11-17, have neither list), its
 `level`, `patient_id`, the selected `extensions`, and `items`: one list per item
 type. A document record adds `note_id`, `note_date`, `note_type`,
 `document_type` and `document_type_text`; a patient record adds `note_count`,
@@ -87,9 +88,17 @@ Every item has:
 | `treatments` | `treatment` | both | `treatment_type`, `regimen`, `agents`, `site`, `setting`, `line_of_therapy`, `treatment_status`, `start_date`, `end_date`, `best_response`, `end_reason`, `toxicities` |
 | `disease_assessments` | `disease_assessment` | document | `disease_status`, `disease_sites` |
 | `performance_status` | `performance_status` | document | `scale` (`ecog`, `karnofsky`), `score` |
+| `lab_tests` | `lab_test` | both | `lab_test` (`cbc`, `cmp`, `bmp`, `liver_function`, `renal_function`, `ldh`, `coagulation`, `pregnancy_test`, ... `other`), `lab_text`, `result_text`, `result_flag`, `collection_date` |
+| `counseling` | `counseling` | both | `topic` (`smoking_cessation`, `genetic_counseling`, `fertility`, `psychosocial_distress`, `palliative_care`, `lymphedema`, ... `other`), `topic_text`, `counseling_kind` (`counseling`, `discussion`, `screening`, `referral`, `consultation`), `provider`, `details`, `counseling_date` |
 | `events` | `event` | patient | `event_type`, `description`, `event_date` |
 
-Imaging studies and procedures also record how they occurred. In a document
+Lab tests cover blood, urine and other fluid tests, one item per test or panel per
+collection; serum tumor markers that follow a cancer (CEA, CA 19-9, PSA) stay
+biomarkers. Counseling covers counseling, care discussions, supportive-care
+screenings (such as distress or lymphedema screening) and referrals, one item per
+topic per encounter.
+
+Imaging studies, procedures, lab tests and counseling also record how they occurred. In a document
 record, `relation` is `this_report` (the study an imaging report reads, or the
 procedure that produced the specimen a pathology report examines),
 `previously_performed` (an earlier or outside study or procedure the note says

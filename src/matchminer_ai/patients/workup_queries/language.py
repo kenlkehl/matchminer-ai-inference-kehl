@@ -68,7 +68,7 @@ MAX_TEXT = 400
 STATUSES = ("performed", "planned", "any")
 #: Item types whose items are performed or planned; items of other types are
 #: always performed (a criterion's ``performed`` is read as ``any`` for them).
-STATUS_TYPES = frozenset({"imaging_study", "procedure", "treatment"})
+STATUS_TYPES = frozenset({"imaging_study", "procedure", "lab_test", "counseling", "treatment"})
 ANCHORS = ("any_time", "reference_date", "diagnosis_date", "criterion_earliest", "criterion_latest")
 NO_ANCHOR = ("unknown", "reference_date")
 IF_NOT_STATED = ("unknown", "no_match", "match")

@@ -429,7 +429,8 @@ def check_population_workup_with_extractions(
 
 #: The parts of a compiled SQL entry a population report keeps (no query results).
 SQL_QUERY_FIELDS = ("cache_key", "status", "expressible", "not_expressible_reason", "sql",
-                    "summary", "approximations", "accepted_by", "termination", "error",
+                    "summary", "approximations", "recommends_against", "accepted_by",
+                    "termination", "error",
                     "action_count", "submit_count", "distribution", "exploration", "cached",
                     "model", "usage")
 

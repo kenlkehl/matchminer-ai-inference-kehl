@@ -89,7 +89,7 @@ Model-written SQL never runs in the calling process.
 
 **Columns** come from the item type declarations (`table_columns`), never from the
 data. A query written against one database therefore runs on any other database of
-the same `DATABASE_VERSION` (`mmai-extraction-sql-v1`).
+the same `DATABASE_VERSION` (`mmai-extraction-sql-v2`).
 
 **Every item table** starts with these shared columns:
 - `item_key`, `patient_key`, `item_type`, `level`, `note_id`, `note_date`,
@@ -111,7 +111,10 @@ the same `DATABASE_VERSION` (`mmai-extraction-sql-v1`).
 
 **`patients`** carries `reference_date`, which by default is the latest note date.
 It also carries the extraction's completeness (`extraction_incomplete`,
-`notes_without_records`).
+`notes_without_records`) and `extracted_item_types`: the item types every one of the
+patient's records was extracted for. Records of an older extraction schema lack some
+types; v1 records have no lab tests or counseling. `extraction_coverage` counts the
+covered patients per item type.
 
 **Privacy:** the tables hold no patient ids (patients are numbered) and no note
 text. Evidence quotes stay in Python and are attached to results by `item_key`.
@@ -122,8 +125,9 @@ text. Evidence quotes stay in Python and are attached to results by `item_key`.
 - `patient_key`
 - `status` and `reason`, one of the pairs `met/documented`,
   `not_met/not_documented`, `not_met/planned_only`, `unknown/uncertain_dates`,
-  `unknown/fields_not_stated`, `unknown/anchor_unavailable` or
-  `not_applicable/documented_not_applicable`
+  `unknown/fields_not_stated`, `unknown/anchor_unavailable`,
+  `not_applicable/documented_not_applicable` or, only for a requirement that
+  advises against its step, `done_not_recommended/documented_not_recommended`
 - `applicability`
 - `evidence_item_keys`
 - `detail`
@@ -131,13 +135,39 @@ text. Evidence quotes stay in Python and are attached to results by `item_key`.
 **Code checks** that the query returns one row per patient, that the values are
 valid, and that every cited key is one of that patient's items.
 
+**Steps the guideline advises against** ("FDG-PET/CT not routinely indicated"). The
+agent submits these with `recommends_against: true`:
+- A patient who had the step anyway is `done_not_recommended`, never `met`.
+- The aggregate reports their count and no completion fraction (`recommends_against`
+  on the row).
+
 **Code then applies the compiled-query method's overrides:**
 - no extraction records gives unknown / `no_extraction`;
 - an incomplete extraction turns not_met into unknown / `incomplete_extraction`;
+- so does a query that reads an item table the patient's records were never extracted
+  for (for example `lab_tests` on v1 records): an empty table there says nothing;
 - a requirement the agent declared not expressible gives unknown / `not_expressible`;
 - a missing or failed query gives unknown / `query_unavailable`.
 
 `aggregate_extraction_workup` counts the results, as for compiled queries.
+
+## Rules the agent follows
+
+The system prompt (`patient.workup_sql.system.txt`) holds the full rules. The main
+ones:
+- **Timing:** any time up to the reference date counts unless the requirement is
+  defined by timing relative to an event. Phase labels such as "initial evaluation"
+  set no window.
+- **Undated anchors:** when the anchor event has no exact date, it is dated by the
+  first note that mentions it, and a step dated before that note counts as before
+  the event.
+- **Labs:** a lab requirement is met only when every lab it names is documented.
+  Tumor markers are biomarkers.
+- **History and physical** is always done and is ignored inside combined
+  requirements.
+- **Population:** neither the population nor its site is re-checked. Items about an
+  unrelated cancer are excluded through `cancer_ids`, never through lists of site
+  words.
 
 ## Privacy
 

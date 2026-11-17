@@ -28,6 +28,7 @@ import io
 import json
 import math
 import os
+import re
 import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -35,7 +36,11 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from matchminer_ai.patients.extraction import vocabulary as v
-from matchminer_ai.patients.extraction.schema import SCHEMA_VERSION, ItemType
+from matchminer_ai.patients.extraction.schema import (
+    SCHEMA_VERSION,
+    ItemType,
+    record_item_types,
+)
 from matchminer_ai.patients.workup_queries.evaluate import (
     ItemView,
     PatientData,
@@ -47,7 +52,7 @@ from matchminer_ai.patients.workup_queries.evaluate import (
 )
 from matchminer_ai.patients.workup_queries.language import item_types
 
-DATABASE_VERSION = "mmai-extraction-sql-v1"
+DATABASE_VERSION = "mmai-extraction-sql-v2"
 
 #: Columns every item table starts with, and the ``items`` view holds.
 COMMON_COLUMNS: tuple[tuple[str, str, str], ...] = (
@@ -99,6 +104,15 @@ PATIENT_COLUMNS = (
     ("extraction_incomplete", "BOOLEAN", "Some notes or chunks failed or lack records, so a "
      "missing item may be an extraction gap (code turns not_met into unknown for these)."),
     ("item_count", "INTEGER", "Items extracted for the patient, both levels."),
+    ("extracted_item_types", "VARCHAR[]", "The item types every one of this patient's "
+     "records was extracted for (older extraction schemas lack some, such as lab_test and "
+     "counseling): an absent type cannot document anything for this patient."),
+)
+COVERAGE_COLUMNS = (
+    ("item_type", "VARCHAR", "An item type (its table is in table_name)."),
+    ("table_name", "VARCHAR", "The item type's table."),
+    ("patients_covered", "INTEGER", "Patients whose records were all extracted for it."),
+    ("patients", "INTEGER", "Patients in this database."),
 )
 DOCUMENT_COLUMNS = (
     ("patient_key", "INTEGER", "The patient."),
@@ -264,6 +278,15 @@ class ExtractionDatabase:
     item_tables: dict[str, str]
     extensions: list[str]
     fingerprint: str
+    covered: dict[str, frozenset] | None = None
+
+    def uncovered(self, patient_id: str, sql: str) -> list[str]:
+        """Item tables ``sql`` names that this patient's extraction did not cover."""
+        covered = (self.covered or {}).get(patient_id)
+        if covered is None:
+            return []
+        return [table for name, table in self.item_tables.items()
+                if name not in covered and re.search(rf"\b{re.escape(table)}\b", sql, re.I)]
 
     def statements(self) -> list[str]:
         """Trusted DDL run after the tables are loaded: the ``items`` view."""
@@ -368,6 +391,15 @@ def build_extraction_database(
         raise ValueError("patient_ids repeat")
     keys = {pid: n for n, pid in enumerate(ids, 1)}
     by_type = {t.name: t for t in types}
+    everything = frozenset(by_type)
+    covered: dict[str, frozenset] = {}
+    for row in _record_rows(records):
+        record = row.get("record")
+        if not isinstance(record, dict):
+            continue
+        pid = str(row.get("patient_id") or record.get("patient_id"))
+        found = record_item_types(record) & everything
+        covered[pid] = covered[pid] & found if pid in covered else found
     columns = {t.name: table_columns(t) for t in types}
     rows: dict[str, list[dict]] = {t.name: [] for t in types}
     views: dict[int, ItemView] = {}
@@ -406,6 +438,7 @@ def build_extraction_database(
             "notes_without_records": patient.notes_without_records,
             "extraction_incomplete": patient.incomplete,
             "item_count": len(patient.items),
+            "extracted_item_types": sorted(covered.get(pid, everything)),
         })
     for row in _record_rows(records):
         record = row.get("record") if isinstance(row.get("record"), dict) else {}
@@ -433,9 +466,13 @@ def build_extraction_database(
         tables[item_type.key] = _table(spec, rows[item_type.name])
         item_tables[item_type.name] = item_type.key
     tables["vocabulary"] = _table(VOCABULARY_COLUMNS, _vocabulary_rows(types))
+    coverage = {pid: covered.get(pid, everything) for pid in ids}
+    tables["extraction_coverage"] = _table(COVERAGE_COLUMNS, [
+        {"item_type": t.name, "table_name": t.key, "patients": len(ids),
+         "patients_covered": sum(t.name in c for c in coverage.values())} for t in types])
     return ExtractionDatabase(tables=tables, patient_ids=ids, views=views, data=data,
                               item_tables=item_tables, extensions=list(extensions),
-                              fingerprint=_fingerprint(tables))
+                              fingerprint=_fingerprint(tables), covered=coverage)
 
 
 def database_info(database: ExtractionDatabase) -> dict:
@@ -538,11 +575,16 @@ def render_database_guide(extensions: Iterable[str] | None = ()) -> str:
         blocks.append(block(f"{item_type.key} (item_type '{item_type.name}'; the shared "
                             "columns, then:)", columns, note + date_note))
     blocks.append(block("vocabulary (every code and its meaning)", VOCABULARY_COLUMNS))
+    blocks.append(block("extraction_coverage (which item types the records were extracted "
+                        "for)", COVERAGE_COLUMNS, "An item type with few covered patients was "
+                        "not extracted for most records (an older extraction schema): an "
+                        "empty table then says nothing about whether things were done."))
     return "\n\n".join(blocks)
 
 
 __all__ = [
     "COMMON_COLUMNS",
+    "COVERAGE_COLUMNS",
     "DATABASE_VERSION",
     "ExtractionDatabase",
     "build_extraction_database",

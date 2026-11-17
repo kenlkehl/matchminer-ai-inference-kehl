@@ -34,7 +34,9 @@ from datetime import date
 from . import vocabulary as v
 from .vocabulary import Vocabulary
 
-SCHEMA_VERSION = "mmai-clinical-extraction-v1"
+SCHEMA_VERSION = "mmai-clinical-extraction-v2"
+#: Schema versions in order. v2 (2026-11-17) added lab tests and counseling.
+SCHEMA_VERSIONS = ("mmai-clinical-extraction-v1", "mmai-clinical-extraction-v2")
 LEVELS = ("document", "patient")
 
 #: Longest accepted evidence quote, in characters (the shortest supporting span
@@ -410,6 +412,71 @@ PERFORMANCE_STATUS = ItemType(
     max_items=4,
 )
 
+LAB_TEST = ItemType(
+    name="lab_test",
+    key="lab_tests",
+    id_prefix="L",
+    description=(
+        "A laboratory test or panel on blood, urine or another body fluid: one item per "
+        "test or panel per collection (or per order, when only ordered)."
+    ),
+    levels=frozenset(LEVELS),
+    occurrence=True,
+    primary_date="collection_date",
+    fields=(
+        _choice("lab_test", v.LAB_TESTS, "The test or panel.", "lab_text"),
+        _text(
+            "lab_text",
+            "The test as written ('CBC with differential', 'CMP', 'creatinine', 'LFTs', "
+            "'serum beta-hCG').",
+        ),
+        _text(
+            "result_text",
+            "The result as written, with values and units ('WBC 6.2, Hgb 11.8, Plt 240', "
+            "'creatinine 1.1 mg/dL'); '' when the document gives none.",
+        ),
+        _choice("result_flag", v.LAB_RESULT_FLAGS, "Whether the result is called normal or "
+                "abnormal."),
+        _date("collection_date", "The date the sample was collected or resulted."),
+    ),
+    guidance=(
+        "Record tests that were resulted (performed) and tests that are ordered or "
+        "scheduled (planned). Serum tumor markers used to follow a cancer (CEA, CA 19-9, "
+        "CA-125, PSA, AFP) are biomarkers, not lab tests; record them as biomarkers. One "
+        "item per panel: do not split a CBC or a metabolic panel into its analytes."
+    ),
+)
+
+COUNSELING = ItemType(
+    name="counseling",
+    key="counseling",
+    id_prefix="C",
+    description=(
+        "Counseling, education, a care discussion, a supportive-care screening or a "
+        "referral for one topic: one item per topic per encounter."
+    ),
+    levels=frozenset(LEVELS),
+    occurrence=True,
+    primary_date="counseling_date",
+    fields=(
+        _choice("topic", v.COUNSELING_TOPICS, "What it is about.", "topic_text"),
+        _text("topic_text", "The topic as written ('smoking cessation', 'oncofertility "
+              "referral', 'distress screening')."),
+        _choice("counseling_kind", v.COUNSELING_KINDS, "What happened."),
+        _text("provider", "Who gave it or was referred to, as written ('genetic counselor', "
+              "'palliative care', 'social work'); '' when not stated."),
+        _text("details", "What was advised, found or decided, as written ('distress score "
+              "3', 'declined referral', 'nicotine patch started'); ''."),
+        _date("counseling_date", "The date it was given, done or made."),
+    ),
+    guidance=(
+        "Record counseling, discussions, screenings and referrals the document says were "
+        "given, done or made (performed), and ones it says are planned (planned). Do not "
+        "record consent for a procedure or a discussion of anticancer treatment options; "
+        "treatments themselves are treatment items."
+    ),
+)
+
 EVENT = ItemType(
     name="event",
     key="events",
@@ -438,8 +505,29 @@ CORE_ITEM_TYPES: tuple[ItemType, ...] = (
     TREATMENT,
     DISEASE_ASSESSMENT,
     PERFORMANCE_STATUS,
+    LAB_TEST,
+    COUNSELING,
     EVENT,
 )
+#: Core item types and the schema version that introduced them; a record of an
+#: earlier version cannot contain them.
+ITEM_TYPES_SINCE = {"lab_test": "mmai-clinical-extraction-v2",
+                    "counseling": "mmai-clinical-extraction-v2"}
+
+
+def record_item_types(record: dict) -> frozenset[str]:
+    """The core item types a record's schema version extracts, plus its extensions'."""
+    version = record.get("schema_version")
+    index = SCHEMA_VERSIONS.index(version) if version in SCHEMA_VERSIONS else len(
+        SCHEMA_VERSIONS) - 1
+    names = {t.name for t in CORE_ITEM_TYPES
+             if SCHEMA_VERSIONS.index(ITEM_TYPES_SINCE.get(t.name, SCHEMA_VERSIONS[0])) <= index}
+    if record.get("extensions"):
+        from .extensions import resolve_extensions
+
+        for extension in resolve_extensions(list(record["extensions"])):
+            names.update(t.name for t in extension.item_types)
+    return frozenset(names)
 
 
 def item_types_for(level: str, extra: Iterable[ItemType] = ()) -> tuple[ItemType, ...]:
@@ -1012,18 +1100,22 @@ def check_items(
 __all__ = [
     "BIOMARKER",
     "CORE_ITEM_TYPES",
+    "COUNSELING",
     "DIAGNOSIS",
     "DISEASE_ASSESSMENT",
     "EVENT",
     "Field",
     "IMAGING_STUDY",
+    "ITEM_TYPES_SINCE",
     "ItemType",
+    "LAB_TEST",
     "LEVELS",
     "PERFORMANCE_STATUS",
     "PROCEDURE",
     "Problem",
     "ResponseCheck",
     "SCHEMA_VERSION",
+    "SCHEMA_VERSIONS",
     "TREATMENT",
     "check_item",
     "check_items",
@@ -1033,6 +1125,7 @@ __all__ = [
     "item_types_for",
     "parse_date",
     "patient_response_schema",
+    "record_item_types",
     "record_json_schema",
     "render_field_guide",
     "resolved_date",

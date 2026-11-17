@@ -453,7 +453,8 @@ def test_incomplete_or_missing_extraction_is_unknown_and_unexpressible_requireme
     assert second["review"]["assessments"][0]["reason"] == "no_extraction"
     assert first["review"]["metadata"]["coverage"]["notes_without_records"] == 2
     aggregate = report["aggregate"][0]
-    assert aggregate["statuses"] == {"met": 0, "not_met": 0, "unknown": 2, "not_applicable": 0}
+    assert aggregate["statuses"] == {"met": 0, "not_met": 0, "unknown": 2, "not_applicable": 0,
+                                    "done_not_recommended": 0}
     assert aggregate["documented_completion_fraction"] is None
     failed_query = [{"status": "failed", "query": None, "requirement": {"name": "x"}}]
     result = check_workup_with_extractions(pd.DataFrame([failed]), failed_query)
@@ -654,3 +655,25 @@ def test_compile_preset_uses_nemotron_structured_outputs_and_room_to_reason():
         config=config)
     assert runtime["remote"]["request_params"]["temperature"] == 1.0
     assert runtime["remote"]["extra_body"]["top_k"] == -1
+
+
+def test_lab_tests_and_counseling_are_occurrence_items():
+    from matchminer_ai.patients.workup_queries.evaluate import cluster_items, describe_item, item_view
+
+    lab = {"item_type": "lab_test", "relation": "this_report", "source_of_document": True,
+           "status": "performed", "lab_test": "cbc", "lab_text": "CBC with diff",
+           "result_text": "", "result_flag": "abnormal", "collection_date": when("2024-03-01"),
+           "evidence": [quote("n1", "2024-03-01", "CBC")]}
+    planned = {**lab, "relation": "planned", "status": "planned",
+               "collection_date": when(None)}
+    talk = {"item_type": "counseling", "relation": "this_report", "source_of_document": True,
+            "status": "performed", "topic": "smoking_cessation", "topic_text": "",
+            "counseling_kind": "counseling", "provider": "", "details": "",
+            "counseling_date": when("2024-03-01"), "evidence": [quote("n1", "2024-03-01", "quit")]}
+    views = [item_view(i, level="document", note_id="n1", note_date="2024-03-01")
+             for i in (lab, dict(lab), planned, talk)]
+    assert describe_item(views[0]) == "CBC (CBC with diff), abnormal"
+    assert describe_item(views[3]) == "smoking cessation counseling"
+    assert views[2].status == "planned" and views[0].status == "performed"
+    # The same performed CBC twice is one cluster; the planned one stays separate.
+    assert len(cluster_items(views[:3])) == 2

@@ -7,7 +7,10 @@ the shape of :func:`~matchminer_ai.patients.workup_queries.check_workup_with_ext
 evidence quotes; limitations), so dashboards, drilldowns and exports read both.
 Code keeps the same overrides: no records gives unknown, an incomplete
 extraction turns not_met into unknown, and an unexpressible requirement or a
-failed query gives unknown.
+failed query gives unknown. A patient whose records were extracted without an
+item type the query reads (an older extraction schema, such as one without lab
+tests or counseling) also gets unknown instead of not_met. A requirement that
+advises against its step reports a documented step as done_not_recommended.
 """
 
 from __future__ import annotations
@@ -39,8 +42,10 @@ NOTICE = (
     "does not establish overall guideline concordance."
 )
 _LEADS = {"met": "Met", "not_met": "Not documented in the extraction records",
-          "unknown": "Unknown", "not_applicable": "Not applicable"}
-_STATES = {"met": "yes", "unknown": "unknown", "not_applicable": "yes"}
+          "unknown": "Unknown", "not_applicable": "Not applicable",
+          "done_not_recommended": "Done though the guideline advises against it"}
+_STATES = {"met": "yes", "unknown": "unknown", "not_applicable": "yes",
+           "done_not_recommended": "yes"}
 
 
 def _result(status, reason, applicability, bottom_line, *, entry=None, evidence=None,
@@ -104,7 +109,12 @@ def assess(row: dict | None, entry: dict, patient: PatientData, database: Extrac
         text += " Items: " + "; ".join(f"{describe_item(v)}, {_date_text(v)}"
                                        for _, v in views[:3]) + "."
     limitations = list(entry.get("approximations") or [])
-    if status == "not_met" and patient.incomplete:
+    missing = database.uncovered(patient.patient_id, entry.get("sql") or "")
+    if status == "not_met" and missing:
+        status, reason = "unknown", "incomplete_extraction"
+        text = ("Unknown: not found, but this patient's records were extracted without "
+                f"{', '.join(missing)} (an older extraction schema).")
+    elif status == "not_met" and patient.incomplete:
         status, reason = "unknown", "incomplete_extraction"
         text = f"Unknown: not found in the extraction records, but {_incomplete(patient)}."
     elif reason == "not_documented":
@@ -151,7 +161,9 @@ def check_workup_with_sql(
             for done, number in enumerate(runnable, 1):
                 check_cancelled()
                 try:
-                    check = run_final_query(box, compiled[number]["sql"], len(ids), limits)
+                    check = run_final_query(
+                        box, compiled[number]["sql"], len(ids), limits,
+                        recommends_against=bool(compiled[number].get("recommends_against")))
                 except SQLSandboxError:
                     failures[number] = "the isolated SQL worker failed while running this query."
                     runs[number] = {"status": "failed", "problem": "worker_failure"}
@@ -187,6 +199,7 @@ def check_workup_with_sql(
                 **result,
                 "query_key": entry.get("cache_key"),
                 "sql": entry.get("sql"),
+                "recommends_against": bool(entry.get("recommends_against")),
             })
         patients.append({
             "patient_id": pid,

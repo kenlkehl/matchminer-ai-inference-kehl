@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 SECTION = "workup_sql_agent"
 PROMPT_FILE = "patient.workup_sql.system.txt"
-AGENT_VERSION = "mmai-workup-sql-agent-v1"
+AGENT_VERSION = "mmai-workup-sql-agent-v2"
 RESULT_COLUMNS = ("patient_key", "status", "applicability", "reason", "evidence_item_keys",
                   "detail")
 #: The reasons a query may give, by status; code owns the others (no_extraction,
@@ -57,10 +57,12 @@ SQL_REASONS = {
     "not_met": ("not_documented", "planned_only"),
     "unknown": ("uncertain_dates", "fields_not_stated", "anchor_unavailable"),
     "not_applicable": ("documented_not_applicable",),
+    # Only for a requirement that advises against the step (recommends_against).
+    "done_not_recommended": ("documented_not_recommended",),
 }
 ACTIONS = ("query", "submit", "accept", "not_expressible")
 _FIELDS = ("action", "purpose", "sql", "summary", "approximations", "not_expressible_reason",
-           "memory")
+           "recommends_against", "memory")
 
 
 @dataclass(frozen=True)
@@ -164,6 +166,9 @@ def response_schema(limits: WorkupSQLLimits, actions: Sequence[str] = ACTIONS) -
                                "approximated, one short sentence each; otherwise []."},
             "not_expressible_reason": {**text, "description": "not_expressible: why; "
                                        "otherwise ''."},
+            "recommends_against": {"type": "boolean", "description": "submit: true when the "
+                                   "requirement advises against the step (not recommended, "
+                                   "not routinely indicated); otherwise false."},
             "memory": {**text, "description": "Notes to yourself for later turns: findings, "
                        f"codes, spellings, plan (at most {limits.max_memory_chars} characters)."},
         },
@@ -221,8 +226,14 @@ class ResultCheck:
     distribution: dict
 
 
-def check_result(reply: dict, patient_count: int, limits: WorkupSQLLimits) -> ResultCheck:
-    """Check a final query's full output against the contract (one row per patient)."""
+def check_result(reply: dict, patient_count: int, limits: WorkupSQLLimits, *,
+                 recommends_against: bool = False) -> ResultCheck:
+    """Check a final query's full output against the contract (one row per patient).
+
+    For a requirement that advises against its step (``recommends_against``), a
+    documented step is ``done_not_recommended``, never ``met``; otherwise
+    ``done_not_recommended`` is not allowed.
+    """
     problems: list[str] = []
     if reply["error"]:
         return ResultCheck([f"The query failed: {reply['error']}: {reply['error_detail']}"],
@@ -255,6 +266,13 @@ def check_result(reply: dict, patient_count: int, limits: WorkupSQLLimits) -> Re
             flag(f"status must be one of {', '.join(STATUSES)}", key)
         elif reason not in SQL_REASONS[status]:
             flag(f"reason does not fit its status (allowed pairs: {_pairs()})", key)
+        elif recommends_against and status == "met":
+            flag("this requirement advises against the step (recommends_against true): "
+                 "report a documented step as done_not_recommended / "
+                 "documented_not_recommended, never met", key)
+        elif not recommends_against and status == "done_not_recommended":
+            flag("done_not_recommended is only for a requirement that advises against the "
+                 "step: set recommends_against true, or report met", key)
         if row["applicability"] not in APPLICABILITY:
             flag(f"applicability must be one of {', '.join(APPLICABILITY)}", key)
         if status == "not_applicable" and row["applicability"] != "not_applicable":
@@ -301,12 +319,12 @@ def ownership_sql(sql: str) -> str:
 
 
 def run_final_query(box: SQLSandbox, sql: str, patient_count: int,
-                    limits: WorkupSQLLimits) -> ResultCheck:
+                    limits: WorkupSQLLimits, *, recommends_against: bool = False) -> ResultCheck:
     """Run a final query once over the whole database and check its output."""
     sql = _strip(sql)
     reply = box.query(sql, max_rows=patient_count + 1, count_limit=patient_count + 2,
                       max_cell_chars=None, timeout=limits.final_timeout_seconds)
-    check = check_result(reply, patient_count, limits)
+    check = check_result(reply, patient_count, limits, recommends_against=recommends_against)
     if not check.problems:
         owned = box.query(ownership_sql(sql), max_rows=1, timeout=limits.final_timeout_seconds)
         foreign = owned["rows"][0][0] if not owned["error"] and owned["rows"] else None
@@ -413,7 +431,8 @@ class _Run:
             "actions_left": left,
             "submissions_left": self.limits.max_submits - self.submits,
             "allowed_actions": actions,
-            "pending_submission": ({"sql": self.pending["sql"], "summary": self.pending["summary"]}
+            "pending_submission": ({"sql": self.pending["sql"], "summary": self.pending["summary"],
+                                    "recommends_against": self.pending["recommends_against"]}
                                    if self.pending else None),
             "memory": self.memory,
             "earlier_steps": [f"{s['step']}. {s['action']}: {s['purpose']} -> {s['outcome']}"
@@ -432,8 +451,11 @@ class _Run:
             if value["action"] not in actions:
                 raise ValueError("action must be one of the allowed actions.")
             for name in _FIELDS:
-                if name != "approximations" and not isinstance(value[name], str):
+                if name not in {"approximations", "recommends_against"} and not isinstance(
+                        value[name], str):
                     raise ValueError(f"{name} must be a string.")
+            if type(value["recommends_against"]) is not bool:
+                raise ValueError("recommends_against must be true or false.")
             if not isinstance(value["approximations"], list) or len(value["approximations"]) > 8 \
                     or any(not isinstance(a, str) for a in value["approximations"]):
                 raise ValueError("approximations must be a list of at most 8 strings.")
@@ -465,7 +487,8 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
     started = time.monotonic()
     outcome = {"status": "failed", "expressible": True, "not_expressible_reason": "",
                "sql": None, "summary": "", "approximations": [], "accepted_by": None,
-               "distribution": None, "termination": "budget_exhausted", "error": None}
+               "recommends_against": False, "distribution": None,
+               "termination": "budget_exhausted", "error": None}
     try:
         for turn in range(limits.max_actions):
             check_cancelled()
@@ -494,10 +517,12 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
                          f"error {reply['error']}" if reply["error"] else _rows(reply))
             elif action == "submit":
                 run.submits += 1
-                check = run_final_query(box, value["sql"], patient_count, limits)
+                check = run_final_query(box, value["sql"], patient_count, limits,
+                                        recommends_against=value["recommends_against"])
                 candidate = {"sql": _strip(value["sql"]), "summary": value["summary"].strip(),
                              "approximations": [a.strip() for a in value["approximations"]
                                                 if a.strip()],
+                             "recommends_against": value["recommends_against"],
                              "distribution": check.distribution}
                 run.pending = None if check.problems else candidate
                 run.step("submit", purpose or "final query", value["sql"],
@@ -550,7 +575,8 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
 def _accepted(candidate, by) -> dict:
     return {"status": "compiled", "expressible": True, "sql": candidate["sql"],
             "summary": candidate["summary"], "approximations": list(candidate["approximations"]),
-            "accepted_by": by, "distribution": candidate["distribution"]}
+            "recommends_against": candidate["recommends_against"], "accepted_by": by,
+            "distribution": candidate["distribution"]}
 
 
 # ---------------------------------------------------------------------------
