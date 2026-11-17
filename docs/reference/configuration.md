@@ -586,6 +586,41 @@ and the local context 200,000 tokens. A remote backend keeps
 `remote.max_concurrent_requests` requests per server in flight, as for
 `document_extraction`; each patient's chunks still run one after another.
 
+## `workup_sql_agent`
+
+Configuration for `patients.compile_workup_sql` (see
+[SQL-Agent Workup Checks](../api/workup-sql.md)). For each distinct workup
+requirement, an LLM agent explores an extraction database with read-only SQL in an
+isolated worker and accepts one cohort-level query. It needs an OpenAI-compatible
+endpoint (`remote.enabled`; a local vLLM server works), not an in-process engine.
+Exploration results are patient-derived extracted values (no ids, note text or
+quotes) and reach that endpoint.
+
+**Top-level keys:**
+- `max_attempts` (3): attempts per turn for an invalid action.
+- `structured_outputs` (true): JSON-schema responses; false sends the schema in the
+  prompt only.
+- `tokenizer_mode` (`bytes`): conservative local prompt budgets; `endpoint` counts
+  with `/tokenize`.
+- `context_window` (null): null uses `local.engine.max_model_len`, then the
+  endpoint's `/v1/models`.
+- `sampling_profile`, `reasoning_effort` (`high`) and `reasoning_parser`, as for
+  other LLM sections.
+- `local` / `remote`: the model, with 32,000 completion tokens per turn by default.
+
+**`limits` keys:**
+- `max_actions` (20) and `max_submits` (4).
+- `submit_by` (8): the action by which the agent is asked to submit a first
+  candidate.
+- `max_rows` (30), `max_cell_chars` (160) and `max_result_chars` (6,000): what the
+  agent sees of a result.
+- `max_memory_chars` (4,000), `max_recent_steps` (8), `max_sql_chars` (8,000).
+- `max_detail_chars` (300) and `max_evidence_items` (8): per-patient output.
+- `sample_rows_per_status` (3): example rows shown after a submission.
+- `max_concurrent_items` (4): requirements explored at once, sharing one worker.
+- `query_timeout_seconds` (20) and `final_timeout_seconds` (120).
+- `worker_memory_mb` (4,096) and `duckdb_memory_mb` (2,048).
+
 ## `trial_space_criteria_extraction`
 
 Configuration for extracting the complete inclusion and exclusion criteria

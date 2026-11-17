@@ -42,6 +42,9 @@ documents = extract_document_records(notes, config=config)
 report = check_workup_with_extractions(documents, compiled)
 ```
 
+[SQL-Agent Workup Checks](workup-sql.md) read the same records with queries that an LLM
+agent writes in SQL after exploring the extracted data.
+
 For a population, `matchminer_ai.population.check_population_workup_with_extractions`
 takes a cohort (with its space), the compiled queries and the document and
 patient records, links records to the cohort's own notes by note id, and returns

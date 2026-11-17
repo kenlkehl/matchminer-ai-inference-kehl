@@ -53,6 +53,12 @@ from .workup_queries import (
     validate_workup_query,
 )
 from .workup_search import review_patient_workup_with_note_search
+from .workup_sql import (
+    build_extraction_database,
+    check_workup_with_sql,
+    compile_workup_sql,
+    write_extraction_database,
+)
 from .workup_search_review import WorkupSearchReviewConfig
 
 
@@ -258,9 +264,12 @@ __all__ = [
     "answer_patient_question_batch",
     "answer_patient_questions",
     "answer_question_with_raw_patient_notes",
+    "build_extraction_database",
     "check_patient_summary",
     "check_workup_with_extractions",
+    "check_workup_with_sql",
     "compile_workup_queries",
+    "compile_workup_sql",
     "compress_patient_note",
     "compress_patient_notes",
     "concatenate_patient_note_pdfs",
@@ -274,4 +283,5 @@ __all__ = [
     "summarize_patient_notes",
     "summarize_patients",
     "validate_workup_query",
+    "write_extraction_database",
 ]

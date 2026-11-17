@@ -301,40 +301,23 @@ def review_population_workup(
     )
 
 
-def check_population_workup_with_extractions(
-    cohort,
-    compiled,
-    *,
-    document_records=None,
-    patient_records=None,
-    reference_dates=None,
-    progress_callback=None,
-):
-    """Check every selected patient × workup item with structured extraction records.
+EXTRACTION_METHODS = ("extraction_queries", "extraction_sql")
 
-    No LLM calls: ``compiled`` holds one compiled query per item of the cohort
-    space's ``diagnostic_workup`` (``compile_workup_queries``), and code runs them
-    on each patient's records (``check_workup_with_extractions``). Records are
-    linked to the cohort's own notes by note id: document records of notes the
-    cohort does not hold are ignored, cohort notes without a document record make
-    a not-documented result unknown, and a patient-level record built from other
-    notes (its ``note_ids`` column, or else its ``note_count``) is ignored.
+
+def _linked_extraction_records(cohort, document_records, patient_records):
+    """The cohort's own extraction records, linked to its notes by note id.
+
+    Document records of notes the cohort does not hold are ignored, cohort notes
+    without a document record are counted per patient (``notes_without_records``),
+    and a patient-level record built from other notes (its ``note_ids`` column,
+    or else its ``note_count``) is ignored. Returns (patient ids, record frames,
+    coverage by patient, counts).
     """
     from matchminer_ai.patients.extraction.notes import note_ids
-    from matchminer_ai.patients.workup_queries import (
-        NOTICE as EXTRACTION_NOTICE,
-        check_workup_with_extractions,
-    )
 
     ids = cohort.summaries.patient_id.tolist()
     if not ids:
         raise ValueError("Select a nonempty cohort first.")
-    recommendations = (cohort.space or {}).get("diagnostic_workup", [])
-    if not recommendations:
-        raise ValueError("Select a guideline space with workup recommendations.")
-    if len(compiled) != len(recommendations):
-        raise ValueError("Supply one compiled query per workup recommendation.")
-    progress = progress_callback or (lambda _: None)
     notes = cohort.notes.assign(note_id=note_ids(cohort.notes))
     held = {pid: set(group.note_id) for pid, group in notes.groupby("patient_id", sort=False)}
     frames, counts = [], {"documents_used": 0, "documents_ignored": 0,
@@ -373,10 +356,48 @@ def check_population_workup_with_extractions(
         coverage = {pid: {"notes_without_records": len(held.get(pid, set()) - covered.get(pid, set()))}
                     for pid in ids}
         counts["notes_without_records"] = sum(c["notes_without_records"] for c in coverage.values())
-    progress(f"Checking {len(ids)} patients against {len(recommendations)} workup queries")
+    return ids, frames, coverage, counts
+
+
+def _workup_recommendations(cohort, compiled, what):
+    recommendations = (cohort.space or {}).get("diagnostic_workup", [])
+    if not recommendations:
+        raise ValueError("Select a guideline space with workup recommendations.")
+    if len(compiled) != len(recommendations):
+        raise ValueError(f"Supply one {what} per workup recommendation.")
     # Assessments keep the space's complete recommendations, as full-note reviews do.
-    linked = [{**entry, "requirement": copy.deepcopy(item)}
-              for entry, item in zip(compiled, recommendations, strict=True)]
+    return recommendations, [{**entry, "requirement": copy.deepcopy(item)}
+                             for entry, item in zip(compiled, recommendations, strict=True)]
+
+
+def check_population_workup_with_extractions(
+    cohort,
+    compiled,
+    *,
+    document_records=None,
+    patient_records=None,
+    reference_dates=None,
+    progress_callback=None,
+):
+    """Check every selected patient × workup item with structured extraction records.
+
+    No LLM calls: ``compiled`` holds one compiled query per item of the cohort
+    space's ``diagnostic_workup`` (``compile_workup_queries``), and code runs them
+    on each patient's records (``check_workup_with_extractions``). Records are
+    linked to the cohort's own notes by note id (``_linked_extraction_records``).
+    """
+    from matchminer_ai.patients.workup_queries import (
+        NOTICE as EXTRACTION_NOTICE,
+        check_workup_with_extractions,
+    )
+
+    if not cohort.summaries.patient_id.tolist():
+        raise ValueError("Select a nonempty cohort first.")
+    recommendations, linked = _workup_recommendations(cohort, compiled, "compiled query")
+    ids, frames, coverage, counts = _linked_extraction_records(
+        cohort, document_records, patient_records)
+    progress = progress_callback or (lambda _: None)
+    progress(f"Checking {len(ids)} patients against {len(recommendations)} workup queries")
     result = check_workup_with_extractions(
         frames, linked, patient_ids=ids, reference_dates=reference_dates, coverage=coverage,
     )
@@ -402,6 +423,70 @@ def check_population_workup_with_extractions(
                                            "cached", "model")}
                 for entry in compiled
             ],
+        },
+    )
+
+
+#: The parts of a compiled SQL entry a population report keeps (no query results).
+SQL_QUERY_FIELDS = ("cache_key", "status", "expressible", "not_expressible_reason", "sql",
+                    "summary", "approximations", "accepted_by", "termination", "error",
+                    "action_count", "submit_count", "distribution", "exploration", "cached",
+                    "model", "usage")
+
+
+def check_population_workup_with_sql(
+    cohort,
+    compiled,
+    *,
+    document_records=None,
+    patient_records=None,
+    reference_dates=None,
+    config=None,
+    progress_callback=None,
+):
+    """Check every selected patient × workup item with the SQL agent's accepted queries.
+
+    No LLM calls: ``compiled`` holds one accepted query per item of the cohort
+    space's ``diagnostic_workup`` (``compile_workup_sql``). Each query runs once
+    over a database of the whole cohort's linked records
+    (``check_workup_with_sql``), linked to its notes as for compiled queries.
+    """
+    from matchminer_ai.patients.workup_sql import NOTICE as SQL_NOTICE, check_workup_with_sql
+
+    if not cohort.summaries.patient_id.tolist():
+        raise ValueError("Select a nonempty cohort first.")
+    recommendations, linked = _workup_recommendations(cohort, compiled, "compiled SQL entry")
+    ids, frames, coverage, counts = _linked_extraction_records(
+        cohort, document_records, patient_records)
+    progress = progress_callback or (lambda _: None)
+    progress(f"Running {len(recommendations)} workup SQL queries over {len(ids)} patients")
+    result = check_workup_with_sql(
+        frames, linked, patient_ids=ids, reference_dates=reference_dates, coverage=coverage,
+        config=config, progress_callback=lambda done, total: progress(
+            f"Running workup SQL queries over the cohort · {done}/{total}"),
+    )
+    check_cancelled()
+    progress(f"Checked {len(ids)}/{len(ids)} patients")
+    queries = []
+    for entry, run, item in zip(compiled, result["queries"], recommendations, strict=True):
+        queries.append({"requirement": copy.deepcopy(item),
+                        **{k: copy.deepcopy(entry.get(k)) for k in SQL_QUERY_FIELDS},
+                        "cohort_run": run})
+    return replace(
+        cohort,
+        report={
+            "version": 2,
+            "method": "extraction_sql",
+            "note_source": "original",
+            "patient_count": len(ids),
+            "space": copy.deepcopy(cohort.space),
+            "aggregate": result["aggregate"],
+            "patients": result["patients"],
+            "notice": SQL_NOTICE + " Research use only; confirm applicability, timing "
+            "and findings with a clinician.",
+            "provenance": copy.deepcopy(cohort.provenance),
+            "extraction": counts,
+            "queries": queries,
         },
     )
 
@@ -551,7 +636,7 @@ def load_patient_cohort(path, *, max_uncompressed_bytes=16 * 1024**3):
                 p["patient_id"] for p in patients
             ] != cohort.summaries.patient_id.tolist():
                 raise ValueError("Review membership mismatch.")
-            if cohort.report.get("method") == "extraction_queries":
+            if cohort.report.get("method") in EXTRACTION_METHODS:
                 from matchminer_ai.patients.workup_queries import aggregate_extraction_workup
 
                 aggregate = aggregate_extraction_workup(

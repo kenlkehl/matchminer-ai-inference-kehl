@@ -367,6 +367,62 @@ workup_query_compile:
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
+workup_sql_agent:
+  # The SQL workup agent (matchminer_ai.patients.workup_sql): per distinct workup requirement
+  # (never per patient), an LLM explores an extraction database with read-only SQL in an
+  # isolated DuckDB worker and accepts one cohort-level query; code runs it once per cohort.
+  # Its only tool is read-only SQL. It needs an OpenAI-compatible endpoint (remote.enabled; a
+  # local vLLM server, Vertex or another provider), not an in-process engine. Exploration
+  # results are patient-derived extracted values (no ids, note text or quotes): use only an
+  # endpoint authorized for the records.
+  # Attempts per turn for an invalid action (validated in code).
+  max_attempts: 3
+  structured_outputs: true
+  # bytes: conservative local prompt budgets; endpoint: count with the server's /tokenize.
+  tokenizer_mode: bytes
+  # null: local.engine.max_model_len.
+  context_window: null
+  sampling_profile: auto
+  reasoning_effort: high
+  reasoning_parser: auto
+  limits:
+    max_actions: 20
+    max_submits: 4
+    # The agent is asked to submit a first candidate by this action, then review and revise.
+    submit_by: 8
+    # Rows and characters of an exploration result the agent sees.
+    max_rows: 30
+    max_cell_chars: 160
+    max_result_chars: 6000
+    max_memory_chars: 4000
+    max_recent_steps: 8
+    max_sql_chars: 8000
+    max_detail_chars: 300
+    max_evidence_items: 8
+    sample_rows_per_status: 3
+    # Requirements explored at once; they share one SQL worker.
+    max_concurrent_items: 4
+    query_timeout_seconds: 20
+    final_timeout_seconds: 120
+    worker_memory_mb: 4096
+    duckdb_memory_mb: 2048
+  local:
+    model_name: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
+    engine:
+      max_model_len: 131072
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      max_tokens: 32000
+      skip_special_tokens: false
+  remote:
+    model_name: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
+    request_params:
+      max_tokens: 32000
+    extra_body:
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
 trial_space_criteria_extraction:
   max_document_characters: 120000
   max_criteria_per_type: 256
