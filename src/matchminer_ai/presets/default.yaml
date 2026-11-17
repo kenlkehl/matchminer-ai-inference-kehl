@@ -590,8 +590,10 @@ decision_model:
   batch_size: 256
   compile: false
 match_quality:
-  # match_quality_score (the expected 0-6 match score / 6) at or above this passes.
-  score_cutoff: 0.2
+  # match_quality_pass: P(reasonable) (the decision model's potentially-eligible answer) at or above this.
+  # match_quality_score (the expected 0-6 match score / 6) ranks pairs; it is not a pass criterion
+  # (until 2026-11-17 a score cutoff of 0.2 was, which only approximated this answer).
+  reasonableness_cutoff: 0.5
 exclusion_criteria:
   # P(potentially eligible on the boilerplate criteria) at or above this passes.
   pass_cutoff: 0.5

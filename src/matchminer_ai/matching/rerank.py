@@ -38,6 +38,20 @@ def _scores(answers: list[dict[str, float]]) -> tuple[list[float], dict[str, lis
     return scores, heads
 
 
+def reasonableness_cutoff(config: MMAIConfig) -> float:
+    """``match_quality.reasonableness_cutoff``: P(reasonable) at or above which a pair passes (default 0.5).
+
+    Since 2026-11-17 (user) a pair passes on the decision model's own potentially-eligible answer, not on
+    ``match_quality_score``: the former 0.2 score cutoff only approximated that answer, and it rejected pairs
+    the model judged reasonable but whose cohort was not specific on any dimension (a certain P(reasonable) with
+    no specificity scores 1/6). An old ``score_cutoff`` key is ignored.
+    """
+    value = float((config.raw.get("match_quality") or {}).get("reasonableness_cutoff", 0.5))
+    if not 0.0 <= value <= 1.0:
+        raise ValueError("match_quality.reasonableness_cutoff must be between 0 and 1")
+    return value
+
+
 def _decide(candidate_pairs: pd.DataFrame, config: MMAIConfig) -> tuple[list[dict[str, float]], dict]:
     _, cohorts, patients = _pair_inputs(candidate_pairs)
     questions = match_questions()
@@ -81,7 +95,7 @@ def score_match_quality(
             ``clinical_space_summary``).
 
     config : MMAIConfig, optional
-        MMAI configuration: ``decision_model`` (the model) and ``match_quality.score_cutoff``.
+        MMAI configuration: ``decision_model`` (the model) and ``match_quality.reasonableness_cutoff``.
         Uses default preset when omitted.
     filter_low_quality : bool, default True
         If True, only return rows where ``match_quality_pass`` evaluates to True.
@@ -104,7 +118,9 @@ def score_match_quality(
             0–1 match score, the expected match score fraction: P(reasonable) × (1 +
             P(cancer type) + P(burden) + P(treatment history) + 2 P(biomarker)) / 6.
         match_quality_pass : bool
-            Whether the match quality score meets the configured cutoff.
+            Whether P(reasonable) (``match_quality_reasonableness``) meets
+            ``match_quality.reasonableness_cutoff`` (0.5 by default): the decision model's own
+            potentially-eligible call. ``match_quality_score`` is for ranking only.
         match_quality_<label> : float
             Each match question's P(yes), for reasonableness, cancer_type, burden,
             treatment_history and biomarker.
@@ -113,16 +129,14 @@ def score_match_quality(
     """
     trial_id, _, _ = _pair_inputs(candidate_pairs)
     resolved_config = config or load_default_preset()
-    score_cutoff = float(resolved_config.raw.get("match_quality", {}).get("score_cutoff", 0.2))
+    cutoff = reasonableness_cutoff(resolved_config)
     answers, model_metadata = _decide(candidate_pairs, resolved_config)
 
     # Convert the answers into a compact, derived result table.
     output = candidate_pairs[["patient_id", trial_id]].copy()
     confidence_scores, heads = _scores(answers)
     output["match_quality_score"] = confidence_scores
-    output["match_quality_pass"] = [
-        score >= score_cutoff for score in confidence_scores
-    ]
+    output["match_quality_pass"] = [p >= cutoff for p in heads["reasonableness"]]
     for label, values in heads.items():
         output[f"match_quality_{label}"] = values
 
@@ -191,7 +205,7 @@ def interpret_match_quality(
         raise ValueError(f"head must be one of {list(LABELS)}")
     trial_id, cohorts, patients = _pair_inputs(candidate_pairs)
     resolved_config = config or load_default_preset()
-    score_cutoff = float(resolved_config.raw.get("match_quality", {}).get("score_cutoff", 0.2))
+    cutoff = reasonableness_cutoff(resolved_config)
     answers, model_metadata = _decide(candidate_pairs, resolved_config)
     confidence_scores, heads = _scores(answers)
     questions = match_questions()
@@ -206,7 +220,7 @@ def interpret_match_quality(
 
     output = candidate_pairs[["patient_id", trial_id]].copy()
     output["match_quality_score"] = confidence_scores
-    output["match_quality_pass"] = [score >= score_cutoff for score in confidence_scores]
+    output["match_quality_pass"] = [p >= cutoff for p in heads["reasonableness"]]
     for label, values in heads.items():
         output[f"match_quality_{label}"] = values
     output["attribution_method"] = [item["method"] for item in explanations]

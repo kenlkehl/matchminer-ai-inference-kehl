@@ -88,6 +88,27 @@ def _config(**sections):
                       model_metadata_cache_dir=None, raw=sections)
 
 
+def test_match_quality_pass_is_the_reasonableness_answer_not_the_score(monkeypatch):
+    """A pair passes on P(reasonable) >= match_quality.reasonableness_cutoff (default 0.5); match_quality_score only
+    ranks. Under the former 0.2 score cutoff a certain-reasonable pair with no specificity (score 1/6) failed."""
+    answers = {"Plain": {"reasonableness": 0.95, "cancer_type": 0.0, "burden": 0.0, "treatment_history": 0.0,
+                         "biomarker": 0.0},
+               "Doubtful": {"reasonableness": 0.4, "cancer_type": 1.0, "burden": 1.0, "treatment_history": 1.0,
+                            "biomarker": 1.0}}
+    fake = _FakeDecisions(lambda state, name: answers["Plain" if "Plain" in state else "Doubtful"][name])
+    monkeypatch.setattr("matchminer_ai.matching.rerank.run_decisions", fake)
+    pairs = pd.DataFrame({"patient_id": ["P1", "P2"], "space_trial_id": ["T1-1", "T2-1"],
+                          "cancer_history_summary": ["Plain history.", "Doubtful history."],
+                          "cohort_key_criteria": ["Solid tumors.", "Solid tumors."]})
+    every = score_match_quality(pairs, config=_config(match_quality={}), filter_low_quality=False)
+    assert every["match_quality_score"].tolist() == pytest.approx([0.95 / 6, 0.4])
+    assert every["match_quality_pass"].tolist() == [True, False]
+    kept = score_match_quality(pairs, config=_config(match_quality={"score_cutoff": 0.2}))  # old key: ignored
+    assert kept["patient_id"].tolist() == ["P1"]
+    with pytest.raises(ValueError, match="reasonableness_cutoff"):
+        score_match_quality(pairs, config=_config(match_quality={"reasonableness_cutoff": 1.5}))
+
+
 def test_score_match_quality_asks_the_five_match_questions_and_scores_them(monkeypatch):
     """One state per pair (patient key section, cohort key criteria), five noul questions, expected score."""
     probabilities = {"reasonableness": 0.9, "cancer_type": 0.5, "burden": 0.0, "treatment_history": 0.0, "biomarker": 1.0}
@@ -96,7 +117,7 @@ def test_score_match_quality_asks_the_five_match_questions_and_scores_them(monke
     pairs = pd.DataFrame({"patient_id": ["P1", "P2"], "space_trial_id": ["T1-1", "T2-1"],
                           "cancer_history_summary": ["Lung adenocarcinoma.", "Breast cancer."],
                           "cohort_key_criteria": ["Metastatic NSCLC.", "Melanoma."]})
-    result, metadata = score_match_quality(pairs, config=_config(match_quality={"score_cutoff": 0.2}),
+    result, metadata = score_match_quality(pairs, config=_config(match_quality={"reasonableness_cutoff": 0.5}),
                                            return_metadata=True)
     state, questions = fake.requests[0]
     assert state.index("Lung adenocarcinoma.") < state.index("Metastatic NSCLC.")
@@ -104,7 +125,7 @@ def test_score_match_quality_asks_the_five_match_questions_and_scores_them(monke
     assert questions["reasonableness"].startswith("Is this patient potentially eligible for this cohort")
     assert "if the patient is clearly ineligible, answer no" in questions["reasonableness"]
     assert "evidence_status" not in "".join(questions.values())
-    assert result["patient_id"].tolist() == ["P1"]  # P2 scores below the cutoff
+    assert result["patient_id"].tolist() == ["P1"]  # P2's P(reasonable) is below the cutoff
     assert result["match_quality_score"].iloc[0] == pytest.approx(0.9 * (1 + 0.5 + 2) / 6)
     assert result["match_quality_biomarker"].iloc[0] == 1.0
     assert metadata["model_metadata"]["score_match_quality"]["model_name"] == "LiquidAI/d1-2B"

@@ -102,7 +102,9 @@ def write_guideline_considerations_report(
             f"- Catalog spaces: {metadata.get('catalog', {}).get('catalog_spaces', 'unavailable')}",
             f"- TrialSpace candidates per patient: {retrieval.get('candidate_k') or 'all catalog spaces'}",
             f"- Requested top N by match-quality score: {retrieval.get('top_n', 'unavailable')}",
-            f"- Match-quality cutoff flag: {retrieval.get('score_cutoff', 'unavailable')}; no candidates removed by that cutoff.",
+            f"- Match-quality pass flag: P(reasonable) >= "
+            f"{retrieval.get('reasonableness_cutoff', retrieval.get('score_cutoff', 'unavailable'))}; "
+            "no candidates removed by it.",
             f"- Catalog fingerprint: `{metadata.get('catalog', {}).get('catalog_sha256', 'unavailable')}`",
         ]
         for role, model in metadata.get("model_metadata", {}).items():

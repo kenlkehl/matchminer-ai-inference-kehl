@@ -114,6 +114,7 @@ def retrieve_guideline_considerations(
     from matchminer_ai.embedding import embed_for_matching
     from matchminer_ai.embedding.embed import embedding_model_metadata
     from matchminer_ai.matching import generate_candidate_matches, score_match_quality
+    from matchminer_ai.matching.rerank import reasonableness_cutoff
     from matchminer_ai.trials import load_guideline_catalog
 
     if type(top_n) is not int or top_n < 1:
@@ -237,7 +238,7 @@ def retrieve_guideline_considerations(
             "returned_pairs": len(result),
             "ranked_by": "match_quality_score",
             "filter_low_quality": False,
-            "score_cutoff": resolved.raw["match_quality"].get("score_cutoff", 0.2),
+            "reasonableness_cutoff": reasonableness_cutoff(resolved),
         },
     }
     progress(f"Returned considerations for {len(result)} ranked patient-space pairs")

@@ -830,10 +830,15 @@ Padded tokens per forward pass (default 65536) and requests per
 
 ## `match_quality`
 
-### `match_quality.score_cutoff`
+### `match_quality.reasonableness_cutoff`
 
-Minimum `match_quality_score`, the expected match score fraction of the five
-match questions, required for `match_quality_pass == true` (default 0.2).
+Minimum P(reasonable) (`match_quality_reasonableness`, the decision model's
+potentially-eligible answer) for `match_quality_pass == true` (default 0.5);
+`score_match_quality(filter_low_quality=True)` keeps only passing pairs.
+`match_quality_score` ranks pairs and is not a pass criterion. Until 2026-11-17
+the pass was `match_quality_score >= score_cutoff` (0.2), which only
+approximated this answer and rejected reasonable pairs whose cohort was not
+specific on any dimension; an old `score_cutoff` key is ignored.
 
 ## `exclusion_criteria`
 

@@ -117,7 +117,7 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     decision = decision_settings(config)
     assert (decision["model_name"], decision["revision"]) == ("LiquidAI/d1-2B", "652f920e544ea37f81e4b0ce89b81d4ed0da90b1")
     assert decision["max_length"] == 10000
-    assert config.raw["match_quality"] == {"score_cutoff": 0.2}
+    assert config.raw["match_quality"] == {"reasonableness_cutoff": 0.5}
 
     assert config.llm_match_quality["local"]["engine"]["max_model_len"] == 100000
     assert config.llm_match_quality["local"]["model_name"] == MODEL

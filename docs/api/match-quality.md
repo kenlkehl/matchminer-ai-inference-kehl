@@ -56,9 +56,10 @@ match_quality_score = P(reasonable) × (1 + P(cancer_type) + P(burden)
                       + P(treatment_history) + 2·P(biomarker)) / 6
 ```
 
-the expected match score as a fraction of 6. `match_quality_pass` is
-`match_quality_score >= match_quality.score_cutoff` (0.2 by default; tuned for
-the earlier checker, so retune it for a fine-tuned decision model).
+the expected match score as a fraction of 6, used for ranking. `match_quality_pass`
+is `match_quality_reasonableness >= match_quality.reasonableness_cutoff` (0.5 by
+default), the decision model's own potentially-eligible answer (since 2026-11-17;
+before, a `match_quality_score` cutoff of 0.2 approximated it).
 
 `interpret_match_quality` attributes one match question's decision (`head`,
 default `"reasonableness"`): gradient times input embedding for the question's

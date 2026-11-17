@@ -254,7 +254,8 @@ architecture or its `set` attention.
   requires that dimension and the patient documentedly satisfies it. It returns
   each P(yes) as `match_quality_<label>` and `match_quality_score` =
   P(reasonable) × (1 + P(cancer_type) + P(burden) + P(treatment_history) +
-  2·P(biomarker)) / 6, passing at `match_quality.score_cutoff` (0.2).
+  2·P(biomarker)) / 6 (for ranking); a pair passes when P(reasonable) >=
+  `match_quality.reasonableness_cutoff` (0.5).
 - `exclusion_criteria_check` asks the boilerplate question about the patient's
   boilerplate section and the cohort's boilerplate criteria. Yes means
   potentially eligible; no means the patient clearly fails at least one
