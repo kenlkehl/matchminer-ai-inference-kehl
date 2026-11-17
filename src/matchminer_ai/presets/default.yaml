@@ -542,6 +542,48 @@ exclusion_criteria:
 criteria_check:
   # A criterion line whose P(yes = not clearly failing) is below this is flagged as clearly failed.
   fail_cutoff: 0.5
+# check_eligibility_criteria_with_llm: the LLM alternative to the decision model's per-criterion check, one request
+# per line with the per-criterion teacher prompt (criterion_check.labels.user.txt, the question-7 label contract).
+llm_criteria_check:
+  # Constrain each remote answer to CRITERION_LABEL_JSON_SCHEMA (structured outputs, after the reasoning).
+  structured_outputs: true
+  # Attempts for a line whose answer fails validation (each retry names the validation error).
+  max_attempts: 3
+  # A remote backend keeps chunk_size * chunks_in_flight requests in flight, each sent as another returns;
+  # a local one gets batches of chunk_size.
+  chunk_size: 64
+  chunks_in_flight: 1
+  sampling_profile: auto
+  reasoning_effort: xhigh
+  reasoning_parser: auto
+  # The training teacher's output budget (32,768 tokens, reasoning included).
+  local:
+    model_name: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
+    engine:
+      max_model_len: 100000
+      tensor_parallel_size: 1
+      gpu_memory_utilization: 0.9
+      language_model_only: true
+      trust_remote_code: true
+      enable_prefix_caching: true
+      mamba_backend: flashinfer
+      mamba_ssm_cache_dtype: float16
+      enable_mamba_cache_stochastic_rounding: true
+      mamba_cache_philox_rounds: 5
+      mamba_cache_mode: align
+    chat_template_kwargs:
+      enable_thinking: true
+    generation:
+      max_tokens: 32768
+      skip_special_tokens: false
+  remote:
+    model_name: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
+    request_params:
+      max_tokens: 32768
+    extra_body:
+      skip_special_tokens: false
+      chat_template_kwargs:
+        enable_thinking: true
 llm_match_quality:
   sampling_profile: auto
   reasoning_effort: xhigh

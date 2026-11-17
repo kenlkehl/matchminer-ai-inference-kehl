@@ -267,7 +267,10 @@ architecture or its `set` attention.
   (`criterion_pass_probability`) means the patient does not clearly fail the
   line; no means the patient clearly fails it: an inclusion line clearly not
   met, or an exclusion line clearly met.** `criterion_clearly_fails` flags lines
-  below `criteria_check.fail_cutoff` (0.5).
+  below `criteria_check.fail_cutoff` (0.5). `check_eligibility_criteria_with_llm`
+  asks an LLM the same, one request per line, with the per-criterion teacher
+  prompt the decision model trains on (`criterion_check.labels.user.txt`, decoded
+  under its answer schema), returning each line's answer, status and reason.
 
 A state's questions are read together (`decision_model.set_size`, the model's
 trained 16 by default). Fine-tuning uses 10,000-token requests; longer ones still

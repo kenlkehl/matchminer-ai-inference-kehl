@@ -805,6 +805,8 @@ def score_good_options_with_llm(
         message_indices.append(index)
     generation: LLMGenerationResult | None = None
     latest_by_index: dict[int, tuple[ParsedGoodOptionResult, str, str, str]] = {}
+    attempts_by_index: dict[int, int] = {}
+    fallback_indices: set[int] = set()
     pending_indices = list(message_indices)
 
     def run_pending(
@@ -820,6 +822,7 @@ def score_good_options_with_llm(
             raise RuntimeError("GoodOption LLM returned an unexpected output count.")
         failed: list[int] = []
         for output_index, frame_index in enumerate(indices):
+            attempts_by_index[frame_index] = attempts_by_index.get(frame_index, 0) + 1
             response = str(generation.final_outputs[output_index] or "")
             reasoning = (
                 str(generation.reasoning_outputs[output_index] or "")
@@ -862,6 +865,7 @@ def score_good_options_with_llm(
         )
 
     if pending_indices and reasoning_off_fallback:
+        fallback_indices.update(pending_indices)
         pending_indices = run_pending(
             pending_indices,
             generation_config=_good_option_reasoning_disabled_config(resolved_config),
@@ -896,6 +900,8 @@ def score_good_options_with_llm(
                     "good_option_reasoning_text": reasoning,
                     "good_option_finish_reason": finish_reason,
                     "good_option_parse_error": parsed.parse_error,
+                    "good_option_parse_attempts": attempts_by_index.get(frame_index, 0),
+                    "good_option_reasoning_off_fallback_used": frame_index in fallback_indices,
                     "good_option_evidence_packing": packing_by_index[frame_index],
                 }
             )

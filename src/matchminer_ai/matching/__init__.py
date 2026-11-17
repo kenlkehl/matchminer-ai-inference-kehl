@@ -15,6 +15,7 @@ from .adaptive_cutoff import (
 )
 from .criteria_check import check_eligibility_criteria
 from .exclusion_check import exclusion_criteria_check, interpret_exclusion_criteria
+from .llm_checks import check_eligibility_criteria_with_llm
 from .llm_checks import exclusion_criteria_check_with_llm
 from .llm_checks import score_match_quality_with_llm
 from .match import generate_candidate_matches
@@ -38,6 +39,7 @@ __all__ = [
     "TrialCentricCutoffStabilityResult",
     "assess_trial_centric_cutoff_stability",
     "check_eligibility_criteria",
+    "check_eligibility_criteria_with_llm",
     "exclusion_criteria_check",
     "exclusion_criteria_check_with_llm",
     "generate_candidate_matches",

@@ -294,7 +294,10 @@ production defaults from the `good_option_check` preset section:
 - Invalid answers get `max_parse_attempts` (3) attempts in total, then one
   attempt with thinking disabled when `reasoning_off_fallback` is true.
 
-Output columns match `score_good_options_with_llm`. With
+Output columns match `score_good_options_with_llm`. With `debug_mode`, each row
+also carries the answer and reasoning texts, finish reason, parse error, evidence
+packing, `good_option_parse_attempts` (requests sent for the pair) and
+`good_option_reasoning_off_fallback_used`. With
 `return_metadata=True`, `metadata["good_option_check"]` reports
 `max_output_tokens`, `context_tokens`, `context_source` (`configured`,
 `endpoint`, or `preset`), and `context_warning`. The caller's config is never

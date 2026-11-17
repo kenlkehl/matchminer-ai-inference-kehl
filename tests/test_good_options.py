@@ -423,6 +423,9 @@ def test_llm_scoring_retries_parse_failures_with_feedback_then_disables_reasonin
     assert config.llm_good_option["local"]["chat_template_kwargs"] == {
         "enable_thinking": True
     }
+    # Debug mode reports each pair's attempts and whether the thinking-off attempt ran.
+    assert output["good_option_parse_attempts"].tolist() == [1, 4]
+    assert output["good_option_reasoning_off_fallback_used"].tolist() == [False, True]
 
 
 def _check_pairs() -> pd.DataFrame:
