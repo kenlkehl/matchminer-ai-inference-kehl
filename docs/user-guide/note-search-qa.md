@@ -5,7 +5,7 @@ in a DataFrame, concatenated text, or both, with optional existing-summary conte
 patients and questions concurrently. This is a standalone, opt-in alternative to
 reading every note chunk for every question. The guideline fetcher also offers
 this harness as an optional workup-review method; full-note review stays the default.
-Embedding-based raw-note QA and summarization are unchanged.
+Patient summarization is unchanged.
 
 ## Guideline workup review
 

@@ -21,11 +21,9 @@ from matchminer_ai.matching import (
     write_guideline_considerations_report,
 )
 from matchminer_ai.patients import (
-    answer_question_with_raw_patient_notes,
     compress_patient_note,
     compress_patient_notes,
     concatenate_patient_note_pdfs,
-    full_patient_screen,
     review_patient_workup,
     summarize_patients,
 )
@@ -51,9 +49,7 @@ def test_imports():
     assert summarize_patients is not None
     assert compress_patient_note is not None
     assert compress_patient_notes is not None
-    assert answer_question_with_raw_patient_notes is not None
     assert concatenate_patient_note_pdfs is not None
-    assert full_patient_screen is not None
     assert embed_for_matching is not None
     assert build_good_option_catalog is not None
     assert build_intervention_screening_messages is not None

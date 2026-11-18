@@ -28,8 +28,6 @@ class MMAIConfig:
     llm_exclusion_criteria: dict[str, Any] = field(default_factory=dict)
     llm_good_option: dict[str, Any] = field(default_factory=dict)
     good_option_catalog: dict[str, Any] = field(default_factory=dict)
-    raw_patient_note_qa: dict[str, Any] = field(default_factory=dict)
-    full_patient_screen: dict[str, Any] = field(default_factory=dict)
     trial_space_criteria_extraction: dict[str, Any] = field(default_factory=dict)
     protocol_cohort_extraction: dict[str, Any] = field(default_factory=dict)
     synthetic_protocol_generation: dict[str, Any] = field(default_factory=dict)
@@ -56,8 +54,6 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "llm_exclusion_criteria": deepcopy(config.llm_exclusion_criteria),
             "llm_good_option": deepcopy(config.llm_good_option),
             "good_option_catalog": deepcopy(config.good_option_catalog),
-            "raw_patient_note_qa": deepcopy(config.raw_patient_note_qa),
-            "full_patient_screen": deepcopy(config.full_patient_screen),
             "trial_space_criteria_extraction": deepcopy(
                 config.trial_space_criteria_extraction
             ),
@@ -96,8 +92,6 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
         llm_exclusion_criteria=dict(data.get("llm_exclusion_criteria", {})),
         llm_good_option=dict(data.get("llm_good_option", {})),
         good_option_catalog=dict(data.get("good_option_catalog", {})),
-        raw_patient_note_qa=dict(data.get("raw_patient_note_qa", {})),
-        full_patient_screen=dict(data.get("full_patient_screen", {})),
         trial_space_criteria_extraction=dict(
             data.get("trial_space_criteria_extraction", {})
         ),

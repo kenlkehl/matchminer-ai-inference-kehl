@@ -2,8 +2,7 @@ from matchminer_ai.config import load_default_preset
 
 MODEL = "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"
 LLM_SECTIONS = (
-    "trial", "patient", "raw_patient_note_qa", "full_patient_screen",
-    "trial_space_criteria_extraction", "protocol_cohort_extraction",
+    "trial", "patient", "trial_space_criteria_extraction", "protocol_cohort_extraction",
     "synthetic_protocol_generation", "llm_match_quality", "llm_exclusion_criteria",
     "llm_good_option", "document_extraction", "patient_extraction",
 )
@@ -50,32 +49,6 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     assert config.patient["chunk_overlap"] == 500
     assert config.patient["local"]["generation"]["max_tokens"] == 50000
     assert config.patient["remote"]["request_params"]["max_tokens"] == 50000
-    assert config.raw_patient_note_qa["embedding_model_name"] == (
-        "Qwen/Qwen3-Embedding-0.6B"
-    )
-    assert config.raw_patient_note_qa["embedding_device"] == "cuda"
-    assert config.raw_patient_note_qa["chunk_size"] == 220
-    assert config.raw_patient_note_qa["chunk_overlap"] == 32
-    assert config.raw_patient_note_qa["query_prefix"].startswith("Instruct:")
-    assert config.raw_patient_note_qa["query_prefix"].endswith("\nQuery:")
-    assert config.raw_patient_note_qa["max_agent_steps"] == 6
-    assert config.raw_patient_note_qa["local"]["generation"]["max_tokens"] == 16000
-    assert config.full_patient_screen["max_workers"] == 4
-    assert config.full_patient_screen["process_start_method"] == "spawn"
-    assert config.full_patient_screen["max_questions"] == 128
-    assert (
-        config.full_patient_screen["remote"]["request_params"]["max_tokens"]
-        == 12000
-    )
-    assert config.full_patient_screen["local"]["chat_template_kwargs"] == {
-        "enable_thinking": False
-    }
-    assert config.full_patient_screen["remote"]["request_params"][
-        "response_format"
-    ] == {"type": "json_object"}
-    assert config.full_patient_screen["remote"]["extra_body"][
-        "chat_template_kwargs"
-    ] == {"enable_thinking": False}
     assert config.trial_space_criteria_extraction["max_document_characters"] == 120000
     assert config.trial_space_criteria_extraction["max_criteria_per_type"] == 256
     assert config.trial_space_criteria_extraction["response_retry_limit"] == 2
@@ -241,3 +214,19 @@ def test_default_server_command_serves_nemotron_like_production():
                         ("--max-model-len", "200000"), ("--reasoning-parser", "nemotron_v3"),
                         ("--tool-call-parser", "qwen3_coder")):
         assert command[command.index(flag) + 1] == value
+
+
+def test_configs_with_the_removed_raw_note_sections_still_load(tmp_path):
+    """Raw-note QA and full-patient screening were removed on 2026-11-18 (user instruction); a saved config that
+    still has their sections loads, keeping them only in ``raw``."""
+    import yaml
+    from matchminer_ai.config import load_config
+
+    data = load_default_preset().raw
+    data["raw_patient_note_qa"] = {"embedding_model_name": "Qwen/Qwen3-Embedding-0.6B"}
+    data["full_patient_screen"] = {"max_workers": 4}
+    path = tmp_path / "old.yaml"
+    path.write_text(yaml.safe_dump(data))
+    config = load_config(path)
+    assert config.raw["raw_patient_note_qa"]["embedding_model_name"] == "Qwen/Qwen3-Embedding-0.6B"
+    assert not hasattr(config, "raw_patient_note_qa") and not hasattr(config, "full_patient_screen")

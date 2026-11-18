@@ -335,14 +335,7 @@ Optional source-grounded extensions can also:
   patient summarization workflow;
 - extract complete, source-grounded inclusion and exclusion criteria relevant
   to one trial space from an OCR eligibility-checklist text file using the
-  configured LLM backend;
-- answer a focused question over one patient's raw notes through local
-  embedding retrieval and a bounded, evidence-citing LLM agent, with one
-  code-derived source date per chunk when note-level dated input is available;
-- screen complete trial eligibility criteria by decomposing them into grounded
-  raw-note questions, embedding the note index once on CUDA, reusing its CPU
-  vectors across concurrent question processes against an authorized endpoint,
-  and synthesizing a human-reviewable JSON result; and
+  configured LLM backend; and
 - build a versioned patient-free evidence catalog from a list of NCT IDs,
   LLM-screen ctgov entries for single concrete agents with direct anticancer
   treatment intent (regimens split into their agents), deduplicate
@@ -604,8 +597,8 @@ human review. See [citation review and collection repair](docs/user-guide/guidel
 ### NVIDIA Nemotron 3.5 Super VL
 
 `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4` is the default model of
-every LLM section of the default preset (trial, patient, raw-note Q&A, full-patient
-screen, criteria extraction, protocol cohorts, synthetic protocols, the LLM match,
+every LLM section of the default preset (trial, patient, criteria extraction,
+protocol cohorts, synthetic protocols, the LLM match,
 exclusion and GoodOption checks), locally and remotely; Gemma 4 and the other
 profiles remain supported by setting a section's `model_name`. Each local engine
 serves it in-process as the production vLLM servers do: `trust_remote_code`,
@@ -615,8 +608,7 @@ SSM cache with stochastic rounding (5 Philox rounds) and `mamba_cache_mode: alig
 build needs a GPU with native FP4 (Blackwell); a different build, such as an FP8
 one, is selected by changing `model_name`. Sections whose thinking shares the
 output budget leave room for Nemotron's reasoning (10-15k tokens on long tasks):
-the LLM match and exclusion checks reserve the training teacher's 32,768 tokens
-and raw-note Q&A 16,000.
+the LLM match and exclusion checks reserve the training teacher's 32,768 tokens.
 
 Text LLM stages recognize `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`,
 the BF16 variant, and the served alias `nemotron-3.5-super-vl` with
