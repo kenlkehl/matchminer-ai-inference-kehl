@@ -95,8 +95,10 @@ def test_criteria_prompt_extracts_every_criterion_verbatim_with_the_applicabilit
     assert "stratification factors" in listing
     assert "crossover, extension, continuation, retreatment, and rollover phases" in listing
     assert not any(word in listing for word in ("identical", "combine"))
-    # a name only identifies a group and never narrows it (2026-11-18, NCT05867121)
+    # a name never narrows a group; a cohort needs no eligibility section of its own (2026-11-18, NCT06385925)
     assert "it must never narrow it" in listing
+    assert "A cohort does not need its own eligibility section or heading" in listing
+    assert "List such a group even when the document gives it no criteria of its own" in listing
 
 
 def test_ctgov_listing_is_one_document_of_title_summary_and_criteria():
