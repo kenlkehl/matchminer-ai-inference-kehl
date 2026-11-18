@@ -83,7 +83,10 @@ def test_criteria_prompt_extracts_every_criterion_verbatim_with_the_applicabilit
     for rule in ("Never leave out a criterion because it is common or administrative",
                  "Copy each criterion verbatim from the document", "Do not paraphrase, summarize, shorten",
                  "only the version that applies in the United States",
-                 "Never delete a qualifier", "even when its name also says so"):
+                 "Never delete a qualifier", "even when its name also says so",
+                 # names only tell the cohorts apart; examples are not requirements (2026-11-18, NCT05867121)
+                 "never from its name", "are not requirements",
+                 "never rewrite a criterion the document states to fit the target cohort"):
         assert rule in criteria
     assert "boilerplate" not in criteria.lower()
     listing = load_prompts()["list"]
@@ -92,6 +95,8 @@ def test_criteria_prompt_extracts_every_criterion_verbatim_with_the_applicabilit
     assert "stratification factors" in listing
     assert "crossover, extension, continuation, retreatment, and rollover phases" in listing
     assert not any(word in listing for word in ("identical", "combine"))
+    # a name only identifies a group and never narrows it (2026-11-18, NCT05867121)
+    assert "it must never narrow it" in listing
 
 
 def test_ctgov_listing_is_one_document_of_title_summary_and_criteria():

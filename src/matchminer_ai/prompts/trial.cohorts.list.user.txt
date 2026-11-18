@@ -24,6 +24,7 @@ WHICH COHORTS TO LIST
 NAMING THE COHORTS
 -Use the document's own names. For a cohort at the lowest level of nested cohorts, join the names of its levels, such as "Phase 1b, Part B".
 -When the document's name alone would not tell a reader which group is meant, or the document gives no name, add a brief description of the group's defining feature taken from the document, such as its disease or treatment setting, for example "Cohort 2 (previously treated disease)". For a trial with a single cohort, use the document's name for its population or "All participants".
+-A name only identifies a group; it must never narrow it. Describe a group no more narrowly than the document defines it. When the document gives diseases or other features only as examples, with words such as "such as", "including", "e.g.", or "for example", keep that wording in the name or leave the examples out; never write them as a list that looks complete.
 -Give every cohort a different name, and list the cohorts in the order the document presents them.
 -Return names only; do not write eligibility criteria.
 
