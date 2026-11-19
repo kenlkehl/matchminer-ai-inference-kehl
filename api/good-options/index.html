@@ -1,0 +1,2243 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the matchminer-ai Python package">
+      
+      
+      
+      
+        <link rel="prev" href="../criteria-check/">
+      
+      
+        <link rel="next" href="../llm/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Good Option Research and Scoring - MatchMiner-AI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#good-option-catalog-and-scoring" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MatchMiner-AI" class="md-header__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MatchMiner-AI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Good Option Research and Scoring
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MatchMiner-AI" class="md-nav__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MatchMiner-AI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/gpu-recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Recommendations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-notebook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Notebook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/patient-centric-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient-centric matching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/good-options-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the Good Options pipeline works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/local-vs-remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an Inference Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/guideline-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/pdq-catalogs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/note-search-qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Note-search question answering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/population-workup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population workup review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/qc-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Package API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Document OCR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../patients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Clinical Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction-Based Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-sql/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL-Agent Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../candidate-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labeling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Teacher Labeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../match-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guideline-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exclusion-criteria/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclusion Criteria
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../criteria-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prompt-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompt resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-the-patient-free-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build the patient-free catalog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Build the patient-free catalog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#score-a-patient-trial-candidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Score a patient-trial candidate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Score a patient-trial candidate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evidence-packing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence packing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-demand-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-demand check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deprecated-goodoptionchecker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecated: GoodOptionChecker
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        trials
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        matching
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM Server Helper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prompt-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompt resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-the-patient-free-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build the patient-free catalog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Build the patient-free catalog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#score-a-patient-trial-candidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Score a patient-trial candidate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Score a patient-trial candidate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evidence-packing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence packing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-demand-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-demand check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deprecated-goodoptionchecker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecated: GoodOptionChecker
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        trials
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        matching
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="good-option-catalog-and-scoring">Good Option Catalog and Scoring<a class="headerlink" href="#good-option-catalog-and-scoring" title="Permanent link">&para;</a></h1>
+<p>Good Option scoring is a patient-trial ranking signal, not an eligibility
+determination, response probability, or treatment recommendation. Research and
+patient scoring are separate, versioned stages.</p>
+<p>Use the existing trial and matching stage namespaces:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_good_option_catalog</span><span class="p">,</span> <span class="n">load_good_option_catalog</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">check_good_options</span>
+
+<span class="c1"># Public-only research stage; run once before patient scoring.</span>
+<span class="n">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="n">build_good_option_catalog</span><span class="p">(</span><span class="n">nct_ids</span><span class="p">,</span> <span class="s2">"drug_catalog"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># candidate_pairs: patient_id, trial_id, cancer_history_summary</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="n">check_good_options</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">,</span> <span class="n">catalog</span><span class="o">=</span><span class="s2">"drug_catalog"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+</code></pre></div>
+<p><code>check_good_options</code> is the supported on-demand entry point; see
+<a href="#on-demand-check">On-demand check</a>. <code>score_good_options_with_llm</code> is the
+lower-level scorer it wraps.</p>
+<p>Patient summaries reach the configured LLM endpoint in LLM mode. Use an
+endpoint authorized for the sensitivity of the input. Catalog construction
+accepts NCT IDs only and never receives patient context.</p>
+<p>The old <code>matchminer_ai.good_options</code> namespace and its submodules remain
+compatibility aliases. Trial research is implemented in <code>trials/drug_catalog.py</code>,
+<code>trials/drug_research.py</code>, and <code>trials/drug_evidence.py</code>; patient scoring is in
+<code>matching/good_options.py</code>.</p>
+<h2 id="prompt-resources">Prompt resources<a class="headerlink" href="#prompt-resources" title="Permanent link">&para;</a></h2>
+<p>All templates below are bundled under <code>src/matchminer_ai/prompts/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Files</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>trial_drug_screen.system.txt</code>, <code>.user.txt</code>, <code>.retry.txt</code></td>
+<td>Identify anticancer agents and classify their roles in each trial.</td>
+</tr>
+<tr>
+<td><code>trial_drug_class.system.txt</code>, <code>.user.txt</code>, <code>.retry.txt</code></td>
+<td>Assign each drug to pharmacologic classes.</td>
+</tr>
+<tr>
+<td><code>trial_drug_synthesis.system.txt</code>, <code>.delta.txt</code>, <code>.delta_retry.txt</code></td>
+<td>Synthesize passage-grounded drug and class evidence one chunk at a time, returning only new or revised facts.</td>
+</tr>
+<tr>
+<td><code>llm_good_option.system.txt</code>, <code>.user.txt</code>, <code>.rubric.txt</code>, <code>.retry.txt</code></td>
+<td>Apply the four-criterion patient-drug rubric and correct invalid responses.</td>
+</tr>
+<tr>
+<td><code>good_option_checker_template.txt</code></td>
+<td>Deprecated. Patient-drug input for the retired GoodOptionChecker classifier.</td>
+</tr>
+</tbody>
+</table>
+<p>The catalog-build templates are listed in <code>CATALOG_PROMPTS</code>;
+<code>catalog_prompts_sha256()</code> fingerprints their text for checkpoint reuse.</p>
+<h2 id="build-the-patient-free-catalog">Build the patient-free catalog<a class="headerlink" href="#build-the-patient-free-catalog" title="Permanent link">&para;</a></h2>
+<p><code>build_good_option_catalog</code> accepts a list of NCT IDs. It fetches each current
+ClinicalTrials.gov record, then uses the configured LLM to screen every <code>DRUG</code>,
+<code>BIOLOGICAL</code>, and <code>COMBINATION_PRODUCT</code> entry in its public trial and arm
+context. Only concrete named agents with direct anticancer treatment intent
+proceed to normalization and research. Antitumor medicines, biologics, cell/gene
+therapies, therapeutic radiopharmaceuticals, and genuine named anticancer
+comparators are retained; supportive/procedural medicines (including toxicity
+protection such as sodium thiosulfate and GVHD prophylaxis such as tacrolimus,
+unless the trial uses them as anticancer therapy), anesthetics, hemostatic
+agents, diagnostic tracers, devices, prevention-only agents, dosing/cohort
+labels, and unnamed standard-of-care placeholders are excluded fail-closed. The
+screen also resolves retained agents' investigational, uncertain, control,
+background (given the same way to every participant), or supportive roles; an
+agent given only in a comparator arm is control.</p>
+<p>Each active entity is one agent named by its entry's own text (ctgov name,
+aliases, description, or the descriptions of its arms), or a component of a
+regimen named there: "Pemetrexed + Cisplatin /Carboplatin" becomes three agents,
+and a standard acronym such as FOLFIRI is expanded from knowledge into
+fluorouracil, leucovorin, and irinotecan, with the acronym listed in
+<code>regimen_names</code>. Agents are named by generic name (INN/USAN) or development
+code, never by a treatment category; an abbreviation, misspelling, or brand or
+shortened name that a generic name replaces ("LV", "5-Flurouracil") is listed in
+<code>regimen_names</code> the same way. A name of three or more letters and digits may
+be any part of the entry's text with spacing and punctuation removed; a
+two-character one ("SG", "LV") must be whole words of it, and a single character
+a whole field. Validation rejects agent names absent from the entry's text
+unless such a regimen or spelling is listed, and a regimen name listed as an
+agent; a listed regimen name the text does not contain is dropped with a logged
+count rather than failing the trial, and grounds no agent. A
+combination-spelled name or an ungrounded one gets one more attempt. With a
+remote backend the answer is decoded under <code>INTERVENTION_SCREENING_JSON_SCHEMA</code>
+(<code>good_option_catalog.structured_outputs</code>).</p>
+<p>Every decision is retained in <code>trial_intervention_screening.parquet</code>, including
+the disposition, exclusion category, confidence, rationale, supported
+active-entity names, and expanded regimen names (<code>regimen_names_json</code>). Excluded entries never enter <code>trial_drug_index.parquet</code>,
+the unique-drug set, web queries, evidence retrieval, or synthesis. Retained
+identities are normalized with the bundled NCIt snapshot and deduplicated across
+the complete run. A name, its parenthetical-free form, or a parenthetical alone
+that is an exact NCIt name or synonym wins; otherwise
+<code>NCIThesaurusDrugIndex.resolve_drug_name</code> accepts a concept only when one rule
+finds exactly one: the same <code>drug_name_key</code> (case, spacing, separators, salt
+abbreviations, isotope notation, liposome word order), the same key without
+salts (the parent molecule when salts tie), route/dosage-form/biosimilar words
+moved or dropped, or one misspelled word of eight or more letters corrected. An
+unmatched drug's <code>NAME:</code> identity is a hash of its <code>drug_name_key</code>.</p>
+<p>Each unique drug is researched once across mechanism and targets, human efficacy
+by tumor type and histology, biomarker prevalence, biomarker-directed human
+efficacy, and safety. The retriever uses bounded authoritative-source adapters
+plus full-text general-web documents. General-web queries include the explicit
+phrase <code>cancer treatment</code> to reduce name-collision results. Technical failures
+are retried with
+<code>Retry-After</code> or exponential backoff; successful empty results remain distinct
+from exhausted technical failures. Searches accept drug identity only and can
+never receive patient text.</p>
+<p>Retrieval runs on three axes, and every passage records which one found it in
+<code>query_scope</code>.</p>
+<p>The <strong>drug</strong> axis is the one above: the agent's own name and aliases.</p>
+<p>The <strong>indication</strong> axis searches efficacy by tumor, biomarker prevalence, and
+biomarker-directed efficacy with a disease as a required clause. The same
+three facets run for both drug–disease and class–disease searches. The diseases
+come from the <code>conditionsModule.conditions</code> of the trials
+the drug appears in, which the build already fetches and stores, so the axis
+stays patient-free and cacheable. Without it the drug evidence never names the
+patient's cancer for most patient-drug pairs, and the first rubric criterion
+fires far less often when the disease is absent than when it is present. The
+axis is bounded as a whole by <code>max_indication_passages_per_drug</code>, interleaved
+across diseases, sources, and search facets, so it cannot swamp the agent's own
+corpus or let efficacy results crowd out prevalence findings.
+Research settings are part of the checkpoint fingerprint: catalogs built before
+the disease-specific prevalence searches need a fresh build to include them.</p>
+<p>The <strong>class</strong> axis retrieves literature for the pharmacologic classes a drug
+belongs to, once per class rather than once per drug, so agents that share a
+class share a corpus. Classes are normalized to the bundled NCIt hierarchy. A
+class is an NCIt concept above a drug concept, in the Pharmacologic Substance
+branch, other than the fixed <code>NCIT_UMBRELLA_CLASSES</code> (Pharmacologic Substance,
+Antineoplastic Agent, Enzyme Inhibitor, and the like); the chemical-structure
+branch is not used. A <code>classify</code> stage between <code>research</code> and <code>synthesis</code>
+assigns an NCIt-matched drug every class above its concept in code. A local
+search of NCIt class names and synonyms against the drug's name, NCIt
+definition, and mechanism passages then finds up to <code>class_candidate_limit</code>
+candidate classes, and the LLM may add, by code, those the passages show the
+drug belongs to; an added class brings its NCIt ancestors, codes outside the
+candidates are rejected, the hierarchy is never removed, and an NCIt-classified
+drug with no candidates gets no LLM call. A drug NCIt leaves unclassified gets its classes
+from the LLM: candidates, or a new class (<code>class_source="llm"</code>) only where none
+fits. The answer is decoded under <code>DRUG_CLASS_JSON_SCHEMA</code> with a remote
+backend. Only the matched drug's record and its candidates' names and short
+definitions enter the prompt, never the ontology.</p>
+<p>An NCIt class's <code>class_id</code> is <code>NCIT:&lt;code&gt;</code>, its name NCIt's display or
+preferred name, and its aliases NCIt synonyms; its definition joins its corpus
+as a citable passage. A new class's identity is a hash of its normalized name,
+so "PD-L1 inhibitor" and "PD-L1 Inhibitors" resolve to one corpus, and a new
+name that spells an NCIt class is stored as that class. Assignments are stored
+in <code>drug_classes.parquet</code>, with <code>ncit_code</code>, <code>class_source</code> (<code>ncit</code> or <code>llm</code>),
+and <code>assigned_by</code> (<code>ncit_hierarchy</code>, <code>llm_added_ncit</code>,
+<code>llm_added_ncit_ancestor</code>, or <code>llm_new</code>); only LLM-chosen rows carry a basis,
+target, confidence, and support IDs. The corpus is stored in <code>class_evidence/</code>.</p>
+<p>The configured LLM synthesizes the evidence ledger into structured facts with
+validated passage support IDs. A matched bundled NCIt definition is materialized
+as its own citable ledger passage rather than supplied as uncitable side context.
+Synthesis retains supported evidence across maturity levels—including ontology,
+preclinical, first-in-human, phase 1, ctgov, and mature clinical evidence—and
+labels its level without requiring approval, randomization, publication, or
+mature outcomes. Token-limited or blank final responses are retried, and the
+default synthesis completion budget is 100,000 tokens; if every ordinary
+attempt is token-limited, the final attempt disables thinking. The bundle stores two
+clean projections: a
+GoodOption summary without safety and a summary with safety
+(<code>help_me_choose_summary</code>, named for the removed Help Me Choose comparison).
+URLs, queries, source labels, ctgov metadata, and failure notices remain in
+the internal Parquet ledger and do not appear in the patient-bearing prompt.</p>
+<p>Each class corpus is synthesized in its own call on its own budget, and stored
+in <code>class_summaries.parquet</code>. Keeping it separate is deliberate: the drugs that
+most need class evidence already fill the agent budget, so pooling the two would
+let a flood of same-class passages evict the agent's own data. Every fact carries
+a <code>scope</code> of <code>agent</code> or <code>class</code>, assigned in code from the corpus synthesis ran
+over rather than asked of the model, and both projections print it, so the
+rubric's instruction to prefer agent-specific evidence has something to bind to.</p>
+<p>Catalog publication and its intermediate JSON checkpoints are atomic. By
+default, checkpoints are stored beside the requested catalog in
+<code>&lt;catalog&gt;_checkpoints</code>. Completed ctgov fetches, intervention screens, drug
+research, and drug syntheses are reused when the same build is restarted.
+Technically blocked fetches are retried. The checkpoint manifest fingerprints
+the NCT list, source/research settings, ontology version, the text of the
+catalog prompts, and teacher configuration; incompatible checkpoints fail
+explicitly instead of silently mixing evidence generations. Pass <code>checkpoint_path</code> to select another
+directory or <code>reset_checkpoint=True</code> to discard a recognized checkpoint bundle.</p>
+<p><code>validate_good_option_catalog</code> verifies file hashes, the catalog's
+<code>compatibility_id</code> (a fingerprint of those hashes), intervention-screen decisions, trial-drug references, terminal
+research states, and structured-fact evidence support.
+<code>load_good_option_catalog</code> validates by default.</p>
+<h3 id="command-line">Command line<a class="headerlink" href="#command-line" title="Permanent link">&para;</a></h3>
+<p><code>matchminer-ai-build-good-option-catalog</code> builds and validates a complete
+catalog, drug classes included, against an OpenAI-compatible endpoint:</p>
+<div class="highlight"><pre><span></span><code>matchminer-ai-build-good-option-catalog<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--nct-ids-file<span class="w"> </span>trial_ids.txt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output<span class="w"> </span>data/no_phi/good_option_catalog<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--server-url<span class="w"> </span>http://gpu-host:8001/v1
+</code></pre></div>
+<p>The served model is read from the endpoint's <code>/v1/models</code>, and its registered
+sampling profile (see <a href="../llm/#model-sampling-profiles">LLM Server Helper</a>) is
+applied to <code>llm_good_option</code> and every <code>good_option_catalog.*_llm</code> stage
+override. Checkpoints default to <code>&lt;output&gt;_checkpoints</code>; rerun the same command
+to resume.</p>
+<p>Research requests to ClinicalTrials.gov, DailyMed, and the NCBI E-utilities are
+paced per host across every subject; <code>--host-requests-per-second HOST=RATE</code>
+overrides a default, and <code>--ncbi-api-key-file</code> supplies an NCBI API key for the
+higher E-utilities rate (see
+<a href="../../reference/configuration/#good_option_catalog"><code>good_option_catalog</code></a>). The
+command prints the rates it uses and whether a key is set, never the key.
+<code>--llm-batch-size</code> sets how many trials are screened, and drugs classified, at
+once (<code>build_good_option_catalog(llm_batch_size=...)</code>). None of these options is
+part of the checkpoint fingerprint, so a build can resume with different values.</p>
+<h2 id="score-a-patient-trial-candidate">Score a patient-trial candidate<a class="headerlink" href="#score-a-patient-trial-candidate" title="Permanent link">&para;</a></h2>
+<p><code>evaluate_good_options</code> and <code>score_good_options_with_llm</code> require a loaded
+catalog. The prompt contains the patient cancer-history summary first, followed
+only by evidence for scoreable investigational or unresolved drugs in the trial.
+Control, background, and supportive drugs are indexed but are never scored.</p>
+<p>Agent and class evidence are merged only here, at prompt time. After the per-drug
+sections the prompt carries one labelled <code>DRUG CLASS EVIDENCE</code> block per distinct
+class across the trial's drugs, naming which drugs each block covers; two drugs
+sharing a class produce one block, not two.</p>
+<h3 id="evidence-packing">Evidence packing<a class="headerlink" href="#evidence-packing" title="Permanent link">&para;</a></h3>
+<p>The catalog's stored projections are fixed-size renders made at build time. The
+scoring prompt does not use them; <code>pack_good_option_evidence</code> re-renders every
+drug and class from its stored structured facts, sized to how much evidence the
+trial has in total:</p>
+<ol>
+<li><code>good_option_evidence_budget</code> takes the teacher's context window
+   (<code>good_option_prompt.context_tokens</code>, or
+   <code>llm_good_option.local.engine.max_model_len</code> when unset), subtracts the
+   active backend's <code>llm_good_option</code> <code>max_tokens</code> completion allowance,
+   <code>safety_tokens</code>, room for a parse retry, and the fixed prompt text, and
+   converts the rest at <code>chars_per_token</code> (3.5, conservative for Gemma 4, which
+   averages ~4.4 on catalog text, and for the default Nemotron 3.5 Super, whose
+   tokenizer matches Gemma 4's 4.6 on ctgov eligibility criteria). With the default preset that leaves roughly
+   500,000 characters.</li>
+<li>Drugs and classes share it by weighted max-min fair share, drugs at twice a
+   class's weight. A subject needing less than its share releases the rest.
+   <code>max_drug_section_tokens</code> and <code>max_class_section_tokens</code> (20,000 each) bound
+   any one subject.</li>
+<li>A subject that fits its share is rendered in full. One that does not steps
+   down to <code>condensed</code> (attribution capped at 160 characters, statements at
+   300) or <code>brief</code> (100 and 160) if that fits, so every fact stays visible; the
+   space saved is offered to the others. On v12 class syntheses the two levels
+   render at a median 88% and 58% of full size.</li>
+<li>Only when even <code>brief</code> overflows are facts dropped, by the projection's
+   ranking (strongest evidence first, tumor types interleaved) with an omission
+   count; the survivors keep <code>condensed</code> detail so their numbers survive.</li>
+</ol>
+<p>Subjects without stored facts, such as hand-built summaries, fall back to their
+stored projection, truncated if needed. Scoring metadata records a summary of
+granularities and truncations, and debug mode adds per-row <code>good_option_evidence_packing</code>.</p>
+<p>The rubric awards each scoreable drug up to four binary points:</p>
+<ol>
+<li>evidence of benefit in the patient's disease type;</li>
+<li>the targeted biomarker is commonly expressed in that disease type;</li>
+<li>the patient's tumor is documented to have the targeted biomarker; and</li>
+<li>human evidence of benefit from targeting that biomarker.</li>
+</ol>
+<p>The code-derived LLM score is <code>total_points / (4 * scoreable_drug_count)</code>.
+Trials with missing catalog data, exhausted research, or missing synthesis are
+returned as explicitly unscored; there is no live-search or legacy-snippet
+fallback.</p>
+<h3 id="on-demand-check">On-demand check<a class="headerlink" href="#on-demand-check" title="Permanent link">&para;</a></h3>
+<p><code>check_good_options</code> runs the LLM rubric for patient-trial pairs with
+production defaults from the <code>good_option_check</code> preset section:</p>
+<ul>
+<li><code>catalog</code> may be a loaded <code>GoodOptionCatalog</code> or a bundle path. A path is
+  loaded with <code>load_good_option_catalog(path, cache=True)</code>, which validates once
+  and reuses the catalog until any bundle file's size or modification time
+  changes.</li>
+<li>The <code>llm_good_option</code> completion is capped at <code>max_output_tokens</code> (50,000)
+  on a copy of the config, leaving more of the context for evidence.</li>
+<li>Unless <code>good_option_prompt.context_tokens</code> is set, the evidence budget follows
+  the smallest <code>max_model_len</code> that the configured OpenAI-compatible servers
+  report at <code>/v1/models</code>. If the lookup fails, packing uses the configured
+  context and the warning is returned.</li>
+<li>Invalid answers get <code>max_parse_attempts</code> (3) attempts in total, then one
+  attempt with thinking disabled when <code>reasoning_off_fallback</code> is true.</li>
+</ul>
+<p>Output columns match <code>score_good_options_with_llm</code>. With <code>debug_mode</code>, each row
+also carries the answer and reasoning texts, finish reason, parse error, evidence
+packing, <code>good_option_parse_attempts</code> (requests sent for the pair) and
+<code>good_option_reasoning_off_fallback_used</code>. With
+<code>return_metadata=True</code>, <code>metadata["good_option_check"]</code> reports
+<code>max_output_tokens</code>, <code>context_tokens</code>, <code>context_source</code> (<code>configured</code>,
+<code>endpoint</code>, or <code>preset</code>), and <code>context_warning</code>. The caller's config is never
+mutated, and the <code>llm_good_option</code> section that fingerprints catalog builds is
+left unchanged.</p>
+<h3 id="deprecated-goodoptionchecker">Deprecated: GoodOptionChecker<a class="headerlink" href="#deprecated-goodoptionchecker" title="Permanent link">&para;</a></h3>
+<p>The trained four-logit GoodOptionChecker classifier is deprecated. It saw one
+patient summary and one drug summary per example, never the class evidence the
+teacher prompt carries, and no checker artifact is published. <code>score_good_options</code>,
+<code>evaluate_good_options(method="classifier")</code>, and
+<code>build_good_option_checker_text</code> still run but emit <code>DeprecationWarning</code>; the
+<code>good_option_checker</code> preset section remains only so existing configs load.</p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.trials" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.trials</span>
+
+
+<a href="#matchminer_ai.trials" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Trial processing APIs.</p>
+<p>Each trial step is its own function, so callers can run some and skip others:
+:func:<code>extract_cohorts</code> (ctgov listings) or :func:<code>extract_protocol_cohorts</code> (full
+protocols) screen for cancer treatment and extract each cohort's complete criteria;
+:func:<code>merge_equivalent_cohorts</code> combines a trial's cohorts with essentially the same
+criteria; :func:<code>remove_boilerplate_criteria</code> tags every criteria line inclusion or exclusion and
+boilerplate or not, and separates key from boilerplate criteria.
+:func:<code>process_trials</code> runs all of them, on ctgov listings or protocols, in that order.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching</span>
+
+
+<a href="#matchminer_ai.matching" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Matching helpers.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

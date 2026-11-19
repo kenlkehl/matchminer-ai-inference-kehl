@@ -1,0 +1,33 @@
+Extract the cancer patient populations eligible for this trial. Each clinical space must independently describe a population an oncologist would recognize when considering the next treatment. Use the shortest complete description supported by the trial; preserve eligibility logic and the clinical treatment setting.
+
+FIELD DEFINITIONS
+- Age range allowed: The applicable age limits.
+- Sex allowed: The stated restriction, otherwise Both. Assume Female for uterine, ovarian, vulvar, vaginal, and fallopian tube cancers; Male for testicular, penile, and prostate cancers. Do not assume a sex restriction for breast cancer.
+- Cancer type allowed: One primary cancer site or disease type, spelled out.
+- Histology allowed: One pathological subtype. Receptor status, mutations, and molecular results belong in biomarkers.
+- Cancer burden allowed: Disease extent and clinically defining state: stage, nonmetastatic or metastatic disease, resectability, recurrence, refractory disease, remission, and disease-specific risk categories. Preserve resectable versus unresectable disease and preoperative versus adjuvant versus palliative settings when specified. Retain applicable stage systems and disease-defining thresholds. Stage IV alone does not imply de novo disease; describe recurrent advanced disease as eligible when the full text supports it. For hematologic cancers, retain required relapsed/refractory/remission status. Completed treatments belong in prior treatment, not here.
+- Prior treatment required: Treatments already received, including required surgery, radiation, systemic drugs/classes, treatment setting, and any required response. Planned study treatment or future surgery is not prior treatment.
+- Prior treatment excluded: Disallowed prior exposures, stated as the exposures themselves. Preserve restrictions to a particular disease or treatment setting.
+- Biomarkers required: Required molecular results, receptor/protein expression, germline or somatic alterations, and molecular risk assays such as Oncotype or PAM50. Distinguish a required result from a test merely being performed; note screening assessment of a required result when stated. Specimen availability is not a biomarker. Pathological risk features such as lymphovascular invasion belong in burden; disease-monitoring tumor markers are not molecular eligibility biomarkers.
+- Biomarkers excluded: Molecular results that disqualify the patient. Preserve qualifications such as exclusion of known carriers without requiring testing.
+Use NA when a field has no specified or applicable criterion.
+
+POPULATIONS AND LOGIC
+All fields in one space apply together. Within a field, write AND when every listed condition is required and OR when alternatives are allowed. For independently disqualifying exposures, write "Any of: A OR B OR C" in the excluded field. If only their combination disqualifies, state "A AND B together".
+
+Use separate spaces for different cancer types/histologies and materially different disease or treatment settings. Separate treatment-defining biomarker populations, such as EGFR-mutant and ALK-rearranged non-small cell lung cancer. Combine alternative risk features only when they can be expressed as OR within the appropriate field and every other field remains applicable to each alternative. Otherwise use separate complete spaces. An alternative in one field must not become an additional requirement in another.
+
+Repeat shared criteria in every applicable space, preserving subgroup exceptions and dependencies. Avoid duplicate populations, but do not invent exclusions to make overlapping eligible populations mutually exclusive. Never refer to another space, arm, or cohort instead of stating its criteria.
+
+For broad eligibility such as any solid tumor or any hematologic malignancy, enumerate an exhaustive list of compatible cancer type/histology combinations using oncology knowledge, even when individual diagnoses are unnamed. Respect every explicit disease exclusion and repeat the shared criteria. This diagnosis normalization does not authorize inventing other eligibility criteria. Any generic solid-tumor or hematologic-malignancy space must follow the complete disease-specific list.
+
+OMISSIONS AND GENERAL EXCLUSIONS
+Omit measurable-disease rules, target-lesion measurements, biopsy/specimen logistics, and treatment washout periods from the entire output. These omissions do not include resectability, clinical disease extent, or permanent prior-treatment exclusions.
+
+After the spaces, list general medical exclusions such as organ dysfunction, poor performance status, infections, autoimmune disease, or unrelated malignancies. Keep core population criteria in the spaces. Preserve thresholds and exceptions. When converting an inclusion rule to an exclusion, negate the whole condition: eligibility A OR B means exclusion only when both A and B fail. Phrase each item as a reason for exclusion.
+
+OUTPUT FORMAT
+Return plain ASCII text only, with no introduction, commentary, Markdown, or table. Number spaces consecutively. Each space occupies one line and uses exactly these fields in this order:
+1. Age range allowed: <value>. Sex allowed: <value>. Cancer type allowed: <value>. Histology allowed: <value>. Cancer burden allowed: <value>. Prior treatment required: <value>. Prior treatment excluded: <value>. Biomarkers required: <value>. Biomarkers excluded: <value>.
+After the final space, write the exact heading "Boilerplate exclusions:" on its own line, followed by one general exclusion per line.
+

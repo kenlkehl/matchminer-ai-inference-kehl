@@ -1,0 +1,2985 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the matchminer-ai Python package">
+      
+      
+      
+      
+        <link rel="prev" href="../match-quality/">
+      
+      
+        <link rel="next" href="../exclusion-criteria/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Guideline Consideration Retrieval - MatchMiner-AI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#guideline-consideration-retrieval" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MatchMiner-AI" class="md-header__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MatchMiner-AI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Guideline Consideration Retrieval
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MatchMiner-AI" class="md-nav__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MatchMiner-AI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/gpu-recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Recommendations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-notebook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Notebook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/patient-centric-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient-centric matching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/good-options-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the Good Options pipeline works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/local-vs-remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an Inference Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/guideline-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/pdq-catalogs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/note-search-qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Note-search question answering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/population-workup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population workup review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/qc-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Package API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Document OCR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../patients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Clinical Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction-Based Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-sql/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL-Agent Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../candidate-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labeling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Teacher Labeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../match-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guidelines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        guidelines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="guidelines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guidelines.retrieve_guideline_considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        retrieve_guideline_considerations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guideline_report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        guideline_report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="guideline_report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guideline_report.write_guideline_considerations_report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_guideline_considerations_report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exclusion-criteria/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclusion Criteria
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../criteria-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../good-options/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM Server Helper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guidelines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        guidelines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="guidelines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guidelines.retrieve_guideline_considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        retrieve_guideline_considerations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guideline_report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        guideline_report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="guideline_report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.guideline_report.write_guideline_considerations_report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_guideline_considerations_report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="guideline-consideration-retrieval">Guideline consideration retrieval<a class="headerlink" href="#guideline-consideration-retrieval" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.guidelines" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.guidelines</span>
+
+
+<a href="#matchminer_ai.matching.guidelines" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Retrieve stored guideline considerations with TrialSpace and the decision model's match score.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.guidelines.retrieve_guideline_considerations" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">retrieve_guideline_considerations</span>
+
+
+<a href="#matchminer_ai.matching.guidelines.retrieve_guideline_considerations" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">retrieve_guideline_considerations</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">top_n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="n">candidate_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">embedding_cache_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">progress_callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return considerations for each patient's highest match-quality-ranked spaces.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>patient_summaries</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One row per patient, with <code>patient_id</code> and <code>cancer_history_summary</code>.
+Only these columns enter model inference. No raw-note summarization occurs.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>catalog</code>
+            </td>
+            <td>
+                  <code>path, DataFrame, or list of paths</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Complete guideline records accepted by <code>trials.load_guideline_catalog</code>.
+Unchanged files reuse validated records in the loader's process-local
+cache; changed catalog/status/audit files are reloaded and validated.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>top_n</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Maximum spaces returned per patient, ranked by match-quality score.</p>
+              </div>
+            </td>
+            <td>
+                  <code>5</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>candidate_k</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span> or None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>TrialSpace nearest neighbors to rerank per patient. Must be &gt;= top_n,
+or None to score every catalog space. A smaller catalog returns fewer rows.</p>
+              </div>
+            </td>
+            <td>
+                  <code>20</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Uses existing <code>embedding</code> and <code>raw['match_quality']</code> settings and
+their bundled prompts. Both models run locally through the public stage
+APIs; no generative LLM or public-source retrieval is used.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>return_metadata</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Also return config, catalog identity, both model metadata records, and
+retrieval/reranking parameters and counts.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>embedding_cache_dir</code>
+            </td>
+            <td>
+                  <code>path</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Persist guideline vectors outside the code repository for reuse across
+calls and process restarts. Keys cover exact text and the loaded encoder
+revision, tokenizer, prompt, sequence cutoff, and inference libraries.
+Patient text and patient vectors are never written to this cache.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>progress_callback</code>
+            </td>
+            <td>
+                  <code><span title="callable">callable</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Receives preparation, embedding, retrieval, scoring, and completion updates.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> or <span title="tuple">tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="dict">dict</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One row per selected patient-space pair, including <code>patient_id</code>,
+<code>rank</code> (match-quality order), <code>retrieval_rank</code> (TrialSpace order),
+<code>similarity_score</code>, <code>match_quality_score</code>, <code>match_quality_pass</code>, and
+the complete stored catalog record, including both consideration menus.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>The two public model stages are <code>embed_for_matching</code> and
+<code>score_match_quality</code>, with <code>generate_candidate_matches</code> between them.
+Both read each space's <code>cohort_key_criteria</code> from <code>load_guideline_catalog</code>:
+its nine fields in the layout of a trial cohort's key criteria.
+Catalog embeddings are computed once per call for all supplied patients,
+or reused from the optional verified cache. Only missing/changed text is
+embedded. Patient embeddings always use the same model configuration.
+Ranking is at space level, not disease/trial level.
+All retrieved candidates are scored with <code>filter_low_quality=False</code> so a
+cutoff cannot silently remove the requested top N. Low scores remain flagged
+by <code>match_quality_pass</code>. Ties use similarity, then the space ID. A score is
+a prioritization signal, not a probability of clinical appropriateness.
+Stored menus and caveats are returned unchanged, without asserting that every
+option applies to the individual patient. Source and clinician review remain
+necessary, including checking prior treatment, biomarkers, and missing facts.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/guidelines.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">retrieve_guideline_considerations</span><span class="p">(</span>
+    <span class="n">patient_summaries</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">top_n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="n">candidate_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">embedding_cache_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return considerations for each patient's highest match-quality-ranked spaces.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    patient_summaries : pd.DataFrame</span>
+<span class="sd">        One row per patient, with ``patient_id`` and ``cancer_history_summary``.</span>
+<span class="sd">        Only these columns enter model inference. No raw-note summarization occurs.</span>
+<span class="sd">    catalog : path, DataFrame, or list of paths</span>
+<span class="sd">        Complete guideline records accepted by ``trials.load_guideline_catalog``.</span>
+<span class="sd">        Unchanged files reuse validated records in the loader's process-local</span>
+<span class="sd">        cache; changed catalog/status/audit files are reloaded and validated.</span>
+<span class="sd">    top_n : int, default 5</span>
+<span class="sd">        Maximum spaces returned per patient, ranked by match-quality score.</span>
+<span class="sd">    candidate_k : int or None, default 20</span>
+<span class="sd">        TrialSpace nearest neighbors to rerank per patient. Must be &gt;= top_n,</span>
+<span class="sd">        or None to score every catalog space. A smaller catalog returns fewer rows.</span>
+<span class="sd">    config : MMAIConfig, optional</span>
+<span class="sd">        Uses existing ``embedding`` and ``raw['match_quality']`` settings and</span>
+<span class="sd">        their bundled prompts. Both models run locally through the public stage</span>
+<span class="sd">        APIs; no generative LLM or public-source retrieval is used.</span>
+<span class="sd">    return_metadata : bool, optional</span>
+<span class="sd">        Also return config, catalog identity, both model metadata records, and</span>
+<span class="sd">        retrieval/reranking parameters and counts.</span>
+<span class="sd">    embedding_cache_dir : path, optional</span>
+<span class="sd">        Persist guideline vectors outside the code repository for reuse across</span>
+<span class="sd">        calls and process restarts. Keys cover exact text and the loaded encoder</span>
+<span class="sd">        revision, tokenizer, prompt, sequence cutoff, and inference libraries.</span>
+<span class="sd">        Patient text and patient vectors are never written to this cache.</span>
+<span class="sd">    progress_callback : callable, optional</span>
+<span class="sd">        Receives preparation, embedding, retrieval, scoring, and completion updates.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pd.DataFrame or tuple[pd.DataFrame, dict]</span>
+<span class="sd">        One row per selected patient-space pair, including ``patient_id``,</span>
+<span class="sd">        ``rank`` (match-quality order), ``retrieval_rank`` (TrialSpace order),</span>
+<span class="sd">        ``similarity_score``, ``match_quality_score``, ``match_quality_pass``, and</span>
+<span class="sd">        the complete stored catalog record, including both consideration menus.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    The two public model stages are ``embed_for_matching`` and</span>
+<span class="sd">    ``score_match_quality``, with ``generate_candidate_matches`` between them.</span>
+<span class="sd">    Both read each space's ``cohort_key_criteria`` from ``load_guideline_catalog``:</span>
+<span class="sd">    its nine fields in the layout of a trial cohort's key criteria.</span>
+<span class="sd">    Catalog embeddings are computed once per call for all supplied patients,</span>
+<span class="sd">    or reused from the optional verified cache. Only missing/changed text is</span>
+<span class="sd">    embedded. Patient embeddings always use the same model configuration.</span>
+<span class="sd">    Ranking is at space level, not disease/trial level.</span>
+<span class="sd">    All retrieved candidates are scored with ``filter_low_quality=False`` so a</span>
+<span class="sd">    cutoff cannot silently remove the requested top N. Low scores remain flagged</span>
+<span class="sd">    by ``match_quality_pass``. Ties use similarity, then the space ID. A score is</span>
+<span class="sd">    a prioritization signal, not a probability of clinical appropriateness.</span>
+<span class="sd">    Stored menus and caveats are returned unchanged, without asserting that every</span>
+<span class="sd">    option applies to the individual patient. Source and clinician review remain</span>
+<span class="sd">    necessary, including checking prior treatment, biomarkers, and missing facts.</span>
+<span class="sd">    """</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.embedding</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_for_matching</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.embedding.embed</span><span class="w"> </span><span class="kn">import</span> <span class="n">embedding_model_metadata</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">generate_candidate_matches</span><span class="p">,</span> <span class="n">score_match_quality</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching.rerank</span><span class="w"> </span><span class="kn">import</span> <span class="n">reasonableness_cutoff</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_guideline_catalog</span>
+
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">top_n</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">top_n</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"top_n must be a positive integer."</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">candidate_k</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span>
+        <span class="nb">type</span><span class="p">(</span><span class="n">candidate_k</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">candidate_k</span> <span class="o">&lt;</span> <span class="n">top_n</span>
+    <span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"candidate_k must be &gt;= top_n or None."</span><span class="p">)</span>
+    <span class="n">resolved</span> <span class="o">=</span> <span class="n">load_default_preset</span><span class="p">()</span> <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">config</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">resolved</span><span class="p">,</span> <span class="n">MMAIConfig</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"config must be an MMAIConfig instance or None."</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">progress_callback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">progress_callback</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"progress_callback must be callable or None."</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">progress</span><span class="p">(</span><span class="n">message</span><span class="p">):</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">progress_callback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">progress_callback</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s2">"Guideline retrieval progress callback failed"</span>
+                <span class="p">)</span>
+
+    <span class="n">patients</span> <span class="o">=</span> <span class="n">_patient_frame</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">)</span>
+    <span class="n">spaces</span><span class="p">,</span> <span class="n">catalog_metadata</span> <span class="o">=</span> <span class="n">load_guideline_catalog</span><span class="p">(</span>
+        <span class="n">catalog</span><span class="p">,</span> <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="n">progress</span>
+    <span class="p">)</span>
+    <span class="n">progress</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Embedding </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">patients</span><span class="p">)</span><span class="si">}</span><span class="s2"> patient summaries with TrialSpace"</span><span class="p">)</span>
+    <span class="n">patient_vectors</span><span class="p">,</span> <span class="n">patient_metadata</span> <span class="o">=</span> <span class="n">embed_for_matching</span><span class="p">(</span>
+        <span class="n">patients</span><span class="p">,</span> <span class="n">entity_type</span><span class="o">=</span><span class="s2">"patient"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span> <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+    <span class="n">patient_model</span> <span class="o">=</span> <span class="n">embedding_model_metadata</span><span class="p">(</span><span class="n">patient_metadata</span><span class="p">[</span><span class="s2">"model_metadata"</span><span class="p">])</span>
+    <span class="n">matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">patient_vectors</span><span class="p">[</span><span class="s2">"embedding"</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">matrix</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">matrix</span><span class="o">.</span><span class="n">size</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">matrix</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"TrialSpace returned invalid or non-finite embeddings."</span><span class="p">)</span>
+    <span class="n">cache_metadata</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"enabled"</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">embedding_cache_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">._guideline_embedding_cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_guideline_embeddings</span>
+
+        <span class="n">space_vectors</span><span class="p">,</span> <span class="n">cache_metadata</span> <span class="o">=</span> <span class="n">cached_guideline_embeddings</span><span class="p">(</span>
+            <span class="n">spaces</span><span class="p">,</span>
+            <span class="n">config</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span>
+            <span class="n">patient_model</span><span class="o">=</span><span class="n">patient_model</span><span class="p">,</span>
+            <span class="n">dimension</span><span class="o">=</span><span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+            <span class="n">directory</span><span class="o">=</span><span class="n">embedding_cache_dir</span><span class="p">,</span>
+            <span class="n">progress</span><span class="o">=</span><span class="n">progress</span><span class="p">,</span>
+            <span class="n">embed</span><span class="o">=</span><span class="n">embed_for_matching</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">space_model</span> <span class="o">=</span> <span class="n">patient_model</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">progress</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"Embedding </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">spaces</span><span class="p">)</span><span class="si">}</span><span class="s2"> guideline spaces with the same TrialSpace model"</span>
+        <span class="p">)</span>
+        <span class="n">space_vectors</span><span class="p">,</span> <span class="n">space_metadata</span> <span class="o">=</span> <span class="n">embed_for_matching</span><span class="p">(</span>
+            <span class="n">spaces</span><span class="p">[[</span><span class="s2">"space_trial_id"</span><span class="p">,</span> <span class="s2">"cohort_key_criteria"</span><span class="p">]],</span>
+            <span class="n">entity_type</span><span class="o">=</span><span class="s2">"trial"</span><span class="p">,</span>
+            <span class="n">config</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span>
+            <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">space_model</span> <span class="o">=</span> <span class="n">embedding_model_metadata</span><span class="p">(</span><span class="n">space_metadata</span><span class="p">[</span><span class="s2">"model_metadata"</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">patient_model</span> <span class="o">!=</span> <span class="n">space_model</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"Patient and guideline embedding model metadata differ; refusing to mix embeddings."</span>
+        <span class="p">)</span>
+    <span class="k">for</span> <span class="n">vectors</span> <span class="ow">in</span> <span class="p">(</span><span class="n">patient_vectors</span><span class="p">,</span> <span class="n">space_vectors</span><span class="p">):</span>
+        <span class="n">matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">vectors</span><span class="p">[</span><span class="s2">"embedding"</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">matrix</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">matrix</span><span class="o">.</span><span class="n">size</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">matrix</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"TrialSpace returned invalid or non-finite embeddings."</span><span class="p">)</span>
+    <span class="n">progress</span><span class="p">(</span><span class="s2">"Retrieving nearest guideline spaces by TrialSpace cosine similarity"</span><span class="p">)</span>
+    <span class="n">candidates</span> <span class="o">=</span> <span class="n">generate_candidate_matches</span><span class="p">(</span><span class="n">patient_vectors</span><span class="p">,</span> <span class="n">space_vectors</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">candidate_k</span><span class="p">)</span>
+    <span class="n">candidates</span> <span class="o">=</span> <span class="n">candidates</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">"rank"</span><span class="p">:</span> <span class="s2">"retrieval_rank"</span><span class="p">})</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">candidates</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">patients</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="s2">"many_to_one"</span><span class="p">)</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
+        <span class="n">spaces</span><span class="p">[[</span><span class="s2">"space_trial_id"</span><span class="p">,</span> <span class="s2">"cohort_key_criteria"</span><span class="p">]],</span>
+        <span class="n">on</span><span class="o">=</span><span class="s2">"space_trial_id"</span><span class="p">,</span>
+        <span class="n">validate</span><span class="o">=</span><span class="s2">"many_to_one"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">progress</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Scoring </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> patient-space pairs with the decision model's match questions"</span><span class="p">)</span>
+    <span class="n">scores</span><span class="p">,</span> <span class="n">checker_metadata</span> <span class="o">=</span> <span class="n">score_match_quality</span><span class="p">(</span>
+        <span class="n">pairs</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span> <span class="n">filter_low_quality</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="s2">"space_trial_id"</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">scores</span><span class="o">.</span><span class="n">duplicated</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"The match-quality check did not return exactly one score per candidate pair."</span>
+        <span class="p">)</span>
+    <span class="n">scored</span> <span class="o">=</span> <span class="n">candidates</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="n">keys</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="s2">"one_to_one"</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span>
+        <span class="n">pd</span><span class="o">.</span><span class="n">to_numeric</span><span class="p">(</span><span class="n">scored</span><span class="p">[</span><span class="s2">"match_quality_score"</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"coerce"</span><span class="p">)</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The match-quality check returned missing or non-finite scores."</span><span class="p">)</span>
+    <span class="n">scored</span> <span class="o">=</span> <span class="n">scored</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span>
+        <span class="p">[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="s2">"match_quality_score"</span><span class="p">,</span> <span class="s2">"similarity_score"</span><span class="p">,</span> <span class="s2">"space_trial_id"</span><span class="p">],</span>
+        <span class="n">ascending</span><span class="o">=</span><span class="p">[</span><span class="kc">True</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">],</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">"stable"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">scored</span><span class="p">[</span><span class="s2">"rank"</span><span class="p">]</span> <span class="o">=</span> <span class="n">scored</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">cumcount</span><span class="p">()</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">selected</span> <span class="o">=</span> <span class="n">scored</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">scored</span><span class="p">[</span><span class="s2">"rank"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">top_n</span><span class="p">]</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">selected</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">spaces</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"space_trial_id"</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="s2">"many_to_one"</span><span class="p">)</span>
+    <span class="c1"># Preserve the caller's patient order; within each patient retain checker order.</span>
+    <span class="n">order</span> <span class="o">=</span> <span class="p">{</span><span class="n">pid</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">pid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">patients</span><span class="p">[</span><span class="s2">"patient_id"</span><span class="p">])}</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span>
+        <span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">order</span><span class="p">),</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"stable"</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"package"</span><span class="p">:</span> <span class="n">package_metadata</span><span class="p">(),</span>
+        <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved</span><span class="p">),</span>
+        <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"embed_for_matching"</span><span class="p">:</span> <span class="n">patient_model</span><span class="p">,</span>
+            <span class="s2">"score_match_quality"</span><span class="p">:</span> <span class="n">checker_metadata</span><span class="p">[</span><span class="s2">"model_metadata"</span><span class="p">][</span>
+                <span class="s2">"score_match_quality"</span>
+            <span class="p">],</span>
+        <span class="p">},</span>
+        <span class="s2">"catalog"</span><span class="p">:</span> <span class="n">catalog_metadata</span><span class="p">,</span>
+        <span class="s2">"guideline_embedding_cache"</span><span class="p">:</span> <span class="n">cache_metadata</span><span class="p">,</span>
+        <span class="s2">"retrieval"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"candidate_k"</span><span class="p">:</span> <span class="n">candidate_k</span><span class="p">,</span>
+            <span class="s2">"top_n"</span><span class="p">:</span> <span class="n">top_n</span><span class="p">,</span>
+            <span class="s2">"patients"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">patients</span><span class="p">),</span>
+            <span class="s2">"scored_pairs"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">scored</span><span class="p">),</span>
+            <span class="s2">"returned_pairs"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">),</span>
+            <span class="s2">"ranked_by"</span><span class="p">:</span> <span class="s2">"match_quality_score"</span><span class="p">,</span>
+            <span class="s2">"filter_low_quality"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">"reasonableness_cutoff"</span><span class="p">:</span> <span class="n">reasonableness_cutoff</span><span class="p">(</span><span class="n">resolved</span><span class="p">),</span>
+        <span class="p">},</span>
+    <span class="p">}</span>
+    <span class="n">progress</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Returned considerations for </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="si">}</span><span class="s2"> ranked patient-space pairs"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span> <span class="k">if</span> <span class="n">return_metadata</span> <span class="k">else</span> <span class="n">result</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.guideline_report" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.guideline_report</span>
+
+
+<a href="#matchminer_ai.matching.guideline_report" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Write a local, source-preserving review report from ranked guideline records.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.guideline_report.write_guideline_considerations_report" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">write_guideline_considerations_report</span>
+
+
+<a href="#matchminer_ai.matching.guideline_report.write_guideline_considerations_report" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">write_guideline_considerations_report</span><span class="p">(</span><span class="n">matches</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">patient_summaries</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">output_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">patient_provenance</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Write ranked diagnostic/treatment menus and evidence to external Markdown.</p>
+<p><code>matches</code> is returned by <code>retrieve_guideline_considerations</code>. Supply the
+same patient summary DataFrame to display the actual retrieval input. Optional
+retrieval metadata records model/catalog provenance; <code>patient_provenance</code>
+can record a synthetic source file, source identifier, and selection method.
+Menus, caveats, and quotations are rendered from the catalog without a model
+rewrite. Source PDF links are local and are included only when files exist.</p>
+<p>The required output path must be outside this package/code repository and
+the recorded guideline source collections. The file contains patient text
+and source-derived guideline content; keep it in an appropriate local data
+directory, outside public packages and source control.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/guideline_report.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 24</span>
+<span class="normal"> 25</span>
+<span class="normal"> 26</span>
+<span class="normal"> 27</span>
+<span class="normal"> 28</span>
+<span class="normal"> 29</span>
+<span class="normal"> 30</span>
+<span class="normal"> 31</span>
+<span class="normal"> 32</span>
+<span class="normal"> 33</span>
+<span class="normal"> 34</span>
+<span class="normal"> 35</span>
+<span class="normal"> 36</span>
+<span class="normal"> 37</span>
+<span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">write_guideline_considerations_report</span><span class="p">(</span>
+    <span class="n">matches</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">patient_summaries</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">output_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">patient_provenance</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Write ranked diagnostic/treatment menus and evidence to external Markdown.</span>
+
+<span class="sd">    ``matches`` is returned by ``retrieve_guideline_considerations``. Supply the</span>
+<span class="sd">    same patient summary DataFrame to display the actual retrieval input. Optional</span>
+<span class="sd">    retrieval metadata records model/catalog provenance; ``patient_provenance``</span>
+<span class="sd">    can record a synthetic source file, source identifier, and selection method.</span>
+<span class="sd">    Menus, caveats, and quotations are rendered from the catalog without a model</span>
+<span class="sd">    rewrite. Source PDF links are local and are included only when files exist.</span>
+
+<span class="sd">    The required output path must be outside this package/code repository and</span>
+<span class="sd">    the recorded guideline source collections. The file contains patient text</span>
+<span class="sd">    and source-derived guideline content; keep it in an appropriate local data</span>
+<span class="sd">    directory, outside public packages and source control.</span>
+<span class="sd">    """</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.guidelines</span><span class="w"> </span><span class="kn">import</span> <span class="n">_patient_frame</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials._guideline_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">format_key_criteria</span>
+
+    <span class="n">patients</span> <span class="o">=</span> <span class="n">_patient_frame</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">)</span>
+    <span class="n">required</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"patient_id"</span><span class="p">,</span>
+        <span class="s2">"space_trial_id"</span><span class="p">,</span>
+        <span class="s2">"rank"</span><span class="p">,</span>
+        <span class="s2">"retrieval_rank"</span><span class="p">,</span>
+        <span class="s2">"similarity_score"</span><span class="p">,</span>
+        <span class="s2">"match_quality_score"</span><span class="p">,</span>
+        <span class="s2">"match_quality_pass"</span><span class="p">,</span>
+        <span class="s2">"name"</span><span class="p">,</span>
+        <span class="s2">"space"</span><span class="p">,</span>
+        <span class="s2">"source"</span><span class="p">,</span>
+        <span class="s2">"diagnostic_workup"</span><span class="p">,</span>
+        <span class="s2">"treatment_options"</span><span class="p">,</span>
+        <span class="s2">"evidence"</span><span class="p">,</span>
+        <span class="s2">"uncertainties"</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">required</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="n">matches</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="ow">or</span> <span class="n">matches</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"matches must contain nonempty ranked guideline consideration records."</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="n">matches</span><span class="p">[</span><span class="s2">"patient_id"</span><span class="p">])</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">patients</span><span class="p">[</span><span class="s2">"patient_id"</span><span class="p">])):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Every returned patient must have a supplied patient summary."</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">".md"</span><span class="p">,</span> <span class="s2">".markdown"</span><span class="p">}:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"output_path must name a Markdown file."</span><span class="p">)</span>
+    <span class="n">package</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">roots</span> <span class="o">=</span> <span class="p">[</span><span class="n">package</span><span class="p">]</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">package</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">"pyproject.toml"</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">roots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">package</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+    <span class="n">roots</span> <span class="o">+=</span> <span class="p">[</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="s2">"input_directory"</span><span class="p">])</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span>
+        <span class="k">for</span> <span class="n">source</span> <span class="ow">in</span> <span class="n">matches</span><span class="p">[</span><span class="s2">"source"</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">source</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"input_directory"</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">is_relative_to</span><span class="p">(</span><span class="n">root</span><span class="p">)</span> <span class="k">for</span> <span class="n">root</span> <span class="ow">in</span> <span class="n">roots</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"Report output must stay outside the code repository and guideline source collections."</span>
+        <span class="p">)</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">"# Patient-specific guideline catalog retrieval"</span><span class="p">,</span>
+        <span class="s2">""</span><span class="p">,</span>
+        <span class="s2">"Research review only. TrialSpace retrieves candidate populations; the decision model's match-quality score ranks their fit. "</span>
+        <span class="s2">"Scores are prioritization signals, not probabilities or treatment recommendations. "</span>
+        <span class="s2">"The menus below are copied from the stored catalog, with their conditions and uncertainties. "</span>
+        <span class="s2">"They have not been individually adjudicated for this patient. Source and clinician review are required."</span><span class="p">,</span>
+        <span class="s2">""</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">metadata</span><span class="p">:</span>
+        <span class="n">retrieval</span> <span class="o">=</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"retrieval"</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="s2">"## Retrieval provenance"</span><span class="p">,</span>
+            <span class="s2">""</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">"- Catalog spaces: </span><span class="si">{</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'catalog'</span><span class="p">,</span><span class="w"> </span><span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'catalog_spaces'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unavailable'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">"- TrialSpace candidates per patient: </span><span class="si">{</span><span class="n">retrieval</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'candidate_k'</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">'all catalog spaces'</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">"- Requested top N by match-quality score: </span><span class="si">{</span><span class="n">retrieval</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'top_n'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unavailable'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">"- Match-quality pass flag: P(reasonable) &gt;= "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">retrieval</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'reasonableness_cutoff'</span><span class="p">,</span><span class="w"> </span><span class="n">retrieval</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'score_cutoff'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unavailable'</span><span class="p">))</span><span class="si">}</span><span class="s2">; "</span>
+            <span class="s2">"no candidates removed by it."</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">"- Catalog fingerprint: `</span><span class="si">{</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'catalog'</span><span class="p">,</span><span class="w"> </span><span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'catalog_sha256'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unavailable'</span><span class="p">)</span><span class="si">}</span><span class="s2">`"</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="k">for</span> <span class="n">role</span><span class="p">,</span> <span class="n">model</span> <span class="ow">in</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"model_metadata"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"- </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">role</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'model_name'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unavailable'</span><span class="p">))</span><span class="si">}</span><span class="s2">; revision `</span><span class="si">{</span><span class="n">model</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'model_sha'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unavailable'</span><span class="p">)</span><span class="si">}</span><span class="s2">`"</span>
+            <span class="p">)</span>
+        <span class="k">for</span> <span class="n">artifact</span> <span class="ow">in</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"catalog"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"artifacts"</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"- Catalog file: </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">artifact</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'path'</span><span class="p">,</span><span class="w"> </span><span class="s1">'DataFrame input'</span><span class="p">))</span><span class="si">}</span><span class="s2">; stored audit: </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">artifact</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'recorded_source_audit'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unavailable'</span><span class="p">))</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">patient_provenance</span><span class="p">:</span>
+        <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">"## Patient source"</span><span class="p">,</span> <span class="s2">""</span><span class="p">]</span>
+        <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">"- </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">patient_provenance</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">]</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">patient</span> <span class="ow">in</span> <span class="n">patients</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="s2">"records"</span><span class="p">):</span>
+        <span class="n">ranked</span> <span class="o">=</span> <span class="n">matches</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+            <span class="n">matches</span><span class="p">[</span><span class="s2">"patient_id"</span><span class="p">]</span> <span class="o">==</span> <span class="n">patient</span><span class="p">[</span><span class="s2">"patient_id"</span><span class="p">]</span>
+        <span class="p">]</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">"rank"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ranked</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">"## Patient </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">patient</span><span class="p">[</span><span class="s1">'patient_id'</span><span class="p">])</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+            <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"### Summary used for retrieval"</span><span class="p">,</span>
+            <span class="s2">""</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="s2">"&gt; "</span> <span class="o">+</span> <span class="n">_text</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"  "</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">patient</span><span class="p">[</span><span class="s2">"cancer_history_summary"</span><span class="p">]</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+        <span class="p">]</span>
+        <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"### Ranked catalog spaces"</span><span class="p">,</span>
+            <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"| Rank | Catalog population | Match-quality score | Cutoff flag | TrialSpace cosine | Retrieval rank |"</span><span class="p">,</span>
+            <span class="s2">"| --- | --- | ---: | --- | ---: | ---: |"</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">ranked</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="s2">"records"</span><span class="p">):</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"| </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'rank'</span><span class="p">]</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">'name'</span><span class="p">])</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'match_quality_score'</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">'Pass'</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">row</span><span class="p">[</span><span class="s1">'match_quality_pass'</span><span class="p">]</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">'Below cutoff'</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'similarity_score'</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'retrieval_rank'</span><span class="p">]</span><span class="si">}</span><span class="s2"> |"</span>
+            <span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">ranked</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="s2">"records"</span><span class="p">):</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s2">"source"</span><span class="p">]</span>
+            <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                <span class="sa">f</span><span class="s2">"### </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'rank'</span><span class="p">]</span><span class="si">}</span><span class="s2">. </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">'name'</span><span class="p">])</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+                <span class="s2">""</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"Space ID: `</span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'space_trial_id'</span><span class="p">]</span><span class="si">}</span><span class="s2">`"</span><span class="p">,</span>
+                <span class="s2">""</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"Source: </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="s1">'title'</span><span class="p">])</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="s1">'version'</span><span class="p">])</span><span class="si">}</span><span class="s2">."</span><span class="p">,</span>
+                <span class="s2">""</span><span class="p">,</span>
+                <span class="s2">"**Catalog population key criteria**"</span><span class="p">,</span>
+                <span class="s2">""</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="c1"># The criteria retrieval and scoring read: the catalog's stored cohort-style</span>
+            <span class="c1"># criteria, else one line per field under the headings.</span>
+            <span class="n">key_criteria</span> <span class="o">=</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"cohort_key_criteria"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key_criteria</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">key_criteria</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+                <span class="n">key_criteria</span> <span class="o">=</span> <span class="n">format_key_criteria</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s2">"space"</span><span class="p">])</span>
+            <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="n">_text</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"  "</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">key_criteria</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()]</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">source</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"source_kind"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"nci_pdq"</span><span class="p">:</span>
+                <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                    <span class="s2">"**Source type:** NCI PDQ health-professional evidence summary. "</span>
+                    <span class="s2">"PDQ evidence grades are not NCCN recommendation categories; "</span>
+                    <span class="s2">"listed alternatives do not establish universally required care."</span><span class="p">,</span>
+                    <span class="s2">""</span><span class="p">,</span>
+                <span class="p">]</span>
+                <span class="k">for</span> <span class="n">document</span> <span class="ow">in</span> <span class="n">source</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"documents"</span><span class="p">,</span> <span class="p">[]):</span>
+                    <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s1">'attribution'</span><span class="p">])</span><span class="si">}</span><span class="s2">. "</span>
+                        <span class="sa">f</span><span class="s2">"Source updated: </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">document</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'updated_at'</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">'not stated'</span><span class="p">)</span><span class="si">}</span><span class="s2">. "</span>
+                        <span class="sa">f</span><span class="s2">"[Original summary](</span><span class="si">{</span><span class="n">document</span><span class="p">[</span><span class="s1">'url'</span><span class="p">]</span><span class="si">}</span><span class="s2">)."</span><span class="p">,</span>
+                        <span class="s2">""</span><span class="p">,</span>
+                    <span class="p">]</span>
+            <span class="n">pdf</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">source</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"input_directory"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">source</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"source_pdf"</span><span class="p">):</span>
+                <span class="n">candidate</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">Path</span><span class="p">(</span><span class="n">source</span><span class="p">[</span><span class="s2">"input_directory"</span><span class="p">])</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="n">source</span><span class="p">[</span><span class="s2">"source_pdf"</span><span class="p">]</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">candidate</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+                    <span class="n">pdf</span> <span class="o">=</span> <span class="n">candidate</span>
+            <span class="n">evidence_by_key</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="k">def</span><span class="w"> </span><span class="nf">citations</span><span class="p">(</span><span class="n">evidence</span><span class="p">):</span>
+                <span class="n">labels</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">evidence</span><span class="p">:</span>
+                    <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">"page_id"</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">"line_ids"</span><span class="p">]),</span> <span class="n">item</span><span class="p">[</span><span class="s2">"quote"</span><span class="p">])</span>
+                    <span class="n">evidence_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">item</span>
+                    <span class="n">address</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="s1">'page_id'</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'printed_label'</span><span class="p">,</span><span class="w"> </span><span class="s1">'unlabeled'</span><span class="p">)</span><span class="si">}</span><span class="s2">); lines "</span>
+                        <span class="o">+</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">item</span><span class="p">[</span><span class="s2">"line_ids"</span><span class="p">]))</span>
+                    <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">source</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"source_kind"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"nci_pdq"</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"source_url"</span><span class="p">):</span>
+                        <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">address</span><span class="p">)</span><span class="si">}</span><span class="s2">](</span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="s1">'source_url'</span><span class="p">]</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">pdf</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"pdf_page"</span><span class="p">):</span>
+                        <span class="n">link</span> <span class="o">=</span> <span class="n">quote</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">pdf</span><span class="p">,</span> <span class="n">output</span><span class="o">.</span><span class="n">parent</span><span class="p">),</span> <span class="n">safe</span><span class="o">=</span><span class="s2">"/.-_"</span><span class="p">)</span>
+                        <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">address</span><span class="p">)</span><span class="si">}</span><span class="s2">](</span><span class="si">{</span><span class="n">link</span><span class="si">}</span><span class="s2">#page=</span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="s1">'pdf_page'</span><span class="p">]</span><span class="si">}</span><span class="s2">)"</span>
+                        <span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_text</span><span class="p">(</span><span class="n">address</span><span class="p">))</span>
+                <span class="k">return</span> <span class="s2">"; "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
+
+            <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">"Population evidence: "</span> <span class="o">+</span> <span class="n">citations</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s2">"evidence"</span><span class="p">]),</span> <span class="s2">""</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">issue</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"citation_review"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"issues"</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"**Population source support unresolved:** </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">issue</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s2">""</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">title</span> <span class="ow">in</span> <span class="p">(</span>
+                <span class="p">(</span><span class="s2">"diagnostic_workup"</span><span class="p">,</span> <span class="s2">"Diagnostic / workup considerations"</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">"treatment_options"</span><span class="p">,</span> <span class="s2">"Treatment / management considerations"</span><span class="p">),</span>
+            <span class="p">):</span>
+                <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"**</span><span class="si">{</span><span class="n">title</span><span class="si">}</span><span class="s2">**"</span><span class="p">,</span> <span class="s2">""</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">row</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
+                    <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                        <span class="s2">"No items were recorded in this catalog for this population."</span><span class="p">,</span>
+                        <span class="s2">""</span><span class="p">,</span>
+                    <span class="p">]</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">row</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
+                    <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                        <span class="sa">f</span><span class="s2">"- **</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">'name'</span><span class="p">])</span><span class="si">}</span><span class="s2">** — **Conditions:** </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">'conditions'</span><span class="p">])</span><span class="si">}</span><span class="s2">. "</span>
+                        <span class="sa">f</span><span class="s2">"**Category:** </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">'category'</span><span class="p">])</span><span class="si">}</span><span class="s2">. **Sources:** </span><span class="si">{</span><span class="n">citations</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">'evidence'</span><span class="p">])</span><span class="si">}</span><span class="s2">."</span>
+                    <span class="p">]</span>
+                    <span class="k">for</span> <span class="n">issue</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"citation_review"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"issues"</span><span class="p">,</span> <span class="p">[]):</span>
+                        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  - **Source support unresolved:** </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">issue</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+            <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">"**Catalog uncertainties and context limits**"</span><span class="p">,</span> <span class="s2">""</span><span class="p">]</span>
+            <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"- </span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">row</span><span class="p">[</span><span class="s2">"uncertainties"</span><span class="p">]]</span> <span class="ow">or</span> <span class="p">[</span>
+                <span class="s2">"- No uncertainties were recorded; this does not establish completeness."</span>
+            <span class="p">]</span>
+            <span class="n">omitted</span> <span class="o">=</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"omitted_source_page_ids"</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="k">if</span> <span class="n">omitted</span><span class="p">:</span>
+                <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                    <span class="sa">f</span><span class="s2">"- Extraction detail context omitted </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">omitted</span><span class="p">)</span><span class="si">}</span><span class="s2"> source pages."</span><span class="p">,</span>
+                    <span class="s2">""</span><span class="p">,</span>
+                    <span class="s2">"&lt;details&gt;"</span><span class="p">,</span>
+                    <span class="s2">"&lt;summary&gt;Omitted extraction context pages&lt;/summary&gt;"</span><span class="p">,</span>
+                    <span class="s2">""</span><span class="p">,</span>
+                    <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">_text</span><span class="p">,</span> <span class="n">omitted</span><span class="p">)),</span>
+                    <span class="s2">""</span><span class="p">,</span>
+                    <span class="s2">"&lt;/details&gt;"</span><span class="p">,</span>
+                <span class="p">]</span>
+            <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                <span class="s2">""</span><span class="p">,</span>
+                <span class="s2">"&lt;details&gt;"</span><span class="p">,</span>
+                <span class="s2">"&lt;summary&gt;Stored source excerpts for this population and its considerations&lt;/summary&gt;"</span><span class="p">,</span>
+                <span class="s2">""</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">evidence_by_key</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                    <span class="sa">f</span><span class="s2">"**</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">'page_id'</span><span class="p">])</span><span class="si">}</span><span class="s2">; lines </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="w"> </span><span class="n">item</span><span class="p">[</span><span class="s1">'line_ids'</span><span class="p">]))</span><span class="si">}</span><span class="s2">**"</span><span class="p">,</span>
+                    <span class="s2">""</span><span class="p">,</span>
+                <span class="p">]</span>
+                <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+                    <span class="s2">"&gt; "</span> <span class="o">+</span> <span class="n">_text</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"  "</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">item</span><span class="p">[</span><span class="s2">"quote"</span><span class="p">]</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+                <span class="p">]</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+            <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">"&lt;/details&gt;"</span><span class="p">,</span> <span class="s2">""</span><span class="p">]</span>
+    <span class="n">atomic_text</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">output</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

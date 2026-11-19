@@ -1,0 +1,2555 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the matchminer-ai Python package">
+      
+      
+      
+      
+        <link rel="prev" href="../local-vs-remote/">
+      
+      
+        <link rel="next" href="../pdq-catalogs/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Guideline extraction - MatchMiner-AI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#guideline-extraction" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MatchMiner-AI" class="md-header__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MatchMiner-AI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Guideline extraction
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MatchMiner-AI" class="md-nav__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MatchMiner-AI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/gpu-recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Recommendations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-notebook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Notebook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../patient-centric-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient-centric matching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../good-options-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the Good Options pipeline works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../local-vs-remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an Inference Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supply-a-local-source-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supply a local source library
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extract-one-disease" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extract one disease
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpoint-and-budget-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoint and budget configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#population-ownership-and-field-meanings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Population ownership and field meanings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#persistence-and-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Persistence and review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrieve-considerations-from-an-existing-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieve considerations from an existing catalog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrieve considerations from an existing catalog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key criteria
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrieve-considerations-for-patient-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieve considerations for patient summaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#process-the-remaining-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process the remaining collection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reviewing-existing-catalog-citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reviewing existing catalog citations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pdq-catalogs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../note-search-qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Note-search question answering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../population-workup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population workup review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/qc-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Package API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/documents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Document OCR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/patients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Clinical Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/workup-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction-Based Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/workup-sql/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL-Agent Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/candidate-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/labeling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Teacher Labeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/match-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/guideline-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/exclusion-criteria/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclusion Criteria
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/criteria-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/good-options/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM Server Helper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supply-a-local-source-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supply a local source library
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extract-one-disease" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extract one disease
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpoint-and-budget-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoint and budget configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#population-ownership-and-field-meanings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Population ownership and field meanings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#persistence-and-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Persistence and review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrieve-considerations-from-an-existing-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieve considerations from an existing catalog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrieve considerations from an existing catalog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key criteria
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrieve-considerations-for-patient-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieve considerations for patient summaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#process-the-remaining-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process the remaining collection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reviewing-existing-catalog-citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reviewing existing catalog citations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="guideline-extraction">Guideline extraction<a class="headerlink" href="#guideline-extraction" title="Permanent link">&para;</a></h1>
+<p><code>matchminer_ai.trials.summarize_guidelines</code> turns one locally supplied NCCN
+guideline into canonical disease-state populations, each defined by nine population
+fields (stored as one line in <code>clinical_space_summary</code>). Loading a catalog lays those
+fields out as a trial cohort's key criteria (<code>cohort_key_criteria</code>; see
+<a href="#key-criteria">Key criteria</a>). Each population also has diagnostic/workup
+considerations, treatment/management options, source quotations, and uncertainties.
+All clinical content is extracted by the configured LLM. Python manages source
+ownership, record identity, validation, persistence, and export.</p>
+<p>Generation prompts begin by explaining the library's purpose: later patient-summary
+matching and retrieval of source-supported workup and treatment considerations.
+They define a clinical space and explain that only its nine population fields enter
+the matching text; names and menus cannot supply missing criteria. Each call then
+receives its stage-specific task and schema, including any fixed-field restrictions.</p>
+<p>This is an optional source-grounded extraction workflow, separate from trial
+matching. A guideline population is not a clinical trial, a treatment recommendation,
+or an eligibility determination. Structural checks do not establish clinical
+correctness or completeness. Review the original PDF when graphical relationships
+or clinical applicability are uncertain.</p>
+<h2 id="supply-a-local-source-library">Supply a local source library<a class="headerlink" href="#supply-a-local-source-library" title="Permanent link">&para;</a></h2>
+<p>No NCCN source files or generated catalogs are distributed with this package.
+Supply your own permitted local copies. The reader accepts the page-preserving
+<code>nccn-pdf-to-markdown</code> manifest format: a collection <code>markdown/manifest.json</code>,
+per-disease manifests and Markdown page files, plus the original PDFs alongside
+<code>markdown/</code>. Each page has a fenced text block and a recorded hash. PDF hashes,
+page coverage, and Markdown hashes must agree before any model call. Incomplete
+copies fail explicitly and can be retried after copying finishes.</p>
+<p>For a new collection, the repository includes <code>scripts/convert_guidelines.py</code>.
+Install <code>matchminer-ai[guideline-conversion]</code> and Poppler's <code>pdftotext</code>, then run
+from a source checkout:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>scripts/convert_guidelines.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input-dir<span class="w"> </span>/path/to/local/guideline-pdfs<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>/path/to/local/guideline-pdfs/markdown
+</code></pre></div>
+<p>The converter requires explicit external paths and makes no network or model calls.
+It preserves text, page addresses, and links; it does not perform OCR or recover
+every arrow, table relationship, superscript, or graphical decision branch. Retain
+the PDF for human review. Conversion provenance is in <code>scripts/README.md</code>.</p>
+<h2 id="extract-one-disease">Extract one disease<a class="headerlink" href="#extract-one-disease" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_default_preset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_guidelines</span><span class="p">,</span> <span class="n">summarize_guidelines</span>
+
+<span class="n">source</span> <span class="o">=</span> <span class="s2">"/path/to/local/guideline-pdfs/markdown"</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">list_guidelines</span><span class="p">(</span><span class="n">source</span><span class="p">))</span>  <span class="c1"># Use the disease folder name from this table.</span>
+
+<span class="n">config</span> <span class="o">=</span> <span class="n">load_default_preset</span><span class="p">()</span>
+<span class="n">config</span><span class="o">.</span><span class="n">remote</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">config</span><span class="o">.</span><span class="n">remote</span><span class="p">[</span><span class="s2">"server_urls"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"http://camus:8002/v1"</span><span class="p">]</span>
+<span class="n">config</span><span class="o">.</span><span class="n">remote</span><span class="p">[</span><span class="s2">"request_timeout"</span><span class="p">]</span> <span class="o">=</span> <span class="mi">7200</span>
+<span class="n">config</span><span class="o">.</span><span class="n">remote</span><span class="p">[</span><span class="s2">"max_concurrent_requests"</span><span class="p">]</span> <span class="o">=</span> <span class="mi">32</span>
+
+<span class="n">spaces</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">qc</span> <span class="o">=</span> <span class="n">summarize_guidelines</span><span class="p">(</span>
+    <span class="n">source</span><span class="p">,</span>
+    <span class="n">disease</span><span class="o">=</span><span class="s2">"breast"</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"/path/to/private-derived-data/breast-run-1"</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_qc</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">progress_callback</span><span class="o">=</span><span class="nb">print</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>The function accepts one disease per call and returns the same flag combinations
+as <code>extract_cohorts</code>: a DataFrame, optionally followed by metadata and/or a QC
+DataFrame. The standard columns are <code>space_trial_id</code>, <code>trial_id</code>,
+<code>clinical_space_number</code>, <code>clinical_space_summary</code>, and <code>general_exclusion_criteria</code>.
+Here <code>trial_id</code> has a <code>guideline:</code> namespace, and <code>general_exclusion_criteria</code> is
+<code>NA</code> because no trial protocol was summarized. These IDs must not be sent to
+services expecting NCT identifiers.</p>
+<p>Additional columns include the nine-field <code>space</code> object, <code>diagnostic_workup</code>,
+<code>treatment_options</code>, <code>evidence</code>, <code>source</code>, <code>uncertainties</code>, and omitted context.
+Each menu item has its conditions, source-stated category, and evidence. Load the
+exported catalog with <code>load_guideline_catalog</code> to get each space's
+<code>cohort_key_criteria</code>, the text the retrieval APIs pass to TrialSpace and the decision
+model; this function does not load an embedding model or perform matching.</p>
+<h2 id="endpoint-and-budget-configuration">Endpoint and budget configuration<a class="headerlink" href="#endpoint-and-budget-configuration" title="Permanent link">&para;</a></h2>
+<p>The collection runner can give unstarted catalogs to another same-model server:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>examples/extract_guideline_collection.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--source<span class="w"> </span>/path/to/local/guideline-pdfs/markdown<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>/path/to/private-derived-data/collection<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--endpoint<span class="w"> </span>http://original-server:8001/v1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--additional-endpoint<span class="w"> </span>http://additional-server:8060/v1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--new-disease-endpoint<span class="w"> </span>http://additional-server:8060/v1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--model<span class="w"> </span>served-model-id<span class="w"> </span>--concurrency<span class="w"> </span><span class="m">32</span>
+</code></pre></div>
+<p>Retain the original invocation's source, output, primary endpoint, model and
+completed-catalog arguments when resuming. Additional endpoints are preflighted
+for the same model ID and advertised context window. Each disease with an existing
+<code>run_config.json</code> keeps its recorded endpoint and checkpoints. With
+<code>--new-disease-endpoint</code>, every unstarted catalog goes to that server; otherwise
+unstarted work is balanced between configured endpoints. Separate disease-worker
+pools allow the additional server to start immediately. <code>--concurrency</code> applies
+<strong>per endpoint</strong>. By default disease dispatch is automatic: up to that many
+available catalogs can run on each endpoint, helping fill request slots even
+during serial catalog stages. Use <code>--disease-workers</code> only to explicitly limit
+concurrent disease preparation. <code>collection.json</code> records the effective disease
+worker counts, allocation policy and endpoint
+assigned to each disease and the preflight model information. Stop the original
+collection process before resuming; do not run two collection writers together.
+Each disease still uses the standard single-endpoint API and provenance checks.</p>
+<p>The structured client's generation cap is shared across disease clients within
+one process and held until each response stream ends. Exact <code>/tokenize</code> checks
+and <code>/models</code> discovery share a separate preparation pool, limited to at most
+four requests per endpoint (or the configured concurrency if smaller). This
+keeps prompt preparation from waiting behind long generations without increasing
+the generation cap. Context packing, output reserves and checkpoint identities
+are unchanged. Separate processes still have separate limits.</p>
+<p>NCCN and PDQ collection runners use the same shared-capacity dispatcher. Every
+active catalog receives the full configured endpoint request cap; it is never
+divided into fixed per-disease reservations. Finishing catalogs release request
+slots immediately, and the last catalog can use the entire cap for its independent
+detail jobs without a worker restart. Ready queued diseases start as soon as a
+disease worker becomes free. Dependencies, exact context packing, server limits,
+and the number of unfinished jobs can still keep actual traffic below the cap.</p>
+<p>For a long-tail resume, stop the original batch and repeat the same invocation
+with the desired <code>--concurrency</code>, omitting <code>--disease-workers</code> for automatic
+allocation. This preserves accepted checkpoints and clinical settings. Keep one
+batch process per endpoint budget where possible; separate recovery processes do
+not automatically borrow capacity across processes, and their combined limits
+must stay within the caller's allowance. No server or allowed cap is selected
+automatically.</p>
+<p>If one disease needs an existing verified source snapshot, supply
+<code>--source-override DISEASE /path/to/snapshot/markdown</code>. Its collection manifest
+must identify the same PDF hash as the main collection. The standard source
+reader still verifies every page and the PDF before generation. Overrides are
+recorded in the collection identity and must be retained when resuming. They
+select source files only; they do not import old extraction results or checkpoints.</p>
+<p>The existing <code>MMAIConfig</code> owns configuration. Shared <code>config.remote</code> selects the
+endpoint, concurrency, timeout, and maximum request attempts (<code>max_retries</code>).
+The new <code>config.guideline</code> stage uses the same <code>remote.model_name</code>,
+<code>remote.request_params</code>, and <code>remote.extra_body</code> convention as other LLM stages.
+Existing trial and patient defaults are unchanged.</p>
+<table>
+<thead>
+<tr>
+<th>Guideline setting</th>
+<th>Default / behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>remote.model_name</code></td>
+<td><code>None</code>: discover the served model from <code>/v1/models</code></td>
+</tr>
+<tr>
+<td><code>context_window</code></td>
+<td><code>None</code>: use the full advertised <code>max_model_len</code>; require an explicit value if unavailable</td>
+</tr>
+<tr>
+<td><code>remote.request_params.max_tokens</code></td>
+<td>100,000 reserved output tokens, including reasoning</td>
+</tr>
+<tr>
+<td><code>remote.request_params.temperature</code> / <code>top_p</code></td>
+<td>1.0 / 0.95</td>
+</tr>
+<tr>
+<td><code>remote.extra_body.top_k</code></td>
+<td>Vendor profile: Nemotron 3.5 Super = -1 (disabled), Gemma 4 = 64, Qwen 3.8 = 20</td>
+</tr>
+<tr>
+<td><code>remote.extra_body.chat_template_kwargs.enable_thinking</code></td>
+<td><code>True</code></td>
+</tr>
+<tr>
+<td><code>reasoning_effort</code></td>
+<td><code>xhigh</code> for Qwen 3.8; Gemma uses its thinking switch</td>
+</tr>
+<tr>
+<td><code>safety_tokens</code></td>
+<td>2,048 tokens for retry feedback</td>
+</tr>
+<tr>
+<td><code>packet_pages</code></td>
+<td>8 PRIMARY pages per extraction call</td>
+</tr>
+<tr>
+<td><code>tokenizer_mode</code></td>
+<td><code>endpoint</code>: count the actual chat template through vLLM <code>/tokenize</code></td>
+</tr>
+<tr>
+<td><code>response_format</code></td>
+<td><code>json_schema</code>; also supports <code>json_object</code> or <code>none</code></td>
+</tr>
+<tr>
+<td><code>stream</code></td>
+<td><code>True</code>, preserving raw content, reasoning, usage, and finish reasons</td>
+</tr>
+<tr>
+<td><code>api_key_env</code></td>
+<td><code>OPENAI_API_KEY</code>; only the environment variable name is persisted</td>
+</tr>
+</tbody>
+</table>
+<p>The stage resolves the vendor generation profile from the actual served model.
+See <a href="../../reference/configuration/#model-aware-sampling-and-reasoning">model-aware sampling</a>.
+For another provider, explicitly select its model/context, sampling parameters,
+supported response format, and reasoning controls. Set <code>sampling_profile="none"</code> before removing <code>top_k</code> and
+<code>chat_template_kwargs</code> from <code>extra_body</code> to omit those vLLM extensions. If <code>/tokenize</code>
+is unavailable, set <code>tokenizer_mode="bytes"</code> to use conservative UTF-8 byte
+accounting; this is not a model-token measurement and is never selected silently.
+Do not put credentials in URLs or request parameters; use the named environment
+variable. This initial API supports one remote endpoint and does not launch a
+server or support local vLLM generation.</p>
+<p>Context packing keeps whole pages, prioritizes required source evidence, and uses
+all available source context when it fits. Every omission is recorded. The output
+reserve is never reduced to make input fit. Oversized mandatory evidence fails
+with instructions to reduce packet size or choose a larger context. A response
+ending at a token limit is rejected even if its JSON parses. Sustained repetitive
+output is stopped, recorded, and retried within the configured attempt bound.</p>
+<h2 id="population-ownership-and-field-meanings">Population ownership and field meanings<a class="headerlink" href="#population-ownership-and-field-meanings" title="Permanent link">&para;</a></h2>
+<p>Each source page has one PRIMARY extraction owner; other calls may use it as
+supporting CONTEXT. A candidate anchors its defining branch to owned source lines.
+Routing text and discussion paraphrases should defer to the defining treatment
+table's owner. Source addresses are the only persistent identifiers the model
+must cite. Candidate/paradigm IDs, hashes, and batching bookkeeping stay in Python.
+Consolidation returns clinical definitions rather than arbitrary ID mappings.</p>
+<p>The prompts preserve one current treatment decision per space. Source-defined
+treatment lines and prior exposure belong in the prior-treatment fields; burden
+contains extent, stage, resectability, and disease-severity states. Visceral crisis
+is burden and endocrine refractoriness is treatment response. Alternatives across
+fields are split without changing OR to AND. Generic breast HR-negative expands
+to ER-negative AND PR-negative; HR-positive expands to ER-positive OR PR-positive.
+Both NCCN and PDQ definition prompts use the trial-extraction framing of one
+self-contained combination of patient criteria. They require a clause-by-clause
+field check before returning extraction or consolidation results. Untreated status
+belongs in scoped prior-treatment exclusions; treatment ineligibility belongs in
+option conditions. Mixed alternatives across age, history, burden and biomarkers
+must be split while retaining shared criteria and the source's OR logic. The prompt
+requires correcting known representation errors during definition creation rather
+than merely recording them in uncertainties. Later fixed-definition stages still
+cannot rewrite populations. This is a prompt contract, not a new semantic validator;
+its clinical effect needs evaluation on model outputs. The revised core prompts
+require a new output directory and do not upgrade existing catalogs or checkpoints.</p>
+<p>Treatment-history wording describes the actual previous drugs/classes, disease
+setting, response and any explicitly defined counts. Ordinal headings such as
+"second-line" do not by themselves establish one previous regimen, progression,
+or how maintenance, substitutions or earlier-setting therapy are counted. Names
+and space fields use concrete source-supported history rather than line shorthand.
+Undefined source terminology remains a cited uncertainty; the prompt must not
+invent specificity, erase the boundary or merge it into an unrestricted population.
+Exact source quotations retain their original wording.</p>
+<p>Consolidation and cross-batch selection now have an independent population-coverage
+gate before detail generation. Identical clinical names and nine-field definitions
+pass deterministically; other inputs undergo bounded LLM comparisons against the
+proposed catalog. Every input must receive a review, and missing or uncertain
+coverage rejects the proposed result and triggers a bounded full-catalog retry.
+The review compares clinical content and meaningful population names, not arbitrary
+record IDs. A broader disease umbrella or diagnostic state cannot substitute for
+a treatment-specific population. This adds inference work; it is an LLM judgment
+about preservation, not proof of clinical correctness or source completeness.</p>
+<p>The gate also revalidates accepted consolidation checkpoints when resuming an older
+run. Adding only these coverage prompts preserves compatible extraction and detail
+requests; other model, source, prompt, and generation-setting changes still require
+a new output directory. <code>canonical_coverage.json</code> records the final per-input
+judgments, input/catalog fingerprints, and accepted-review provenance. The offline
+audit checks that this report belongs to the final catalog and has no missing inputs.
+Typographic comparison operators (<code>≥</code>/<code>&gt;=</code> and <code>≤</code>/<code>&lt;=</code>) are equivalent for the
+exact-definition comparison; thresholds, clinical words, and Boolean grouping
+remain unchanged. This comparison never rewrites source or model output.
+The field validator treats numeric comparators such as <code>less than or equal to
+2 cm</code> as a single predicate. It does not mistake their internal <code>or</code> for a
+population alternative; separate AND/OR alternatives still require grouping.
+Count phrases such as <code>one or more lesions</code> are likewise atomic; this exception
+is limited to explicit count units and does not mask <code>one OR more advanced
+disease</code> or an additional population alternative. Stored field text is unchanged.
+Inclusive time comparisons such as <code>at or after 2 years</code> and <code>at or before 3
+months</code> are also atomic when both a numeric bound and an explicit time unit are
+present. Other population alternatives remain subject to the same grouping checks.</p>
+<p>Detail generation freezes the canonical definition and supplies its current menu.</p>
+<p>Final-detail generation uses <strong>source excerpts</strong>, not model-selected line numbers.
+Each citation contains a supplied page ID and exact <code>source_text</code>. Code locates a
+unique match on that page (allowing whitespace differences only), derives its
+line numbers, and copies the original text for display. Missing or ambiguous
+excerpts fail validation and trigger a bounded retry. This prevents a model from
+requesting one sentence while accidentally citing a neighboring numbered line.
+The model must select text supporting the particular option, its conditions, and
+any stated category, without expanding narrower source claims using background
+knowledge.</p>
+<p>For a two-column page, the displayed quote can be a verified substring of one
+column; the full original lines remain in <code>source_lines</code>. Multiple excerpts can
+connect wrapped clauses and population prerequisites without interleaving the
+other column. The offline audit checks the excerpt's exact source location and
+the recorded raw provider response. Extraction and consolidation still use line
+references internally. Existing line-reference catalogs remain readable and
+auditable, but this change does not retrospectively correct their citations.
+Exact text occurrence is not an independent guarantee of clinical support.</p>
+<p>Prompts, including field descriptions, consolidation, selection, and citation
+repair instructions, live in <code>src/matchminer_ai/prompts/guideline.*.txt</code> and
+<code>structured.retry.txt</code>. These generation prompts are fingerprinted for resume checks.
+Citation-only repair can change references and page accounting, never clinical
+fields, option content, or defining branch ownership.</p>
+<p>For failed structured generations, retries include the most recent complete JSON
+draft and validation feedback, using <code>structured.revise_retry.txt</code>. Extraction
+feedback reports every candidate that fails the field checks, rather than stopping
+at the first candidate. The LLM revises its own draft against the original source;
+code never guesses Boolean grouping or edits clinical criteria. Incomplete JSON
+and reasoning traces are not reused. If the draft will not fit, retry with feedback
+alone, keeping all original source context and the full output-token reserve.
+Every actual retry message is saved in <code>request-attempt-*.json</code>. The revision-only
+instruction does not invalidate already accepted generation checkpoints; accepted
+responses still undergo the same grounding and field validation.</p>
+<p>Guideline retries retain the four most recent distinct validation errors for all
+stages, including consolidation, with complete findings rather than shortened
+examples. Repeated errors move back into the recent set. Catalog field validation
+reports all failing populations together, so correcting a coverage omission does
+not hide an earlier Boolean-grouping error. Source context and output headroom
+still must fit; feedback is never a license to drop clinical restrictions.</p>
+<p>Mixed-logic retries also use <code>guideline.boolean_retry.txt</code>, with synthetic
+examples showing how alternatives inside a disease setting must be grouped
+independently of response alternatives. This applies to resumed failures and
+future runs without changing accepted checkpoints or relaxing the checker.</p>
+<p>The Boolean checker treats the conventional anatomic region "head and neck" as
+one named concept. Its internal conjunction is ignored only during operator
+checking; the stored field is unchanged and surrounding AND/OR conditions still
+require explicit grouping. Audit metadata records the checker revision.</p>
+<p>If bounded literal citation selection reports that a fixed detail assertion
+has no supporting passage, the original detail task may regenerate its draft
+against the original source using <code>guideline.unsupported_detail_retry.txt</code>.
+Citation-only repair still cannot change clinical content. The original task
+must keep the canonical space exactly unchanged and pass all field, exact-quote
+and provenance checks. Its failed assertion and the selection diagnostic remain
+in retry feedback, including on resume. Transport failures do not take this path;
+unresolved details remain failures, never empty or silently removed citations.</p>
+<p>Final-detail citation failures use focused, checkpointed excerpt repairs before
+regenerating any clinical record. Each call receives one rejected excerpt, its
+fixed population and assertion, source context, and the affected pages next to
+the repair task. It starts with the assertion's and population's cited pages;
+if that repair exhausts its attempts, one bounded fallback can use all pages
+from the original detail prompt. Identical repair requests within a record are
+deduplicated before dispatch. The model returns only replacement quotations. Code retains
+all valid citations and every clinical field, checks every replacement for exact
+and unique source occurrence, then validates the complete record again. Missing
+or ambiguous support remains a failure; no fuzzy matching or guessed source
+positions are accepted. Complete saved drafts remain repairable even when a
+later attempt returned empty or malformed JSON.</p>
+<p>When both quotation-copying scopes exhaust their attempts, the pipeline switches
+to literal-passage selection. Code prepares a bounded menu of exact source
+fragments with neighboring branch context; the LLM selects the passages supporting
+the fixed assertion. Duplicate table entries gain adjacent literal text to identify
+their occurrence, and text from interleaved PDF columns remains separate excerpts.
+Code copies the selected passages verbatim; it does not decide clinical support.
+An empty or unresolved selection still fails. Previously exhausted copy requests
+are recovered from checkpoints without spending another identical retry budget.
+The audit binds every selected passage and assertion to the recorded model request
+and raw selection response, as well as checking its exact source occurrence.
+When a rejected fragment contains only stop words, literal candidate retrieval
+uses the fixed assertion's name instead. The model must still select a supporting
+exact passage; candidate retrieval never establishes support. If no literal
+candidates exist, the bounded original detail-generation retry receives the
+grounding failure and fixed assertion. It cannot accept an empty citation, alter
+the canonical population, or omit an unresolved recommendation silently.</p>
+<p>Repairs retain the configured context, output-token reserve, reasoning, sampling,
+endpoint, concurrency cap, and bounded attempt count. They do not replay the
+model's reasoning. This avoids repeatedly rewriting a full menu to correct one
+quote or losing later errors behind truncated whole-record feedback. Repairs
+write <code>quote_repairs/</code> receipts; the offline audit ties each replacement to its
+accepted, raw-provider-backed response and checks that no other fields changed.
+Adding this repair stage preserves compatible existing request checkpoints;
+changes to existing prompts, source, model, or generation settings still require
+a new directory. Exhausted repair jobs remain resumable and never produce a
+partially validated catalog.</p>
+<p>If the final population-coverage review finds a distinction missed by intermediate
+reviews, consolidation now sends those full findings back to the affected original
+source batches. It regenerates their complete catalogs, reuses unaffected batch
+checkpoints, and repeats selection and final coverage validation. Every failed
+final review is retained. Recovery is bounded by the configured attempt count and
+stops if the same final failure recurs; closed selection cannot invent missing
+definitions, and a failing final review cannot produce an export.</p>
+<p>When a consolidation batch exhausts retries on population coverage, ambiguous
+Boolean grouping, or invalid source-line citations, the pipeline divides only
+that failed batch into source-backed groups of at most 12 inputs. A smaller failed group can divide again, down to a
+single input; singleton failures still stop the catalog. Successful batches are
+retained, and a persisted <code>canonical_batch_splits.json</code> receipt lets a resume
+skip the exhausted parent and reuse successful child requests. Transport failures
+do not trigger this strategy. Original responses and diagnostics remain available.
+Each child must pass the same field, citation and coverage checks; the combined
+catalog still requires selection and final coverage of every original candidate.
+The source fingerprint, candidate membership and split receipts are audited.
+This changes task size, not clinical definitions, sampling or the output reserve.
+Catalog validation reports all invalid citations with their state names and line
+references, together with field errors, so retries can address them in one pass.
+Blank-only citation fragments remain invalid, including fragments produced by
+splitting a model's citation longer than 12 lines.</p>
+<h2 id="persistence-and-review">Persistence and review<a class="headerlink" href="#persistence-and-review" title="Permanent link">&para;</a></h2>
+<p>Use a separate external output directory for each disease, edition, and generation
+configuration. The API rejects directories inside the source collection or code
+repository. <strong>Outputs contain source-derived and sometimes verbatim guideline
+text</strong>, including checkpoint prompts and raw responses. Keep the entire output
+directory outside source control and public artifacts, regardless of debug mode.</p>
+<p>The directory includes <code>paradigms.jsonl</code>, <code>trial_spaces.csv</code>, <code>report.md</code>, source
+provenance, coverage, ownership, run settings, <code>status.json</code>, per-request
+checkpoints, and <code>validation.json</code>. A failed stage raises rather than returning
+a partial catalog. Exported files alone do not establish success: newly exported
+runs remain <code>running</code> with stage <code>audit</code> during the final provenance audit.
+Only a successful audit lets the public extraction call mark the run <code>complete</code>.
+Repeat the same call to resume completed requests; token counts
+and accepted responses are cached. Changes to concurrency, timeout, retry count,
+or streaming transport are allowed without discarding work. The two explicit
+retry-only resources, <code>guideline.boolean_retry.txt</code> and
+<code>guideline.unsupported_detail_retry.txt</code>, can also be added or revised on resume:
+they guide failed attempts without changing initial extraction prompts. Their
+current hashes remain recorded, and accepted responses are revalidated. Source,
+core prompt, model, and generation changes require a new directory. Use fresh directories when moving
+from the standalone prototype; its old generated outputs are not imported.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">audit_guideline_catalog</span>
+
+<span class="n">audit</span> <span class="o">=</span> <span class="n">audit_guideline_catalog</span><span class="p">(</span>
+    <span class="n">source</span><span class="p">,</span>
+    <span class="n">disease</span><span class="o">=</span><span class="s2">"breast"</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"/path/to/private-derived-data/breast-run-1"</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>The offline audit verifies source hashes, ownership, exact quotations, raw-response
+preservation, budgets, and agreement among exports. QC separately reports uncertain
+source pages, states with uncertainties or omitted context, and empty treatment
+menus. Neither audit nor QC certifies completeness or clinical appropriateness.</p>
+<h2 id="retrieve-considerations-from-an-existing-catalog">Retrieve considerations from an existing catalog<a class="headerlink" href="#retrieve-considerations-from-an-existing-catalog" title="Permanent link">&para;</a></h2>
+<p>Use the complete <code>paradigms.jsonl</code> export or its containing disease directory.
+The earlier standalone prototype's complete JSONL catalogs are supported without
+regenerating them. <code>trial_spaces.csv</code> omits the diagnostic/treatment menus and is
+not sufficient for consideration lookup. A list of catalog paths can combine
+several diseases or editions; space identifiers must remain unique.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_guideline_catalog</span><span class="p">,</span> <span class="n">get_guideline_considerations</span>
+
+<span class="n">catalog_path</span> <span class="o">=</span> <span class="s2">"/path/to/private-derived-data/breast-run-1"</span>
+<span class="n">catalog</span> <span class="o">=</span> <span class="n">load_guideline_catalog</span><span class="p">(</span><span class="n">catalog_path</span><span class="p">)</span>
+<span class="n">record</span> <span class="o">=</span> <span class="n">get_guideline_considerations</span><span class="p">(</span>
+    <span class="n">catalog</span><span class="p">,</span>
+    <span class="n">space_trial_id</span><span class="o">=</span><span class="n">catalog</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">"space_trial_id"</span><span class="p">],</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">"diagnostic_workup"</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">"treatment_options"</span><span class="p">])</span>
+</code></pre></div>
+<h3 id="key-criteria">Key criteria<a class="headerlink" href="#key-criteria" title="Permanent link">&para;</a></h3>
+<p>Since 2026-11-14 every catalog has cohort-style key criteria written by the endpoint. After canonicalization
+fixes each space, one request per space (jobs <code>cohort-criteria-NNNN</code>, prompts <code>guideline.cohort_criteria*.txt</code>)
+writes what a trial protocol would state for that population. The request shows:
+- the space's name and nine fields;
+- the guideline lines its evidence cites, as context only;
+- style examples from trial protocols in other cancers.</p>
+<p>What it must write:
+- every non-NA field expressed, nothing the fields do not contain;
+- one criterion per sentence, Boolean logic in words, no generic trial requirements;
+- each criterion naming the fields it expresses, which code checks.</p>
+<p>Records gain <code>key_criteria</code>, the rendered text that <code>load_guideline_catalog</code> returns as <code>cohort_key_criteria</code>,
+and <code>key_criteria_items</code> (<code>[{type, text, fields}]</code>). The audit ties each to an accepted provider response. For
+a fabricated space, a stored record reads like:</p>
+<div class="highlight"><pre><span></span><code>Inclusion criteria:
+The participant is aged 18 years or older.
+The participant has fictional cancer with metastatic disease.
+The participant has Marker X-positive disease.
+Exclusion criteria:
+The participant has received a prior fictional inhibitor.
+</code></pre></div>
+<p><code>add_guideline_cohort_criteria(catalog_dir, output_dir=...)</code> upgrades a catalog extracted before then:
+- It writes a derived edition: the same records plus these fields, with a derived-edition audit.
+- The base directory is only read.
+- <code>examples/backfill_guideline_cohort_criteria.py</code> does this for a whole run directory.</p>
+<p>A record without <code>key_criteria</code> (an older catalog) gets <code>cohort_key_criteria</code> from its nine fields in the layout of a
+trial cohort's key criteria (<code>cohort_key_criteria</code> from <code>remove_boilerplate_criteria</code>,
+built with the same <code>gather_criteria</code>). The seven required fields come under
+"Inclusion criteria:", then <code>prior_treatment_excluded</code> and <code>biomarkers_excluded</code>
+under "Exclusion criteria:", one unnumbered line per field, written as in
+<code>clinical_space_summary</code> ("Label: value."). A field that is <code>NA</code> (no restriction
+recorded) has no line, and a heading without lines is left out. For a fabricated
+space:</p>
+<div class="highlight"><pre><span></span><code>Inclusion criteria:
+Age range allowed: Age &gt;=18 years.
+Cancer type allowed: Fictional cancer.
+Cancer burden allowed: Metastatic disease.
+Biomarkers required: Marker X positive.
+Exclusion criteria:
+Prior treatment excluded: Prior fictional inhibitor.
+</code></pre></div>
+<p>Guideline spaces have no boilerplate, so this is the text TrialSpace retrieval and
+the decision model's match questions read, as they read a cohort's key criteria
+(<code>retrieve_guideline_considerations</code>, <code>retrieve_guideline_patients</code>). The derived layout is computed
+from <code>space</code> on every load and is not part of <code>catalog_sha256</code> (a stored <code>key_criteria</code> is part of its record
+and hash); <code>clinical_space_summary</code> is unchanged, and lookup and
+the workup review's population context still use <code>clinical_space_summary</code>. Guideline
+vectors embedded from the earlier one-line text are stale: regenerate any you store
+yourself (the persistent cache below re-embeds them automatically).</p>
+<p>Lookup requires a catalog ID or the exact <code>clinical_space_summary</code> text. Unknown
+spaces raise an error rather than silently substituting another population. Text
+lookup may return multiple source editions; use an ID for one specific record.
+Loading checks the stored definition, menus, and evidence structure. If a stored
+status/audit exists, it must report completion/success and the exported JSONL hash
+must match. These are checks of the stored catalog, not a new source or clinical
+audit. Bare JSONL and DataFrame inputs explicitly have unavailable audit status.</p>
+<p>Validated file records are cached in process memory by default. Subsequent lookup
+and patient retrieval calls check the identity, size, modification time, and change
+time of <code>paradigms.jsonl</code>, <code>status.json</code>, and <code>validation.json</code>; unchanged files
+reuse their parsed, validated records without rereading or rehashing their contents.
+Only new or changed catalogs are reloaded. Changes or failures never fall back to
+an older cached version. Returned nested records are independent copies, and
+combined catalogs still undergo identifier/space-number uniqueness checks.
+<code>metadata["validation_cache"]</code> reports reused and loaded file counts (under
+<code>metadata["catalog"]</code> for patient retrieval). Progress distinguishes checking
+files, loading/validating changed catalogs, and reusing validated records.</p>
+<p>The cache is bounded to 128 files and 512 MiB of source JSONL; Python records have
+additional memory overhead. It disappears on process restart and contains no
+patient summaries or results. File-change detection follows the filesystem's
+metadata visibility, including any network filesystem delay. Call
+<code>load_guideline_catalog(path, refresh=True)</code> to force a full read and validation
+and replace a cached version. DataFrame inputs are always copied and validated.</p>
+<h2 id="retrieve-considerations-for-patient-summaries">Retrieve considerations for patient summaries<a class="headerlink" href="#retrieve-considerations-for-patient-summaries" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_default_preset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">retrieve_guideline_considerations</span><span class="p">,</span>
+    <span class="n">write_guideline_considerations_report</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">patients</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span>
+    <span class="p">{</span><span class="s2">"patient_id"</span><span class="p">:</span> <span class="s2">"example"</span><span class="p">,</span> <span class="s2">"cancer_history_summary"</span><span class="p">:</span> <span class="s2">"Your patient summary here"</span><span class="p">}</span>
+<span class="p">])</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">load_default_preset</span><span class="p">()</span>
+<span class="c1"># Set both to "cpu" when running without a supported GPU.</span>
+<span class="n">config</span><span class="o">.</span><span class="n">embedding</span><span class="p">[</span><span class="s2">"device"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"cuda"</span>
+<span class="n">config</span><span class="o">.</span><span class="n">raw</span><span class="p">[</span><span class="s2">"match_quality"</span><span class="p">][</span><span class="s2">"device"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"cuda"</span>
+
+<span class="n">ranked</span><span class="p">,</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">retrieve_guideline_considerations</span><span class="p">(</span>
+    <span class="n">patients</span><span class="p">,</span>
+    <span class="n">catalog_path</span><span class="p">,</span>
+    <span class="n">top_n</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">candidate_k</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">progress_callback</span><span class="o">=</span><span class="nb">print</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">write_guideline_considerations_report</span><span class="p">(</span>
+    <span class="n">ranked</span><span class="p">,</span>
+    <span class="n">patients</span><span class="p">,</span>
+    <span class="s2">"/path/to/private-derived-data/patient-review.md"</span><span class="p">,</span>
+    <span class="n">metadata</span><span class="o">=</span><span class="n">metadata</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>This composes the existing public functions in order:</p>
+<ol>
+<li><code>embed_for_matching</code> embeds the patient summaries and the spaces' key criteria
+   (<code>cohort_key_criteria</code>) with the same configured TrialSpace model. Catalog vectors are
+   computed once per call for all supplied patients, or reused from the optional
+   disk cache described below.</li>
+<li><code>generate_candidate_matches</code> retrieves <code>candidate_k</code> spaces by cosine similarity.
+   Set <code>candidate_k=None</code> to send all catalog spaces to the checker.</li>
+<li><code>score_match_quality</code> scores the retrieved patient-space pairs with the decision model's match questions.</li>
+<li>The highest <code>top_n</code> spaces per patient are returned with their stored diagnostic
+   and treatment considerations. <code>rank</code> is match-quality order; <code>retrieval_rank</code>
+   retains the earlier TrialSpace order. Ties use cosine similarity, then space ID.</li>
+</ol>
+<p>The unit of ranking is a <strong>space</strong>, so multiple populations from one guideline can
+appear in the results. No disease-level/trial-ID deduplication occurs. <code>candidate_k</code>
+must be at least <code>top_n</code>; a smaller catalog returns all available spaces. Match-quality
+cutoff flags are retained but do not remove candidates from the top-N result. Scores
+use the existing package's <code>match_quality_score</code> semantics and are not calibrated
+probabilities of patient-specific applicability.</p>
+<p>No generative LLM rewrites the menus or adjudicates individual options. Stored
+conditions, categories, evidence, and uncertainties are returned unchanged. A
+high-ranking population does not establish that every listed therapy applies to
+this patient. The report displays the actual summary, both ranks/scores, the
+population definitions, menus, caveats, local PDF links when available, and stored
+source excerpts for review. Reports contain patient text and source-derived
+content and must stay outside the code repository and source collection.</p>
+<p>The embedding and checker inference are local. On a first run the configured
+model weights/metadata may be downloaded from Hugging Face; no patient text or
+catalog text is used in those requests. To use existing model caches entirely
+offline, set <code>HF_HUB_CACHE</code> and <code>HF_HUB_OFFLINE=1</code> before imports and point
+<code>config.model_metadata_cache_dir</code> at matching cached model metadata. Both stages
+must use compatible dated model releases; this workflow does not accept external
+precomputed vectors that might have been produced by another TrialSpace model.</p>
+<p>Pass <code>embedding_cache_dir="/path/to/private/guideline_embeddings"</code> to
+<code>retrieve_guideline_considerations</code> to persist guideline vectors across calls and
+process restarts. The default is <code>None</code> (no disk vector cache). The cache stores
+vectors and input hashes, never patient summaries, patient vectors, or guideline
+text. Keep it outside code repositories because the vectors are source-derived.
+Identical text can reuse vectors across disease selections and catalog updates;
+new or changed definitions are embedded individually. Entries are keyed by the exact
+key-criteria text, so vectors saved for the earlier one-line definitions are never
+reused; they are recomputed on first use and the old entries are simply unused. Catalog validation and
+source-integrity checks still run on every call, and returned menus always come
+from the current catalog.</p>
+<p>Cache identity includes the actual loaded Hugging Face encoder revision,
+tokenizer content, prompt, sequence cutoff, embedding implementation, and library
+versions. A mutable local model directory or an encoder without a verifiable
+loaded revision bypasses persistent caching. Corrupt vector entries are rebuilt;
+an unavailable cache falls back to fresh computation. Metadata records cache
+hits, newly embedded texts, and the cache identity under
+<code>guideline_embedding_cache</code>; progress callbacks report reuse. Patient embedding
+and match-quality scoring still run for every request, and model weights must
+still load on the first request after restarting the process.</p>
+<p>The source-checkout example <code>examples/retrieve_guideline_considerations.py</code> reads
+one selected patient from a Parquet summary table and writes the review Markdown,
+ranked JSONL, input summary, and run provenance to an external directory. Its
+<code>--patient-id-column</code> and <code>--summary-column</code> options adapt training-era columns
+such as <code>pseudo_mrn</code> and <code>patient_summary</code> to the public API names. Optional
+<code>--synthetic-notes</code> verifies the selected ID occurs in a supplied synthetic note
+table and records that provenance. No sample patient or NCCN catalog is bundled.
+Its <code>--embedding-cache-dir</code> option enables the same persistent guideline-vector
+cache as the public retrieval API.</p>
+<h2 id="process-the-remaining-collection">Process the remaining collection<a class="headerlink" href="#process-the-remaining-collection" title="Permanent link">&para;</a></h2>
+<p>The source-checkout runner composes <code>summarize_guidelines</code> across diseases while
+sharing one endpoint request cap. Several diseases can prepare context or perform
+serial consolidation while others fill available generation slots. At most 32
+HTTP requests are active at once with the following configuration; streaming
+responses hold their slots until completion or failure.</p>
+<div class="highlight"><pre><span></span><code><span class="nv">PYTHONPATH</span><span class="o">=</span>src<span class="w"> </span>python<span class="w"> </span>examples/extract_guideline_collection.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--source<span class="w"> </span>/path/to/local/guideline-pdfs/markdown<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>/path/to/private-derived-data/remaining-run<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--endpoint<span class="w"> </span>http://your-server:8001/v1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--model<span class="w"> </span>Qwen/Qwen3.8-Flash-Next<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--concurrency<span class="w"> </span><span class="m">32</span><span class="w"> </span>--disease-workers<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--completed-catalog<span class="w"> </span>/path/to/private-derived-data/completed-disease
+</code></pre></div>
+<p>Repeat <code>--completed-catalog</code> for each existing catalog. Skipping requires a passing
+stored audit, verified JSONL hash, and a source PDF hash matching the current
+collection manifest. Model provenance remains attached to each catalog; the runner
+does not relabel older outputs as Qwen-generated. Optional repeated <code>--disease</code>
+arguments restrict the run. Missing source files or failed diseases are recorded
+in external <code>collection.json</code>; other diseases continue. A collection is marked
+complete only when every selected disease passes its extraction and audit.
+Repeat the identical command to resume accepted checkpoints and retry failures.
+An identical disease run with a completed status, passing audit, matching source
+fingerprint and matching export hash reuses its finished catalog, even when the
+collection summary still records an earlier failure. The public API repeats the
+offline provenance audit before returning; it does not redo extraction or
+population-review prompts. Changed configurations and unaudited outputs still
+follow the normal compatibility checks and checkpoint-resume path.
+On resume, failed diseases are scheduled before still-running and unstarted
+diseases, so recovery does not wait behind long consolidations. The same runner
+then continues the remaining collection with its shared request cap.
+The collection runner keeps all generated content outside the repository.</p>
+<p>When restarting a collection alongside separate recovery workers, repeat
+<code>--defer-disease DISEASE</code> for each disease those workers own. Deferred diseases
+remain in the original collection identity and retain their saved status, but
+this invocation does not submit them. This permits a code reload without
+duplicate disease writers. If all dispatched work succeeds while deferred work
+remains unfinished, the collection status is <code>deferred</code>, not <code>complete</code>.
+Omit the flag on a later resume to bring that disease back into this runner.</p>
+<p>To recover only diseases currently marked failed, add <code>--retry-failed</code> to the
+same command. This writes a separate <code>recovery.json</code> rather than competing with
+a live batch's <code>collection.json</code>; each disease retains its original output and
+accepted checkpoints. The original collection summary remains unchanged until
+the normal collection command is resumed. During a concurrent recovery, use a
+small <code>--concurrency</code> value: request limits are shared within each process, not
+across separate runners. Extraction retries retain up to four recent validation
+diagnostics, including when resuming saved responses, so fixing one field does
+not discard guidance about earlier errors. Validation still must pass before
+any response is accepted.</p>
+<h2 id="reviewing-existing-catalog-citations">Reviewing existing catalog citations<a class="headerlink" href="#reviewing-existing-catalog-citations" title="Permanent link">&para;</a></h2>
+<p><code>trials.review_guideline_citations</code> reviews every population, diagnostic item,
+and treatment item using the configured guideline LLM. It replaces citations
+with exact source excerpts, derives their page/line addresses in code, and keeps
+all clinical fields and IDs unchanged. It uses the full available context with
+the usual output reserve, reasoning and vendor sampling settings. Required
+citation pages are retained; other source pages fill the remaining budget.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">review_guideline_citations</span>
+
+<span class="n">reviewed</span><span class="p">,</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">review_guideline_citations</span><span class="p">(</span>
+    <span class="s2">"/local/data/original_catalog"</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"/local/data/reviewed_catalog"</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>Each population and menu item gains <code>citation_review</code>, containing <code>version</code>,
+<code>status</code> (<code>supported_by_model_review</code> or <code>unresolved</code>), and <code>issues</code>. An unresolved
+item can have partial evidence or an empty evidence list. <strong>Consumers must show
+these issues beside the affected assertion</strong>, rather than presenting partial
+source support as validation of the complete recommendation. The dashboard and
+Markdown reports do this. A completed review can contain unresolved items; the
+status and audit report count them separately. Neither model review nor the
+mechanical audit establishes clinical correctness.</p>
+<p>The external output retains <code>original_paradigms.jsonl</code>, per-space reviews, raw
+provider responses, the standard catalog exports, and a reconstructable audit.
+Original catalogs are never overwritten. <code>audit_guideline_catalog</code> recognizes
+both extraction and citation-review catalogs. Resume the same invocation after
+an interruption; accepted checkpoints are reused. Changed source bytes, original
+catalog bytes, prompts or generation settings require a new output directory.</p>
+<p>For a collection, create an external JSON object mapping disease names to their
+completed catalog directories, then run:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>examples/review_guideline_collection.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--catalog-manifest<span class="w"> </span>/local/data/catalogs.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>/local/data/citation_reviews<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--endpoint<span class="w"> </span>http://localhost:8000/v1<span class="w"> </span>--concurrency<span class="w"> </span><span class="m">32</span>
+</code></pre></div>
+<p>The endpoint model is discovered unless <code>--model</code> is supplied. Four disease
+workers share the process-wide cap of 32 HTTP requests. <code>collection.json</code> and
+each disease's <code>status.json</code> record live progress, failures, and unresolved
+source-support findings. Repeating the command resumes successful checkpoints
+and retries failed jobs; it does not silently skip a previously failed catalog.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

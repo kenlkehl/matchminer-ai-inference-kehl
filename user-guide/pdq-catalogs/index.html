@@ -1,0 +1,2050 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the matchminer-ai Python package">
+      
+      
+      
+      
+        <link rel="prev" href="../guideline-extraction/">
+      
+      
+        <link rel="next" href="../note-search-qa/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>NCI PDQ catalogs - MatchMiner-AI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#nci-pdq-catalogs" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MatchMiner-AI" class="md-header__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MatchMiner-AI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              NCI PDQ catalogs
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MatchMiner-AI" class="md-nav__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MatchMiner-AI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/gpu-recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Recommendations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-notebook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Notebook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../patient-centric-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient-centric matching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../good-options-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the Good Options pipeline works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../local-vs-remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an Inference Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guideline-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#snapshot-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snapshot sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extract-populations-and-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extract populations and considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expand-a-treatment-collection-without-waiting-for-catalog-tails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expand a treatment collection without waiting for catalog tails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interrupt-resume-or-move-to-another-endpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interrupt, resume, or move to another endpoint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recover-a-failed-subset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recover a failed subset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-meaning-and-reuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source meaning and reuse
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../note-search-qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Note-search question answering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../population-workup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population workup review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/qc-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Package API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/documents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Document OCR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/patients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Clinical Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/workup-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction-Based Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/workup-sql/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL-Agent Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/candidate-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/labeling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Teacher Labeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/match-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/guideline-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/exclusion-criteria/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclusion Criteria
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/criteria-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/good-options/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM Server Helper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#snapshot-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snapshot sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extract-populations-and-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extract populations and considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expand-a-treatment-collection-without-waiting-for-catalog-tails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expand a treatment collection without waiting for catalog tails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interrupt-resume-or-move-to-another-endpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interrupt, resume, or move to another endpoint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recover-a-failed-subset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recover a failed subset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-meaning-and-reuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source meaning and reuse
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="nci-pdq-catalogs">NCI PDQ catalogs<a class="headerlink" href="#nci-pdq-catalogs" title="Permanent link">&para;</a></h1>
+<p>The PDQ source adapter creates the same TrialSpace population, diagnostic/workup,
+and treatment-menu records as the guideline extraction API. It reuses extraction
+ownership, source-backed consolidation, population coverage, exact excerpt repair,
+checkpoint resume, export and final audit, working from complete PDQ documents.</p>
+<p>Every generation prompt opens with the library's purpose, the meaning of a clinical
+space, and how its nine population fields support later patient-summary matching.
+The opening also distinguishes this source-extraction task from patient advice and
+explains that organizing PDQ evidence does not make it a clinical practice guideline.
+The PDQ system message also includes the complete current <code>trial.user.primer.txt</code>
+and <code>trial.user.question.txt</code> directly from the package, verbatim, as the population
+format reference. A PDQ adaptation preserves JSON output, source-only care populations,
+explicit treatment history, and fixed-definition stage boundaries; the trial prompt's
+plain-text output, boilerplate section, assumed sex criteria and trial washout rules
+do not override those requirements. Both trial prompt files and the adaptation are
+fingerprinted in PDQ checkpoints. Changing them requires a new output directory;
+they are not dependencies of NCCN catalog checkpoints.</p>
+<h2 id="snapshot-sources">Snapshot sources<a class="headerlink" href="#snapshot-sources" title="Permanent link">&para;</a></h2>
+<p>Choose complete NCI PDQ <strong>health-professional</strong> summary URLs. A disease can use one
+document or an ordered list of related documents. The package downloads only these
+documents; it does not follow article citations, fetch images or search using
+patient data.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">prepare_pdq_library</span><span class="p">,</span> <span class="n">list_guidelines</span>
+
+<span class="n">sources</span> <span class="o">=</span> <span class="s2">"/local/data/pdq/sources-2026-10-07"</span>
+<span class="n">prepare_pdq_library</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">"nsclc"</span><span class="p">:</span> <span class="s2">"https://www.cancer.gov/types/lung/hp/non-small-cell-lung-treatment-pdq"</span><span class="p">,</span>
+        <span class="s2">"breast"</span><span class="p">:</span> <span class="s2">"https://www.cancer.gov/types/breast/hp/breast-treatment-pdq"</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="n">sources</span><span class="p">,</span>
+    <span class="n">progress_callback</span><span class="o">=</span><span class="nb">print</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">list_guidelines</span><span class="p">(</span><span class="n">sources</span><span class="p">))</span>
+</code></pre></div>
+<p>The external directory retains original HTML bytes, timestamps, document URLs,
+headings and anchors, all article text, nested lists, table cells with span
+attributes, references and reuse notices. Images are not interpreted; visual-source
+limitations are recorded. Update histories and editorial sections remain saved
+but are excluded from population-extraction ownership. References remain available
+as context and must not be turned into clinical recommendations.</p>
+<p>Each derived section is verified by reparsing the original HTML, comparing its
+text and provenance, and checking hashes. Unsupported page layouts fail rather
+than silently falling back to a shortened text excerpt. Sections are never cut
+to an arbitrary character budget. Very large required sections can exceed the
+configured LLM context; that remains an explicit failure, not a truncated success.</p>
+<p>Repeating the call with the same URL mapping verifies and reuses the snapshot
+without network calls. An interrupted download can reuse completed disease
+snapshots. Use a <strong>new source directory</strong> to fetch updated articles. The visible
+updated date and NCI content metadata date are retained separately when they
+differ. The version identifier derives from the original HTML hashes; retrieval
+time is not presented as a clinical publication date.</p>
+<h2 id="extract-populations-and-considerations">Extract populations and considerations<a class="headerlink" href="#extract-populations-and-considerations" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_default_preset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">summarize_pdq</span>
+
+<span class="n">config</span> <span class="o">=</span> <span class="n">load_default_preset</span><span class="p">()</span>
+<span class="n">config</span><span class="o">.</span><span class="n">remote</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+    <span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">server_urls</span><span class="o">=</span><span class="p">[</span><span class="s2">"http://your-selected-server:8001/v1"</span><span class="p">],</span>
+    <span class="n">max_concurrent_requests</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">request_timeout</span><span class="o">=</span><span class="mi">7200</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">config</span><span class="o">.</span><span class="n">guideline</span><span class="p">[</span><span class="s2">"remote"</span><span class="p">][</span><span class="s2">"model_name"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># discover the served model</span>
+
+<span class="n">spaces</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">qc</span> <span class="o">=</span> <span class="n">summarize_pdq</span><span class="p">(</span>
+    <span class="n">sources</span><span class="p">,</span>
+    <span class="n">disease</span><span class="o">=</span><span class="s2">"nsclc"</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"/local/data/pdq/catalogs-2026-10-07/nsclc"</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_qc</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">progress_callback</span><span class="o">=</span><span class="nb">print</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><code>summarize_guidelines</code> also accepts the same prepared library and selects the PDQ
+profile from its verified manifest. <code>summarize_pdq</code> is an explicit wrapper that
+rejects non-PDQ libraries. Both use <code>config.guideline</code> and <code>config.remote</code>, full
+discovered context, the normal 100,000-token output reserve, reasoning enabled,
+and automatic vendor sampling. Qwen 3.8 uses xhigh effort by default. An endpoint
+must be supplied explicitly; neither function starts or substitutes a server.
+Separate processes must have their combined concurrency budget managed by the
+caller when sharing a server with other catalog jobs.</p>
+<p>All clinical extraction is performed by the configured endpoint. PDQ prompting
+distinguishes explicit care options from trial enrollment criteria, historical
+comparators, protocol-mandated tests and exploratory research. It preserves
+source-supported prior drugs/classes, disease setting and response in prior-treatment
+fields, plus population-defining biomarkers. Space names and fields use explicit
+history rather than ordinal treatment-line shorthand. An undefined line heading
+does not authorize inventing regimen counts or progression requirements; its
+remaining ambiguity is retained with source evidence.
+The <code>category</code> field retains PDQ evidence-grade wording when supplied; it is not
+converted to an NCCN recommendation category. Applicability, timing, alternative
+methods and investigational status remain explicit conditions or uncertainties.
+These prompt rules require evaluation on real outputs; a passing mechanical audit
+does not establish clinical correctness or completeness.</p>
+<p>Exports remain <code>paradigms.jsonl</code>, <code>trial_spaces.csv</code>, <code>report.md</code>, <code>sources.json</code>,
+<code>run_config.json</code> and <code>validation.json</code>, with source and model checkpoints.
+Identifiers use a <code>pdq-</code>/<code>pdq:</code> namespace. Each evidence item has exact text and line
+addresses plus <code>source_url</code>, <code>section_number</code> and <code>section_path</code>; it has no invented
+PDF page number. Catalog and patient-retrieval reports link to the source section.
+Prompt identities for existing NCCN runs exclude PDQ-only prompt files.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">audit_guideline_catalog</span><span class="p">,</span> <span class="n">get_guideline_considerations</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">retrieve_guideline_considerations</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.patients</span><span class="w"> </span><span class="kn">import</span> <span class="n">review_patient_workup</span>
+
+<span class="n">catalog</span> <span class="o">=</span> <span class="s2">"/local/data/pdq/catalogs-2026-10-07/nsclc"</span>
+<span class="n">audit_guideline_catalog</span><span class="p">(</span><span class="n">sources</span><span class="p">,</span> <span class="n">disease</span><span class="o">=</span><span class="s2">"nsclc"</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="n">catalog</span><span class="p">)</span>  <span class="c1"># offline</span>
+<span class="n">exact</span> <span class="o">=</span> <span class="n">get_guideline_considerations</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">space_trial_id</span><span class="o">=</span><span class="n">spaces</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">space_trial_id</span><span class="p">)</span>
+<span class="n">ranked</span> <span class="o">=</span> <span class="n">retrieve_guideline_considerations</span><span class="p">(</span>
+    <span class="n">patient_summaries</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">candidate_k</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">top_n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">review</span> <span class="o">=</span> <span class="n">review_patient_workup</span><span class="p">(</span>
+    <span class="n">raw_patient_notes</span><span class="p">,</span>
+    <span class="n">ranked</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">diagnostic_workup</span><span class="p">,</span>
+    <span class="n">population_context</span><span class="o">=</span><span class="n">ranked</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">clinical_space_summary</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>The retrieval API uses local TrialSpace and the decision model. Workup review sends raw
+notes to the configured patient LLM. It checks documentation and applicability
+of the stored PDQ considerations, retaining their conditions and source evidence.
+It does not imply that all alternative tests were required or establish NCCN
+concordance. Patient data must only reach an authorized endpoint.</p>
+<p>For a source-checkout CLI, put the URL mapping in an external JSON file:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">PYTHONPATH</span><span class="o">=</span>src<span class="w"> </span>python<span class="w"> </span>examples/extract_pdq.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--summaries<span class="w"> </span>/local/data/pdq/summaries.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--source-dir<span class="w"> </span>/local/data/pdq/sources-2026-10-07<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>/local/data/pdq/catalogs-2026-10-07<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--endpoint<span class="w"> </span>http://your-selected-server:8001/v1<span class="w"> </span>--concurrency<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+<p>Use <code>--download-only</code> without endpoint/output arguments to prepare sources without
+LLM calls. The existing <code>extract_guideline_collection.py</code> runner can process the
+prepared library with multiple disease workers sharing its endpoint cap.</p>
+<h2 id="expand-a-treatment-collection-without-waiting-for-catalog-tails">Expand a treatment collection without waiting for catalog tails<a class="headerlink" href="#expand-a-treatment-collection-without-waiting-for-catalog-tails" title="Permanent link">&para;</a></h2>
+<p><code>examples/plan_pdq_treatment_collection.py</code> snapshots NCI's adult and pediatric
+treatment indexes and writes an external <code>inventory.json</code> and <code>jobs.json</code>.
+Repeated index aliases become one job; distinct adult/child sources remain
+separate. Overview indexes, financial toxicity, survivorship, genomics and the
+general transplant overview are explicitly recorded as excluded supporting
+topics. Unrecognized links fail for review instead of silently disappearing.</p>
+<div class="highlight"><pre><span></span><code><span class="nv">PYTHONPATH</span><span class="o">=</span>src<span class="w"> </span>python<span class="w"> </span>examples/plan_pdq_treatment_collection.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--inventory-dir<span class="w"> </span>/local/data/pdq/treatment-index-snapshot<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--source-dir<span class="w"> </span>/local/data/pdq/treatment-sources<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--catalog-dir<span class="w"> </span>/local/data/pdq/treatment-catalogs
+
+<span class="nv">PYTHONPATH</span><span class="o">=</span>src<span class="w"> </span>python<span class="w"> </span>examples/extract_pdq_collection.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--plan<span class="w"> </span>/local/data/pdq/treatment-index-snapshot/jobs.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>/local/data/pdq/treatment-catalogs<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--endpoint<span class="w"> </span>http://your-selected-server:8000/v1<span class="w"> </span>--concurrency<span class="w"> </span><span class="m">32</span>
+</code></pre></div>
+<p>To expand an existing <code>extract_pdq.py</code> run, also give the planner
+<code>--existing-summaries</code>, <code>--existing-source</code> and <code>--existing-output</code>. It preserves
+those disease names and source/output paths, including all accepted checkpoints.
+Stop the old worker before starting the expanded collection: the shared cap is
+process-wide, not shared between independent processes. Changing the plan requires
+a new collection metadata directory, but compatible disease output directories
+can stay unchanged. Changing an endpoint requires <code>--allow-endpoint-change</code> and
+the normal per-catalog compatibility checks.</p>
+<p>The public API is <code>summarize_pdq_collection(jobs, output_dir=..., config=...)</code>.
+Each job supplies <code>source_directory</code>, <code>output_directory</code>, and optionally <code>urls</code>.
+Existing-source jobs resume immediately; newly downloaded sources enter generation
+as soon as ready. Downloads default to two concurrent workers independently of
+the shared generation cap. A slow source or a serial consolidation stage does not
+hold up other catalogs. Source failures remain visible in <code>collection.json</code> while
+healthy jobs continue; rerunning reuses verified sources and compatible results.
+The returned state's <code>completed_catalogs</code> list can be passed directly to
+<code>load_guideline_catalog</code>, including catalogs in their original directories.</p>
+<h2 id="interrupt-resume-or-move-to-another-endpoint">Interrupt, resume, or move to another endpoint<a class="headerlink" href="#interrupt-resume-or-move-to-another-endpoint" title="Permanent link">&para;</a></h2>
+<p>The PDQ and NCCN collection runners share the same capacity-allocation policy.
+By default, up to <code>--concurrency</code> available diseases run in parallel. Each disease
+can use the full shared endpoint request cap, so finishing catalogs immediately
+free slots for remaining work, including the last catalog. <code>--disease-workers</code>
+is an optional explicit limit on disease preparation, rather than a default
+two-disease restriction. Dependencies, source packing and the remaining number
+of independent jobs can keep actual traffic below the cap.</p>
+<p>The runner writes <code>collection.json</code> with the effective disease-worker count,
+allocation policy,
+its PID, endpoint, stage messages, failures and per-disease completion/audit counts.
+Each disease retains the pipeline's independently saved request/response checkpoints.
+A directory lock prevents two batch owners from writing to the same output.</p>
+<p>Send SIGTERM or Ctrl-C to the runner, or create an empty <code>STOP</code> file in its output
+directory. These stop local dispatch and mark the batch interrupted. A request
+already accepted by the remote server may briefly continue there. Only fully
+saved, validated responses are reusable; an interrupted stream is retried.
+Remove <code>STOP</code> and repeat the original command to resume. Do not start a replacement
+worker until the original process has exited.</p>
+<p>Concurrency and the explicit disease-worker override may change on resume without
+changing clinical checkpoint identities. Omit <code>--disease-workers</code> to restore
+automatic allocation. Run the collection in one process where possible: separate
+processes have independent request caps and need an explicitly managed combined
+budget. Automatic allocation does not raise <code>--concurrency</code> or choose a server.</p>
+<p>To move unfinished work to another instance of the <strong>same model</strong>, repeat the
+command with the new explicit <code>--endpoint</code> and <code>--allow-endpoint-change</code>. The
+new server must advertise the same model ID and full context limit. Sampling,
+reasoning, source and clinical prompt settings must still match. No fallback
+server is selected automatically. Cached token counts are scoped to the actual
+destination so the new server's tokenizer performs new packing checks.</p>
+<p>For the public API, pass <code>allow_endpoint_change=True</code> to <code>summarize_pdq</code> or
+<code>summarize_guidelines</code>. Both PDQ and NCCN catalogs support this opt-in migration.
+Original checkpoint identities and raw responses stay intact; <code>run_config.json</code>
+retains the original <code>base_url</code> and current <code>transport_base_url</code>, and
+<code>endpoint_history.json</code> records destinations. Each new request attempt records
+its actual transport, which the final audit checks against that history.
+The existing general collection runner retains its stricter endpoint ownership;
+use the public API for migrating an existing NCCN disease run.</p>
+<p>Switching model IDs, context sizes, or generation settings requires a separate
+output directory. Keep completed audited catalogs and the previous run's files;
+do not relabel old responses as having come from the new model. The endpoint's
+advertised ID is a compatibility check, not a verification of model weights.
+Resume/retry failed runs only after diagnosing their recorded errors.</p>
+<h2 id="recover-a-failed-subset">Recover a failed subset<a class="headerlink" href="#recover-a-failed-subset" title="Permanent link">&para;</a></h2>
+<p>Create a new job plan containing only failed diseases, preserving each job's exact
+source/output paths and URLs from the original collection's <code>identity.jobs</code>.
+Use a separate directory for recovery metadata and point <code>--parent-collection</code> at
+the original report:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">PYTHONPATH</span><span class="o">=</span>src<span class="w"> </span>python<span class="w"> </span>examples/extract_pdq_collection.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--plan<span class="w"> </span>/local/data/pdq/failed-jobs.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>/local/data/pdq/recovery<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--parent-collection<span class="w"> </span>/local/data/pdq/treatment-catalogs/collection.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--endpoint<span class="w"> </span>http://your-selected-server:8000/v1<span class="w"> </span>--concurrency<span class="w"> </span><span class="m">32</span>
+</code></pre></div>
+<p>The recovery worker locks both collection directories, updates the original
+report as each disease progresses, and leaves completed catalogs outside its plan
+untouched. Stop the original worker first. The Python API accepts the same option
+as <code>parent_collection=...</code>. Interrupt/resume and explicit endpoint migration work
+the same way as for a full collection.</p>
+<p>Recovery is part of the shared PDQ/NCCN pipeline. Exhausted extraction tasks can
+split into smaller, uniquely owned page groups; final population-coverage failures
+can narrow affected consolidation batches. Both keep durable split records and
+reuse compatible accepted checkpoints. When optional cross-batch deduplication
+repeatedly omits or rewrites populations, the pipeline retains all validated
+definitions, records that semantic duplicates may remain, and still requires the
+full population-coverage check to pass.</p>
+<p>The same retention path handles a repetitive deduplication response. If selection
+passes its local review but fails the final original-population review, the
+pipeline first restores the complete validated union and checks coverage again.
+The rejected selection and review stay in the audit record; source batches are
+revisited only if the complete union still fails. Exhausted extraction responses
+with ambiguous Boolean grouping receive focused feedback and retry headroom while
+retaining all owned source pages and the full output reserve.
+If an exhausted extraction confuses table rows or display wrapping with literal
+source line addresses, a bounded retry repeats the owned section and restricts
+the address schema to actual primary pages and nonblank line numbers. The source
+is not renumbered, clinical content is generated by the endpoint, and all original
+field, page-accounting, ownership and citation checks still apply. A branch on a
+different owner's page does not qualify for this retry.</p>
+<p>Targeted retries can constrain immutable population fields and coverage names to
+their exact supplied values. Citation repair chooses literal supporting source
+text, treating the rejected draft as fallible. These retries do not relax exact
+quotation, population coverage, source ownership, or final audit requirements.
+Clinical output remains model-generated and retains its raw-response provenance.</p>
+<p>When exact-definition deduplication combines records, their original clinical names
+are retained in <code>population_names</code>, together with the union of source evidence and
+batch provenance. Detail generation receives those names and associated candidate
+menus. Coverage can recognize an exact original population through that audited name
+history; a matching name with different clinical restrictions still requires review.</p>
+<p>Output-limited coverage reviews split into smaller input groups while retaining the
+complete proposed catalog. Exhausted extraction prompts can repack whole optional
+supporting pages to reserve 8,192 input tokens for retry feedback; every owned primary
+page and the configured output-token reserve remain intact. Boolean diagnostics
+identify the complete offending parenthesis group, including errors late in a field.</p>
+<p>If a singleton consolidation exhausts its coverage retries, the pipeline can send its
+original extraction owner back to the endpoint for source review. Both the original
+extraction and the conflicting review are presented as fallible. The model re-extracts
+the entire owned packet with the original validation rules. This is bounded to one
+review per packet and two packets per catalog. <code>extraction_source_reviews.json</code> keeps
+the original extraction and trigger; changed candidates cause downstream artifacts
+to move to <code>superseded_candidate_artifacts/</code> before rebuilding. Raw provider responses
+remain intact, and final audit verifies both original and replacement provenance.
+An unresolved disagreement still fails; no clinical field is patched by Python.</p>
+<h2 id="source-meaning-and-reuse">Source meaning and reuse<a class="headerlink" href="#source-meaning-and-reuse" title="Permanent link">&para;</a></h2>
+<p><a href="https://www.cancer.gov/publications/pdq/information-summaries">NCI describes PDQ</a>
+as reviewed, referenced evidence summaries, explicitly not clinical practice
+guidelines. A PDQ-derived catalog can provide a distinct, source-defined benchmark
+for care review; it must retain that identity and distinguish expected care,
+acceptable alternatives and research descriptions.</p>
+<p><a href="https://www.cancer.gov/publications/pdq/levels-evidence/treatment">PDQ evidence grades</a>
+describe evidence rather than NCCN recommendation categories.
+<a href="https://www.cancer.gov/policies/copyright-reuse">NCI's reuse policy</a> permits reuse
+of much of its text with attribution, subject to page-specific exceptions for
+third-party material. Tables and reproduced material may carry such notices.
+Do not treat a derived catalog as an unchanged official PDQ product or an NCI
+endorsement. Source snapshots and generated catalogs are deliberately not bundled
+with this package. Review the relevant notices before redistributing them.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,3125 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the matchminer-ai Python package">
+      
+      
+      
+      
+        <link rel="prev" href="../embedding/">
+      
+      
+        <link rel="next" href="../labeling/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Candidate Matching - MatchMiner-AI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#candidate-matching" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MatchMiner-AI" class="md-header__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MatchMiner-AI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Candidate Matching
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MatchMiner-AI" class="md-nav__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MatchMiner-AI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/gpu-recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Recommendations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-notebook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Notebook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/patient-centric-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient-centric matching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/good-options-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the Good Options pipeline works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/local-vs-remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an Inference Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/guideline-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/pdq-catalogs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/note-search-qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Note-search question answering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/population-workup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population workup review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/qc-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Package API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Document OCR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../patients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Clinical Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction-Based Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-sql/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL-Agent Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="match">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match.generate_candidate_matches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_candidate_matches
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adaptive-trial-centric-cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adaptive trial-centric cutoff
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        adaptive_cutoff
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="adaptive_cutoff">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TrialCentricCutoffResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffStabilityResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TrialCentricCutoffStabilityResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.find_trial_centric_cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        find_trial_centric_cutoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.assess_trial_centric_cutoff_stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        assess_trial_centric_cutoff_stability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labeling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Teacher Labeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../match-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guideline-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exclusion-criteria/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclusion Criteria
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../criteria-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../good-options/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM Server Helper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="match">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match.generate_candidate_matches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_candidate_matches
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adaptive-trial-centric-cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adaptive trial-centric cutoff
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        adaptive_cutoff
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="adaptive_cutoff">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TrialCentricCutoffResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffStabilityResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TrialCentricCutoffStabilityResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.find_trial_centric_cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        find_trial_centric_cutoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.adaptive_cutoff.assess_trial_centric_cutoff_stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        assess_trial_centric_cutoff_stability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="candidate-matching">Candidate Matching<a class="headerlink" href="#candidate-matching" title="Permanent link">&para;</a></h1>
+<p><code>generate_candidate_matches</code> ranks TrialSpace vectors from <code>embed_for_matching</code>
+by cosine similarity over the entire supplied corpus. Each table needs exactly
+one identifier column (<code>patient_id</code>, <code>cohort_trial_id</code> or <code>space_trial_id</code>) and
+an <code>embedding</code> vector column. Pass patients first for patient-centric retrieval
+and cohorts first for trial-centric retrieval; <code>k=None</code> returns the full
+ranking. Results keep both identifiers, <code>similarity_score</code> and one-based <code>rank</code>.
+<code>config</code> is accepted for call compatibility and unused. Vectors from different
+TrialSpace models cannot be mixed; changing models requires regenerating both
+sides.</p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.match" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.match</span>
+
+
+<a href="#matchminer_ai.matching.match" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Candidate match generation helpers.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.match.generate_candidate_matches" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">generate_candidate_matches</span>
+
+
+<a href="#matchminer_ai.matching.match.generate_candidate_matches" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">generate_candidate_matches</span><span class="p">(</span><span class="n">query_df</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">corpus_df</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return top-k corpus matches per query, preserving entity IDs and rank.</p>
+<p>Inputs are TrialSpace tables from <code>embed_for_matching</code>, ranked by cosine
+similarity. Reverse the arguments for the other retrieval direction.
+<code>k=None</code> returns all corpus entities. <code>config</code> is accepted for call
+compatibility and unused. Results include both identifiers,
+<code>similarity_score</code>, and one-based rank.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/match.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">generate_candidate_matches</span><span class="p">(</span>
+    <span class="n">query_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">corpus_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return top-k corpus matches per query, preserving entity IDs and rank.</span>
+
+<span class="sd">    Inputs are TrialSpace tables from ``embed_for_matching``, ranked by cosine</span>
+<span class="sd">    similarity. Reverse the arguments for the other retrieval direction.</span>
+<span class="sd">    ``k=None`` returns all corpus entities. ``config`` is accepted for call</span>
+<span class="sd">    compatibility and unused. Results include both identifiers,</span>
+<span class="sd">    ``similarity_score``, and one-based rank.</span>
+<span class="sd">    """</span>
+    <span class="c1"># Validate required schema for IDs and embeddings.</span>
+    <span class="n">query_id_col</span> <span class="o">=</span> <span class="n">_resolve_id_column</span><span class="p">(</span><span class="n">query_df</span><span class="p">,</span> <span class="s2">"query_df"</span><span class="p">)</span>
+    <span class="n">corpus_id_col</span> <span class="o">=</span> <span class="n">_resolve_id_column</span><span class="p">(</span><span class="n">corpus_df</span><span class="p">,</span> <span class="s2">"corpus_df"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">"embedding"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">query_df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"query_df must include embedding"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">"embedding"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">corpus_df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"corpus_df must include embedding"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">k</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">k</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"k must be a positive integer or None"</span><span class="p">)</span>
+
+    <span class="c1"># Parse embeddings and ensure consistent vector dimensionality.</span>
+    <span class="n">query_embeddings</span> <span class="o">=</span> <span class="n">_stack_embeddings</span><span class="p">(</span><span class="n">query_df</span><span class="p">[</span><span class="s2">"embedding"</span><span class="p">])</span>
+    <span class="n">corpus_embeddings</span> <span class="o">=</span> <span class="n">_stack_embeddings</span><span class="p">(</span><span class="n">corpus_df</span><span class="p">[</span><span class="s2">"embedding"</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">query_embeddings</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">corpus_embeddings</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+            <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="n">query_id_col</span><span class="p">,</span> <span class="n">corpus_id_col</span><span class="p">,</span> <span class="s2">"similarity_score"</span><span class="p">,</span> <span class="s2">"rank"</span><span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Normalize embeddings and compute cosine similarity matrix.</span>
+    <span class="n">query_norm</span> <span class="o">=</span> <span class="n">_normalize_rows</span><span class="p">(</span><span class="n">query_embeddings</span><span class="p">)</span>
+    <span class="n">corpus_norm</span> <span class="o">=</span> <span class="n">_normalize_rows</span><span class="p">(</span><span class="n">corpus_embeddings</span><span class="p">)</span>
+    <span class="n">similarity</span> <span class="o">=</span> <span class="n">query_norm</span> <span class="o">@</span> <span class="n">corpus_norm</span><span class="o">.</span><span class="n">T</span>
+
+    <span class="c1"># Extract top-k corpus matches per query.</span>
+    <span class="n">query_ids</span> <span class="o">=</span> <span class="n">query_df</span><span class="p">[</span><span class="n">query_id_col</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="n">corpus_ids</span> <span class="o">=</span> <span class="n">corpus_df</span><span class="p">[</span><span class="n">corpus_id_col</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+    <span class="n">records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">num_corpus</span> <span class="o">=</span> <span class="n">similarity</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">top_k</span> <span class="o">=</span> <span class="n">num_corpus</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">min</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">num_corpus</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">row_idx</span><span class="p">,</span> <span class="n">query_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">query_ids</span><span class="p">):</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="n">similarity</span><span class="p">[</span><span class="n">row_idx</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">top_k</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">top_k</span> <span class="o">==</span> <span class="n">num_corpus</span><span class="p">:</span>
+            <span class="n">ranked_idx</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">descending</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ranked_idx</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">top_k</span><span class="p">,</span> <span class="n">largest</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">indices</span>
+        <span class="k">for</span> <span class="n">rank</span><span class="p">,</span> <span class="n">corpus_idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ranked_idx</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">corpus_idx_int</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">corpus_idx</span><span class="p">)</span>
+            <span class="n">records</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="n">query_id_col</span><span class="p">:</span> <span class="n">query_id</span><span class="p">,</span>
+                    <span class="n">corpus_id_col</span><span class="p">:</span> <span class="n">corpus_ids</span><span class="p">[</span><span class="n">corpus_idx_int</span><span class="p">],</span>
+                    <span class="s2">"similarity_score"</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">corpus_idx_int</span><span class="p">]),</span>
+                    <span class="s2">"rank"</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">rank</span><span class="p">),</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">from_records</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="adaptive-trial-centric-cutoff">Adaptive trial-centric cutoff<a class="headerlink" href="#adaptive-trial-centric-cutoff" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.adaptive_cutoff" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.adaptive_cutoff</span>
+
+
+<a href="#matchminer_ai.matching.adaptive_cutoff" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Adaptive TrialSpace cutoff selection for trial-centric matching.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffResult" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">TrialCentricCutoffResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffResult" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Result of an adaptive trial-centric cutoff search.</p>
+<p><code>cutoff</code> is the number of leading TrialSpace-ranked patients that should
+proceed to the full match-quality and general-exclusion checks. The probe
+tables are diagnostics for the search, not eligibility determinations.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/matchminer_ai/matching/adaptive_cutoff.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TrialCentricCutoffResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Result of an adaptive trial-centric cutoff search.</span>
+
+<span class="sd">    ``cutoff`` is the number of leading TrialSpace-ranked patients that should</span>
+<span class="sd">    proceed to the full match-quality and general-exclusion checks. The probe</span>
+<span class="sd">    tables are diagnostics for the search, not eligibility determinations.</span>
+<span class="sd">    """</span>
+
+    <span class="n">cutoff</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">total_candidates</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">check_method</span><span class="p">:</span> <span class="n">CutoffCheckMethod</span>
+    <span class="n">score_threshold</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">patients_per_side</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">initial_cutoff_proportion</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">scored_candidates</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+    <span class="n">search_history</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffStabilityResult" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">TrialCentricCutoffStabilityResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffStabilityResult" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Starting-position QA for an adaptive trial-centric cutoff search.</p>
+<p>Match-quality scores are computed once for the complete ranking, then reused
+for every requested initial cutoff proportion. <code>cutoff_runs</code> compares the
+selected prefix and the number of threshold-passing patients inside that
+prefix. These are model-screening diagnostics, not eligibility results.</p>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/matchminer_ai/matching/adaptive_cutoff.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span>
+<span class="normal">90</span>
+<span class="normal">91</span>
+<span class="normal">92</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TrialCentricCutoffStabilityResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Starting-position QA for an adaptive trial-centric cutoff search.</span>
+
+<span class="sd">    Match-quality scores are computed once for the complete ranking, then reused</span>
+<span class="sd">    for every requested initial cutoff proportion. ``cutoff_runs`` compares the</span>
+<span class="sd">    selected prefix and the number of threshold-passing patients inside that</span>
+<span class="sd">    prefix. These are model-screening diagnostics, not eligibility results.</span>
+<span class="sd">    """</span>
+
+    <span class="n">total_candidates</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">score_threshold</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">patients_per_side</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">initial_cutoff_proportions</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="n">cutoff_runs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+    <span class="n">scored_candidates</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+    <span class="n">selected_cutoff_spread</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">reasonable_consideration_count_spread</span><span class="p">:</span> <span class="nb">int</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.adaptive_cutoff.find_trial_centric_cutoff" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">find_trial_centric_cutoff</span>
+
+
+<a href="#matchminer_ai.matching.adaptive_cutoff.find_trial_centric_cutoff" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">find_trial_centric_cutoff</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">check_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'trial_checker'</span><span class="p">,</span> <span class="n">score_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">patients_per_side</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_CUTOFF_PATIENTS_PER_SIDE</span><span class="p">,</span> <span class="n">initial_cutoff_proportion</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_INITIAL_CUTOFF_PROPORTION</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">progress_callback</span><span class="p">:</span> <span class="n">TrialCentricCutoffProgress</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TrialCentricCutoffResult</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Find how many TrialSpace-ranked patients should receive both checkers.</p>
+<p>The input must contain the complete patient ranking for one trial space,
+normally produced with <code>generate_candidate_matches(..., k=None)</code> and
+joined to the patient and trial summary text. By default the search starts
+halfway down the ranking; <code>initial_cutoff_proportion</code> can move that first
+probe when the expected qualifying fraction is substantially smaller or
+larger. At each proposed cutoff it scores the patients immediately above
+and below the boundary, then bisects toward the top when failures are the
+majority (or the window is tied) and toward the bottom when passes are the
+strict majority. Overlapping probe windows reuse prior scores.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>candidate_pairs</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Complete TrialSpace-ranked patient pairs for exactly one trial space.
+Required columns are <code>patient_id</code>, <code>space_trial_id</code>, <code>rank</code>,
+<code>cancer_history_summary</code>, and <code>clinical_space_summary</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>check_method</code>
+            </td>
+            <td>
+                  <code>(&#39;trial_checker&#39;, &#39;llm&#39;)</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Use the decision model's 0-1 match-quality score or the LLM checker's 0-6 score for
+the boundary probes.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#34;trial_checker&#34;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>score_threshold</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Score at or above which a probe patient passes. Defaults to 0.20 for
+the decision model and 1 for the LLM checker.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>patients_per_side</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of patients to probe on each side of a proposed cutoff. Windows
+are clipped at the top and bottom of the ranking.</p>
+              </div>
+            </td>
+            <td>
+                  <code>10</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>initial_cutoff_proportion</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Proportion of the complete ranking at which to place the first cutoff
+probe. Must be between 0 (the top) and 1 (the bottom). Later probes use
+the same bisection behavior regardless of this starting point.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.5</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Package configuration passed to the selected checker.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>progress_callback</code>
+            </td>
+            <td>
+                  <code><span title="callable">callable</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Called after each iteration as <code>(completed, maximum, message)</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="TrialCentricCutoffResult
+
+
+  
+      dataclass
+   (matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffResult)" href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffResult">TrialCentricCutoffResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The selected cutoff, unique probe scores, and iteration diagnostics.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>This heuristic assumes that checker pass rates generally decline with
+TrialSpace rank. It estimates a compute cutoff; it does not establish
+patient eligibility or replace review of the complete current protocol.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/adaptive_cutoff.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span>
+<span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span>
+<span class="normal">443</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">find_trial_centric_cutoff</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">check_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"trial_checker"</span><span class="p">,</span>
+    <span class="n">score_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">patients_per_side</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_CUTOFF_PATIENTS_PER_SIDE</span><span class="p">,</span>
+    <span class="n">initial_cutoff_proportion</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_INITIAL_CUTOFF_PROPORTION</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">TrialCentricCutoffProgress</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TrialCentricCutoffResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Find how many TrialSpace-ranked patients should receive both checkers.</span>
+
+<span class="sd">    The input must contain the complete patient ranking for one trial space,</span>
+<span class="sd">    normally produced with ``generate_candidate_matches(..., k=None)`` and</span>
+<span class="sd">    joined to the patient and trial summary text. By default the search starts</span>
+<span class="sd">    halfway down the ranking; ``initial_cutoff_proportion`` can move that first</span>
+<span class="sd">    probe when the expected qualifying fraction is substantially smaller or</span>
+<span class="sd">    larger. At each proposed cutoff it scores the patients immediately above</span>
+<span class="sd">    and below the boundary, then bisects toward the top when failures are the</span>
+<span class="sd">    majority (or the window is tied) and toward the bottom when passes are the</span>
+<span class="sd">    strict majority. Overlapping probe windows reuse prior scores.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    candidate_pairs : pd.DataFrame</span>
+<span class="sd">        Complete TrialSpace-ranked patient pairs for exactly one trial space.</span>
+<span class="sd">        Required columns are ``patient_id``, ``space_trial_id``, ``rank``,</span>
+<span class="sd">        ``cancer_history_summary``, and ``clinical_space_summary``.</span>
+<span class="sd">    check_method : {"trial_checker", "llm"}, default "trial_checker"</span>
+<span class="sd">        Use the decision model's 0-1 match-quality score or the LLM checker's 0-6 score for</span>
+<span class="sd">        the boundary probes.</span>
+<span class="sd">    score_threshold : float, optional</span>
+<span class="sd">        Score at or above which a probe patient passes. Defaults to 0.20 for</span>
+<span class="sd">        the decision model and 1 for the LLM checker.</span>
+<span class="sd">    patients_per_side : int, default 10</span>
+<span class="sd">        Number of patients to probe on each side of a proposed cutoff. Windows</span>
+<span class="sd">        are clipped at the top and bottom of the ranking.</span>
+<span class="sd">    initial_cutoff_proportion : float, default 0.5</span>
+<span class="sd">        Proportion of the complete ranking at which to place the first cutoff</span>
+<span class="sd">        probe. Must be between 0 (the top) and 1 (the bottom). Later probes use</span>
+<span class="sd">        the same bisection behavior regardless of this starting point.</span>
+<span class="sd">    config : MMAIConfig, optional</span>
+<span class="sd">        Package configuration passed to the selected checker.</span>
+<span class="sd">    progress_callback : callable, optional</span>
+<span class="sd">        Called after each iteration as ``(completed, maximum, message)``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    TrialCentricCutoffResult</span>
+<span class="sd">        The selected cutoff, unique probe scores, and iteration diagnostics.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    This heuristic assumes that checker pass rates generally decline with</span>
+<span class="sd">    TrialSpace rank. It estimates a compute cutoff; it does not establish</span>
+<span class="sd">    patient eligibility or replace review of the complete current protocol.</span>
+<span class="sd">    """</span>
+    <span class="n">method</span> <span class="o">=</span> <span class="n">_normalize_check_method</span><span class="p">(</span><span class="n">check_method</span><span class="p">)</span>
+    <span class="n">threshold</span> <span class="o">=</span> <span class="n">_resolve_score_threshold</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">score_threshold</span><span class="p">)</span>
+    <span class="n">radius</span> <span class="o">=</span> <span class="n">_validate_patients_per_side</span><span class="p">(</span><span class="n">patients_per_side</span><span class="p">)</span>
+    <span class="n">starting_proportion</span> <span class="o">=</span> <span class="n">_validate_initial_cutoff_proportion</span><span class="p">(</span><span class="n">initial_cutoff_proportion</span><span class="p">)</span>
+    <span class="n">ranked</span> <span class="o">=</span> <span class="n">_prepare_ranked_candidates</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">score_rows</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"trial_checker"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">score_match_quality</span><span class="p">(</span>
+                <span class="n">rows</span><span class="p">,</span>
+                <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+                <span class="n">filter_low_quality</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">score_match_quality_with_llm</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_run_cutoff_search</span><span class="p">(</span>
+        <span class="n">ranked</span><span class="p">,</span>
+        <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+        <span class="n">threshold</span><span class="o">=</span><span class="n">threshold</span><span class="p">,</span>
+        <span class="n">radius</span><span class="o">=</span><span class="n">radius</span><span class="p">,</span>
+        <span class="n">starting_proportion</span><span class="o">=</span><span class="n">starting_proportion</span><span class="p">,</span>
+        <span class="n">score_rows</span><span class="o">=</span><span class="n">score_rows</span><span class="p">,</span>
+        <span class="n">progress_callback</span><span class="o">=</span><span class="n">progress_callback</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.adaptive_cutoff.assess_trial_centric_cutoff_stability" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">assess_trial_centric_cutoff_stability</span>
+
+
+<a href="#matchminer_ai.matching.adaptive_cutoff.assess_trial_centric_cutoff_stability" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">assess_trial_centric_cutoff_stability</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">initial_cutoff_proportions</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS</span><span class="p">,</span> <span class="n">score_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">patients_per_side</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_CUTOFF_PATIENTS_PER_SIDE</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">progress_callback</span><span class="p">:</span> <span class="n">TrialCentricCutoffProgress</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TrialCentricCutoffStabilityResult</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Assess adaptive-cutoff sensitivity to its first boundary position.</p>
+<p>This QA helper runs the match-quality check over the complete ranked corpus exactly
+once, then replays the adaptive search against those cached scores for each
+requested starting proportion. It reports both the selected cutoff and the
+number of threshold-passing patients within the selected prefix. A stable
+result has small spreads across starts.</p>
+<p>Unlike :func:<code>find_trial_centric_cutoff</code>, this function intentionally scores
+every candidate. It is an offline diagnostic for synthetic or otherwise
+explicitly authorized data, not the compute-saving production path and not
+an eligibility assessment.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>candidate_pairs</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Complete TrialSpace-ranked patient pairs for one trial space, with the
+same required columns as :func:<code>find_trial_centric_cutoff</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>initial_cutoff_proportions</code>
+            </td>
+            <td>
+                  <code>sequence of float</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Unique first-probe positions between 0 and 1. Defaults to 10%, 25%,
+50%, 75%, and 90% of the complete ranking.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="matchminer_ai.matching.adaptive_cutoff.DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS">DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>score_threshold</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>match-quality score at or above which a patient passes for this QA run.
+Defaults to 0.20 on the 0-1 sigmoid scale.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>patients_per_side</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of patients on each side of every replayed boundary probe.</p>
+              </div>
+            </td>
+            <td>
+                  <code>10</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Package configuration used for the one complete match-quality pass.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>progress_callback</code>
+            </td>
+            <td>
+                  <code><span title="callable">callable</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Called after each starting-position replay as
+<code>(completed, total_starts, message)</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="TrialCentricCutoffStabilityResult
+
+
+  
+      dataclass
+   (matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffStabilityResult)" href="#matchminer_ai.matching.adaptive_cutoff.TrialCentricCutoffStabilityResult">TrialCentricCutoffStabilityResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Per-start diagnostics, one complete table of cached match-quality scores,
+and the cutoff and passing-count spreads.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/adaptive_cutoff.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span>
+<span class="normal">538</span>
+<span class="normal">539</span>
+<span class="normal">540</span>
+<span class="normal">541</span>
+<span class="normal">542</span>
+<span class="normal">543</span>
+<span class="normal">544</span>
+<span class="normal">545</span>
+<span class="normal">546</span>
+<span class="normal">547</span>
+<span class="normal">548</span>
+<span class="normal">549</span>
+<span class="normal">550</span>
+<span class="normal">551</span>
+<span class="normal">552</span>
+<span class="normal">553</span>
+<span class="normal">554</span>
+<span class="normal">555</span>
+<span class="normal">556</span>
+<span class="normal">557</span>
+<span class="normal">558</span>
+<span class="normal">559</span>
+<span class="normal">560</span>
+<span class="normal">561</span>
+<span class="normal">562</span>
+<span class="normal">563</span>
+<span class="normal">564</span>
+<span class="normal">565</span>
+<span class="normal">566</span>
+<span class="normal">567</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span>
+<span class="normal">571</span>
+<span class="normal">572</span>
+<span class="normal">573</span>
+<span class="normal">574</span>
+<span class="normal">575</span>
+<span class="normal">576</span>
+<span class="normal">577</span>
+<span class="normal">578</span>
+<span class="normal">579</span>
+<span class="normal">580</span>
+<span class="normal">581</span>
+<span class="normal">582</span>
+<span class="normal">583</span>
+<span class="normal">584</span>
+<span class="normal">585</span>
+<span class="normal">586</span>
+<span class="normal">587</span>
+<span class="normal">588</span>
+<span class="normal">589</span>
+<span class="normal">590</span>
+<span class="normal">591</span>
+<span class="normal">592</span>
+<span class="normal">593</span>
+<span class="normal">594</span>
+<span class="normal">595</span>
+<span class="normal">596</span>
+<span class="normal">597</span>
+<span class="normal">598</span>
+<span class="normal">599</span>
+<span class="normal">600</span>
+<span class="normal">601</span>
+<span class="normal">602</span>
+<span class="normal">603</span>
+<span class="normal">604</span>
+<span class="normal">605</span>
+<span class="normal">606</span>
+<span class="normal">607</span>
+<span class="normal">608</span>
+<span class="normal">609</span>
+<span class="normal">610</span>
+<span class="normal">611</span>
+<span class="normal">612</span>
+<span class="normal">613</span>
+<span class="normal">614</span>
+<span class="normal">615</span>
+<span class="normal">616</span>
+<span class="normal">617</span>
+<span class="normal">618</span>
+<span class="normal">619</span>
+<span class="normal">620</span>
+<span class="normal">621</span>
+<span class="normal">622</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span>
+<span class="normal">645</span>
+<span class="normal">646</span>
+<span class="normal">647</span>
+<span class="normal">648</span>
+<span class="normal">649</span>
+<span class="normal">650</span>
+<span class="normal">651</span>
+<span class="normal">652</span>
+<span class="normal">653</span>
+<span class="normal">654</span>
+<span class="normal">655</span>
+<span class="normal">656</span>
+<span class="normal">657</span>
+<span class="normal">658</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">assess_trial_centric_cutoff_stability</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">initial_cutoff_proportions</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS</span>
+    <span class="p">),</span>
+    <span class="n">score_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">patients_per_side</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_CUTOFF_PATIENTS_PER_SIDE</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">TrialCentricCutoffProgress</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TrialCentricCutoffStabilityResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Assess adaptive-cutoff sensitivity to its first boundary position.</span>
+
+<span class="sd">    This QA helper runs the match-quality check over the complete ranked corpus exactly</span>
+<span class="sd">    once, then replays the adaptive search against those cached scores for each</span>
+<span class="sd">    requested starting proportion. It reports both the selected cutoff and the</span>
+<span class="sd">    number of threshold-passing patients within the selected prefix. A stable</span>
+<span class="sd">    result has small spreads across starts.</span>
+
+<span class="sd">    Unlike :func:`find_trial_centric_cutoff`, this function intentionally scores</span>
+<span class="sd">    every candidate. It is an offline diagnostic for synthetic or otherwise</span>
+<span class="sd">    explicitly authorized data, not the compute-saving production path and not</span>
+<span class="sd">    an eligibility assessment.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    candidate_pairs : pd.DataFrame</span>
+<span class="sd">        Complete TrialSpace-ranked patient pairs for one trial space, with the</span>
+<span class="sd">        same required columns as :func:`find_trial_centric_cutoff`.</span>
+<span class="sd">    initial_cutoff_proportions : sequence of float</span>
+<span class="sd">        Unique first-probe positions between 0 and 1. Defaults to 10%, 25%,</span>
+<span class="sd">        50%, 75%, and 90% of the complete ranking.</span>
+<span class="sd">    score_threshold : float, optional</span>
+<span class="sd">        match-quality score at or above which a patient passes for this QA run.</span>
+<span class="sd">        Defaults to 0.20 on the 0-1 sigmoid scale.</span>
+<span class="sd">    patients_per_side : int, default 10</span>
+<span class="sd">        Number of patients on each side of every replayed boundary probe.</span>
+<span class="sd">    config : MMAIConfig, optional</span>
+<span class="sd">        Package configuration used for the one complete match-quality pass.</span>
+<span class="sd">    progress_callback : callable, optional</span>
+<span class="sd">        Called after each starting-position replay as</span>
+<span class="sd">        ``(completed, total_starts, message)``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    TrialCentricCutoffStabilityResult</span>
+<span class="sd">        Per-start diagnostics, one complete table of cached match-quality scores,</span>
+<span class="sd">        and the cutoff and passing-count spreads.</span>
+<span class="sd">    """</span>
+    <span class="n">proportions</span> <span class="o">=</span> <span class="n">_validate_stability_proportions</span><span class="p">(</span><span class="n">initial_cutoff_proportions</span><span class="p">)</span>
+    <span class="n">threshold</span> <span class="o">=</span> <span class="n">_resolve_score_threshold</span><span class="p">(</span><span class="s2">"trial_checker"</span><span class="p">,</span> <span class="n">score_threshold</span><span class="p">)</span>
+    <span class="n">radius</span> <span class="o">=</span> <span class="n">_validate_patients_per_side</span><span class="p">(</span><span class="n">patients_per_side</span><span class="p">)</span>
+    <span class="n">ranked</span> <span class="o">=</span> <span class="n">_prepare_ranked_candidates</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
+    <span class="n">total_candidates</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ranked</span><span class="p">)</span>
+    <span class="n">scored</span> <span class="o">=</span> <span class="n">_score_complete_ranking_for_stability</span><span class="p">(</span>
+        <span class="n">ranked</span><span class="p">,</span>
+        <span class="n">threshold</span><span class="o">=</span><span class="n">threshold</span><span class="p">,</span>
+        <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">score_lookup</span> <span class="o">=</span> <span class="n">scored</span><span class="p">[[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="s2">"space_trial_id"</span><span class="p">,</span> <span class="s2">"match_quality_score"</span><span class="p">]]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">cached_score_rows</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">rows</span><span class="p">[[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="s2">"space_trial_id"</span><span class="p">]]</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
+            <span class="n">score_lookup</span><span class="p">,</span>
+            <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="s2">"space_trial_id"</span><span class="p">],</span>
+            <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
+            <span class="n">validate</span><span class="o">=</span><span class="s2">"one_to_one"</span><span class="p">,</span>
+            <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">run_records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">run_number</span><span class="p">,</span> <span class="n">proportion</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">proportions</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">_run_cutoff_search</span><span class="p">(</span>
+            <span class="n">ranked</span><span class="p">,</span>
+            <span class="n">method</span><span class="o">=</span><span class="s2">"trial_checker"</span><span class="p">,</span>
+            <span class="n">threshold</span><span class="o">=</span><span class="n">threshold</span><span class="p">,</span>
+            <span class="n">radius</span><span class="o">=</span><span class="n">radius</span><span class="p">,</span>
+            <span class="n">starting_proportion</span><span class="o">=</span><span class="n">proportion</span><span class="p">,</span>
+            <span class="n">score_rows</span><span class="o">=</span><span class="n">cached_score_rows</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">cutoff</span>
+        <span class="n">reasonable_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="n">scored</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+                <span class="n">scored</span><span class="p">[</span><span class="s2">"rank"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">selected</span><span class="p">,</span>
+                <span class="s2">"stability_score_pass"</span><span class="p">,</span>
+            <span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="n">run_records</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">"initial_cutoff_proportion"</span><span class="p">:</span> <span class="n">proportion</span><span class="p">,</span>
+                <span class="s2">"initial_proposed_cutoff"</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">total_candidates</span> <span class="o">*</span> <span class="n">proportion</span><span class="p">),</span>
+                <span class="s2">"selected_cutoff"</span><span class="p">:</span> <span class="n">selected</span><span class="p">,</span>
+                <span class="s2">"selected_cutoff_fraction"</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="n">selected</span> <span class="o">/</span> <span class="n">total_candidates</span> <span class="k">if</span> <span class="n">total_candidates</span> <span class="k">else</span> <span class="mf">0.0</span>
+                <span class="p">),</span>
+                <span class="s2">"reasonable_consideration_count"</span><span class="p">:</span> <span class="n">reasonable_count</span><span class="p">,</span>
+                <span class="s2">"reasonable_consideration_fraction"</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="n">reasonable_count</span> <span class="o">/</span> <span class="n">selected</span> <span class="k">if</span> <span class="n">selected</span> <span class="k">else</span> <span class="mf">0.0</span>
+                <span class="p">),</span>
+                <span class="s2">"search_iteration_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">search_history</span><span class="p">),</span>
+                <span class="s2">"probe_patient_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">scored_candidates</span><span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">progress_callback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">progress_callback</span><span class="p">(</span>
+                <span class="n">run_number</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">proportions</span><span class="p">),</span>
+                <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Stability start </span><span class="si">{</span><span class="n">proportion</span><span class="si">:</span><span class="s2">.0%</span><span class="si">}</span><span class="s2">: selected top "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">selected</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> with </span><span class="si">{</span><span class="n">reasonable_count</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> "</span>
+                    <span class="s2">"threshold-passing patient(s)."</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+
+    <span class="n">cutoff_runs</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">from_records</span><span class="p">(</span><span class="n">run_records</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">_STABILITY_COLUMNS</span><span class="p">)</span>
+    <span class="n">selected_cutoff_spread</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+        <span class="n">cutoff_runs</span><span class="p">[</span><span class="s2">"selected_cutoff"</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">-</span> <span class="n">cutoff_runs</span><span class="p">[</span><span class="s2">"selected_cutoff"</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+    <span class="p">)</span>
+    <span class="n">reasonable_count_spread</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+        <span class="n">cutoff_runs</span><span class="p">[</span><span class="s2">"reasonable_consideration_count"</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+        <span class="o">-</span> <span class="n">cutoff_runs</span><span class="p">[</span><span class="s2">"reasonable_consideration_count"</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">TrialCentricCutoffStabilityResult</span><span class="p">(</span>
+        <span class="n">total_candidates</span><span class="o">=</span><span class="n">total_candidates</span><span class="p">,</span>
+        <span class="n">score_threshold</span><span class="o">=</span><span class="n">threshold</span><span class="p">,</span>
+        <span class="n">patients_per_side</span><span class="o">=</span><span class="n">radius</span><span class="p">,</span>
+        <span class="n">initial_cutoff_proportions</span><span class="o">=</span><span class="n">proportions</span><span class="p">,</span>
+        <span class="n">cutoff_runs</span><span class="o">=</span><span class="n">cutoff_runs</span><span class="p">,</span>
+        <span class="n">scored_candidates</span><span class="o">=</span><span class="n">scored</span><span class="p">,</span>
+        <span class="n">selected_cutoff_spread</span><span class="o">=</span><span class="n">selected_cutoff_spread</span><span class="p">,</span>
+        <span class="n">reasonable_consideration_count_spread</span><span class="o">=</span><span class="n">reasonable_count_spread</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div><p>Rank the entire patient corpus, attach the package-format patient and trial
+summary columns, then select the leading prefix reported by the search:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">find_trial_centric_cutoff</span><span class="p">,</span>
+    <span class="n">generate_candidate_matches</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">ranking</span> <span class="o">=</span> <span class="n">generate_candidate_matches</span><span class="p">(</span><span class="n">trial_embeddings</span><span class="p">,</span> <span class="n">patient_embeddings</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<span class="n">candidate_pairs</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">ranking</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"patient_id"</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">trial_spaces</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"space_trial_id"</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">cutoff</span> <span class="o">=</span> <span class="n">find_trial_centric_cutoff</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">,</span>
+    <span class="n">check_method</span><span class="o">=</span><span class="s2">"trial_checker"</span><span class="p">,</span>  <span class="c1"># or "llm"</span>
+    <span class="n">score_threshold</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span>           <span class="c1"># use 1 for the default LLM threshold</span>
+    <span class="n">patients_per_side</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">initial_cutoff_proportion</span><span class="o">=</span><span class="mf">0.10</span><span class="p">,</span> <span class="c1"># start 10% down when few patients qualify</span>
+<span class="p">)</span>
+<span class="n">pairs_for_both_checkers</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">"rank"</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"stable"</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span>
+    <span class="p">:</span> <span class="n">cutoff</span><span class="o">.</span><span class="n">cutoff</span>
+<span class="p">]</span>
+</code></pre></div>
+<p>LLM probes send the probe patient and trial summaries to the configured LLM
+backend. Use only endpoints authorized for the sensitivity of those inputs.</p>
+<p>To test whether the adaptive result depends on the first boundary position,
+run the offline stability helper on synthetic or otherwise explicitly
+authorized data:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">assess_trial_centric_cutoff_stability</span>
+
+<span class="n">stability</span> <span class="o">=</span> <span class="n">assess_trial_centric_cutoff_stability</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">,</span>
+    <span class="n">initial_cutoff_proportions</span><span class="o">=</span><span class="p">(</span><span class="mf">0.10</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.50</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.90</span><span class="p">),</span>
+    <span class="n">score_threshold</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span>
+    <span class="n">patients_per_side</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">stability</span><span class="o">.</span><span class="n">cutoff_runs</span><span class="p">)</span>
+</code></pre></div>
+<p>This diagnostic scores the complete ranking once with <code>score_match_quality</code> and reuses
+those scores for every start. <code>selected_cutoff_spread</code> measures allocation
+sensitivity; <code>reasonable_consideration_count_spread</code> measures how many
+threshold-passing patients that sensitivity adds or omits. These are research
+QA signals, not patient eligibility determinations.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

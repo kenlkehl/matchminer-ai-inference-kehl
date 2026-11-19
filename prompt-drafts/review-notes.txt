@@ -1,0 +1,38 @@
+TRIAL-SPACE PROMPT REWRITE - REVIEW DRAFT
+
+These files are proposed replacements for the active primer and closing question.
+They are outside the package prompt directory and are not used by extraction.
+The user's latest clarification remains the committed active prompt in both repos.
+This draft has not been evaluated on the LLM.
+
+Design changes:
+- Define each field positively before giving a short, explicit omission list.
+- Preserve resectability and treatment setting as population-defining information.
+- Preserve completed therapy in prior treatment and future treatment context in burden.
+- Treat all nine fields as conjunctive. Permit OR consolidation only when it does
+  not turn independent eligibility alternatives into simultaneous requirements.
+- Specify the meaning of excluded-field lists instead of relying on the heading
+  to supply an implicit negation.
+- Separate molecular results from specimen logistics and pathological risk features.
+- Retain exhaustive diagnosis enumeration for broad cancer trials, separate
+  histologies, shared criteria, source exceptions, and the existing output schema.
+- Replace repeated warnings and reminders with one brief closing check.
+
+Intentional proposal for review:
+The draft removes strict mutual exclusivity. Eligible subgroups can overlap, and
+the requested generic basket spaces necessarily overlap the disease-specific
+spaces. Forcing a disjoint partition can require unsupported negative criteria
+or additional fragmentation. The draft instead removes duplicates and preserves
+the source's actual alternatives. This differs from the latest committed wording.
+
+Schema tradeoff:
+The nine-field format implies AND across fields. Oncotype OR PAM50 can remain in
+one biomarker field. A molecular-score pathway OR a pathological-risk pathway
+may still require separate spaces when the alternatives belong in different
+fields. Fewer spaces is not a valid improvement if it changes the eligibility set.
+
+Suggested evaluation after review:
+Compare this draft with a fixed baseline on the same saved trials, including the
+breast and resectable head-and-neck examples, with repeated generations under the
+same model and sampling settings. Assess completeness, field placement, logical
+equivalence, and appropriate granularity separately. Do not judge only by count.

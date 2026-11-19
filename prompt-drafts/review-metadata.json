@@ -1,0 +1,25 @@
+{
+  "tokenizer": "RedHatAI/Gemma-4-31B-IT-FP8-Dynamic",
+  "tokens": {
+    "active": {
+      "trial.user.primer.txt": 1764,
+      "trial.user.question.txt": 177,
+      "total": 1941
+    },
+    "draft": {
+      "trial.user.primer.txt": 1028,
+      "trial.user.question.txt": 45,
+      "total": 1073
+    },
+    "reduction_percent": 44.7
+  },
+  "active_commits": {
+    "inference": "3928443f3252ca04bb3039c50caceca2df314a2d",
+    "training": "ad26d282ece95d81617a37e0fc8b8151c6e84704"
+  },
+  "draft_sha256": {
+    "trial.user.primer.txt": "c906946da7af11aca460775cb1d13b8234213ce78269413cba89c618506b115c",
+    "trial.user.question.txt": "18b585aeed6a26c3cbcae1e4b59bdeb8ebd2e426d53265db0a503c5d6004cc9a"
+  },
+  "active_prompt_unchanged_after_drafting": true
+}

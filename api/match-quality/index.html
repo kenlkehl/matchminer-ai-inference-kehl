@@ -1,0 +1,3965 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the matchminer-ai Python package">
+      
+      
+      
+      
+        <link rel="prev" href="../labeling/">
+      
+      
+        <link rel="next" href="../guideline-retrieval/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Match Quality - MatchMiner-AI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#match-quality" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MatchMiner-AI" class="md-header__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MatchMiner-AI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Match Quality
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MatchMiner-AI" class="md-nav__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MatchMiner-AI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/gpu-recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Recommendations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-notebook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Notebook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/patient-centric-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient-centric matching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/good-options-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the Good Options pipeline works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/local-vs-remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an Inference Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/guideline-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/pdq-catalogs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/note-search-qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Note-search question answering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/population-workup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population workup review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/qc-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Package API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Document OCR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../patients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Clinical Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction-Based Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workup-sql/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL-Agent Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../candidate-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labeling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Teacher Labeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#match-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Match labels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-model-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision-model scores
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        decision_model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="decision_model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.match_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.match_questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_questions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.boilerplate_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        boilerplate_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.boilerplate_question" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        boilerplate_question
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.criteria_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        criteria_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.criterion_question" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        criterion_question
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.run_decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_decisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rerank
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="rerank">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        score_match_quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="score_match_quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality--expected-columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expected columns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality--columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Columns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.interpret_match_quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        interpret_match_quality
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.llm_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        llm_checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="llm_checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.llm_checks.score_match_quality_with_llm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        score_match_quality_with_llm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_labels
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="match_labels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.match_score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_score
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.parse_match_labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parse_match_labels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.build_match_label_messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_match_label_messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.match_labels_contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_labels_contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guideline-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exclusion-criteria/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclusion Criteria
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../criteria-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../good-options/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM Server Helper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#match-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Match labels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-model-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision-model scores
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        decision_model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="decision_model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.match_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.match_questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_questions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.boilerplate_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        boilerplate_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.boilerplate_question" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        boilerplate_question
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.criteria_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        criteria_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.criterion_question" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        criterion_question
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.decision_model.run_decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_decisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rerank
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="rerank">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        score_match_quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="score_match_quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality--expected-columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expected columns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality--columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Columns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.interpret_match_quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        interpret_match_quality
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.llm_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        llm_checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="llm_checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.llm_checks.score_match_quality_with_llm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        score_match_quality_with_llm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_labels
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="match_labels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.match_score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_score
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.parse_match_labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parse_match_labels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.build_match_label_messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_match_label_messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.match_labels.match_labels_contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match_labels_contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="match-quality">Match Quality<a class="headerlink" href="#match-quality" title="Permanent link">&para;</a></h1>
+<p>The decision model's match questions (<code>score_match_quality</code>) and their LLM alternative
+(<code>score_match_quality_with_llm</code>) read <strong>key text only</strong>: the patient summary's
+key section and the cohort's key criteria. Boilerplate is the
+<a href="../exclusion-criteria/">exclusion-criteria</a> stage's. Each row is one candidate
+pair with:</p>
+<ul>
+<li><code>patient_id</code>;</li>
+<li><code>cohort_trial_id</code> (or historical <code>space_trial_id</code>);</li>
+<li><code>cancer_history_summary</code>, the patient's key section (or a complete
+  <code>patient_summary</code>, whose text before <code>Other relevant history:</code> is taken);</li>
+<li><code>cohort_key_criteria</code> (else <code>cohort_eligibility_criteria</code> when the
+  boilerplate step did not run, else historical <code>clinical_space_summary</code>).</li>
+</ul>
+<h2 id="match-labels">Match labels<a class="headerlink" href="#match-labels" title="Permanent link">&para;</a></h2>
+<p>One LLM prompt, <code>match_quality.labels.system.txt</code>
+(<code>matchminer_ai.matching.match_labels</code>, schema <code>trial-match-labels-v1</code>), asks
+five yes/no questions about one patient's key section and one cohort's key
+criteria. Each answer carries an <code>evidence_status</code> (<code>supported</code>,
+<code>contradicted</code>, <code>insufficient_information</code> or <code>not_applicable</code>) and a <code>reason</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Label</th>
+<th>Question</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reasonableness</code></td>
+<td>No clear evidence that the patient fails any of the key criteria. Missing information is not a mismatch.</td>
+<td>1 (gate)</td>
+</tr>
+<tr>
+<td><code>cancer_type</code></td>
+<td>The cohort specifically names a cancer type or histology matching the patient's active cancer.</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>burden</code></td>
+<td>A specific stage or disease-burden requirement is documented as satisfied.</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>treatment_history</code></td>
+<td>A specific prior-treatment requirement is documented as satisfied.</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>biomarker</code></td>
+<td>A specific required biomarker condition is documented as satisfied.</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<p><code>match_score</code> gives 0–6: 0 unless the patient is reasonable, otherwise 1 plus
+the points of each other yes answer. The training teacher labels pairs with
+this same prompt and contract, and the decision model learns one yes/no
+question per label. <code>score_match_quality_with_llm</code> uses it by default
+(<code>llm_match_quality.prompt_file</code>) and returns <code>llm_match_quality_score</code> (0–6, or
+-1 when the answer fails the contract) plus one boolean <code>llm_&lt;label&gt;</code> column per
+label (None when unparsed). Debug mode adds the answer, reasoning and parse
+status.</p>
+<h2 id="decision-model-scores">Decision-model scores<a class="headerlink" href="#decision-model-scores" title="Permanent link">&para;</a></h2>
+<p><code>score_match_quality</code> asks the decision model
+(<a href="#decision-model"><code>matchminer_ai.matching.decision_model</code></a>; the <code>decision_model</code>
+configuration section, base <code>LiquidAI/d1-2B</code> by default) the five match questions
+about one state: the patient's key section and the cohort's key criteria. Each
+question's instructions are its section of <code>match_quality.labels.system.txt</code>
+(without the teacher's evidence-status bookkeeping), except <code>reasonableness</code>,
+which opens: <em>Is this patient potentially eligible for this cohort after review
+of the patient history and these key criteria? If the patient is potentially
+eligible, answer yes; if the patient is clearly ineligible, answer no.</em> It
+returns each P(yes) as <code>match_quality_&lt;label&gt;</code> and</p>
+<div class="highlight"><pre><span></span><code>match_quality_score = P(reasonable) × (1 + P(cancer_type) + P(burden)
+                      + P(treatment_history) + 2·P(biomarker)) / 6
+</code></pre></div>
+<p>the expected match score as a fraction of 6, used for ranking. <code>match_quality_pass</code>
+is <code>match_quality_reasonableness &gt;= match_quality.reasonableness_cutoff</code> (0.5 by
+default), the decision model's own potentially-eligible answer (since 2026-11-17;
+before, a <code>match_quality_score</code> cutoff of 0.2 approximated it).</p>
+<p><code>interpret_match_quality</code> attributes one match question's decision (<code>head</code>,
+default <code>"reasonableness"</code>): gradient times input embedding for the question's
+yes-minus-no logit at its answer slot, read in the same packed sequence as the
+scores. Token offsets refer to the <code>cohort_key_criteria</code> and
+<code>patient_key_summary</code> sources. Attributions are local model sensitivities for
+debugging and human review, not clinical rationales.</p>
+<p>Scores and labels are ranking and screening signals, not eligibility
+determinations. The LLM check sends patient key text to the configured LLM
+endpoint; use only an endpoint authorized for that data.</p>
+<h2 id="decision-model">Decision model<a class="headerlink" href="#decision-model" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.decision_model" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.decision_model</span>
+
+
+<a href="#matchminer_ai.matching.decision_model" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>The decision model: one System One model (LiquidAI d1) answering seven yes/no question families.</p>
+<p>A decision model reads a <em>state</em> and named questions and returns, for each <code>noul</code> (yes/no)
+question, P(yes) from one forward pass, without generating text. The pinned base model is
+<code>LiquidAI/d1-2B</code>; the training repository fine-tunes it on the teacher's labels of the same
+seven families (<code>train_decision_model.py</code>), and <code>decision_model.model_name</code> in the
+configuration selects either.</p>
+<p>The seven families, and what <strong>yes</strong> means for each:</p>
+<p>1-5. <code>reasonableness</code>, <code>cancer_type</code>, <code>burden</code>, <code>treatment_history</code>, <code>biomarker</code>: the match
+     labels of :mod:<code>matchminer_ai.matching.match_labels</code>, five questions about one state, the
+     patient summary's key section (cancer history) and the cohort's key criteria
+     (:func:<code>match_state</code>, :func:<code>match_questions</code>). <code>reasonableness</code> yes: the patient is
+     potentially eligible after review of these texts; no: clearly ineligible. The other four yes:
+     the cohort specifically requires that dimension and the patient documentedly satisfies it.
+6.   <code>boilerplate</code>: one question about the patient summary's boilerplate section and the
+     cohort's boilerplate criteria (:func:<code>boilerplate_state</code>, :func:<code>boilerplate_question</code>). Yes:
+     potentially eligible; no: clearly fails at least one boilerplate criterion.
+7.   <code>criterion</code>: one question per line of the cohort's eligibility criteria, about the complete
+     patient summary and the cohort's complete numbered criteria (:func:<code>criteria_state</code>,
+     :func:<code>criterion_question</code>; the question restates the line with its number and its
+     inclusion/exclusion type). <strong>Yes: the patient does not clearly fail this line</strong> (it is met,
+     or its information is missing, or the patient could meet it by waiting, or it does not bind
+     this patient). <strong>No: the patient clearly fails it: an inclusion line clearly not met, or an
+     exclusion line clearly met.</strong> A line is judged in its role in the criteria (the state states
+     the rules, 2026-11-13): an alternative fails only when the patient clearly fails every
+     alternative of its group, and then all of them fail; an introducing line fails as its lines
+     fail together; a requirement for only some of the patients the criteria admit fails only when
+     it clearly applies; branches that together define who may enroll fail a patient who fits none;
+     and a standalone requirement fails a patient who lacks what it requires.</p>
+<p>These builders are the only definition of the states and questions: the training repository
+renders its training examples with them, so inference reads exactly what the model learned.
+Patient text reaches only the configured decision model, which runs locally by default.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.decision_model.match_state" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">match_state</span>
+
+
+<a href="#matchminer_ai.matching.decision_model.match_state" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">match_state</span><span class="p">(</span><span class="n">patient_key_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cohort_key_criteria</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The state of questions 1-5: the patient's key section and the cohort's key criteria.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">match_state</span><span class="p">(</span><span class="n">patient_key_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cohort_key_criteria</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The state of questions 1-5: the patient's key section and the cohort's key criteria."""</span>
+    <span class="k">return</span> <span class="n">match_state_with_ranges</span><span class="p">(</span><span class="n">patient_key_summary</span><span class="p">,</span> <span class="n">cohort_key_criteria</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.decision_model.match_questions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">match_questions</span>
+
+
+<a href="#matchminer_ai.matching.decision_model.match_questions" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">match_questions</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Questions 1-5, by match label: each label's instructions (its question and rules).</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">match_questions</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Questions 1-5, by match label: each label's instructions (its question and rules)."""</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">_match_questions</span><span class="p">())</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.decision_model.boilerplate_state" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">boilerplate_state</span>
+
+
+<a href="#matchminer_ai.matching.decision_model.boilerplate_state" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">boilerplate_state</span><span class="p">(</span><span class="n">patient_boilerplate_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cohort_boilerplate_criteria</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The state of question 6: the patient's boilerplate section and the cohort's boilerplate criteria.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">boilerplate_state</span><span class="p">(</span><span class="n">patient_boilerplate_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cohort_boilerplate_criteria</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The state of question 6: the patient's boilerplate section and the cohort's boilerplate criteria."""</span>
+    <span class="k">return</span> <span class="n">boilerplate_state_with_ranges</span><span class="p">(</span><span class="n">patient_boilerplate_summary</span><span class="p">,</span> <span class="n">cohort_boilerplate_criteria</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.decision_model.boilerplate_question" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">boilerplate_question</span>
+
+
+<a href="#matchminer_ai.matching.decision_model.boilerplate_question" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">boilerplate_question</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Question 6: yes when potentially eligible, no when clearly failing a boilerplate criterion.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">boilerplate_question</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Question 6: yes when potentially eligible, no when clearly failing a boilerplate criterion."""</span>
+    <span class="k">return</span> <span class="n">_prompt</span><span class="p">(</span><span class="s2">"boilerplate_question"</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.decision_model.criteria_state" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">criteria_state</span>
+
+
+<a href="#matchminer_ai.matching.decision_model.criteria_state" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">criteria_state</span><span class="p">(</span><span class="n">patient_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">items</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The state of question 7: the complete patient summary (key section, then <code>Other relevant
+history:</code>) and the cohort's complete criteria, numbered as the boilerplate step numbers them.
+The state also states how a line binds the patient through its role (alternatives, introducing
+lines, requirements for only some patients, branches, standalone requirements): read once per
+packed sequence rather than once per question, so the decision model's questions stay short.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">criteria_state</span><span class="p">(</span><span class="n">patient_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">items</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The state of question 7: the complete patient summary (key section, then ``Other relevant</span>
+<span class="sd">    history:``) and the cohort's complete criteria, numbered as the boilerplate step numbers them.</span>
+<span class="sd">    The state also states how a line binds the patient through its role (alternatives, introducing</span>
+<span class="sd">    lines, requirements for only some patients, branches, standalone requirements): read once per</span>
+<span class="sd">    packed sequence rather than once per question, so the decision model's questions stay short."""</span>
+    <span class="k">return</span> <span class="n">_fill</span><span class="p">(</span><span class="n">_prompt</span><span class="p">(</span><span class="s2">"criterion_state"</span><span class="p">),</span> <span class="n">patient_summary</span><span class="o">=</span><span class="n">patient_summary</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="n">numbered_criteria</span><span class="o">=</span><span class="n">_numbered</span><span class="p">(</span><span class="n">items</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.decision_model.criterion_question" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">criterion_question</span>
+
+
+<a href="#matchminer_ai.matching.decision_model.criterion_question" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">criterion_question</span><span class="p">(</span><span class="n">item</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Question 7 for one criteria line (an item of <code>cohort_criteria_items</code>). Yes: the patient does
+not clearly fail it; no: an inclusion line clearly not met or an exclusion line clearly met.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">criterion_question</span><span class="p">(</span><span class="n">item</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Question 7 for one criteria line (an item of ``cohort_criteria_items``). Yes: the patient does</span>
+<span class="sd">    not clearly fail it; no: an inclusion line clearly not met or an exclusion line clearly met."""</span>
+    <span class="k">return</span> <span class="n">_fill</span><span class="p">(</span><span class="n">_prompt</span><span class="p">(</span><span class="s2">"criterion_question"</span><span class="p">),</span> <span class="n">number</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">"number"</span><span class="p">])),</span>
+                 <span class="n">criterion_type</span><span class="o">=</span><span class="n">_criterion_label</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">"criterion_type"</span><span class="p">]),</span> <span class="n">criterion</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">"text"</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.decision_model.run_decisions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">run_decisions</span>
+
+
+<a href="#matchminer_ai.matching.decision_model.run_decisions" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">run_decisions</span><span class="p">(</span><span class="n">requests</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]],</span> <span class="o">*</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">progress</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>P(yes) of each named question of each <code>(state, {name: instructions})</code> request.</p>
+<p>Every question is a <code>noul</code> question; a request's questions are read together after its state
+(<code>decision_model.set_size</code> at a time, the model's trained size by default). Requests longer
+than <code>decision_model.max_length</code> tokens (the fine-tuning length) still run, with no
+truncation, and are counted in the metadata's <code>over_max_length</code>.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_decisions</span><span class="p">(</span>
+    <span class="n">requests</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">progress</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""P(yes) of each named question of each ``(state, {name: instructions})`` request.</span>
+
+<span class="sd">    Every question is a ``noul`` question; a request's questions are read together after its state</span>
+<span class="sd">    (``decision_model.set_size`` at a time, the model's trained size by default). Requests longer</span>
+<span class="sd">    than ``decision_model.max_length`` tokens (the fine-tuning length) still run, with no</span>
+<span class="sd">    truncation, and are counted in the metadata's ``over_max_length``.</span>
+<span class="sd">    """</span>
+    <span class="n">settings</span> <span class="o">=</span> <span class="n">decision_settings</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">load_decision_model</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="n">prompt</span> <span class="o">=</span> <span class="n">d1_module</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">"prompt"</span><span class="p">)</span>
+    <span class="n">answers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">over</span><span class="p">,</span> <span class="n">tokens</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="n">batch</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">settings</span><span class="p">[</span><span class="s2">"batch_size"</span><span class="p">]))</span>
+    <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">requests</span><span class="p">),</span> <span class="n">batch</span><span class="p">):</span>
+        <span class="n">chunk</span> <span class="o">=</span> <span class="n">requests</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">start</span> <span class="o">+</span> <span class="n">batch</span><span class="p">]</span>
+        <span class="n">calls</span> <span class="o">=</span> <span class="p">[(</span><span class="n">state</span><span class="p">,</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">noul</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">questions</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span> <span class="k">for</span> <span class="n">state</span><span class="p">,</span> <span class="n">questions</span> <span class="ow">in</span> <span class="n">chunk</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">state</span><span class="p">,</span> <span class="n">questions</span> <span class="ow">in</span> <span class="n">calls</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">tokens</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="p">[</span><span class="n">prompt</span><span class="o">.</span><span class="n">as_question</span><span class="p">(</span><span class="n">q</span><span class="p">)</span> <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">questions</span><span class="o">.</span><span class="n">values</span><span class="p">()])</span> <span class="o">&gt;</span> <span class="n">settings</span><span class="p">[</span><span class="s2">"max_length"</span><span class="p">]:</span>
+                <span class="n">over</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">system_one_batch</span><span class="p">(</span><span class="n">calls</span><span class="p">,</span> <span class="n">set_size</span><span class="o">=</span><span class="n">settings</span><span class="p">[</span><span class="s2">"set_size"</span><span class="p">]):</span>
+            <span class="n">answers</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="n">name</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">answer</span><span class="p">[</span><span class="s2">"noul"</span><span class="p">])</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">answer</span> <span class="ow">in</span> <span class="n">out</span><span class="p">[</span><span class="s2">"answers"</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
+            <span class="n">tokens</span> <span class="o">+=</span> <span class="nb">int</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">"usage"</span><span class="p">][</span><span class="s2">"input_tokens"</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">progress</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">progress</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">start</span> <span class="o">+</span> <span class="n">batch</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">requests</span><span class="p">)),</span> <span class="nb">len</span><span class="p">(</span><span class="n">requests</span><span class="p">))</span>
+    <span class="n">local</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">settings</span><span class="p">[</span><span class="s2">"model_name"</span><span class="p">]))</span><span class="o">.</span><span class="n">expanduser</span><span class="p">()</span><span class="o">.</span><span class="n">is_dir</span><span class="p">()</span>
+    <span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"model_name"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">settings</span><span class="p">[</span><span class="s2">"model_name"</span><span class="p">]),</span> <span class="s2">"revision"</span><span class="p">:</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">local</span> <span class="k">else</span> <span class="n">settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"revision"</span><span class="p">),</span>
+                <span class="s2">"model_sha"</span><span class="p">:</span> <span class="n">_model_sha</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span> <span class="s2">"backend"</span><span class="p">:</span> <span class="n">settings</span><span class="p">[</span><span class="s2">"backend"</span><span class="p">],</span> <span class="s2">"questions_sha256"</span><span class="p">:</span> <span class="n">questions_digest</span><span class="p">(),</span>
+                <span class="s2">"set_size"</span><span class="p">:</span> <span class="n">settings</span><span class="p">[</span><span class="s2">"set_size"</span><span class="p">]</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="s2">"d1_set_size"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+                <span class="s2">"max_length"</span><span class="p">:</span> <span class="n">settings</span><span class="p">[</span><span class="s2">"max_length"</span><span class="p">],</span> <span class="s2">"requests"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">requests</span><span class="p">),</span>
+                <span class="s2">"questions"</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">q</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">requests</span><span class="p">),</span> <span class="s2">"input_tokens"</span><span class="p">:</span> <span class="n">tokens</span><span class="p">,</span> <span class="s2">"over_max_length"</span><span class="p">:</span> <span class="n">over</span><span class="p">}</span>
+    <span class="k">return</span> <span class="n">answers</span><span class="p">,</span> <span class="n">metadata</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.rerank" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.rerank</span>
+
+
+<a href="#matchminer_ai.matching.rerank" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Match quality scoring with the decision model's five match questions.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.rerank.score_match_quality" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">score_match_quality</span>
+
+
+<a href="#matchminer_ai.matching.rerank.score_match_quality" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">score_match_quality</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">filter_low_quality</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Evaluate the clinical match quality of each candidate patient–cohort pair with the decision model.</p>
+<p>The decision model (:mod:<code>matchminer_ai.matching.decision_model</code>, configured by
+<code>decision_model</code>) answers the five match questions about one state: the cohort's key criteria
+and the patient summary's key section (:func:<code>exclusion_criteria_check</code> handles the boilerplate).
+The questions are the match labels of :mod:<code>matchminer_ai.matching.match_labels</code>:
+<code>reasonableness</code> (yes: potentially eligible after review of these texts; no: clearly
+ineligible) and the cancer type, burden, treatment history and biomarker specificity answers.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>candidate_pairs</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>DataFrame of candidate patient–cohort pairs.</p>
+<h5 id="matchminer_ai.matching.rerank.score_match_quality--expected-columns">Expected columns<a class="headerlink" href="#matchminer_ai.matching.rerank.score_match_quality--expected-columns" title="Permanent link">&para;</a></h5>
+<p>patient_id : str
+    Patient identifier.
+cohort_trial_id : str
+    Cohort identifier (historical <code>space_trial_id</code> is accepted).
+cancer_history_summary : str
+    The patient summary's key section (or a complete <code>patient_summary</code>, whose key
+    section is taken).
+cohort_key_criteria : str
+    The cohort's key criteria (else <code>cohort_eligibility_criteria</code>, else historical
+    <code>clinical_space_summary</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>MMAI configuration: <code>decision_model</code> (the model) and <code>match_quality.reasonableness_cutoff</code>.
+Uses default preset when omitted.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>filter_low_quality</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, only return rows where <code>match_quality_pass</code> evaluates to True.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>return_metadata</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When True, also return a metadata dict containing the config snapshot
+and model metadata for this run.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Derived output table containing:</p>
+<h5 id="matchminer_ai.matching.rerank.score_match_quality--columns">Columns<a class="headerlink" href="#matchminer_ai.matching.rerank.score_match_quality--columns" title="Permanent link">&para;</a></h5>
+<p>patient_id : str
+    Patient identifier.
+cohort_trial_id or space_trial_id : str
+    The input's trial identifier.
+match_quality_score : float
+    0–1 match score, the expected match score fraction: P(reasonable) × (1 +
+    P(cancer type) + P(burden) + P(treatment history) + 2 P(biomarker)) / 6.
+match_quality_pass : bool
+    Whether P(reasonable) (<code>match_quality_reasonableness</code>) meets
+    <code>match_quality.reasonableness_cutoff</code> (0.5 by default): the decision model's own
+    potentially-eligible call. <code>match_quality_score</code> is for ranking only.
+match_quality_<label> : float
+    Each match question's P(yes), for reasonableness, cancer_type, burden,
+    treatment_history and biomarker.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="dict">dict</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When return_metadata is True, returns the DataFrame plus a metadata dict.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/rerank.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_match_quality</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">filter_low_quality</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Evaluate the clinical match quality of each candidate patient–cohort pair with the decision model.</span>
+
+<span class="sd">    The decision model (:mod:`matchminer_ai.matching.decision_model`, configured by</span>
+<span class="sd">    ``decision_model``) answers the five match questions about one state: the cohort's key criteria</span>
+<span class="sd">    and the patient summary's key section (:func:`exclusion_criteria_check` handles the boilerplate).</span>
+<span class="sd">    The questions are the match labels of :mod:`matchminer_ai.matching.match_labels`:</span>
+<span class="sd">    ``reasonableness`` (yes: potentially eligible after review of these texts; no: clearly</span>
+<span class="sd">    ineligible) and the cancer type, burden, treatment history and biomarker specificity answers.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    candidate_pairs : pd.DataFrame</span>
+<span class="sd">        DataFrame of candidate patient–cohort pairs.</span>
+
+<span class="sd">        Expected columns</span>
+<span class="sd">        ----------------</span>
+<span class="sd">        patient_id : str</span>
+<span class="sd">            Patient identifier.</span>
+<span class="sd">        cohort_trial_id : str</span>
+<span class="sd">            Cohort identifier (historical ``space_trial_id`` is accepted).</span>
+<span class="sd">        cancer_history_summary : str</span>
+<span class="sd">            The patient summary's key section (or a complete ``patient_summary``, whose key</span>
+<span class="sd">            section is taken).</span>
+<span class="sd">        cohort_key_criteria : str</span>
+<span class="sd">            The cohort's key criteria (else ``cohort_eligibility_criteria``, else historical</span>
+<span class="sd">            ``clinical_space_summary``).</span>
+
+<span class="sd">    config : MMAIConfig, optional</span>
+<span class="sd">        MMAI configuration: ``decision_model`` (the model) and ``match_quality.reasonableness_cutoff``.</span>
+<span class="sd">        Uses default preset when omitted.</span>
+<span class="sd">    filter_low_quality : bool, default True</span>
+<span class="sd">        If True, only return rows where ``match_quality_pass`` evaluates to True.</span>
+<span class="sd">    return_metadata : bool, default False</span>
+<span class="sd">        When True, also return a metadata dict containing the config snapshot</span>
+<span class="sd">        and model metadata for this run.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pd.DataFrame</span>
+<span class="sd">        Derived output table containing:</span>
+
+<span class="sd">        Columns</span>
+<span class="sd">        -------</span>
+<span class="sd">        patient_id : str</span>
+<span class="sd">            Patient identifier.</span>
+<span class="sd">        cohort_trial_id or space_trial_id : str</span>
+<span class="sd">            The input's trial identifier.</span>
+<span class="sd">        match_quality_score : float</span>
+<span class="sd">            0–1 match score, the expected match score fraction: P(reasonable) × (1 +</span>
+<span class="sd">            P(cancer type) + P(burden) + P(treatment history) + 2 P(biomarker)) / 6.</span>
+<span class="sd">        match_quality_pass : bool</span>
+<span class="sd">            Whether P(reasonable) (``match_quality_reasonableness``) meets</span>
+<span class="sd">            ``match_quality.reasonableness_cutoff`` (0.5 by default): the decision model's own</span>
+<span class="sd">            potentially-eligible call. ``match_quality_score`` is for ranking only.</span>
+<span class="sd">        match_quality_&lt;label&gt; : float</span>
+<span class="sd">            Each match question's P(yes), for reasonableness, cancer_type, burden,</span>
+<span class="sd">            treatment_history and biomarker.</span>
+<span class="sd">    tuple[pd.DataFrame, dict]</span>
+<span class="sd">        When return_metadata is True, returns the DataFrame plus a metadata dict.</span>
+<span class="sd">    """</span>
+    <span class="n">trial_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_pair_inputs</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
+    <span class="n">resolved_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
+    <span class="n">cutoff</span> <span class="o">=</span> <span class="n">reasonableness_cutoff</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">)</span>
+    <span class="n">answers</span><span class="p">,</span> <span class="n">model_metadata</span> <span class="o">=</span> <span class="n">_decide</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">,</span> <span class="n">resolved_config</span><span class="p">)</span>
+
+    <span class="c1"># Convert the answers into a compact, derived result table.</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="p">[[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">trial_id</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">confidence_scores</span><span class="p">,</span> <span class="n">heads</span> <span class="o">=</span> <span class="n">_scores</span><span class="p">(</span><span class="n">answers</span><span class="p">)</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"match_quality_score"</span><span class="p">]</span> <span class="o">=</span> <span class="n">confidence_scores</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"match_quality_pass"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="o">&gt;=</span> <span class="n">cutoff</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">heads</span><span class="p">[</span><span class="s2">"reasonableness"</span><span class="p">]]</span>
+    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">heads</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">output</span><span class="p">[</span><span class="sa">f</span><span class="s2">"match_quality_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+
+    <span class="c1"># Optionally keep only matches that pass the quality threshold.</span>
+    <span class="k">if</span> <span class="n">filter_low_quality</span><span class="p">:</span>
+        <span class="n">keep_rows</span> <span class="o">=</span> <span class="n">output</span><span class="p">[</span><span class="s2">"match_quality_pass"</span><span class="p">]</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">keep_rows</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Optionally return metadata for reproducibility/debugging.</span>
+    <span class="k">if</span> <span class="n">return_metadata</span><span class="p">:</span>
+        <span class="n">metadata_payload</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">"package"</span><span class="p">:</span> <span class="n">package_metadata</span><span class="p">(),</span>
+            <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">),</span>
+            <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"score_match_quality"</span><span class="p">:</span> <span class="n">model_metadata</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="n">metadata_payload</span>
+    <span class="k">return</span> <span class="n">output</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.rerank.interpret_match_quality" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">interpret_match_quality</span>
+
+
+<a href="#matchminer_ai.matching.rerank.interpret_match_quality" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">interpret_match_quality</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">top_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span> <span class="n">head</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'reasonableness'</span><span class="p">,</span> <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Interpret one match question's decision for specific pairs with token attributions.</p>
+<p>Scores each pair as :func:<code>score_match_quality</code> does, then, for the match question <code>head</code>
+(default <code>reasonableness</code>), runs one gradient-enabled forward pass per pair over the same
+packed sequence: gradient times input embedding for the question's yes-minus-no logit at its
+answer slot. Token offsets are relative to the cohort key criteria (<code>cohort_key_criteria</code>
+source) and the patient key section (<code>patient_key_summary</code> source). Positive normalized scores
+support the interpreted decision (<code>head</code> yes when P(yes) &gt;= 0.5, else no); negative scores
+oppose it.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>candidate_pairs</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One or more specific pairs with the same required input columns as
+:func:<code>score_match_quality</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Configuration. Uses the default preset when omitted.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>top_k</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span> or None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Retain the most important tokens per source field. Use <code>None</code> to
+return every retained input token.</p>
+              </div>
+            </td>
+            <td>
+                  <code>30</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>head</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The match question to interpret.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#34;reasonableness&#34;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>return_metadata</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return the config snapshot and model metadata with the result.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One row per input pair with the scores, <code>token_attributions</code>, input
+<code>attribution_coverage</code>, and caveat.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="dict">dict</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Result and reproducibility metadata when <code>return_metadata</code> is True.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/rerank.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">interpret_match_quality</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">top_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>
+    <span class="n">head</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"reasonableness"</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Interpret one match question's decision for specific pairs with token attributions.</span>
+
+<span class="sd">    Scores each pair as :func:`score_match_quality` does, then, for the match question ``head``</span>
+<span class="sd">    (default ``reasonableness``), runs one gradient-enabled forward pass per pair over the same</span>
+<span class="sd">    packed sequence: gradient times input embedding for the question's yes-minus-no logit at its</span>
+<span class="sd">    answer slot. Token offsets are relative to the cohort key criteria (``cohort_key_criteria``</span>
+<span class="sd">    source) and the patient key section (``patient_key_summary`` source). Positive normalized scores</span>
+<span class="sd">    support the interpreted decision (``head`` yes when P(yes) &gt;= 0.5, else no); negative scores</span>
+<span class="sd">    oppose it.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    candidate_pairs : pd.DataFrame</span>
+<span class="sd">        One or more specific pairs with the same required input columns as</span>
+<span class="sd">        :func:`score_match_quality`.</span>
+<span class="sd">    config : MMAIConfig, optional</span>
+<span class="sd">        Configuration. Uses the default preset when omitted.</span>
+<span class="sd">    top_k : int or None, default 30</span>
+<span class="sd">        Retain the most important tokens per source field. Use ``None`` to</span>
+<span class="sd">        return every retained input token.</span>
+<span class="sd">    head : str, default "reasonableness"</span>
+<span class="sd">        The match question to interpret.</span>
+<span class="sd">    return_metadata : bool, default False</span>
+<span class="sd">        Return the config snapshot and model metadata with the result.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pd.DataFrame</span>
+<span class="sd">        One row per input pair with the scores, ``token_attributions``, input</span>
+<span class="sd">        ``attribution_coverage``, and caveat.</span>
+<span class="sd">    tuple[pd.DataFrame, dict]</span>
+<span class="sd">        Result and reproducibility metadata when ``return_metadata`` is True.</span>
+<span class="sd">    """</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.match_labels</span><span class="w"> </span><span class="kn">import</span> <span class="n">LABELS</span>
+    <span class="k">if</span> <span class="n">head</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">LABELS</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"head must be one of </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">LABELS</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">trial_id</span><span class="p">,</span> <span class="n">cohorts</span><span class="p">,</span> <span class="n">patients</span> <span class="o">=</span> <span class="n">_pair_inputs</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
+    <span class="n">resolved_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
+    <span class="n">cutoff</span> <span class="o">=</span> <span class="n">reasonableness_cutoff</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">)</span>
+    <span class="n">answers</span><span class="p">,</span> <span class="n">model_metadata</span> <span class="o">=</span> <span class="n">_decide</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">,</span> <span class="n">resolved_config</span><span class="p">)</span>
+    <span class="n">confidence_scores</span><span class="p">,</span> <span class="n">heads</span> <span class="o">=</span> <span class="n">_scores</span><span class="p">(</span><span class="n">answers</span><span class="p">)</span>
+    <span class="n">questions</span> <span class="o">=</span> <span class="n">match_questions</span><span class="p">()</span>
+    <span class="n">explanations</span><span class="p">,</span> <span class="n">targets</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">cohort</span><span class="p">,</span> <span class="n">patient</span><span class="p">,</span> <span class="n">probability</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cohorts</span><span class="p">,</span> <span class="n">patients</span><span class="p">,</span> <span class="n">heads</span><span class="p">[</span><span class="n">head</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">state</span><span class="p">,</span> <span class="n">ranges</span> <span class="o">=</span> <span class="n">match_state_with_ranges</span><span class="p">(</span><span class="n">patient</span><span class="p">,</span> <span class="n">cohort</span><span class="p">)</span>
+        <span class="n">ranges</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"cohort_key_criteria"</span><span class="p">:</span> <span class="n">ranges</span><span class="p">[</span><span class="s2">"cohort_key_criteria"</span><span class="p">],</span> <span class="s2">"patient_key_summary"</span><span class="p">:</span> <span class="n">ranges</span><span class="p">[</span><span class="s2">"patient_key_summary"</span><span class="p">]}</span>
+        <span class="n">decision</span> <span class="o">=</span> <span class="n">probability</span> <span class="o">&gt;=</span> <span class="mf">0.5</span>
+        <span class="n">explanations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">oriented</span><span class="p">(</span><span class="n">attribute_decision</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">questions</span><span class="p">,</span> <span class="n">head</span><span class="p">,</span> <span class="n">ranges</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">,</span>
+                                                        <span class="n">top_k</span><span class="o">=</span><span class="n">top_k</span><span class="p">),</span> <span class="n">decision</span><span class="p">))</span>
+        <span class="n">targets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">head</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="s1">'yes'</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">decision</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">'no'</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">output</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="p">[[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">trial_id</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"match_quality_score"</span><span class="p">]</span> <span class="o">=</span> <span class="n">confidence_scores</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"match_quality_pass"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="o">&gt;=</span> <span class="n">cutoff</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">heads</span><span class="p">[</span><span class="s2">"reasonableness"</span><span class="p">]]</span>
+    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">heads</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">output</span><span class="p">[</span><span class="sa">f</span><span class="s2">"match_quality_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"attribution_method"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="s2">"method"</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">explanations</span><span class="p">]</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"attribution_target"</span><span class="p">]</span> <span class="o">=</span> <span class="n">targets</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"token_attributions"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="s2">"token_attributions"</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">explanations</span><span class="p">]</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"attribution_coverage"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="s2">"coverage"</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">explanations</span><span class="p">]</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"attribution_caveat"</span><span class="p">]</span> <span class="o">=</span> <span class="n">TOKEN_ATTRIBUTION_CAVEAT</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">return_metadata</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="p">{</span>
+            <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">),</span>
+            <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"interpret_match_quality"</span><span class="p">:</span> <span class="n">model_metadata</span><span class="p">},</span>
+            <span class="s2">"interpretability"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"method"</span><span class="p">:</span> <span class="s2">"gradient_x_input"</span><span class="p">,</span> <span class="s2">"top_k_per_source"</span><span class="p">:</span> <span class="n">top_k</span><span class="p">,</span> <span class="s2">"head"</span><span class="p">:</span> <span class="n">head</span><span class="p">},</span>
+        <span class="p">}</span>
+    <span class="k">return</span> <span class="n">output</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.llm_checks" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.llm_checks</span>
+
+
+<a href="#matchminer_ai.matching.llm_checks" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>LLM-based match quality, exclusion screening and per-criterion checking helpers.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.llm_checks.score_match_quality_with_llm" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">score_match_quality_with_llm</span>
+
+
+<a href="#matchminer_ai.matching.llm_checks.score_match_quality_with_llm" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">score_match_quality_with_llm</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="s1">'MMAIConfig | None'</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Label candidate patient–cohort pairs with the five match labels, in one LLM prompt per pair.</p>
+<p>The prompt (<code>llm_match_quality.prompt_file</code>, by default the training teacher's
+<code>match_quality.labels.system.txt</code>) asks whether the patient is a reasonable candidate on the
+cohort's key criteria and whether the cohort specifically requires, and the patient documentedly
+satisfies, its cancer type, burden, treatment history and biomarker requirements
+(:mod:<code>matchminer_ai.matching.match_labels</code>). Only key text is read: boilerplate is
+<code>exclusion_criteria_check_with_llm</code>'s.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>candidate_pairs</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One row per candidate pair: <code>patient_id</code>; <code>cohort_trial_id</code> (or historical
+<code>space_trial_id</code>); the patient's key section, <code>cancer_history_summary</code> (or a complete
+<code>patient_summary</code>, whose key section is taken); and the cohort's key criteria,
+<code>cohort_key_criteria</code> (else <code>cohort_eligibility_criteria</code>, else <code>clinical_space_summary</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>MMAI configuration with <code>llm_match_quality</code> settings; default preset when omitted.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>return_metadata</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When True, also return a metadata dict with the config snapshot and model metadata.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>patient_id</code>, the trial identifier, <code>llm_match_quality_score</code> (0–6 from
+:func:<code>~matchminer_ai.matching.match_labels.match_score</code>, or -1 when the answer fails the
+contract) and one boolean <code>llm_&lt;label&gt;</code> column per label (None when unparsed). With
+debug_mode: <code>llm_match_quality_answer_text</code>, <code>llm_match_quality_reasoning_text</code> and
+<code>llm_match_quality_parse_status</code> (<code>parsed</code> or the validation error).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="pandas.DataFrame">DataFrame</span>, <span title="dict">dict</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When return_metadata is True, returns the DataFrame plus metadata.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/llm_checks.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_match_quality_with_llm</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="s2">"MMAIConfig | None"</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Label candidate patient–cohort pairs with the five match labels, in one LLM prompt per pair.</span>
+
+<span class="sd">    The prompt (``llm_match_quality.prompt_file``, by default the training teacher's</span>
+<span class="sd">    ``match_quality.labels.system.txt``) asks whether the patient is a reasonable candidate on the</span>
+<span class="sd">    cohort's key criteria and whether the cohort specifically requires, and the patient documentedly</span>
+<span class="sd">    satisfies, its cancer type, burden, treatment history and biomarker requirements</span>
+<span class="sd">    (:mod:`matchminer_ai.matching.match_labels`). Only key text is read: boilerplate is</span>
+<span class="sd">    ``exclusion_criteria_check_with_llm``'s.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    candidate_pairs : pd.DataFrame</span>
+<span class="sd">        One row per candidate pair: ``patient_id``; ``cohort_trial_id`` (or historical</span>
+<span class="sd">        ``space_trial_id``); the patient's key section, ``cancer_history_summary`` (or a complete</span>
+<span class="sd">        ``patient_summary``, whose key section is taken); and the cohort's key criteria,</span>
+<span class="sd">        ``cohort_key_criteria`` (else ``cohort_eligibility_criteria``, else ``clinical_space_summary``).</span>
+<span class="sd">    config : MMAIConfig, optional</span>
+<span class="sd">        MMAI configuration with ``llm_match_quality`` settings; default preset when omitted.</span>
+<span class="sd">    return_metadata : bool, default False</span>
+<span class="sd">        When True, also return a metadata dict with the config snapshot and model metadata.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pd.DataFrame</span>
+<span class="sd">        ``patient_id``, the trial identifier, ``llm_match_quality_score`` (0–6 from</span>
+<span class="sd">        :func:`~matchminer_ai.matching.match_labels.match_score`, or -1 when the answer fails the</span>
+<span class="sd">        contract) and one boolean ``llm_&lt;label&gt;`` column per label (None when unparsed). With</span>
+<span class="sd">        debug_mode: ``llm_match_quality_answer_text``, ``llm_match_quality_reasoning_text`` and</span>
+<span class="sd">        ``llm_match_quality_parse_status`` (``parsed`` or the validation error).</span>
+<span class="sd">    tuple[pd.DataFrame, dict]</span>
+<span class="sd">        When return_metadata is True, returns the DataFrame plus metadata.</span>
+<span class="sd">    """</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai._texts</span><span class="w"> </span><span class="kn">import</span> <span class="n">patient_key_texts</span><span class="p">,</span> <span class="n">trial_id_column</span><span class="p">,</span> <span class="n">trial_key_texts</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.match_labels</span><span class="w"> </span><span class="kn">import</span> <span class="n">LABELS</span><span class="p">,</span> <span class="n">build_match_label_messages</span><span class="p">,</span> <span class="n">match_score</span><span class="p">,</span> <span class="n">parse_match_labels</span>
+
+    <span class="k">if</span> <span class="s2">"patient_id"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">candidate_pairs</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"candidate_pairs is missing required columns: patient_id"</span><span class="p">)</span>
+    <span class="n">trial_id</span> <span class="o">=</span> <span class="n">trial_id_column</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
+    <span class="n">patients</span><span class="p">,</span> <span class="n">cohorts</span> <span class="o">=</span> <span class="n">patient_key_texts</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">),</span> <span class="n">trial_key_texts</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
+
+    <span class="n">resolved_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
+    <span class="n">llm_config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">resolved_config</span><span class="o">.</span><span class="n">llm_match_quality</span><span class="p">)</span>
+    <span class="n">prompt</span> <span class="o">=</span> <span class="n">_load_prompt_template</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">llm_config</span><span class="p">[</span><span class="s2">"prompt_file"</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+    <span class="n">messages_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">build_match_label_messages</span><span class="p">(</span><span class="n">patient</span><span class="p">,</span> <span class="n">cohort</span><span class="p">,</span> <span class="n">prompt</span><span class="p">)</span> <span class="k">for</span> <span class="n">patient</span><span class="p">,</span> <span class="n">cohort</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">patients</span><span class="p">,</span> <span class="n">cohorts</span><span class="p">)]</span>
+    <span class="n">responses</span><span class="p">,</span> <span class="n">reasonings</span><span class="p">,</span> <span class="n">model_metadata</span> <span class="o">=</span> <span class="n">_run_llm_check</span><span class="p">(</span>
+        <span class="n">candidate_pairs</span><span class="p">,</span>
+        <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">,</span>
+        <span class="n">section_name</span><span class="o">=</span><span class="s2">"llm_match_quality"</span><span class="p">,</span>
+        <span class="n">messages_list</span><span class="o">=</span><span class="n">messages_list</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parsed</span><span class="p">,</span> <span class="n">statuses</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">response</span> <span class="ow">in</span> <span class="n">responses</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">parsed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">parse_match_labels</span><span class="p">(</span><span class="n">response</span><span class="p">))</span>
+            <span class="n">statuses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"parsed"</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">parsed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+            <span class="n">statuses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"parse_failed: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">output</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="p">[[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">trial_id</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">"llm_match_quality_score"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">match_score</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">if</span> <span class="n">p</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parsed</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">LABELS</span><span class="p">:</span>
+        <span class="n">output</span><span class="p">[</span><span class="sa">f</span><span class="s2">"llm_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">([</span><span class="n">p</span><span class="p">[</span><span class="n">label</span><span class="p">][</span><span class="s2">"answer"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"yes"</span> <span class="k">if</span> <span class="n">p</span> <span class="k">else</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parsed</span><span class="p">],</span>
+                                           <span class="n">index</span><span class="o">=</span><span class="n">output</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">resolved_config</span><span class="o">.</span><span class="n">debug_mode</span><span class="p">:</span>
+        <span class="n">output</span><span class="p">[</span><span class="s2">"llm_match_quality_answer_text"</span><span class="p">]</span> <span class="o">=</span> <span class="n">responses</span>
+        <span class="n">output</span><span class="p">[</span><span class="s2">"llm_match_quality_reasoning_text"</span><span class="p">]</span> <span class="o">=</span> <span class="n">reasonings</span>
+        <span class="n">output</span><span class="p">[</span><span class="s2">"llm_match_quality_parse_status"</span><span class="p">]</span> <span class="o">=</span> <span class="n">statuses</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">return_metadata</span><span class="p">:</span>
+        <span class="n">metadata_payload</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">"package"</span><span class="p">:</span> <span class="n">package_metadata</span><span class="p">(),</span>
+            <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">),</span>
+            <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"score_match_quality_with_llm"</span><span class="p">:</span> <span class="n">model_metadata</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="n">metadata_payload</span>
+    <span class="k">return</span> <span class="n">output</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="matchminer_ai.matching.match_labels" class="doc doc-heading">
+            <span class="doc doc-object-name doc-module-name">matchminer_ai.matching.match_labels</span>
+
+
+<a href="#matchminer_ai.matching.match_labels" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>The five match labels of a patient–cohort pair, asked in one prompt.</p>
+<p><code>match_quality.labels.system.txt</code> asks one LLM request for five yes/no answers about one
+patient's key summary section and one cohort's key criteria:</p>
+<ul>
+<li><code>reasonableness</code>: no clear evidence that the patient fails any of the key criteria;</li>
+<li><code>cancer_type</code>, <code>burden</code>, <code>treatment_history</code>, <code>biomarker</code>: whether the cohort
+  specifically requires that dimension and the patient documentedly satisfies it.</li>
+</ul>
+<p>Every answer carries an <code>evidence_status</code> and a <code>reason</code>. The training teacher labels pairs
+with this contract, the decision model learns one yes/no question per label, and
+<code>score_match_quality_with_llm</code> uses the same prompt. :func:<code>match_score</code> combines the answers
+into the 0–6 match score: 0 unless reasonable, else 1 plus 1 each for cancer type, burden and
+treatment history and 2 for biomarker.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.match_labels.match_score" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">match_score</span>
+
+
+<a href="#matchminer_ai.matching.match_labels.match_score" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">match_score</span><span class="p">(</span><span class="n">answers</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>0–6: 0 unless reasonable, else the points of every yes answer.</p>
+<p><code>answers</code> maps each label to "yes"/"no", a bool, or a parsed answer object.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/match_labels.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span>
+<span class="normal">90</span>
+<span class="normal">91</span>
+<span class="normal">92</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">match_score</span><span class="p">(</span><span class="n">answers</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""0–6: 0 unless reasonable, else the points of every yes answer.</span>
+
+<span class="sd">    ``answers`` maps each label to "yes"/"no", a bool, or a parsed answer object.</span>
+<span class="sd">    """</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">yes</span><span class="p">(</span><span class="n">label</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">answers</span><span class="p">[</span><span class="n">label</span><span class="p">]</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="p">[</span><span class="s2">"answer"</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">value</span>
+        <span class="k">return</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">True</span> <span class="ow">or</span> <span class="n">value</span> <span class="o">==</span> <span class="s2">"yes"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">yes</span><span class="p">(</span><span class="s2">"reasonableness"</span><span class="p">):</span>
+        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">points</span> <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">points</span> <span class="ow">in</span> <span class="n">POINTS</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">yes</span><span class="p">(</span><span class="n">label</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.match_labels.parse_match_labels" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">parse_match_labels</span>
+
+
+<a href="#matchminer_ai.matching.match_labels.parse_match_labels" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">parse_match_labels</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">finish_reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'stop'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The five answers; any deviation from the contract raises ValueError.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/match_labels.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">parse_match_labels</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">finish_reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"stop"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""The five answers; any deviation from the contract raises ValueError."""</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials.cohort_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">_unique_keys</span><span class="p">,</span> <span class="n">unwrap_json_fence</span>
+    <span class="k">if</span> <span class="n">finish_reason</span> <span class="o">!=</span> <span class="s2">"stop"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Incomplete response: </span><span class="si">{</span><span class="n">finish_reason</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">unwrap_json_fence</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">()),</span> <span class="n">object_pairs_hook</span><span class="o">=</span><span class="n">_unique_keys</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">)</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Response must be valid JSON: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">set</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">set</span><span class="p">(</span><span class="n">LABELS</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Response must be a JSON object with exactly the fields </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">LABELS</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">LABELS</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="n">label</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">set</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">!=</span> <span class="p">{</span><span class="s2">"answer"</span><span class="p">,</span> <span class="s2">"evidence_status"</span><span class="p">,</span> <span class="s2">"reason"</span><span class="p">}:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> must have exactly answer, evidence_status and reason"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">[</span><span class="s2">"answer"</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"yes"</span><span class="p">,</span> <span class="s2">"no"</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">.answer must be yes or no"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">[</span><span class="s2">"evidence_status"</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">EVIDENCE_STATUSES</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">.evidence_status must be one of </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">EVIDENCE_STATUSES</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="s2">"reason"</span><span class="p">],</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">value</span><span class="p">[</span><span class="s2">"reason"</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">.reason must be a nonempty explanation"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">label</span><span class="p">:</span> <span class="n">result</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">LABELS</span><span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.match_labels.build_match_label_messages" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">build_match_label_messages</span>
+
+
+<a href="#matchminer_ai.matching.match_labels.build_match_label_messages" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">build_match_label_messages</span><span class="p">(</span><span class="n">patient_key_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cohort_key_criteria</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>System prompt, then the patient's key section and the cohort's key criteria.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/match_labels.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">49</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_match_label_messages</span><span class="p">(</span><span class="n">patient_key_summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cohort_key_criteria</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                               <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""System prompt, then the patient's key section and the cohort's key criteria."""</span>
+    <span class="k">return</span> <span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"system"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="n">prompt</span> <span class="k">if</span> <span class="n">prompt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">match_labels_prompt</span><span class="p">()},</span>
+            <span class="p">{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"PATIENT HISTORY</span><span class="se">\n</span><span class="si">{</span><span class="n">patient_key_summary</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">"</span>
+                                        <span class="sa">f</span><span class="s2">"COHORT KEY ELIGIBILITY CRITERIA</span><span class="se">\n</span><span class="si">{</span><span class="n">cohort_key_criteria</span><span class="si">}</span><span class="s2">"</span><span class="p">}]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.match_labels.match_labels_contract" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">match_labels_contract</span>
+
+
+<a href="#matchminer_ai.matching.match_labels.match_labels_contract" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">match_labels_contract</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The identity of the contract: labels, points, schema and prompt digest.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/match_labels.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">42</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">match_labels_contract</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""The identity of the contract: labels, points, schema and prompt digest."""</span>
+    <span class="n">prompt</span> <span class="o">=</span> <span class="n">match_labels_prompt</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">"schema_version"</span><span class="p">:</span> <span class="n">MATCH_LABELS_SCHEMA_VERSION</span><span class="p">,</span> <span class="s2">"labels"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">LABELS</span><span class="p">),</span> <span class="s2">"points"</span><span class="p">:</span> <span class="n">POINTS</span><span class="p">,</span>
+            <span class="s2">"prompt_sha256"</span><span class="p">:</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">prompt</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
