@@ -191,9 +191,12 @@ query results.
   else the endpoint's `/v1/models`.
 
 **`limits`:**
-- `max_actions` (20) and `max_submits` (4) bound the run.
-- The agent is asked to submit a first candidate by `submit_by` (8), so that it
+- `max_actions` (12) and `max_submits` (3) bound the run.
+- The agent is asked to submit a first candidate by `submit_by` (6), so that it
   reviews results rather than spending the budget exploring.
+- After a valid submission it may run at most `max_review_queries` (3) checking
+  queries. Code then removes the query action: the agent accepts the submission,
+  or submits a revision that fixes a defect it found, which allows 3 more.
 - `max_rows`, `max_cell_chars` and `max_result_chars` bound what it sees of each
   result.
 - `max_recent_steps` sets how many recent steps are replayed with their results.
@@ -206,6 +209,9 @@ query results.
 
 **Ending a run:**
 - A valid submission on the last turn is accepted, with a limitation saying so.
+- When the budget (or the context window) runs out after a valid submission whose
+  revision was not valid, the last valid submission is used, with limitations
+  saying so.
 - If no valid submission is made, the entry fails and its results are unknown.
 
 **Caching:** distinct requirements are explored once per call. Pass `cache` (any
@@ -215,7 +221,19 @@ mapping) to reuse accepted queries. The key (`workup_sql_cache_key`) covers:
 - the agent, database and extraction-schema versions;
 - the prompt and response-schema hashes.
 
-Failed runs are not cached.
+**Failed runs** are saved under their key too, but never reused: the next call
+explores the requirement again and overwrites the entry. A saved failure keeps
+what is needed to diagnose it:
+- its steps (SQL and outcomes; an invalid submission names its problems, such
+  as `invalid: patients without a row`, never values or error text);
+- `error`, which says how the run ended;
+- `diagnostics`: counts of the harness's own messages for invalid answers, of
+  finish reasons (`length` means cut off at the token limit), and of transport
+  failures by HTTP status. Never provider text, prompts or results.
+
+Each explored requirement is also logged in one line (requirement name, how the
+run ended, actions, seconds, requests and prompt tokens): INFO for an accepted
+query, WARNING for a failure.
 
 ::: matchminer_ai.patients.workup_sql
     options:

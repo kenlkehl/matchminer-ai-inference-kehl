@@ -540,9 +540,12 @@ quotes) and reach that endpoint.
 - `local` / `remote`: the model, with 32,000 completion tokens per turn by default.
 
 **`limits` keys:**
-- `max_actions` (20) and `max_submits` (4).
-- `submit_by` (8): the action by which the agent is asked to submit a first
+- `max_actions` (12) and `max_submits` (3).
+- `submit_by` (6): the action by which the agent is asked to submit a first
   candidate.
+- `max_review_queries` (3): checking queries allowed after a valid submission.
+  Then code removes the query action, and the agent accepts the submission or
+  submits a revision.
 - `max_rows` (30), `max_cell_chars` (160) and `max_result_chars` (6,000): what the
   agent sees of a result.
 - `max_memory_chars` (4,000), `max_recent_steps` (8), `max_sql_chars` (8,000).

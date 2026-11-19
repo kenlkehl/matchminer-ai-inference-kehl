@@ -287,10 +287,13 @@ workup_sql_agent:
   reasoning_effort: high
   reasoning_parser: auto
   limits:
-    max_actions: 20
-    max_submits: 4
+    max_actions: 12
+    max_submits: 3
     # The agent is asked to submit a first candidate by this action, then review and revise.
-    submit_by: 8
+    submit_by: 6
+    # Checking queries allowed after a valid submission; then the agent must accept it or
+    # submit a revision (code removes the query action).
+    max_review_queries: 3
     # Rows and characters of an exploration result the agent sees.
     max_rows: 30
     max_cell_chars: 160

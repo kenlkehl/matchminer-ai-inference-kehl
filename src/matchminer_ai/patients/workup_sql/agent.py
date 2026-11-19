@@ -13,7 +13,9 @@ context and exploration database) and later run once over each cohort
 Exploration results are patient-derived extracted values (no patient ids, note
 text or evidence quotes) and reach the configured LLM endpoint: use only an
 endpoint authorized for the records the database was built from. The cache keeps
-the SQL, the summary and aggregate counts, never query results.
+the SQL, the summary and aggregate counts, never query results. A failed run is
+saved too, with its steps and code-made diagnostics, so that it can be diagnosed;
+it is never reused.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, MutableMapping, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -48,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 SECTION = "workup_sql_agent"
 PROMPT_FILE = "patient.workup_sql.system.txt"
-AGENT_VERSION = "mmai-workup-sql-agent-v2"
+AGENT_VERSION = "mmai-workup-sql-agent-v3"
 RESULT_COLUMNS = ("patient_key", "status", "applicability", "reason", "evidence_item_keys",
                   "detail")
 #: The reasons a query may give, by status; code owns the others (no_extraction,
@@ -70,10 +72,13 @@ _FIELDS = ("action", "purpose", "sql", "summary", "approximations", "not_express
 class WorkupSQLLimits:
     """Bounds of one requirement's agent run (preset ``workup_sql_agent.limits``)."""
 
-    max_actions: int = 20
-    max_submits: int = 4
+    max_actions: int = 12
+    max_submits: int = 3
     #: The action by which the agent is asked to submit a first candidate.
-    submit_by: int = 8
+    submit_by: int = 6
+    #: Checking queries allowed after a valid submission before the agent must accept
+    #: it or submit a revision (code removes the query action).
+    max_review_queries: int = 3
     max_rows: int = 30
     max_cell_chars: int = 160
     max_result_chars: int = 6000
@@ -196,6 +201,7 @@ def render_system_prompt(limits: WorkupSQLLimits, extensions=()) -> str:
     return (load_prompt_text(PROMPT_FILE)
             .replace("{max_rows}", str(limits.max_rows))
             .replace("{submit_by}", str(limits.first_submit))
+            .replace("{max_review_queries}", str(limits.max_review_queries))
             .replace("{max_detail_chars}", str(limits.max_detail_chars))
             .replace("{database_guide}", render_database_guide(extensions)))
 
@@ -239,6 +245,8 @@ class ResultCheck:
     problems: list[str]
     rows: dict[int, dict]
     distribution: dict
+    #: Short code-made names of the problems, safe to save (no values or error text).
+    kinds: list[str] = field(default_factory=list)
 
 
 def check_result(reply: dict, patient_count: int, limits: WorkupSQLLimits, *,
@@ -252,73 +260,90 @@ def check_result(reply: dict, patient_count: int, limits: WorkupSQLLimits, *,
     problems: list[str] = []
     if reply["error"]:
         return ResultCheck([f"The query failed: {reply['error']}: {reply['error_detail']}"],
-                           {}, {})
+                           {}, {}, [f"query error {_error_name(reply['error'])}"])
     columns = [str(c).lower() for c in reply["columns"]]
     if sorted(columns) != sorted(RESULT_COLUMNS) or len(set(columns)) != len(columns):
         return ResultCheck([f"Return exactly the columns {', '.join(RESULT_COLUMNS)} "
-                            f"(got {', '.join(columns) or 'none'})."], {}, {})
+                            f"(got {', '.join(columns) or 'none'})."], {}, {}, ["wrong columns"])
     if reply["more_rows"] or reply["row_count"] > patient_count:
         return ResultCheck([f"The query returned {reply['row_count']} rows for "
-                            f"{patient_count} patients: return one row per patient."], {}, {})
+                            f"{patient_count} patients: return one row per patient."], {}, {},
+                           ["more rows than patients"])
     index = {name: columns.index(name) for name in RESULT_COLUMNS}
     rows: dict[int, dict] = {}
     bad: dict[str, list] = {}
+    tags: dict[str, str] = {}
 
-    def flag(kind, key):
+    def flag(kind, key, tag=None):
         bad.setdefault(kind, []).append(key)
+        tags.setdefault(kind, tag or kind)
 
     for raw in reply["rows"]:
         row = {name: raw[i] for name, i in index.items()}
         key = row["patient_key"]
         if type(key) is not int:
-            flag("patient_key is not an integer", key)
+            flag("patient_key is not an integer", key, "patient_key not an integer")
             continue
         if key in rows:
             flag("patient_key repeats", key)
             continue
         status, reason = row["status"], row["reason"]
         if status not in STATUSES:
-            flag(f"status must be one of {', '.join(STATUSES)}", key)
+            flag(f"status must be one of {', '.join(STATUSES)}", key, "invalid status")
         elif reason not in SQL_REASONS[status]:
-            flag(f"reason does not fit its status (allowed pairs: {_pairs()})", key)
+            flag(f"reason does not fit its status (allowed pairs: {_pairs()})", key,
+                 "reason does not fit status")
         elif recommends_against and status == "met":
             flag("this requirement advises against the step (recommends_against true): "
                  "report a documented step as done_not_recommended / "
-                 "documented_not_recommended, never met", key)
+                 "documented_not_recommended, never met", key, "met for a step advised against")
         elif not recommends_against and status == "done_not_recommended":
             flag("done_not_recommended is only for a requirement that advises against the "
-                 "step: set recommends_against true, or report met", key)
+                 "step: set recommends_against true, or report met", key,
+                 "done_not_recommended without recommends_against")
         if row["applicability"] not in APPLICABILITY:
-            flag(f"applicability must be one of {', '.join(APPLICABILITY)}", key)
+            flag(f"applicability must be one of {', '.join(APPLICABILITY)}", key,
+                 "invalid applicability")
         if status == "not_applicable" and row["applicability"] != "not_applicable":
-            flag("status not_applicable needs applicability not_applicable", key)
+            flag("status not_applicable needs applicability not_applicable", key,
+                 "not_applicable status with other applicability")
         keys = row["evidence_item_keys"]
         if keys is None:
             keys = []
         if not isinstance(keys, list) or any(type(k) is not int for k in keys):
-            flag("evidence_item_keys must be a list of item_key integers ([] when none)", key)
+            flag("evidence_item_keys must be a list of item_key integers ([] when none)", key,
+                 "evidence_item_keys not a list of integers")
             keys = []
         detail = row["detail"]
         if detail is not None and not isinstance(detail, str):
-            flag("detail must be text", key)
+            flag("detail must be text", key, "detail not text")
             detail = None
         rows[key] = {"status": status, "reason": reason, "applicability": row["applicability"],
                      "evidence_item_keys": list(dict.fromkeys(keys))[:limits.max_evidence_items],
                      "detail": (detail or "").strip()[:limits.max_detail_chars]}
     missing = patient_count - len([k for k in rows if 1 <= k <= patient_count])
+    kinds = []
     if missing:
         problems.append(f"{missing} patients have no row: start FROM patients so that every "
                         "patient gets exactly one row.")
+        kinds.append("patients without a row")
     for kind, keys in bad.items():
         shown = ", ".join(str(k) for k in keys[:3])
         problems.append(f"{kind}: {len(keys)} rows (for example patient_key {shown}).")
+        kinds.append(tags[kind])
     statuses = Counter(f"{r['status']}/{r['reason']}" for r in rows.values())
     applicability = Counter(r["applicability"] for r in rows.values())
     with_evidence = Counter(r["status"] for r in rows.values() if r["evidence_item_keys"])
     distribution = {"patients": patient_count, "status_reason": dict(statuses.most_common()),
                     "applicability": dict(applicability.most_common()),
                     "with_evidence": dict(with_evidence)}
-    return ResultCheck(problems, rows, distribution)
+    return ResultCheck(problems, rows, distribution, kinds)
+
+
+def _error_name(error) -> str:
+    """A DuckDB error type (BinderException), never its message."""
+    name = str(error or "")
+    return name if re.fullmatch(r"[A-Za-z_]{1,60}", name) else "error"
 
 
 def _pairs() -> str:
@@ -346,9 +371,11 @@ def run_final_query(box: SQLSandbox, sql: str, patient_count: int,
         if foreign is None:
             check.problems.append(f"evidence_item_keys could not be checked: {owned['error']}: "
                                   f"{owned['error_detail']}")
+            check.kinds.append("evidence check failed")
         elif foreign:
             check.problems.append(f"{foreign} evidence_item_keys are not item_key values of "
                                   "that row's patient.")
+            check.kinds.append("evidence keys of other patients")
     return check
 
 
@@ -393,9 +420,11 @@ def _render_check(check: ResultCheck, limits: WorkupSQLLimits) -> str:
         shown[row["status"]] += 1
         lines.append(f"{key}: {row['status']}, {row['reason']}, {row['applicability']}, "
                      f"{row['evidence_item_keys']}, {row['detail']!r}")
-    lines.append("Check that this is plausible for the requirement (for example look up a few "
-                 "of these patients' items with a query). Accept it if right; otherwise "
-                 "revise and submit again.")
+    lines.append("Accept it unless these results show a specific defect you can name (a count "
+                 "implausible for patients like the guideline population, or a status its own "
+                 "detail contradicts); then fix that defect and submit again. You may first run "
+                 f"up to {limits.max_review_queries} checking queries (for example looking up a "
+                 "few of these patients' items). Do not explore for further edge cases.")
     return "\n".join(lines)
 
 
@@ -409,21 +438,36 @@ class _Run:
         self.system, self.llm = system, llm
         self.memory, self.steps = "", []
         self.pending = None
+        #: The last valid submission, kept when a later revision is not valid.
+        self.last_valid = None
         self.submits = 0
+        #: Checking queries since the pending (valid) submission.
+        self.reviews = 0
+
+    def reviews_left(self) -> int:
+        return max(0, self.limits.max_review_queries - self.reviews) if self.pending else 0
 
     def actions(self, left: int) -> list[str]:
         can_submit = self.submits < self.limits.max_submits
         if left == 1:
             return ["accept"] if self.pending else (
                 ["submit", "not_expressible"] if can_submit else ["not_expressible"])
-        actions = ["query"] + (["submit"] if can_submit else [])
+        # After a valid submission only a few checking queries are allowed: then the
+        # agent accepts it or submits a revision.
+        can_query = not self.pending or self.reviews_left() > 0
+        actions = (["query"] if can_query else []) + (["submit"] if can_submit else [])
         return actions + (["accept"] if self.pending else []) + ["not_expressible"]
 
     def payload(self, turn, left, actions, recent):
-        if self.pending:
-            guidance = ("Your last submission is valid: review its distribution and examples "
-                        "(among patients like the guideline population too). Accept it if it is "
-                        "right; otherwise investigate and submit a revision.")
+        if self.pending and self.reviews_left():
+            guidance = ("Your last submission is valid. Accept it now unless its distribution "
+                        "or examples show a specific defect you can name; then fix that defect "
+                        "and submit a revision. You may run up to "
+                        f"{self.reviews_left()} more checking queries first. Do not explore for "
+                        "further edge cases.")
+        elif self.pending:
+            guidance = ("Your last submission is valid and no checking queries are left: accept "
+                        "it, or submit a revision that fixes a specific defect you found.")
         elif left <= 3:
             guidance = "Few actions are left: submit your best final query now."
         elif turn == 0:
@@ -445,6 +489,7 @@ class _Run:
             "turn": turn + 1,
             "actions_left": left,
             "submissions_left": self.limits.max_submits - self.submits,
+            "checking_queries_left": self.reviews_left() if self.pending else None,
             "allowed_actions": actions,
             "pending_submission": ({"sql": self.pending["sql"], "summary": self.pending["summary"],
                                     "recommends_against": self.pending["recommends_against"]}
@@ -524,17 +569,21 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
                 recent = recent[1:]
             if not client.fits(messages):
                 outcome["termination"] = "context_limit"
+                _fall_back(run, outcome, "context_accepted")
                 break
             value = client.complete("workup-sql-agent", messages, schema, run.validator(actions))
             run.memory = value["memory"]
             action, purpose = value["action"], value["purpose"].strip()
             if action == "query":
+                if run.pending:
+                    run.reviews += 1
                 reply = box.query(value["sql"], max_rows=limits.max_rows,
                                   max_cell_chars=limits.max_cell_chars)
                 run.step("query", purpose, value["sql"], _render(reply, limits),
                          f"error {reply['error']}" if reply["error"] else _rows(reply))
             elif action == "submit":
                 run.submits += 1
+                run.reviews = 0
                 check = run_final_query(box, value["sql"], patient_count, limits,
                                         recommends_against=value["recommends_against"])
                 candidate = {"sql": _strip(value["sql"]), "summary": value["summary"].strip(),
@@ -543,9 +592,12 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
                              "recommends_against": value["recommends_against"],
                              "distribution": check.distribution}
                 run.pending = None if check.problems else candidate
+                if run.pending:
+                    run.last_valid = candidate
                 run.step("submit", purpose or "final query", value["sql"],
                          _render_check(check, limits),
-                         "invalid" if check.problems else "valid")
+                         "invalid: " + "; ".join(check.kinds or ["contract"])
+                         if check.problems else "valid")
                 if run.pending and left == 1:
                     outcome.update(_accepted(run.pending, "budget"))
                     outcome["termination"] = "budget_accepted"
@@ -560,18 +612,21 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
                                termination="not_expressible", summary=purpose)
                 break
         else:
-            if run.pending:
-                outcome.update(_accepted(run.pending, "budget"))
-                outcome["termination"] = "budget_accepted"
+            _fall_back(run, outcome, "budget_accepted")
     except EndpointError:
-        outcome.update(status="failed", termination="endpoint_failure",
-                       error="The agent's LLM endpoint failed or its answers stayed invalid.")
+        outcome.update(status="failed", termination="endpoint_failure")
     except SQLSandboxError:
         outcome.update(status="failed", termination="sandbox_failure",
                        error="The isolated SQL worker failed.")
+    diagnostics = _diagnostics(client)
+    if outcome["termination"] == "endpoint_failure":
+        outcome["error"] = _endpoint_error(diagnostics)
     if outcome["status"] == "failed" and outcome["error"] is None:
+        submits = [s["outcome"] for s in run.steps if s["action"] == "submit"]
         outcome["error"] = ("No valid final query was accepted within the agent's budget"
-                            f" ({outcome['termination']}).")
+                            f" ({outcome['termination']}; {len(run.steps)} actions, "
+                            f"{len(submits)} submissions"
+                            + (f", the last {submits[-1]}" if submits else "") + ").")
     if outcome["accepted_by"] == "budget":
         outcome["approximations"] = [*outcome["approximations"], (
             "The query was used at the end of the agent's action budget, without its "
@@ -585,9 +640,50 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
         seconds=round(time.monotonic() - started, 2),
         usage={"requests": client.requests, "prompt_tokens": client.prompt_tokens,
                "completion_tokens": client.completion_tokens},
+        diagnostics=diagnostics,
         model=llm.model,
     )
     return outcome
+
+
+def _diagnostics(client) -> dict:
+    """What went wrong with the agent's requests, from code-made values only.
+
+    Validation messages are the harness's fixed texts; transport failures keep only
+    their HTTP status. No provider text, prompts or results.
+    """
+    statuses = Counter(str(m.get("http_status", "no status")) for m in client.request_metrics
+                       if m.get("transport_error"))
+    return {
+        "invalid_answers": dict(Counter(client.validation_errors).most_common()),
+        "finish_reasons": dict(Counter(str(r) for r in client.finish_reasons).most_common()),
+        "transport_errors": dict(statuses.most_common()),
+    }
+
+
+def _endpoint_error(diagnostics) -> str:
+    if diagnostics["transport_errors"]:
+        shown = ", ".join(f"HTTP {k} x{n}" if k.isdigit() else f"{k} x{n}"
+                          for k, n in diagnostics["transport_errors"].items())
+        return f"The agent's LLM endpoint failed ({shown})."
+    if diagnostics["invalid_answers"]:
+        last = next(iter(diagnostics["invalid_answers"]))
+        return f"The agent's answers stayed invalid (most often: {last})"
+    if diagnostics["finish_reasons"].get("length"):
+        return "The agent's answers were cut off at the output token limit."
+    return "The agent's LLM endpoint failed or its answers stayed invalid."
+
+
+def _fall_back(run, outcome, termination) -> None:
+    """At the end of the budget, use the pending or else the last valid submission."""
+    candidate = run.pending or run.last_valid
+    if candidate is None:
+        return
+    outcome.update(_accepted(candidate, "budget"))
+    outcome["termination"] = termination
+    if run.pending is None:
+        outcome["approximations"].append(
+            "A later revision was not valid; the last valid submission was used.")
 
 
 def _accepted(candidate, by) -> dict:
@@ -602,10 +698,25 @@ def _accepted(candidate, by) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _valid_cached(entry, contract) -> bool:
+def reusable_sql_entry(entry, contract) -> bool:
+    """Whether a cache entry is an accepted query of ``contract`` (saved failures are not)."""
     return (isinstance(entry, dict) and entry.get("status") == "compiled"
             and entry.get("contract") == contract
             and (entry.get("expressible") is False or isinstance(entry.get("sql"), str)))
+
+
+def _log(entry) -> None:
+    """One line per explored requirement: guideline text and counts, never data."""
+    usage = entry.get("usage") or {}
+    args = (entry["requirement"].get("name") or "requirement", entry["termination"],
+            entry.get("action_count", 0), entry.get("seconds", 0), usage.get("requests", 0),
+            usage.get("prompt_tokens", 0))
+    if entry["status"] == "failed":
+        logger.warning("SQL agent failed for %r: %s after %d actions, %.0f s, %d requests, "
+                       "%d prompt tokens: %s", *args, entry.get("error"))
+    else:
+        logger.info("SQL agent %r: %s after %d actions, %.0f s, %d requests, %d prompt tokens",
+                    *args)
 
 
 def compile_workup_sql(
@@ -625,8 +736,10 @@ def compile_workup_sql(
     ``database``: an exploration database, either a DuckDB file from
     :func:`write_extraction_database` or an :class:`ExtractionDatabase`. The
     agent explores it and checks each submission on all of its patients.
-    ``cache``: any mapping from cache keys to entries (accepted queries only,
-    reused while their contract matches). ``llm`` overrides the endpoint
+    ``cache``: any mapping from cache keys to entries. Accepted queries are reused
+    while their contract matches. A failed run is saved under its key too, with its
+    steps and ``diagnostics``, so that it can be diagnosed; it is never reused, and
+    the next call explores the requirement again (and overwrites it). ``llm`` overrides the endpoint
     resolved from ``config.workup_sql_agent``. ``progress_callback(done, total)``
     reports finished requirements; ``activity_callback(items)`` reports, whenever
     it changes, the requirements being explored: ``{"name", "action",
@@ -637,8 +750,9 @@ def compile_workup_sql(
     entry has ``cache_key``, ``requirement``, ``status`` (compiled or failed),
     ``expressible``, ``sql``, ``summary``, ``approximations``, ``steps`` (SQL
     and outcomes, no results), ``distribution`` (aggregate counts over the
-    exploration population), ``termination``, ``error``, ``usage``, ``model``,
-    ``contract`` and ``cached``. With ``return_metadata``, also returns metadata.
+    exploration population), ``termination``, ``error``, ``usage``,
+    ``diagnostics`` (code-made counts of invalid answers, finish reasons and
+    transport failures), ``model``, ``contract`` and ``cached``. With ``return_metadata``, also returns metadata.
     """
     config = config or load_default_preset()
     limits = agent_limits(config)
@@ -664,7 +778,7 @@ def compile_workup_sql(
     results: dict[str, dict] = {}
     for key in distinct:
         saved = cache.get(key) if cache is not None else None
-        if _valid_cached(saved, contract):
+        if reusable_sql_entry(saved, contract):
             results[key] = {**copy.deepcopy(saved), "cached": True}
     todo = [key for key in distinct if key not in results]
     progress(len(distinct) - len(todo), len(distinct))
@@ -728,8 +842,9 @@ def compile_workup_sql(
                             "compiled_at": datetime.now(timezone.utc).isoformat(
                                 timespec="seconds"),
                         }
-                        if cache is not None and entry["status"] == "compiled":
+                        if cache is not None:
                             cache[key] = copy.deepcopy(entry)
+                        _log(entry)
                         results[key] = {**entry, "cached": False}
                         progress(len(results), len(distinct))
                     report()
@@ -772,6 +887,7 @@ __all__ = [
     "render_system_prompt",
     "resolve_agent_llm",
     "response_schema",
+    "reusable_sql_entry",
     "run_final_query",
     "workup_sql_cache_key",
 ]

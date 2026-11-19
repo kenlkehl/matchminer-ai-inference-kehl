@@ -260,7 +260,8 @@ def test_agent_explores_revises_accepts_and_caches(monkeypatch, database, llm):
     assert entry["sql"] == CT_SQL.strip().rstrip(";") and entry["termination"] == "accepted"
     assert entry["approximations"] == ["Contrast is not checked."]
     assert entry["distribution"]["status_reason"]["met/documented"] == 1
-    assert [s["outcome"] for s in entry["steps"]] == ["1 row", "invalid", "valid"]
+    assert [s["outcome"] for s in entry["steps"]] == [
+        "1 row", "invalid: patients without a row", "valid"]
     assert entries[1]["cache_key"] == entry["cache_key"]
     first, second, third, fourth = (p for p, _, _ in seen)
     assert "accept" not in first["allowed_actions"] and first["memory"] == ""
@@ -300,14 +301,65 @@ def test_agent_not_expressible_and_budget(monkeypatch, database, llm, tmp_path):
     assert seen[-1][0]["allowed_actions"] == ["submit", "not_expressible"]
     assert last["accepted_by"] == "budget" and last["termination"] == "budget_accepted"
     assert "action budget" in last["approximations"][-1]
-    # No valid submission within the budget: failed, never cached.
+    # No valid submission within the budget: failed. The failure is saved, with its
+    # steps and diagnostics, but never reused.
     cache = {}
     script(monkeypatch, [action("query", "SELECT 1"), action("submit", "SELECT 1", summary="x"),
-                         action("submit", "SELECT 2", summary="y")])
+                         action("submit", "SELECT nope FROM patients", summary="y")])
     [failed] = compile_workup_sql([{"name": "MRI"}], database=database, llm=llm, config=config,
                                   cache=cache)
     assert failed["status"] == "failed" and failed["termination"] == "budget_exhausted"
-    assert failed["sql"] is None and cache == {}
+    assert failed["sql"] is None
+    assert [s["outcome"] for s in failed["steps"]] == [
+        "1 row", "invalid: wrong columns", "invalid: query error BinderException"]
+    assert "the last invalid: query error BinderException" in failed["error"]
+    assert set(failed["diagnostics"]) == {"invalid_answers", "finish_reasons",
+                                          "transport_errors"}
+    saved = cache[failed["cache_key"]]
+    assert saved["status"] == "failed" and saved["steps"] == failed["steps"]
+    assert "nope" not in json.dumps(saved["steps"][-1]["outcome"])
+    assert not agent_module.reusable_sql_entry(saved, saved["contract"])
+    seen = script(monkeypatch, [action("query", "SELECT 1"),
+                                action("submit", CT_SQL, summary="MRI."), action("accept")])
+    [retried] = compile_workup_sql([{"name": "MRI"}], database=database, llm=llm,
+                                   config=config, cache=cache)
+    assert len(seen) == 3 and retried["status"] == "compiled" and not retried["cached"]
+    assert cache[failed["cache_key"]]["status"] == "compiled"
+
+
+def test_checking_queries_after_a_valid_submission_are_capped(monkeypatch, database, llm):
+    """After a valid submission the agent may check it a few times, then must decide."""
+    config = load_default_preset()
+    config.workup_sql_agent["limits"] = {"max_actions": 12, "max_review_queries": 2}
+    seen = script(monkeypatch, [
+        action("submit", CT_SQL, summary="CT."),
+        action("query", "SELECT 1"), action("query", "SELECT 2"),
+        # No query allowed now: a revision restores two checking queries.
+        action("submit", CT_SQL, summary="CT, revised."),
+        action("query", "SELECT 3"),
+        action("accept"),
+    ])
+    [entry] = compile_workup_sql([REQUIREMENT], database=database, llm=llm, config=config)
+    allowed = [p["allowed_actions"] for p, _, _ in seen]
+    assert "query" in allowed[1] and "query" in allowed[2]
+    assert allowed[3] == ["submit", "accept", "not_expressible"]
+    assert [p["checking_queries_left"] for p, _, _ in seen] == [None, 2, 1, 0, 2, 1]
+    assert "no checking queries are left" in seen[3][0]["next_step"]
+    assert entry["status"] == "compiled" and entry["summary"] == "CT, revised."
+    assert entry["action_count"] == 6
+    assert "2 checking queries" in seen[1][0]["recent_steps"][-1]["result"]
+
+
+def test_budget_end_falls_back_to_the_last_valid_submission(monkeypatch, database, llm):
+    config = load_default_preset()
+    config.workup_sql_agent["limits"] = {"max_actions": 3, "max_submits": 3}
+    script(monkeypatch, [action("submit", CT_SQL, summary="CT."),
+                         action("submit", "SELECT 1", summary="Broken revision."),
+                         action("submit", "SELECT 2", summary="Broken again.")])
+    [entry] = compile_workup_sql([REQUIREMENT], database=database, llm=llm, config=config)
+    assert entry["status"] == "compiled" and entry["termination"] == "budget_accepted"
+    assert entry["summary"] == "CT." and entry["accepted_by"] == "budget"
+    assert any("later revision was not valid" in a for a in entry["approximations"])
 
 
 def test_agent_fails_closed_on_endpoint_errors(monkeypatch, database, llm):
@@ -318,7 +370,9 @@ def test_agent_fails_closed_on_endpoint_errors(monkeypatch, database, llm):
     cache = {}
     [entry] = compile_workup_sql([REQUIREMENT], database=database, llm=llm, cache=cache)
     assert entry["status"] == "failed" and entry["termination"] == "endpoint_failure"
-    assert "fabricated outage" not in json.dumps(entry) and cache == {}
+    assert "fabricated outage" not in json.dumps(entry)
+    assert "fabricated outage" not in json.dumps(cache)
+    assert cache[entry["cache_key"]]["status"] == "failed"
 
 
 # Cohort evaluation -----------------------------------------------------------
@@ -421,7 +475,8 @@ def test_preset_section_and_endpoint_requirement():
     section = config.workup_sql_agent
     assert section["structured_outputs"] is True and section["tokenizer_mode"] == "bytes"
     limits = agent_limits(config)
-    assert limits.max_actions == 20 and limits.max_concurrent_items == 8
+    assert limits.max_actions == 12 and limits.max_concurrent_items == 8
+    assert limits.submit_by == 6 and limits.max_review_queries == 3
     config.remote["enabled"] = False
     with pytest.raises(ValueError, match="OpenAI-compatible endpoint"):
         resolve_agent_llm(config)
@@ -556,5 +611,5 @@ def test_activity_reports_the_turn_each_item_is_on(monkeypatch, database, llm):
     assert seen[-1] == []  # nothing left exploring
     turns = [item["action"] for items in seen for item in items]
     assert turns and turns == sorted(turns) and max(turns) <= 3
-    assert all(item == {"name": "CT chest", "action": item["action"], "max_actions": 20}
+    assert all(item == {"name": "CT chest", "action": item["action"], "max_actions": 12}
                for items in seen for item in items)

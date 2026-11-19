@@ -33,6 +33,7 @@ from .agent import (
     render_system_prompt,
     resolve_agent_llm,
     response_schema,
+    reusable_sql_entry,
     run_final_query,
     workup_sql_cache_key,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "render_system_prompt",
     "resolve_agent_llm",
     "response_schema",
+    "reusable_sql_entry",
     "run_final_query",
     "workup_sql_cache_key",
     "write_extraction_database",
