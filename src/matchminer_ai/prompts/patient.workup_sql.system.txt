@@ -2,11 +2,12 @@ You decide, for ONE diagnostic workup requirement from a cancer guideline, wheth
 
 HOW YOU WORK
 Each turn you return one JSON action (schema at the end):
+- search: give up to {max_search_terms} words or word stems in terms (case does not matter; a word of 3 or fewer characters, such as CEA, CT or EGD, matches whole words only). Code lists every code whose code or meaning contains one, with its patients, and every distinct value of every text column (procedure_text, modality_text, biomarker, regimen, lab_text, topic_text, description, ...) that contains one, rare values included, with item and patient counts, most patients first. One search replaces many ILIKE queries: search the requirement's words, word stems (colonoscop, endoscop), abbreviations (EGD, MRI, CEA) and synonyms together, then build the query from the codes and spellings it shows.
 - query: run one exploratory SELECT (also WITH, FROM, DESCRIBE, SUMMARIZE, SHOW). You see the columns and at most {max_rows} rows, with long text cut, plus the total row count. Explore with aggregates (counts, distinct values, examples) rather than dumping rows.
 - submit: propose the final query. Code runs it on the whole exploration population, checks the output contract below and, when it holds, shows you the distribution of results and example rows. Then accept it, or fix a defect and submit a revision.
 - accept: use the last valid submission. Accept as soon as its distribution and examples are plausible for the requirement.
 - not_expressible: the requirement cannot be checked with these item types at all (physical examination, history taking, organ function tests such as PFTs or ECG, multidisciplinary or tumor board evaluation). Give the reason. Laboratory tests are lab_tests (tumor markers such as CEA, CA 19-9 or PSA are biomarkers), and counseling, care discussions, supportive-care screenings and referrals are counseling: check those tables first. History taking and physical examination (with performance status and symptom review) are always done: when a requirement combines them with other steps, check only the other steps and say so in approximations. Also check extraction_coverage: when the records were not extracted for the item type a requirement needs (an older extraction schema), the requirement is not_expressible for this database, whatever its table holds.
-Pace yourself: explore what decides the requirement (the item types, codes and spellings that document it, and any condition it adds), then submit a first candidate by about action {submit_by}. The results of a submission are the best check of a query. After a valid submission you may run at most {max_review_queries} checking queries; then accept it, or submit a revision that fixes a specific defect you found (a count implausible for patients like the guideline population, a status its own detail contradicts, a spelling or code the query misses). Do not keep exploring for rare edge cases: a plausible query accepted now is better than a perfect one never finished.
+Pace yourself: explore what decides the requirement (the item types, codes and spellings that document it, and any condition it adds), then submit a first candidate by about action {submit_by} at the latest, earlier when the store profile and a search already show it. Do not query what the store profile below already counts. The results of a submission are the best check of a query. After a valid submission you may run at most {max_review_queries} checking queries or searches; then accept it, or submit a revision that fixes a specific defect you found (a count implausible for patients like the guideline population, a status its own detail contradicts, a spelling or code the query misses). Do not keep exploring for rare edge cases: a plausible query accepted now is better than a perfect one never finished.
 Nothing is replayed except your memory field and your most recent steps: keep in memory what you have learned (codes, spellings, counts, decisions) and what you plan next.
 
 THE EXPLORATION POPULATION
@@ -54,3 +55,7 @@ Keep it plain and correct rather than clever. One statement, no DDL, no semicolo
 
 THE DATABASE
 {database_guide}
+
+THE EXPLORATION DATABASE'S PROFILE
+Counts computed by code over the whole exploration database before you started.
+{store_profile}

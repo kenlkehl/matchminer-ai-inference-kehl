@@ -4,9 +4,12 @@ For each distinct requirement an LLM explores an extraction database
 (:mod:`.database`) with read-only SQL in the isolated worker (:mod:`.sandbox`):
 schema, codes, spellings and distributions. It submits a final query, sees how
 that query's results are distributed over the whole exploration population, and
-accepts or revises it, within a bounded number of actions. The agent's only
-power is read-only SQL on the extracted items: no files, network, shell or
-other tools. The accepted query is cached (one per requirement, population
+accepts or revises it, within a bounded number of actions. Code first counts
+what the store holds (:mod:`.profile`, in the system prompt), and the agent's
+``search`` action lists the codes and text values containing a few words. The
+agent's only power is read-only SQL on the extracted items (its own queries, and
+the code-written ones behind the profile and search): no files, network, shell
+or other tools. The accepted query is cached (one per requirement, population
 context and exploration database) and later run once over each cohort
 (:func:`~matchminer_ai.patients.workup_sql.check_workup_with_sql`).
 
@@ -44,13 +47,21 @@ from matchminer_ai.patients.workup_queries.compile import requirement_text
 from matchminer_ai.patients.workup_queries.evaluate import APPLICABILITY, STATUSES
 
 from .database import DATABASE_VERSION, ExtractionDatabase, read_database_info, render_database_guide
+from .profile import (
+    PROFILE_VERSION,
+    SearchFailed,
+    render_profile,
+    render_search,
+    search_values,
+    store_profile,
+)
 from .sandbox import SandboxLimits, SQLSandbox, SQLSandboxError
 
 logger = logging.getLogger(__name__)
 
 SECTION = "workup_sql_agent"
 PROMPT_FILE = "patient.workup_sql.system.txt"
-AGENT_VERSION = "mmai-workup-sql-agent-v3"
+AGENT_VERSION = "mmai-workup-sql-agent-v4"
 RESULT_COLUMNS = ("patient_key", "status", "applicability", "reason", "evidence_item_keys",
                   "detail")
 #: The reasons a query may give, by status; code owns the others (no_extraction,
@@ -63,8 +74,11 @@ SQL_REASONS = {
     # Only for a requirement that advises against the step (recommends_against).
     "done_not_recommended": ("documented_not_recommended",),
 }
-ACTIONS = ("query", "submit", "accept", "not_expressible")
-_FIELDS = ("action", "purpose", "sql", "summary", "approximations", "not_expressible_reason",
+ACTIONS = ("search", "query", "submit", "accept", "not_expressible")
+#: Actions that explore (and count as checking queries after a valid submission).
+_EXPLORING = ("search", "query")
+_FIELDS = ("action", "purpose", "terms", "sql", "summary", "approximations",
+           "not_expressible_reason",
            "recommends_against", "memory")
 
 
@@ -84,7 +98,10 @@ class WorkupSQLLimits:
     max_result_chars: int = 6000
     max_memory_chars: int = 4000
     max_recent_steps: int = 8
-    max_sql_chars: int = 8000
+    #: Words per search, and matching text values a search shows.
+    max_search_terms: int = 8
+    max_search_rows: int = 50
+    max_sql_chars: int = 16000
     max_detail_chars: int = 300
     max_evidence_items: int = 8
     sample_rows_per_status: int = 3
@@ -118,7 +135,9 @@ class WorkupSQLLimits:
         return SandboxLimits(memory_mb=self.worker_memory_mb,
                              duckdb_memory_mb=self.duckdb_memory_mb,
                              query_timeout_seconds=self.query_timeout_seconds,
-                             max_sql_chars=self.max_sql_chars + 1000)
+                             # Room for the code-written profile and search statements;
+                             # the agent's own SQL is held to max_sql_chars.
+                             max_sql_chars=self.max_sql_chars + 24000)
 
 
 def _section(config: MMAIConfig) -> dict:
@@ -178,7 +197,11 @@ def response_schema(limits: WorkupSQLLimits, actions: Sequence[str] = ACTIONS) -
         "properties": {
             "action": {"type": "string", "enum": list(actions)},
             "purpose": {**text, "description": "What this step is for, one short sentence."},
-            "sql": {**text, "description": "query/submit: one DuckDB SELECT; otherwise ''."},
+            "terms": {"type": "array", "items": text, "maxItems": limits.max_search_terms,
+                      "description": "search: words or word stems to look for (case does not "
+                      "matter); otherwise []."},
+            "sql": {**text, "description": "query/submit: one DuckDB SELECT of at most "
+                    f"{limits.max_sql_chars} characters; otherwise ''."},
             "summary": {**text, "description": "submit: one plain sentence saying what the "
                         "final query checks; otherwise ''."},
             "approximations": {"type": "array", "items": text, "maxItems": 8,
@@ -197,8 +220,15 @@ def response_schema(limits: WorkupSQLLimits, actions: Sequence[str] = ACTIONS) -
     }
 
 
-def render_system_prompt(limits: WorkupSQLLimits, extensions=()) -> str:
+#: Stands for the store profile in the prompt the contract hashes: the profile is a
+#: function of the database (its fingerprint is in the cache key) and of PROFILE_VERSION.
+_PROFILE_PLACEHOLDER = "(the exploration database's profile, computed by code)"
+
+
+def render_system_prompt(limits: WorkupSQLLimits, extensions=(), profile: str | None = None) -> str:
     return (load_prompt_text(PROMPT_FILE)
+            .replace("{store_profile}", profile or _PROFILE_PLACEHOLDER)
+            .replace("{max_search_terms}", str(limits.max_search_terms))
             .replace("{max_rows}", str(limits.max_rows))
             .replace("{submit_by}", str(limits.first_submit))
             .replace("{max_review_queries}", str(limits.max_review_queries))
@@ -212,6 +242,7 @@ def agent_contract(config: MMAIConfig | None = None, extensions=()) -> dict:
     return {
         "agent_version": AGENT_VERSION,
         "database_version": DATABASE_VERSION,
+        "profile_version": PROFILE_VERSION,
         "schema_version": SCHEMA_VERSION,
         "extensions": sorted(extensions),
         "prompt_sha256": digest(render_system_prompt(limits, extensions)),
@@ -431,11 +462,13 @@ def _render_check(check: ResultCheck, limits: WorkupSQLLimits) -> str:
 class _Run:
     """State of one requirement's agent loop."""
 
-    def __init__(self, requirement, population, box, patient_count, llm, limits, system):
+    def __init__(self, requirement, population, box, patient_count, llm, limits, system,
+                 profile=None, extensions=()):
         self.requirement = requirement_text(requirement)
         self.population = (population or "").strip()
         self.box, self.patient_count, self.limits = box, patient_count, limits
         self.system, self.llm = system, llm
+        self.profile, self.extensions = profile, tuple(extensions)
         self.memory, self.steps = "", []
         self.pending = None
         #: The last valid submission, kept when a later revision is not valid.
@@ -455,7 +488,8 @@ class _Run:
         # After a valid submission only a few checking queries are allowed: then the
         # agent accepts it or submits a revision.
         can_query = not self.pending or self.reviews_left() > 0
-        actions = (["query"] if can_query else []) + (["submit"] if can_submit else [])
+        exploring = [a for a in _EXPLORING if a != "search" or self.profile is not None]
+        actions = (exploring if can_query else []) + (["submit"] if can_submit else [])
         return actions + (["accept"] if self.pending else []) + ["not_expressible"]
 
     def payload(self, turn, left, actions, recent):
@@ -471,7 +505,10 @@ class _Run:
         elif left <= 3:
             guidance = "Few actions are left: submit your best final query now."
         elif turn == 0:
-            guidance = ("Start by exploring the tables that can document this requirement: "
+            guidance = ("Start with search: the requirement's words, word stems, abbreviations "
+                        "and synonyms. The store profile already gives table and code counts."
+                        if self.profile is not None else
+                        "Start by exploring the tables that can document this requirement: "
                         "codes, text spellings and counts.")
         elif turn + 1 >= self.limits.first_submit and not self.submits:
             guidance = ("Submit a first candidate now; its results will show what to revise.")
@@ -497,7 +534,8 @@ class _Run:
             "memory": self.memory,
             "earlier_steps": [f"{s['step']}. {s['action']}: {s['purpose']} -> {s['outcome']}"
                               for s in older],
-            "recent_steps": [{k: s[k] for k in ("step", "action", "purpose", "sql", "result")}
+            "recent_steps": [{k: s[k] for k in ("step", "action", "purpose", "terms", "sql",
+                                                "result") if k != "terms" or s["terms"]}
                              for s in recent],
             "next_step": guidance,
         }
@@ -511,21 +549,31 @@ class _Run:
             if value["action"] not in actions:
                 raise ValueError("action must be one of the allowed actions.")
             for name in _FIELDS:
-                if name not in {"approximations", "recommends_against"} and not isinstance(
-                        value[name], str):
+                if name not in {"approximations", "recommends_against", "terms"} and not \
+                        isinstance(value[name], str):
                     raise ValueError(f"{name} must be a string.")
             if type(value["recommends_against"]) is not bool:
                 raise ValueError("recommends_against must be true or false.")
             if not isinstance(value["approximations"], list) or len(value["approximations"]) > 8 \
                     or any(not isinstance(a, str) for a in value["approximations"]):
                 raise ValueError("approximations must be a list of at most 8 strings.")
+            if not isinstance(value["terms"], list) or any(
+                    not isinstance(t, str) or len(t) > 60 for t in value["terms"]) \
+                    or len(value["terms"]) > limits.max_search_terms:
+                raise ValueError(f"terms must be a list of at most {limits.max_search_terms} "
+                                 "words of at most 60 characters.")
+            if value["action"] == "search" and not any(len(t.strip()) >= 2
+                                                       for t in value["terms"]):
+                raise ValueError("search needs terms: at least one word of 2 or more "
+                                 "characters.")
             if len(value["memory"]) > limits.max_memory_chars:
                 raise ValueError("memory is longer than allowed.")
             if value["action"] in {"query", "submit"}:
                 if not value["sql"].strip():
                     raise ValueError("query and submit need sql.")
                 if len(value["sql"]) > limits.max_sql_chars:
-                    raise ValueError("sql is longer than allowed.")
+                    raise ValueError(f"sql is longer than {limits.max_sql_chars} characters: "
+                                     "shorten it (shared CTEs instead of repeated conditions).")
             if value["action"] == "submit" and not value["summary"].strip():
                 raise ValueError("submit needs a one-sentence summary.")
             if value["action"] == "not_expressible" and not value["not_expressible_reason"].strip():
@@ -534,16 +582,18 @@ class _Run:
 
         return check
 
-    def step(self, action, purpose, sql, result, outcome):
+    def step(self, action, purpose, sql, result, outcome, terms=()):
         self.steps.append({"step": len(self.steps) + 1, "action": action, "purpose": purpose,
-                           "sql": sql, "result": result, "outcome": outcome})
+                           "terms": list(terms), "sql": sql, "result": result,
+                           "outcome": outcome})
 
 
 def _compile_one(requirement, population, box, patient_count, llm, limits, system,
-                 on_turn=None) -> dict:
+                 on_turn=None, profile=None, extensions=()) -> dict:
     from matchminer_ai.patients.note_search_qa import _MeasuredClient
 
-    run = _Run(requirement, population, box, patient_count, llm, limits, system)
+    run = _Run(requirement, population, box, patient_count, llm, limits, system, profile,
+               extensions)
     client = _MeasuredClient(llm)
     started = time.monotonic()
     outcome = {"status": "failed", "expressible": True, "not_expressible_reason": "",
@@ -574,9 +624,22 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
             value = client.complete("workup-sql-agent", messages, schema, run.validator(actions))
             run.memory = value["memory"]
             action, purpose = value["action"], value["purpose"].strip()
-            if action == "query":
-                if run.pending:
-                    run.reviews += 1
+            if action in _EXPLORING and run.pending:
+                run.reviews += 1
+            if action == "search":
+                try:
+                    found = search_values(box, value["terms"], profile, extensions=extensions,
+                                          max_rows=limits.max_search_rows,
+                                          max_cell_chars=limits.max_cell_chars)
+                except SearchFailed as exc:
+                    run.step("search", purpose, "", f"The search failed ({exc}): try fewer or "
+                             "longer words, or a query.", f"error {exc}", terms=value["terms"])
+                else:
+                    run.step("search", purpose, "", render_search(found, limits.max_result_chars),
+                             f"{len(found['codes'])} codes, "
+                             f"{len(found['values']) + found['more_values']} values",
+                             terms=found["words"])
+            elif action == "query":
                 reply = box.query(value["sql"], max_rows=limits.max_rows,
                                   max_cell_chars=limits.max_cell_chars)
                 run.step("query", purpose, value["sql"], _render(reply, limits),
@@ -632,7 +695,7 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
             "The query was used at the end of the agent's action budget, without its "
             "final review of the results.")]
     outcome.update(
-        steps=[{k: s[k] for k in ("step", "action", "purpose", "sql", "outcome")}
+        steps=[{k: s[k] for k in ("step", "action", "purpose", "terms", "sql", "outcome")}
                for s in run.steps],
         action_count=len(run.steps) + (outcome["termination"] in {
             "accepted", "not_expressible"}),
@@ -672,6 +735,24 @@ def _endpoint_error(diagnostics) -> str:
     if diagnostics["finish_reasons"].get("length"):
         return "The agent's answers were cut off at the output token limit."
     return "The agent's LLM endpoint failed or its answers stayed invalid."
+
+
+_PROFILES: dict[tuple, dict] = {}
+_PROFILES_LOCK = threading.Lock()
+
+
+def _profile(box, fingerprint, extensions) -> dict:
+    """The exploration database's profile, computed once per process and database."""
+    key = (fingerprint, tuple(sorted(extensions)), PROFILE_VERSION)
+    with _PROFILES_LOCK:
+        if key in _PROFILES:
+            return _PROFILES[key]
+    profile = store_profile(box, extensions)
+    with _PROFILES_LOCK:
+        while len(_PROFILES) >= 4:
+            _PROFILES.pop(next(iter(_PROFILES)))
+        _PROFILES[key] = profile
+    return profile
 
 
 def _fall_back(run, outcome, termination) -> None:
@@ -786,7 +867,6 @@ def compile_workup_sql(
     if todo:
         llm = llm or resolve_agent_llm(config)
         model = llm.model
-        system = render_system_prompt(limits, extensions)
         population_sha = digest((population_context or "").strip())
         first = {key: texts[keys.index(key)] for key in todo}
         box = (SQLSandbox(database=database, limits=limits.sandbox())
@@ -817,9 +897,18 @@ def compile_workup_sql(
 
         with box, ThreadPoolExecutor(max_workers=min(limits.max_concurrent_items,
                                                      len(todo))) as pool:
+            try:
+                profile = _profile(box, fingerprint, extensions)
+            except SQLSandboxError:
+                # The agent still works without it: no profile and no search.
+                logger.warning("The exploration database's profile could not be computed.")
+                profile = None
+            system = render_system_prompt(
+                limits, extensions,
+                render_profile(profile) if profile else "(not available for this database)")
             futures = {submit_cancellable(pool, _compile_one, first[key], population_context,
                                           box, patient_count, llm, limits, system,
-                                          on_turn(key)): key
+                                          on_turn(key), profile, extensions): key
                        for key in todo}
             pending = set(futures)
             try:

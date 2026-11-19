@@ -92,7 +92,8 @@ def llm():
 
 
 def action(kind, sql="", **values):
-    return {"action": kind, "purpose": values.get("purpose", kind), "sql": sql,
+    return {"action": kind, "purpose": values.get("purpose", kind),
+            "terms": list(values.get("terms", [])), "sql": sql,
             "summary": values.get("summary", ""), "approximations": values.get("approximations", []),
             "not_expressible_reason": values.get("reason", ""),
             "recommends_against": values.get("against", False), "memory": values.get("memory", "")}
@@ -362,6 +363,90 @@ def test_budget_end_falls_back_to_the_last_valid_submission(monkeypatch, databas
     assert any("later revision was not valid" in a for a in entry["approximations"])
 
 
+# Store profile and search ------------------------------------------------------
+
+
+def test_store_profile_and_search(database):
+    from matchminer_ai.patients.workup_sql.profile import (
+        render_profile, render_search, search_values, store_profile,
+    )
+
+    with SQLSandbox(database=database, limits=WorkupSQLLimits().sandbox()) as box:
+        profile = store_profile(box)
+        assert profile["patients"] == 4 and profile["documents"] == 5
+        tables = {row["table"]: row for row in profile["tables"]}
+        assert tables["imaging_studies"]["document"] == 3
+        assert tables["imaging_studies"]["patients"] == 2
+        assert tables["imaging_studies"]["planned"] == 1
+        assert ("ct", 2) in profile["codes"]["imaging_studies.modality"]
+        assert ("clinic_note", 3) in profile["codes"]["documents.document_type"]
+        sites = {site: (n, advanced) for site, n, advanced in profile["sites"]}
+        assert sites["lung"] == (1, 0) and sites["(no site group matched)"] == (3, 0)
+        text = render_profile(profile)
+        assert "- imaging_studies: 3 / 0 rows, 2 patients, 1 planned" in text
+        assert "- lung: 1, 0" in text and PID not in text
+        # Case variants merge, rare values are listed, quotes in words are safe.
+        found = search_values(box, ["ct ch", "EGFR", "o'brien", "contrast", "x"], profile)
+        assert found["words"] == ["ct ch", "egfr", "o'brien", "contrast"]
+        assert {"column": "imaging_studies.modality_text", "value": "CT CHEST", "items": 3,
+                "patients": 2} in found["values"]
+        assert {"column": "biomarkers.biomarker", "value": "EGFR", "items": 1,
+                "patients": 1} in found["values"]
+        contrast = [c for c in found["codes"] if c["column"] == "imaging_studies.contrast"]
+        assert {c["code"]: c["patients"] for c in contrast}["with_contrast"] == 2
+        # Short words are whole words (codes' underscores are spaces); longer ones stems.
+        short = search_values(box, ["ct", "egf"], profile)
+        modality = {c["code"] for c in short["codes"] if c["column"] == "imaging_studies.modality"}
+        assert {"ct", "pet_ct"} <= modality and "mri" not in modality
+        assert [v["value"] for v in short["values"]] == ["CT CHEST"]
+        assert search_values(box, ["colonoscop"], profile)["values"] == []
+        rendered = render_search(found, 6000)
+        assert "'CT CHEST' 3, 2" in rendered and PID not in rendered
+        with pytest.raises(ValueError, match="at least one word"):
+            search_values(box, ["x", " "], profile)
+
+
+def test_agent_searches_with_the_store_profile(monkeypatch, database, llm):
+    config = load_default_preset()
+    config.workup_sql_agent["limits"] = {"max_review_queries": 1}
+    seen = script(monkeypatch, [
+        action("search", terms=["CT chest", "computed tomography"]),
+        action("submit", CT_SQL, summary="CT."),
+        action("search", terms=["chest"]),
+        action("accept"),
+    ])
+    [entry] = compile_workup_sql([REQUIREMENT], database=database, llm=llm, config=config)
+    system = seen[0][2]
+    assert "THE EXPLORATION DATABASE'S PROFILE" in system
+    assert "- imaging_studies: 3 / 0 rows, 2 patients" in system
+    assert seen[0][0]["allowed_actions"][:2] == ["search", "query"]
+    assert seen[0][0]["next_step"].startswith("Start with search")
+    first = seen[1][0]["recent_steps"][0]
+    assert first["terms"] == ["ct chest", "computed tomography"] and first["sql"] == ""
+    assert "'CT CHEST' 3, 2" in first["result"]
+    # A search after a valid submission is a checking query.
+    assert seen[3][0]["allowed_actions"] == ["submit", "accept", "not_expressible"]
+    assert entry["status"] == "compiled" and entry["steps"][0]["outcome"].endswith("1 values")
+    assert entry["steps"][0]["terms"] == ["ct chest", "computed tomography"]
+    assert entry["contract"]["profile_version"] == "mmai-workup-sql-profile-v1"
+    # The profile does not change the contract: it is a function of the database.
+    assert entry["contract"] == agent_module.agent_contract(config)
+
+
+def test_a_failed_search_is_a_step_not_a_failure(monkeypatch, database, llm):
+    from matchminer_ai.patients.workup_sql.profile import SearchFailed
+
+    def fail(*args, **kwargs):
+        raise SearchFailed("InterruptException")
+
+    monkeypatch.setattr(agent_module, "search_values", fail)
+    script(monkeypatch, [action("search", terms=["ct"]), action("submit", CT_SQL, summary="CT."),
+                         action("accept")])
+    [entry] = compile_workup_sql([REQUIREMENT], database=database, llm=llm)
+    assert entry["status"] == "compiled"
+    assert entry["steps"][0]["outcome"] == "error InterruptException"
+
+
 def test_agent_fails_closed_on_endpoint_errors(monkeypatch, database, llm):
     def complete(self, job, messages, schema, validator):
         raise agent_module.EndpointError("fabricated outage")
@@ -477,6 +562,7 @@ def test_preset_section_and_endpoint_requirement():
     limits = agent_limits(config)
     assert limits.max_actions == 12 and limits.max_concurrent_items == 8
     assert limits.submit_by == 6 and limits.max_review_queries == 3
+    assert limits.max_search_terms == 8 and limits.max_search_rows == 50
     config.remote["enabled"] = False
     with pytest.raises(ValueError, match="OpenAI-compatible endpoint"):
         resolve_agent_llm(config)

@@ -300,7 +300,10 @@ workup_sql_agent:
     max_result_chars: 6000
     max_memory_chars: 4000
     max_recent_steps: 8
-    max_sql_chars: 8000
+    # Words per search action, and matching text values (rare ones included) it shows.
+    max_search_terms: 8
+    max_search_rows: 50
+    max_sql_chars: 16000
     max_detail_chars: 300
     max_evidence_items: 8
     sample_rows_per_status: 3

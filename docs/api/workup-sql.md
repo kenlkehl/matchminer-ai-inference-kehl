@@ -21,8 +21,10 @@ are used, how text fields are spelled, how often things occur and how dates look
 2. **One query per requirement.** For each distinct workup item (name, conditions,
    category), `compile_workup_sql` runs a bounded agent over an *exploration
    database*, normally a whole extraction store.
-   - Each turn the agent returns one JSON action: `query`, `submit`, `accept` or
-     `not_expressible`.
+   - Before it starts, code counts what the database holds (the **store
+     profile**, below) and puts it in the agent's system prompt.
+   - Each turn the agent returns one JSON action: `search`, `query`, `submit`,
+     `accept` or `not_expressible`.
    - A submission must return one row per patient. Code runs it over every
      exploration patient, checks its output contract and shows the agent the
      distribution of results with example rows. The agent then accepts it or
@@ -84,6 +86,40 @@ The agent's only tool is read-only SQL, run in an isolated worker process
 
 **What the agent cannot do:** it has no files, shell, network, Python or browsing.
 Model-written SQL never runs in the calling process.
+
+## Store profile and search
+
+Every requirement used to start by rediscovering the same facts and hunting for
+spellings with `ILIKE` queries. Two code-made aids replace that
+(`matchminer_ai.patients.workup_sql.profile`). Both run code-written SELECT
+statements in the same worker, over the same tables.
+
+**Store profile** (`store_profile`, `render_profile`; about 7,000 characters for a
+1,000-patient store). Computed once per process and exploration database, it
+gives:
+- patients, notes and incomplete extractions;
+- per item table: rows at each level, patients, planned items, items with an
+  exact stated date, and undated items;
+- patients per code of every code column (codes with no items are left out);
+- patients per cancer site group, and how many of them have stage IV, M1 or
+  distant extent documented. Code matches `primary_site` and `histology` text
+  against fixed patterns (`SITE_GROUPS`), so the groups are approximate. The
+  agent is told to use them only to judge plausibility, never in a final query.
+
+**`search`** (`search_values`). The agent gives up to `max_search_terms` (8) words
+or word stems. Code returns:
+- every code whose code or meaning contains one, with its patients;
+- every distinct value of every text column that contains one, rare values
+  included, with item and patient counts, most patients first. Values that
+  differ only in case are merged. At most `max_search_rows` (50) are shown, and
+  per-column totals show what was cut.
+
+A search after a valid submission counts as a checking query.
+
+The profile is a function of the database and of `PROFILE_VERSION`, which is in
+the agent contract, so the cache key (which holds the database fingerprint)
+covers it. Like exploration results, both reach the agent's endpoint: aggregate
+counts and distinct extracted values, never patient ids, note text or quotes.
 
 ## The database
 
@@ -198,7 +234,7 @@ query results.
   queries. Code then removes the query action: the agent accepts the submission,
   or submits a revision that fixes a defect it found, which allows 3 more.
 - `max_rows`, `max_cell_chars` and `max_result_chars` bound what it sees of each
-  result.
+  result; `max_search_terms` and `max_search_rows` bound a search.
 - `max_recent_steps` sets how many recent steps are replayed with their results.
   Earlier ones are listed by outcome, and the agent's own `memory` carries the rest.
 - Up to `max_concurrent_items` (8) requirements are explored at once, sharing one
@@ -218,7 +254,7 @@ query results.
 mapping) to reuse accepted queries. The key (`workup_sql_cache_key`) covers:
 - the requirement text and the population context;
 - the exploration database's fingerprint;
-- the agent, database and extraction-schema versions;
+- the agent, database, store-profile and extraction-schema versions;
 - the prompt and response-schema hashes.
 
 **Failed runs** are saved under their key too, but never reused: the next call
@@ -246,3 +282,5 @@ query, WARNING for a failure.
         - WorkupSQLLimits
         - workup_sql_cache_key
         - render_database_guide
+        - store_profile
+        - search_values
