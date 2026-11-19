@@ -421,7 +421,7 @@ def test_preset_section_and_endpoint_requirement():
     section = config.workup_sql_agent
     assert section["structured_outputs"] is True and section["tokenizer_mode"] == "bytes"
     limits = agent_limits(config)
-    assert limits.max_actions == 20 and limits.max_concurrent_items == 4
+    assert limits.max_actions == 20 and limits.max_concurrent_items == 8
     config.remote["enabled"] = False
     with pytest.raises(ValueError, match="OpenAI-compatible endpoint"):
         resolve_agent_llm(config)
@@ -521,3 +521,40 @@ def test_steps_the_guideline_advises_against(database):
     assert against["statuses"]["done_not_recommended"] == 1 and against["recommends_against"]
     assert against["documented_completion_fraction"] is None and against["applicable_assessed"] == 0
     assert normal["recommends_against"] is False and normal["documented_completion_fraction"] == 0.5
+
+
+def test_agent_requests_get_their_own_timeout_slots_and_capacity_waits():
+    config = load_default_preset()
+    config.remote.update(enabled=True, server_urls=["http://fabricated.invalid/v1"],
+                         request_timeout=7200, max_concurrent_requests=1)
+    config.workup_sql_agent["remote"]["model_name"] = "fabricated-model"
+    resolved = resolve_agent_llm(config)
+    assert resolved.timeout == 600 and resolved.max_concurrent_requests == 8
+    assert resolved.capacity_retry_initial_seconds == 10
+    config.workup_sql_agent.update(request_timeout=90, max_concurrent_requests=3)
+    resolved = resolve_agent_llm(config)
+    assert resolved.timeout == 90 and resolved.max_concurrent_requests == 3
+
+
+def test_activity_reports_the_turn_each_item_is_on(monkeypatch, database, llm):
+    """Every exploring item's turn is reported while it runs, from the calling thread."""
+    import threading
+
+    caller = threading.current_thread()
+    seen, threads = [], set()
+    import time
+
+    def slow(value):
+        return lambda payload: (time.sleep(0.7), value)[1]
+
+    script(monkeypatch, [slow(action("query", "SELECT 1")),
+                         slow(action("submit", CT_SQL, summary="CT.")), slow(action("accept"))])
+    compile_workup_sql([REQUIREMENT], database=database, llm=llm,
+                       activity_callback=lambda items: (seen.append(items),
+                                                        threads.add(threading.current_thread())))
+    assert threads == {caller}
+    assert seen[-1] == []  # nothing left exploring
+    turns = [item["action"] for items in seen for item in items]
+    assert turns and turns == sorted(turns) and max(turns) <= 3
+    assert all(item == {"name": "CT chest", "action": item["action"], "max_actions": 20}
+               for items in seen for item in items)

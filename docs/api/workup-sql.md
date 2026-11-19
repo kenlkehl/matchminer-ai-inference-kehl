@@ -198,8 +198,11 @@ query results.
   result.
 - `max_recent_steps` sets how many recent steps are replayed with their results.
   Earlier ones are listed by outcome, and the agent's own `memory` carries the rest.
-- Up to `max_concurrent_items` requirements are explored at once, sharing one
-  worker.
+- Up to `max_concurrent_items` (8) requirements are explored at once, sharing one
+  worker; the agent's request cap is raised to match. `activity_callback` reports
+  which requirements are being explored and the turn each is on.
+- A stalled request is retried after `request_timeout` (600 s) instead of the
+  shared `remote.request_timeout`.
 
 **Ending a run:**
 - A valid submission on the last turn is accepted, with a limitation saying so.

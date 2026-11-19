@@ -22,6 +22,7 @@ import copy
 import json
 import logging
 import re
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, MutableMapping, Sequence
@@ -82,7 +83,7 @@ class WorkupSQLLimits:
     max_detail_chars: int = 300
     max_evidence_items: int = 8
     sample_rows_per_status: int = 3
-    max_concurrent_items: int = 4
+    max_concurrent_items: int = 8
     query_timeout_seconds: float = 20.0
     final_timeout_seconds: float = 120.0
     worker_memory_mb: int = 4096
@@ -144,6 +145,20 @@ def resolve_agent_llm(config: MMAIConfig) -> StructuredConfig:
     runtime["response_format"] = "json_schema" if values.get("structured_outputs", True) \
         else "none"
     runtime["tokenizer_mode"] = values.get("tokenizer_mode", "bytes")
+    # A turn's own read timeout: the shared remote.request_timeout (hours, for long
+    # summaries) would let one stalled call hold an item that long.
+    runtime["request_timeout"] = float(values.get("request_timeout", 600))
+    # Enough request slots for every item explored at once.
+    runtime["max_concurrent_requests"] = max(
+        int(runtime.get("max_concurrent_requests") or 1),
+        int(values.get("max_concurrent_requests") or agent_limits(config).max_concurrent_items),
+    )
+    # A busy endpoint (429/503) is waited out, within max_attempts, instead of
+    # costing the item an attempt immediately.
+    if not runtime.get("capacity_retry_initial_seconds"):
+        runtime["capacity_retry_initial_seconds"] = 10.0
+        runtime["capacity_retry_max_seconds"] = max(
+            60.0, float(runtime.get("capacity_retry_max_seconds") or 60.0))
     context = values.get("context_window") or runtime.get("max_model_len")
     if context:
         runtime["context_window"] = int(context)
@@ -479,7 +494,8 @@ class _Run:
                            "sql": sql, "result": result, "outcome": outcome})
 
 
-def _compile_one(requirement, population, box, patient_count, llm, limits, system) -> dict:
+def _compile_one(requirement, population, box, patient_count, llm, limits, system,
+                 on_turn=None) -> dict:
     from matchminer_ai.patients.note_search_qa import _MeasuredClient
 
     run = _Run(requirement, population, box, patient_count, llm, limits, system)
@@ -492,6 +508,8 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
     try:
         for turn in range(limits.max_actions):
             check_cancelled()
+            if on_turn is not None:
+                on_turn(turn + 1)
             left = limits.max_actions - turn
             actions = run.actions(left)
             schema = response_schema(limits, actions)
@@ -600,6 +618,7 @@ def compile_workup_sql(
     progress_callback: Callable[[int, int], None] | None = None,
     return_metadata: bool = False,
     llm: StructuredConfig | None = None,
+    activity_callback: Callable[[list[dict]], None] | None = None,
 ):
     """One accepted cohort-level SQL query per workup requirement.
 
@@ -608,7 +627,11 @@ def compile_workup_sql(
     agent explores it and checks each submission on all of its patients.
     ``cache``: any mapping from cache keys to entries (accepted queries only,
     reused while their contract matches). ``llm`` overrides the endpoint
-    resolved from ``config.workup_sql_agent``.
+    resolved from ``config.workup_sql_agent``. ``progress_callback(done, total)``
+    reports finished requirements; ``activity_callback(items)`` reports, whenever
+    it changes, the requirements being explored: ``{"name", "action",
+    "max_actions"}`` each, ``action`` being the turn the agent is on (both are
+    called from the calling thread).
 
     Returns one entry per requirement, in order (duplicates share an entry). Each
     entry has ``cache_key``, ``requirement``, ``status`` (compiled or failed),
@@ -655,10 +678,34 @@ def compile_workup_sql(
         box = (SQLSandbox(database=database, limits=limits.sandbox())
                if isinstance(database, ExtractionDatabase)
                else SQLSandbox(database_path=database, limits=limits.sandbox()))
+        active: dict[str, int] = {}
+        lock = threading.Lock()
+        shown: list[dict] | None = None
+
+        def on_turn(key):
+            def record(action):
+                with lock:
+                    active[key] = action
+            return record
+
+        def report():
+            nonlocal shown
+            if activity_callback is None:
+                return
+            with lock:
+                items = [{"name": first[key]["name"], "action": action,
+                          "max_actions": limits.max_actions}
+                         for key, action in sorted(active.items(),
+                                                   key=lambda kv: (-kv[1], kv[0]))]
+            if items != shown:
+                shown = items
+                activity_callback(copy.deepcopy(items))
+
         with box, ThreadPoolExecutor(max_workers=min(limits.max_concurrent_items,
                                                      len(todo))) as pool:
             futures = {submit_cancellable(pool, _compile_one, first[key], population_context,
-                                          box, patient_count, llm, limits, system): key
+                                          box, patient_count, llm, limits, system,
+                                          on_turn(key)): key
                        for key in todo}
             pending = set(futures)
             try:
@@ -667,6 +714,8 @@ def compile_workup_sql(
                     check_cancelled()
                     for future in done:
                         key = futures[future]
+                        with lock:
+                            active.pop(key, None)
                         outcome = future.result()
                         entry = {
                             "cache_key": key,
@@ -683,6 +732,7 @@ def compile_workup_sql(
                             cache[key] = copy.deepcopy(entry)
                         results[key] = {**entry, "cached": False}
                         progress(len(results), len(distinct))
+                    report()
             except BaseException:
                 for future in pending:
                     future.cancel()

@@ -279,6 +279,10 @@ workup_sql_agent:
   tokenizer_mode: bytes
   # null: local.engine.max_model_len.
   context_window: null
+  # Seconds a turn's request may go without data before it is retried (remote.request_timeout,
+  # hours for long summaries, would let one stalled call hold an item that long). A 429/503 is
+  # waited out within max_attempts.
+  request_timeout: 600
   sampling_profile: auto
   reasoning_effort: high
   reasoning_parser: auto
@@ -297,8 +301,9 @@ workup_sql_agent:
     max_detail_chars: 300
     max_evidence_items: 8
     sample_rows_per_status: 3
-    # Requirements explored at once; they share one SQL worker.
-    max_concurrent_items: 4
+    # Requirements explored at once; they share one SQL worker. Each turn is one request,
+    # so this many requests are in flight (remote.max_concurrent_requests is raised to it).
+    max_concurrent_items: 8
     query_timeout_seconds: 20
     final_timeout_seconds: 120
     worker_memory_mb: 4096

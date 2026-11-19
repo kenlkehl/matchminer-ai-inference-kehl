@@ -532,6 +532,9 @@ quotes) and reach that endpoint.
   with `/tokenize`.
 - `context_window` (null): null uses `local.engine.max_model_len`, then the
   endpoint's `/v1/models`.
+- `request_timeout` (600): seconds a turn's request may go without data before it
+  is retried, instead of the shared `remote.request_timeout`. A 429 or 503 is
+  waited out (from 10 s, at most 60 s) within `max_attempts`.
 - `sampling_profile`, `reasoning_effort` (`high`) and `reasoning_parser`, as for
   other LLM sections.
 - `local` / `remote`: the model, with 32,000 completion tokens per turn by default.
@@ -545,7 +548,8 @@ quotes) and reach that endpoint.
 - `max_memory_chars` (4,000), `max_recent_steps` (8), `max_sql_chars` (8,000).
 - `max_detail_chars` (300) and `max_evidence_items` (8): per-patient output.
 - `sample_rows_per_status` (3): example rows shown after a submission.
-- `max_concurrent_items` (4): requirements explored at once, sharing one worker.
+- `max_concurrent_items` (8): requirements explored at once, sharing one worker.
+  Each turn is one request, so the agent's request cap is raised to at least this.
 - `query_timeout_seconds` (20) and `final_timeout_seconds` (120).
 - `worker_memory_mb` (4,096) and `duckdb_memory_mb` (2,048).
 
