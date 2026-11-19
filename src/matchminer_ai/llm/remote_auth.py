@@ -11,6 +11,10 @@ from typing import Any, Awaitable, Callable, Mapping
 
 OPENAI_COMPATIBLE_PROVIDER = "openai"
 GOOGLE_AGENT_PLATFORM_PROVIDER = "google_agent_platform"
+#: Claude through a Databricks AI Gateway's Anthropic Messages route
+#: (``https://<workspace>/ai-gateway/anthropic``), authenticated with a Databricks
+#: profile. Only structured requests (``StructuredClient``) support it.
+DATABRICKS_ANTHROPIC_PROVIDER = "databricks_anthropic"
 GOOGLE_CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 
 AsyncAPIKey = str | Callable[[], Awaitable[str]]
@@ -31,12 +35,15 @@ def remote_provider_name(remote_config: Mapping[str, Any]) -> str:
         "vertex": GOOGLE_AGENT_PLATFORM_PROVIDER,
         "vertex_ai": GOOGLE_AGENT_PLATFORM_PROVIDER,
         "google_agent_platform": GOOGLE_AGENT_PLATFORM_PROVIDER,
+        "databricks": DATABRICKS_ANTHROPIC_PROVIDER,
+        "databricks_anthropic": DATABRICKS_ANTHROPIC_PROVIDER,
     }
     try:
         return aliases[normalized]
     except KeyError as exc:
         allowed = ", ".join(
-            (OPENAI_COMPATIBLE_PROVIDER, GOOGLE_AGENT_PLATFORM_PROVIDER)
+            (OPENAI_COMPATIBLE_PROVIDER, GOOGLE_AGENT_PLATFORM_PROVIDER,
+             DATABRICKS_ANTHROPIC_PROVIDER)
         )
         raise ValueError(
             f"Unsupported remote provider {raw_provider!r}. Use one of: {allowed}."
@@ -94,9 +101,72 @@ def clear_google_adc_credential_cache() -> None:
     _google_adc_token_provider.cache_clear()
 
 
+class DatabricksCredentialsError(RuntimeError):
+    """No Databricks access token (missing package, profile or expired login)."""
+
+
+class DatabricksTokenProvider:
+    """Databricks access tokens from a ``databricks-sdk`` WorkspaceClient.
+
+    With a profile (``~/.databrickscfg``, written by ``databricks auth login``), the
+    SDK asks the Databricks CLI for tokens and refreshes them. Without one it uses
+    the runtime identity of a Databricks notebook or job, or a service principal
+    from the ``ARM_*`` environment variables. Tokens are never logged.
+    """
+
+    def __init__(self, profile: str = "") -> None:
+        try:
+            from databricks.sdk import WorkspaceClient
+        except ImportError as exc:
+            raise DatabricksCredentialsError(
+                "Claude through Databricks needs the databricks-sdk and anthropic "
+                "packages: pip install 'matchminer-ai[databricks]'."
+            ) from exc
+        self.profile = profile
+        try:
+            self._client = WorkspaceClient(profile=profile) if profile else WorkspaceClient()
+            self.host = str(self._client.config.host or "")
+        except Exception:  # The SDK raises ValueError and its own config errors.
+            raise DatabricksCredentialsError(_login_hint(profile)) from None
+        self._lock = threading.Lock()
+
+    def token(self) -> str:
+        try:
+            with self._lock:
+                header = self._client.config.authenticate().get("Authorization", "")
+        except Exception:
+            raise DatabricksCredentialsError(_login_hint(self.profile)) from None
+        token = header.removeprefix("Bearer ").strip()
+        if not header.startswith("Bearer ") or not token:
+            raise DatabricksCredentialsError(_login_hint(self.profile))
+        return token
+
+
+def _login_hint(profile: str) -> str:
+    if not profile:
+        return "Could not get a Databricks access token from the runtime identity."
+    return (f"Could not get a Databricks access token for profile {profile!r}. Log in with "
+            f"`databricks auth login --host <workspace URL> --profile {profile}`.")
+
+
+@lru_cache(maxsize=8)
+def databricks_token_provider(profile: str = "") -> DatabricksTokenProvider:
+    """One token provider per Databricks profile (failed setups are not cached)."""
+    return DatabricksTokenProvider(profile)
+
+
+def _openai_only(remote_config: Mapping[str, Any]) -> None:
+    if remote_provider_name(remote_config) == DATABRICKS_ANTHROPIC_PROVIDER:
+        raise ValueError(
+            "Claude through Databricks serves structured requests only (such as the SQL "
+            "workup agent); choose an OpenAI-compatible or Google provider here."
+        )
+
+
 def remote_api_key(remote_config: Mapping[str, Any]) -> AsyncAPIKey:
     """Return the API key value or refresh callback for an OpenAI client."""
 
+    _openai_only(remote_config)
     if remote_provider_name(remote_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
         project_id = str(remote_config.get("google_project_id") or "").strip()
         return _google_adc_token_provider(project_id).async_token
@@ -110,6 +180,7 @@ def remote_bearer_token(
 ) -> str:
     """Return a current synchronous bearer token for endpoint diagnostics."""
 
+    _openai_only(remote_config)
     if remote_provider_name(remote_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
         project_id = str(remote_config.get("google_project_id") or "").strip()
         return _google_adc_token_provider(project_id).token()
@@ -166,11 +237,15 @@ def prepare_messages_for_provider(
 
 __all__ = [
     "AsyncAPIKey",
+    "DATABRICKS_ANTHROPIC_PROVIDER",
+    "DatabricksCredentialsError",
+    "DatabricksTokenProvider",
     "GOOGLE_AGENT_PLATFORM_PROVIDER",
     "GOOGLE_CLOUD_SCOPE",
     "OPENAI_COMPATIBLE_PROVIDER",
     "GoogleADCAccessTokenProvider",
     "clear_google_adc_credential_cache",
+    "databricks_token_provider",
     "prepare_messages_for_provider",
     "remote_api_key",
     "remote_bearer_token",

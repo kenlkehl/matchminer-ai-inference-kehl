@@ -41,7 +41,13 @@ from matchminer_ai.cancellation import check_cancelled, submit_cancellable
 from matchminer_ai.config import MMAIConfig, load_default_preset
 from matchminer_ai.llm.backends import build_llm_runtime_config
 from matchminer_ai.llm.prompts import load_prompt_text
-from matchminer_ai.llm.structured import EndpointError, StructuredConfig, resolve_structured_config
+from matchminer_ai.llm.remote_auth import DATABRICKS_ANTHROPIC_PROVIDER, remote_provider_name
+from matchminer_ai.llm.structured import (
+    CredentialsError,
+    EndpointError,
+    StructuredConfig,
+    resolve_structured_config,
+)
 from matchminer_ai.patients.extraction.schema import SCHEMA_VERSION
 from matchminer_ai.patients.workup_queries.compile import requirement_text
 from matchminer_ai.patients.workup_queries.evaluate import APPLICABILITY, STATUSES
@@ -151,11 +157,19 @@ def agent_limits(config: MMAIConfig | None = None) -> WorkupSQLLimits:
     return WorkupSQLLimits.from_mapping(_section(config or load_default_preset()).get("limits"))
 
 
+#: Connection keys the section's ``remote`` may set for the agent alone, overriding
+#: ``config.remote`` (the other sections, such as extraction, keep that connection).
+_CONNECTION_KEYS = ("server_urls", "provider", "google_project_id", "databricks_profile")
+
+
 def resolve_agent_llm(config: MMAIConfig) -> StructuredConfig:
     """The agent's endpoint: the ``workup_sql_agent`` section on ``config.remote``.
 
-    Any OpenAI-compatible endpoint works (a local vLLM server, Vertex, others);
-    the agent cannot drive an in-process engine.
+    Any OpenAI-compatible endpoint works (a local vLLM server, Vertex, others), and
+    so does Claude through a Databricks AI Gateway (provider ``databricks_anthropic``).
+    The section's ``remote`` may name its own ``server_urls``, ``provider``,
+    ``google_project_id`` and ``databricks_profile``. The agent cannot drive an
+    in-process engine.
     """
     values = _section(config)
     llm = {k: copy.deepcopy(values[k]) for k in
@@ -165,6 +179,14 @@ def resolve_agent_llm(config: MMAIConfig) -> StructuredConfig:
     if runtime["backend_mode"] != "remote":
         raise ValueError("The SQL workup agent needs an OpenAI-compatible endpoint: enable "
                          "remote and set remote.server_urls (a local vLLM server works).")
+    connection = values.get("remote") or {}
+    if "provider" in connection:
+        # A provider of the agent's own: drop the shared connection's credentials scope.
+        runtime.pop("google_project_id", None)
+        runtime.pop("databricks_profile", None)
+    for key in _CONNECTION_KEYS:
+        if key in connection:
+            runtime[key] = copy.deepcopy(connection[key])
     runtime["max_retries"] = int(values.get("max_attempts", 3))
     runtime["response_format"] = "json_schema" if values.get("structured_outputs", True) \
         else "none"
@@ -236,11 +258,29 @@ def render_system_prompt(limits: WorkupSQLLimits, extensions=(), profile: str | 
             .replace("{database_guide}", render_database_guide(extensions)))
 
 
+def agent_llm_identity(config: MMAIConfig | None = None) -> dict:
+    """The provider, model and reasoning effort that write the queries, from the configuration.
+
+    Part of the cache key, so each model's (and effort's) queries are cached apart.
+    Read without contacting the endpoint (a model left to discovery counts as "").
+    """
+    config = config or load_default_preset()
+    section = _section(config)
+    connection = section.get("remote") or {}
+    provider = connection.get("provider") or (getattr(config, "remote", None) or {}).get(
+        "provider")
+    effort = (connection.get("request_params") or {}).get("reasoning_effort") or section.get(
+        "reasoning_effort")
+    return {"provider": remote_provider_name({"provider": provider}),
+            "model": str(connection.get("model_name") or ""), "effort": str(effort or "")}
+
+
 def agent_contract(config: MMAIConfig | None = None, extensions=()) -> dict:
     """What an accepted query depends on besides its requirement, population and database."""
     limits = agent_limits(config)
     return {
         "agent_version": AGENT_VERSION,
+        "llm": agent_llm_identity(config),
         "database_version": DATABASE_VERSION,
         "profile_version": PROFILE_VERSION,
         "schema_version": SCHEMA_VERSION,
@@ -608,10 +648,16 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
             left = limits.max_actions - turn
             actions = run.actions(left)
             schema = response_schema(limits, actions)
-            system_text = system + "\n\nResponse JSON schema:\n" + json.dumps(schema)
+            schema_text = "Response JSON schema:\n" + json.dumps(schema)
+            # Claude caches the instructions as their own block; the schema, whose actions
+            # change from turn to turn, follows in a second one. Chat endpoints get one.
+            head = ([{"role": "system", "content": system},
+                     {"role": "system", "content": schema_text}]
+                    if llm.provider == DATABRICKS_ANTHROPIC_PROVIDER
+                    else [{"role": "system", "content": system + "\n\n" + schema_text}])
             recent = run.steps[-limits.max_recent_steps:]
             while True:
-                messages = [{"role": "system", "content": system_text},
+                messages = [*head,
                             {"role": "user", "content": json.dumps(
                                 run.payload(turn, left, actions, recent), ensure_ascii=False)}]
                 if client.fits(messages) or not recent:
@@ -676,13 +722,16 @@ def _compile_one(requirement, population, box, patient_count, llm, limits, syste
                 break
         else:
             _fall_back(run, outcome, "budget_accepted")
+    except CredentialsError as exc:
+        # A fixed login hint (no provider or patient text).
+        outcome.update(status="failed", termination="endpoint_failure", error=str(exc))
     except EndpointError:
         outcome.update(status="failed", termination="endpoint_failure")
     except SQLSandboxError:
         outcome.update(status="failed", termination="sandbox_failure",
                        error="The isolated SQL worker failed.")
     diagnostics = _diagnostics(client)
-    if outcome["termination"] == "endpoint_failure":
+    if outcome["termination"] == "endpoint_failure" and outcome["error"] is None:
         outcome["error"] = _endpoint_error(diagnostics)
     if outcome["status"] == "failed" and outcome["error"] is None:
         submits = [s["outcome"] for s in run.steps if s["action"] == "submit"]
@@ -970,6 +1019,7 @@ __all__ = [
     "SQL_REASONS",
     "WorkupSQLLimits",
     "agent_contract",
+    "agent_llm_identity",
     "agent_limits",
     "check_result",
     "compile_workup_sql",

@@ -269,7 +269,10 @@ workup_sql_agent:
   # (never per patient), an LLM explores an extraction database with read-only SQL in an
   # isolated DuckDB worker and accepts one cohort-level query; code runs it once per cohort.
   # Its only tool is read-only SQL. It needs an OpenAI-compatible endpoint (remote.enabled; a
-  # local vLLM server, Vertex or another provider), not an in-process engine. Exploration
+  # local vLLM server, Vertex or another provider) or Claude through a Databricks AI Gateway
+  # (remote.provider: databricks_anthropic, server_urls https://<workspace>/ai-gateway/anthropic,
+  # databricks_profile, context_window), not an in-process engine. This section's remote may set
+  # its own server_urls, provider, google_project_id and databricks_profile. Exploration
   # results are patient-derived extracted values (no ids, note text or quotes): use only an
   # endpoint authorized for the records.
   # Attempts per turn for an invalid action (validated in code).

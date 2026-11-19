@@ -17,6 +17,7 @@ from matchminer_ai._storage import atomic_json, digest, read_json
 from matchminer_ai.cancellation import cancel_sleep, check_cancelled, run_cancellable
 
 from .remote_auth import (
+    DATABRICKS_ANTHROPIC_PROVIDER,
     GOOGLE_AGENT_PLATFORM_PROVIDER,
     remote_bearer_token,
     remote_provider_name,
@@ -48,6 +49,8 @@ class StructuredConfig:
     extra_body: dict = field(default_factory=dict)
     provider: str = "openai"
     google_project_id: str = ""
+    # Provider databricks_anthropic: the ~/.databrickscfg profile ("" = runtime identity).
+    databricks_profile: str = ""
     request_start_interval_seconds: float = 0.0
     capacity_retry_initial_seconds: float = 0.0
     capacity_retry_max_seconds: float = 60.0
@@ -72,6 +75,8 @@ class StructuredConfig:
         result = asdict(self)  # Contains only the key's environment-variable NAME.
         if self.transport_base_url is None:
             result.pop("transport_base_url")
+        if not self.databricks_profile:
+            result.pop("databricks_profile")
         # Keep existing checkpoint identities when pacing is not configured.
         for name, default in (
             ("request_start_interval_seconds", 0.0),
@@ -132,6 +137,14 @@ def _retry_after_seconds(value):
         except (ValueError, TypeError, OverflowError):
             return None
     return max(0.0, seconds) if math.isfinite(seconds) else None
+
+
+class CredentialsError(EndpointError):
+    """No credentials for the endpoint (such as an expired login).
+
+    Its message is a fixed text with no provider or patient content, and retrying
+    cannot fix it, so structured requests raise it at once, message intact.
+    """
 
 
 class RepairError(EndpointError):
@@ -285,6 +298,16 @@ class StructuredClient:
             raise ValueError(
                 "Context window must exceed output reserve plus safety tokens"
             )
+        if config.provider == DATABRICKS_ANTHROPIC_PROVIDER:
+            from .anthropic_messages import gateway_url_error, request_field_error
+
+            error = (gateway_url_error(config.base_url)
+                     or request_field_error({**config.request_params, **config.extra_body}))
+            if error:
+                raise ValueError(error)
+            if config.tokenizer_mode != "bytes":
+                raise ValueError("Claude through Databricks has no tokenizer route; "
+                                 "use tokenizer_mode='bytes'.")
 
     def normalize_result(self, value):
         """Normalize representation only; subclasses must not rewrite clinical content."""
@@ -322,6 +345,8 @@ class StructuredClient:
 
     def _http_request(self, endpoint, body=None, *, server_root=False, output_schema=None):
         check_cancelled()
+        if self.config.provider == DATABRICKS_ANTHROPIC_PROVIDER:
+            return self._claude_request(endpoint, body, output_schema)
         base_url = self.config.transport_base_url or self.config.base_url
         headers = {"Content-Type": "application/json"}
         key = os.environ.get(self.config.api_key_env)
@@ -400,6 +425,32 @@ class StructuredClient:
             raise EndpointError(
                 f"Endpoint request failed: {type(exc).__name__}: {exc}"
             ) from exc
+
+    def _claude_request(self, endpoint, body, output_schema):
+        """Claude through a Databricks gateway (``anthropic_messages``), chat-shaped."""
+        from .anthropic_messages import send_messages
+        from .request_limits import endpoint_slot
+
+        if endpoint != "/chat/completions":
+            raise EndpointError(
+                f"Claude through Databricks has no {endpoint} route; set model_name and "
+                "context_window, and use tokenizer_mode='bytes'."
+            )
+        base_url = self.config.transport_base_url or self.config.base_url
+        dispatch_wait = 0.0
+        with endpoint_slot(base_url, self.config.max_concurrent_requests, pool="generation"):
+            if (self.config.request_start_interval_seconds
+                    or self.config.capacity_retry_initial_seconds):
+                from .request_pacing import endpoint_pacer
+
+                dispatch_wait = endpoint_pacer(base_url, self.config.model).wait(
+                    self.config.request_start_interval_seconds)
+            check_cancelled()
+            result = send_messages(self.config, body,
+                                   guards=self.stream_guards(output_schema))
+            check_cancelled()
+        result["transport"]["dispatch_wait_seconds"] = round(dispatch_wait, 4)
+        return result
 
     def discover(self):
         models = self._http("/models").get("data", [])
@@ -500,6 +551,8 @@ class StructuredClient:
                 value, _ = parse_model_json(choice["message"]["content"])
                 validator(value)
                 return value
+            except CredentialsError:
+                raise
             except (ValueError, KeyError, TypeError, IndexError, EndpointError) as exc:
                 if self._capacity_retry(exc, attempt):
                     # Capacity rejection does not invalidate the prompt or add
@@ -810,6 +863,8 @@ class StructuredClient:
                 )
                 atomic_json(folder / f"attempt-{offset + attempt}.json", response)
                 return accept_response(response)
+            except CredentialsError:
+                raise
             except RepairError as exc:
                 atomic_json(
                     folder / f"failure-{offset + attempt}.json",
@@ -944,6 +999,7 @@ def resolve_structured_config(
         base_url=urls[0],
         provider=remote_provider_name(runtime),
         google_project_id=runtime.get("google_project_id", ""),
+        databricks_profile=runtime.get("databricks_profile", ""),
         request_start_interval_seconds=runtime.get("request_start_interval_seconds", 0.0),
         capacity_retry_initial_seconds=runtime.get("capacity_retry_initial_seconds", 0.0),
         capacity_retry_max_seconds=runtime.get("capacity_retry_max_seconds", 60.0),

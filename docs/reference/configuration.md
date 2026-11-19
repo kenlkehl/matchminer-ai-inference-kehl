@@ -105,7 +105,10 @@ Selects the remote LLM backend when true.
 
 Authentication and message-compatibility profile. `openai` is the default and
 reads `OPENAI_API_KEY`. `google_agent_platform` uses ADC and ignores
-`OPENAI_API_KEY`.
+`OPENAI_API_KEY`. `databricks_anthropic` sends structured requests to Claude through a
+Databricks AI Gateway's Anthropic Messages route, authenticated with a Databricks
+profile (`databricks_profile`). Only structured requests support it, such as the SQL
+workup agent; see [SQL-agent workup checks](../api/workup-sql.md).
 
 For example, Gemma 4 26B A4B IT MaaS in a project named `profile-notes` uses:
 

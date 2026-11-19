@@ -222,9 +222,48 @@ query results.
 
 **Section and endpoint:** the `workup_sql_agent` preset section configures the agent.
 - It needs an OpenAI-compatible endpoint (`remote.enabled`): a local vLLM server,
-  Vertex or another provider. It cannot drive an in-process engine.
+  Vertex or another provider, or Claude through a Databricks AI Gateway (below). It
+  cannot drive an in-process engine.
+- The section's `remote` may set its own `server_urls`, `provider`,
+  `google_project_id` and `databricks_profile`, overriding `config.remote` for the
+  agent alone. The other sections (such as extraction) keep the shared connection.
 - The context window comes from `context_window`, else `local.engine.max_model_len`,
   else the endpoint's `/v1/models`.
+
+**Claude through a Databricks AI Gateway** (provider `databricks_anthropic`):
+- **Install:** `pip install 'matchminer-ai[databricks]'` (the `anthropic` and
+  `databricks-sdk` packages).
+- **Log in once:** `databricks auth login --host <workspace URL> --profile unity-gateway`.
+  The Databricks SDK then gets and refreshes access tokens through the Databricks CLI,
+  which must be on the process's `PATH`.
+- **Settings:** in the section's `remote`, set:
+  - `provider: databricks_anthropic`;
+  - `server_urls: ["https://<workspace host>/ai-gateway/anthropic"]`;
+  - `databricks_profile: unity-gateway` (or none, for a notebook's or job's identity, or
+    a service principal from `ARM_*` variables);
+  - `model_name`: the full three-part endpoint name, such as
+    `ai_gateway_model_services_prod.<team>_<project>.<team>_<project>-claude-sonnet-5-5`;
+  - `request_params`: `max_tokens` and `reasoning_effort`, which becomes Claude's
+    effort (`low` to `max`);
+  - `extra_body: {}`.
+
+  Also set the section's `sampling_profile: none` and `context_window` (1,000,000
+  for Sonnet 5.5). The gateway has no `/models` or tokenizer route, so prompt budgets
+  use bytes.
+- **What is sent:** requests go through the official Anthropic SDK to the Messages
+  route, with structured outputs (`output_config.format`).
+  - **Schema limits:** the SDK moves limits Claude does not enforce, such as
+    `maxItems`, into descriptions. The harness still validates them in code.
+  - **Caching:** the instructions are a cached system block. The turn's response
+    schema follows in a second block, because its allowed actions change from turn
+    to turn.
+  - **Refusal fallbacks:** Opus and Sonnet 5.5 requests opt into server-side
+    fallbacks (`fallbacks: "default"`), so a declined turn is answered by another
+    Claude model.
+- **Credentials:** the token goes only to the gateway URL, whose host must be the
+  profile's workspace. A missing or expired login fails the run at once with a login
+  hint. Other failures keep only their HTTP status.
+- **Scope:** only structured requests support this provider; other stages reject it.
 
 **`limits`:**
 - `max_actions` (12) and `max_submits` (3) bound the run.
@@ -255,7 +294,9 @@ mapping) to reuse accepted queries. The key (`workup_sql_cache_key`) covers:
 - the requirement text and the population context;
 - the exploration database's fingerprint;
 - the agent, database, store-profile and extraction-schema versions;
-- the prompt and response-schema hashes.
+- the prompt and response-schema hashes;
+- the provider, model and reasoning effort that write the queries
+  (`agent_llm_identity`), so each model's and effort's queries are cached apart.
 
 **Failed runs** are saved under their key too, but never reused: the next call
 explores the requirement again and overwrites the entry. A saved failure keeps
