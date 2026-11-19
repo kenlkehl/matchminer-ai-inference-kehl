@@ -857,6 +857,7 @@ def test_summarize_patients_retains_existing_without_usable_notes(
     assert result.to_dict("records") == [
         {
             "patient_id": "P1",
+            "last_note_date": None,
             "patient_summary": "History\n\nOther relevant history:\nEvidence",
             "cancer_history_summary": "History",
             "general_exclusion_criteria_evidence": "Evidence",
@@ -1237,3 +1238,116 @@ def test_summarize_patients_reports_remote_model_metadata(monkeypatch):
     assert metadata["model_metadata"] == {
         "summarize_patients": {"model_name": "endpoint-model"}
     }
+
+
+# Incremental summaries: existing summaries with a last_note_date (user, 2026-06-25) -------
+
+from matchminer_ai.patients import summarize as summarize_module  # noqa: E402
+from matchminer_ai.patients.summarize import (  # noqa: E402
+    notes_after_existing_summaries,
+    validate_existing_summaries,
+)
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        {"patient_summary_with_boilerplate": "History\n\nOther relevant history:\nEvidence"},
+        {"cancer_history_summary": "History", "general_exclusion_criteria_evidence": "Evidence"},
+        {"patient_summary": "History", "patient_boilerplate_text": "Evidence"},
+        {"patient_summary": "History\n\nOther relevant history:\nEvidence"},
+    ],
+    ids=["combined", "package_split", "training_split", "legacy_combined"],
+)
+def test_existing_summaries_accept_every_layout(columns):
+    state = validate_existing_summaries(pd.DataFrame([{
+        "patient_id": 7, "last_note_date": "2024-03-05T10:00:00", **columns}]))
+    row = state.iloc[0]
+    assert row["patient_id"] == "7" and row["last_note_date"] == "2024-03-05"
+    assert normalize_patient_summary(row["patient_summary"]) == (
+        "History\n\nOther relevant history:\nEvidence")
+
+
+def test_existing_summaries_need_a_layout_and_readable_dates():
+    with pytest.raises(ValueError, match="unreadable last_note_date for patient_id\\(s\\): B"):
+        validate_existing_summaries(pd.DataFrame({
+            "patient_id": ["A", "B"], "patient_summary": ["x", "y"],
+            "last_note_date": ["2024-01-01", "not a date"]}))
+    with pytest.raises(ValueError, match="must include"):
+        validate_existing_summaries(pd.DataFrame({"patient_id": ["A"], "summary": ["x"]}))
+    # Without last_note_date every note stays (the caller passes only new notes).
+    undated = validate_existing_summaries(pd.DataFrame({"patient_id": ["A"],
+                                                        "patient_summary": ["x"]}))
+    notes = pd.DataFrame({"patient_id": ["A"], "note_text": ["n"], "note_date": ["2020-01-01"]})
+    assert len(notes_after_existing_summaries(notes, undated)) == 1
+
+
+def test_only_notes_after_the_summary_are_kept_with_a_lookback_for_recent_ones(monkeypatch):
+    monkeypatch.setattr(summarize_module, "_today", lambda: pd.Timestamp("2026-06-25"))
+    existing = validate_existing_summaries(pd.DataFrame({
+        "patient_id": ["old", "recent"], "patient_summary": ["x", "y"],
+        "last_note_date": ["2024-01-10", "2026-06-20"]}))
+    notes = pd.DataFrame({
+        "patient_id": ["old", "old", "old", "recent", "recent", "recent", "new"],
+        "note_text": ["a", "b", "c", "d", "e", "f", "g"],
+        "note_date": ["2024-01-10", "2024-01-11", None, "2026-06-09", "2026-06-11",
+                      "2026-06-24", "2010-01-01"],
+    })
+    kept = notes_after_existing_summaries(notes, existing)
+    # old: strictly after its last note; undated notes cannot be placed after it.
+    # recent (within 10 days of today): from 10 days before its last note.
+    # new: no existing summary, every note.
+    assert kept.note_text.tolist() == ["b", "e", "f", "g"]
+
+
+def test_incremental_update_summarizes_only_newer_notes_and_round_trips(monkeypatch):
+    _stub_patient_qc(monkeypatch)
+    monkeypatch.setattr(summarize_module, "_today", lambda: pd.Timestamp("2026-06-25"))
+    seen_notes = []
+
+    def prepare(notes, tokenizer, chunk_size, chunk_overlap):
+        seen_notes.append(notes.copy())
+        return pd.DataFrame([
+            {"patient_id": pid, "chunk_index": 0, "first_date": "", "last_date": "",
+             "chunk_text": " ".join(group.note_text)}
+            for pid, group in notes.groupby("patient_id")
+        ])
+
+    outputs = []
+
+    def generate(prompt_list, **kwargs):
+        texts = ["Updated history\nOther relevant history:\nNone" for _ in prompt_list]
+        outputs.extend(p.prompt_text for p in prompt_list)
+        return LLMGenerationResult(final_outputs=texts, model_metadata={"model_name": "m"},
+                                   finish_reasons=["stop"] * len(texts),
+                                   reasoning_outputs=[""] * len(texts), raw_outputs=[])
+
+    _stub_serial_summarization_runtime(monkeypatch, None, generate)
+    monkeypatch.setattr(summarize_module, "prepare_patient_notes", prepare)
+    existing = pd.DataFrame({
+        "patient_id": ["P1", "P2"],
+        "cancer_history_summary": ["Prior history", "No information about cancer."],
+        "general_exclusion_criteria_evidence": ["Prior evidence", "Not documented."],
+        "last_note_date": ["2024-01-10", "2024-02-01"],
+    })
+    notes = pd.DataFrame({
+        "patient_id": ["P1", "P1", "P2"],
+        "note_text": ["old note", "new note", "old P2 note"],
+        "note_date": ["2024-01-05", "2024-03-01", "2024-01-01"],
+    })
+    result, _ = summarize_patient_notes(notes, config=_config(), existing_summaries=existing)
+    assert [frame.note_text.tolist() for frame in seen_notes] == [["new note"]]
+    assert outputs == ["new note"]
+    by_id = result.set_index("patient_id")
+    assert by_id.loc["P1", "last_note_date"] == "2024-03-01"
+    assert by_id.loc["P1", "cancer_history_summary"] == "Updated history"
+    # P2 had no newer note: its summary passes through, even a non-informative one.
+    assert by_id.loc["P2", "last_note_date"] == "2024-02-01"
+    assert by_id.loc["P2", "cancer_history_summary"] == "No information about cancer."
+    # The output, passed back with the next notes, picks up only what is newer.
+    seen_notes.clear()
+    later = pd.DataFrame({"patient_id": ["P1", "P1"], "note_text": ["new note", "newest"],
+                          "note_date": ["2024-03-01", "2024-04-02"]})
+    again, _ = summarize_patient_notes(later, config=_config(), existing_summaries=result)
+    assert [frame.note_text.tolist() for frame in seen_notes] == [["newest"]]
+    assert again.set_index("patient_id").loc["P1", "last_note_date"] == "2024-04-02"

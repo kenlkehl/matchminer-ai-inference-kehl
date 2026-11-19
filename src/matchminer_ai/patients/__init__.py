@@ -91,14 +91,24 @@ def summarize_patients(
     existing_summaries : pd.DataFrame, optional
         Optional patient-level prior summaries used as the starting state for
         serial updates. Patients with no usable new notes retain their existing
-        summary, subject to the usual summary postprocessing and filtering.
+        summary unchanged (normalized, never dropped as non-informative).
 
         Expected columns
         ----------------
         patient_id : str
             Unique patient identifier.
-        patient_summary : str
-            Existing full patient summary text to update.
+        last_note_date : str or datetime, optional
+            Date of the last note the summary includes. When given (for every
+            row), only notes dated after it are summarized onto the summary, or,
+            when that note is within 10 days of today, notes from 10 days before
+            it, so notes that arrive late are not missed. Without it, every
+            supplied note is summarized onto the summary: pass only new notes.
+        The summary, in the first of these layouts present:
+        ``patient_summary_with_boilerplate`` (a complete summary);
+        ``cancer_history_summary`` and ``general_exclusion_criteria_evidence``
+        (this function's output, so its result can be passed back with new
+        notes); ``patient_summary`` and ``patient_boilerplate_text`` (training
+        output); or ``patient_summary`` (a complete summary).
     checkpoint_dir : str or pathlib.Path, optional
         Directory used to save progress during patient summarization: each
         chunk's result is saved as soon as it is final. Reusing the same
@@ -130,6 +140,10 @@ def summarize_patients(
         -------
         patient_id : str
             Original patient identifier.
+        last_note_date : str or None
+            Date (YYYY-MM-DD) of the latest dated note the summary includes: its
+            newest summarized note, or its existing summary's ``last_note_date``.
+            Pass it back with the next notes to summarize only newer ones.
         patient_summary : str
             Cancer history followed by ``Other relevant history:`` and a
             newline containing relevant comorbidities, performance status,

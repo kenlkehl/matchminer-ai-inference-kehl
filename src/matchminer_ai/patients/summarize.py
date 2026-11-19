@@ -31,7 +31,7 @@ from .checkpoints import (
     prepare_checkpoint_dir,
     save_prepared_chunks,
 )
-from .postprocess import postprocess_patient_summaries
+from .postprocess import OTHER_HISTORY_HEADING, postprocess_patient_summaries
 from .prepare import prepare_patient_notes
 from .prompt_builder import (
     PromptWorkItem,
@@ -50,42 +50,128 @@ _SCHEDULER_TICK_SECONDS = 5.0
 _PROGRESS_LOG_SECONDS = 300.0
 
 
+#: When an existing summary's last note is this recent, notes from up to this many days
+#: before it are summarized again, so notes that arrive late with earlier dates are
+#: not missed (user, 2026-06-25).
+RECENT_SUMMARY_LOOKBACK_DAYS = 10
+_SPLIT_LAYOUTS = (
+    ("cancer_history_summary", "general_exclusion_criteria_evidence"),  # package output
+    ("patient_summary", "patient_boilerplate_text"),  # training output
+)
+
+
+def _joined_summary(key, boilerplate) -> str | None:
+    """One complete summary from its key and boilerplate sections."""
+    key = key.strip() if isinstance(key, str) else ""
+    boilerplate = boilerplate.strip() if isinstance(boilerplate, str) else ""
+    if not key and not boilerplate:
+        return None
+    return f"{key}\n\n{OTHER_HISTORY_HEADING}\n{boilerplate or 'Not documented.'}".strip()
+
+
+def _parse_dates(values: pd.Series) -> pd.Series:
+    """Day-normalized, timezone-free timestamps (NaT when unreadable)."""
+    parsed = pd.to_datetime(values, errors="coerce", format="mixed", utc=True)
+    return parsed.dt.tz_localize(None).dt.normalize()
+
+
 def validate_existing_summaries(
     existing_summaries: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Validate and normalize existing patient summary state."""
-    required_columns = ["patient_id", "patient_summary"]
-    missing = [
-        column
-        for column in required_columns
-        if column not in existing_summaries.columns
-    ]
-    if missing:
-        raise ValueError(
-            "existing summaries input must include columns "
-            "'patient_id' and 'patient_summary'. Missing: "
-            f"{', '.join(missing)}"
-        )
+    """Validate and normalize existing patient summary state.
 
+    Returns one row per ``patient_id`` with the complete ``patient_summary``,
+    read from the first layout present:
+
+    1. ``patient_summary_with_boilerplate``: a complete summary;
+    2. ``cancer_history_summary`` and ``general_exclusion_criteria_evidence``:
+       this package's output sections;
+    3. ``patient_summary`` and ``patient_boilerplate_text``: training output;
+    4. ``patient_summary`` alone: a complete summary.
+
+    With a ``last_note_date`` column (the date of the last note the summary
+    includes; every row needs a readable one), the row also has
+    ``last_note_date`` (YYYY-MM-DD) and ``_last_note_date`` (a timestamp), and
+    only newer notes are summarized onto it.
+    """
+    if "patient_id" not in existing_summaries.columns:
+        raise ValueError("existing summaries input must include a 'patient_id' column.")
+    columns = set(existing_summaries.columns)
     normalized = existing_summaries.copy()
     normalized["patient_id"] = normalized["patient_id"].astype(str)
-    normalized["patient_summary"] = normalized["patient_summary"].where(
-        normalized["patient_summary"].notna(),
-        None,
-    )
-    return normalized.drop_duplicates(subset=["patient_id"], keep="last")
+    split = next((pair for pair in _SPLIT_LAYOUTS if set(pair) <= columns), None)
+    if "patient_summary_with_boilerplate" in columns:
+        summaries = normalized["patient_summary_with_boilerplate"]
+    elif split is not None:
+        summaries = pd.Series(
+            [_joined_summary(k, b) for k, b in zip(normalized[split[0]],
+                                                   normalized[split[1]], strict=True)],
+            index=normalized.index, dtype=object)
+    elif "patient_summary" in columns:
+        summaries = normalized["patient_summary"]
+    else:
+        raise ValueError(
+            "existing summaries input must include 'patient_summary_with_boilerplate', "
+            "'cancer_history_summary' and 'general_exclusion_criteria_evidence', "
+            "'patient_summary' and 'patient_boilerplate_text', or 'patient_summary'."
+        )
+    normalized["patient_summary"] = summaries.where(summaries.notna(), None)
+    keep = ["patient_id", "patient_summary"]
+    if "last_note_date" in columns:
+        dates = _parse_dates(normalized["last_note_date"])
+        invalid = normalized.loc[dates.isna(), "patient_id"]
+        if not invalid.empty:
+            raise ValueError(
+                "existing summaries input has a missing or unreadable last_note_date for "
+                f"patient_id(s): {', '.join(sorted(invalid.unique()))}"
+            )
+        normalized["_last_note_date"] = dates
+        normalized["last_note_date"] = dates.dt.strftime("%Y-%m-%d")
+        keep += ["last_note_date", "_last_note_date"]
+    return normalized.drop_duplicates(subset=["patient_id"], keep="last")[keep]
 
 
-def _build_existing_summary_lookup(
-    existing_summaries: pd.DataFrame | None,
-) -> dict[str, str | None]:
-    if existing_summaries is None:
-        return {}
-    normalized = validate_existing_summaries(existing_summaries)
-    return cast(
-        dict[str, str | None],
-        normalized.set_index("patient_id")["patient_summary"].to_dict(),
-    )
+def _today() -> pd.Timestamp:
+    return pd.Timestamp.today().normalize()
+
+
+def notes_after_existing_summaries(
+    notes: pd.DataFrame,
+    existing: pd.DataFrame,
+) -> pd.DataFrame:
+    """The notes still to summarize given existing summaries (see
+    :func:`validate_existing_summaries`).
+
+    A patient without an existing summary, or whose summary has no
+    ``last_note_date``, keeps every note. Otherwise only notes dated after the
+    summary's last note are kept, or, when that note is within
+    ``RECENT_SUMMARY_LOOKBACK_DAYS`` of today, notes dated after that many days
+    before it. Undated notes of such a patient cannot be placed after the
+    summary and are left out.
+    """
+    if "_last_note_date" not in existing.columns or notes.empty or "note_date" not in notes:
+        return notes
+    window = pd.Timedelta(days=RECENT_SUMMARY_LOOKBACK_DAYS)
+    last = existing.set_index("patient_id")["_last_note_date"]
+    cutoff = last.where(last < _today() - window, last - window)
+    note_cutoff = pd.to_datetime(notes["patient_id"].astype(str).map(cutoff))
+    keep = note_cutoff.isna() | (_parse_dates(notes["note_date"]) > note_cutoff)
+    return notes.loc[keep.to_numpy()].copy()
+
+
+def _last_note_dates(notes: pd.DataFrame, existing: pd.DataFrame) -> dict[str, str | None]:
+    """Each patient's latest note date: its newest summarized note or its existing summary's."""
+    latest: dict[str, pd.Timestamp] = {}
+    usable = notes.loc[notes["note_text"].notna() & (notes["note_text"].astype(str).str.strip() != "")] \
+        if {"note_text", "note_date"} <= set(notes.columns) else notes.iloc[0:0]
+    if not usable.empty:
+        dated = usable.assign(_date=_parse_dates(usable["note_date"])).dropna(subset=["_date"])
+        latest = dated.groupby(dated["patient_id"].astype(str))["_date"].max().to_dict()
+    if "_last_note_date" in existing.columns:
+        for pid, date in existing.set_index("patient_id")["_last_note_date"].items():
+            if pid not in latest or date > latest[pid]:
+                latest[pid] = date
+    return {pid: date.strftime("%Y-%m-%d") for pid, date in latest.items()}
 
 
 def _patient_chunks(prepared_chunks: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
@@ -566,14 +652,25 @@ def summarize_patient_notes(
     existing_summaries : pd.DataFrame, optional
         Optional patient-level prior summaries used as the starting state for
         serial updates. Patients with no usable new notes retain their existing
-        summary, subject to the usual summary postprocessing and filtering.
+        summary unchanged (it is normalized but never dropped as non-informative).
 
         Expected columns
         ----------------
         patient_id : str
             Unique patient identifier.
-        patient_summary : str
-            Existing full patient summary text to update.
+        last_note_date : str or datetime, optional
+            Date of the last note the summary includes. When given (for every
+            row), only notes dated after it are summarized onto the summary, or,
+            for a summary whose last note is within ``RECENT_SUMMARY_LOOKBACK_DAYS``
+            (10) of today, notes after that many days before it, so late-arriving
+            notes are not missed. Without it, every supplied note is summarized
+            onto the summary: pass only new notes.
+        The summary, in one of these layouts (the first one present is used):
+        ``patient_summary_with_boilerplate`` (a complete summary);
+        ``cancer_history_summary`` and ``general_exclusion_criteria_evidence``
+        (this function's output); ``patient_summary`` and
+        ``patient_boilerplate_text`` (training output); or ``patient_summary``
+        (a complete summary).
     checkpoint_dir : str or pathlib.Path, optional
         Directory used to save progress during patient summarization: each
         chunk result is saved as soon as it is final. Reusing the same
@@ -594,6 +691,18 @@ def summarize_patient_notes(
         "patient",
         patient_config,
         config=resolved_config,
+    )
+
+    existing = (
+        validate_existing_summaries(existing_summaries)
+        if existing_summaries is not None
+        else pd.DataFrame(columns=["patient_id", "patient_summary"])
+    )
+    # Patients with a dated existing summary contribute only their newer notes.
+    notes = notes_after_existing_summaries(notes, existing)
+    existing_summary_lookup = cast(
+        dict[str, str | None],
+        existing.set_index("patient_id")["patient_summary"].to_dict(),
     )
 
     prepared_chunks = None
@@ -620,7 +729,6 @@ def summarize_patient_notes(
         if checkpoint_dir is not None:
             save_prepared_chunks(checkpoint_dir, prepared_chunks)
 
-    existing_summary_lookup = _build_existing_summary_lookup(existing_summaries)
     # If the caller provided an existing summary, it is the prior summary for the
     # patient's first chunk; each accepted chunk summary then replaces it.
     state = _SerialState(
@@ -700,32 +808,46 @@ def summarize_patient_notes(
     current_summaries = state.summaries
     failed_patient_ids = state.failed
     # Collapse chunk-level work to one final row for each summarized patient.
-    final_rows = prepared_chunks[["patient_id"]].drop_duplicates().copy()
-    total_patient_count = int(final_rows["patient_id"].nunique())
-    # Retain supplied summaries when there is no new content to process.
-    final_rows = pd.concat(
-        [final_rows, pd.DataFrame({"patient_id": list(existing_summary_lookup)})],
-        ignore_index=True,
-    ).drop_duplicates(subset=["patient_id"])
-    final_rows = final_rows.loc[
-        ~final_rows["patient_id"].astype(str).isin(failed_patient_ids)
+    generated = prepared_chunks[["patient_id"]].drop_duplicates().copy()
+    total_patient_count = int(generated["patient_id"].nunique())
+    generated = generated.loc[
+        ~generated["patient_id"].astype(str).isin(failed_patient_ids)
     ].copy()
-    final_rows["patient_answer_text"] = final_rows["patient_id"].map(current_summaries)
-    if resolved_config.debug_mode:
-        # These columns preserve final-chunk debug traces without feeding them
-        # back into the serial patient summary state.
-        final_rows["patient_reasoning_text"] = final_rows["patient_id"].map(
-            state.reasoning
-        )
-        final_rows["patient_summary_attempts"] = final_rows["patient_id"].map(
-            state.attempts
-        )
-    final_rows = final_rows.dropna(subset=["patient_answer_text"]).copy()
+    # Retain supplied summaries when there is no new content to process.
+    passed = pd.DataFrame({"patient_id": [
+        pid for pid in existing_summary_lookup
+        if pid not in set(prepared_chunks["patient_id"].astype(str))
+    ]})
 
-    patient_count_before_cleaning = int(final_rows["patient_id"].nunique())
-    final_rows, removed_patient_ids = postprocess_patient_summaries(
-        final_rows,
+    def summary_rows(frame):
+        frame = frame.copy()
+        frame["patient_answer_text"] = frame["patient_id"].map(current_summaries)
+        if resolved_config.debug_mode:
+            # These columns preserve final-chunk debug traces without feeding
+            # them back into the serial patient summary state.
+            frame["patient_reasoning_text"] = frame["patient_id"].map(state.reasoning)
+            frame["patient_summary_attempts"] = frame["patient_id"].map(state.attempts)
+        return frame.dropna(subset=["patient_answer_text"]).copy()
+
+    generated = summary_rows(generated)
+    patient_count_before_cleaning = int(generated["patient_id"].nunique())
+    generated, removed_patient_ids = postprocess_patient_summaries(
+        generated,
         resolved_config,
+    )
+    parts = [generated]
+    passed = summary_rows(passed)
+    if not passed.empty:
+        passed, _ = postprocess_patient_summaries(
+            passed, resolved_config, drop_noninformative=False
+        )
+        parts.append(passed)
+    final_rows = pd.concat(parts, ignore_index=True, sort=False) if len(parts) > 1 \
+        else generated
+    last_dates = _last_note_dates(notes, existing)
+    final_rows.insert(
+        1, "last_note_date",
+        [last_dates.get(pid) for pid in final_rows["patient_id"].astype(str)],
     )
 
     metadata = {
@@ -760,6 +882,8 @@ def summarize_patient_notes(
 
 
 __all__ = [
+    "RECENT_SUMMARY_LOOKBACK_DAYS",
+    "notes_after_existing_summaries",
     "summarize_patient_notes",
     "validate_existing_summaries",
 ]

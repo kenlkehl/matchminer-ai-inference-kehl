@@ -238,6 +238,38 @@ concordance determination**. Not documented does not mean not done. Conditional
 indications, compound items, alternatives, historical tests, timing and conflicting
 evidence need clinical review. Treatment-concordance assessment is not included.
 
+## Updating existing summaries
+
+Pass earlier summaries as `existing_summaries`, together with the patients' notes,
+to continue each summary instead of starting over. Each patient's first new chunk
+is summarized onto the existing summary.
+
+The summary can be given in any of these layouts; the first one present is used:
+- `patient_summary_with_boilerplate`: a complete summary;
+- `cancer_history_summary` and `general_exclusion_criteria_evidence`: this
+  function's own output, so a result can be passed back with new notes;
+- `patient_summary` and `patient_boilerplate_text`: the training pipeline's output;
+- `patient_summary` alone: a complete summary.
+
+**`last_note_date`** (optional) is the date of the last note an existing summary
+includes. Every output row has it, so the output can be passed straight back.
+- When it is given (it must be readable on every row), only notes dated after it
+  are summarized onto the summary. Undated notes can't be placed after it and are
+  left out.
+- When that last note is within 10 days of today (`RECENT_SUMMARY_LOOKBACK_DAYS`),
+  notes from 10 days before it are summarized again, so notes that arrive late with
+  earlier dates are not missed.
+- Without `last_note_date`, every supplied note is summarized onto the summary, so
+  pass only new notes.
+
+A patient with no new usable notes keeps their existing summary unchanged. It is
+normalized, but never dropped as non-informative.
+
+```python
+first = summarize_patients(notes_until_june)
+update = summarize_patients(notes_until_july, existing_summaries=first)  # newer notes only
+```
+
 ## Scheduling patient summarization
 
 Each patient's chunks are summarized in order, each prompt carrying the summary

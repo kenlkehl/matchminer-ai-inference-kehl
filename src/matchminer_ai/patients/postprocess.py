@@ -94,13 +94,23 @@ def clean_bad_data(
 def postprocess_patient_summaries(
     df: pd.DataFrame,
     config: MMAIConfig,
+    *,
+    drop_noninformative: bool = True,
 ) -> tuple[pd.DataFrame, set[str]]:
     """Normalize patient summaries, add their key and boilerplate sections, and
-    remove non-informative rows, returning the removed patient IDs."""
+    remove non-informative rows, returning the removed patient IDs.
+
+    ``drop_noninformative=False`` keeps every row: for a supplied summary passed
+    through unchanged, which this run did not write.
+    """
     cleaned = df.copy()
     cleaned["patient_summary"] = cleaned["patient_answer_text"].fillna("").map(normalize_patient_summary)
     cleaned = add_summary_sections(cleaned)
-    cleaned, removed_patient_ids = clean_bad_data(cleaned, summary_column="cancer_history_summary")
+    removed_patient_ids: set[str] = set()
+    if drop_noninformative:
+        cleaned, removed_patient_ids = clean_bad_data(
+            cleaned, summary_column="cancer_history_summary"
+        )
     if not config.debug_mode:
         cleaned = cleaned.drop(columns=["patient_answer_text"], errors="ignore")
     cleaned = cleaned.drop(columns=["finish_reason"], errors="ignore")
