@@ -263,3 +263,46 @@ def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(
         embed_guideline_patients(patients(), batch_size=0)
 
 
+
+
+def test_checker_batches_may_differ_in_counters_but_not_in_model(catalog_frame, monkeypatch):
+    """The decision model's metadata counts each call's work: summed, never compared."""
+    cohort = pd.DataFrame({"patient_id": [str(i) for i in range(50)],
+                           "cancer_history_summary": ["Fabricated"] * 50})
+    model = {"model": "d1", "model_sha": "abc", "backend": "transformers"}
+
+    def embed(frame, *, entity_type, **kwargs):
+        key = "patient_id" if entity_type == "patient" else "space_trial_id"
+        result = frame[[key]].copy()
+        result["embedding"] = [[1.0, 0.0]] * len(frame)
+        return result, {"model_metadata": {"embed_for_matching": {"model": "fixed"}}}
+
+    def score(frame, **kwargs):
+        result = frame[["patient_id", "space_trial_id"]].copy()
+        result["match_quality_score"] = 0.5
+        result["match_quality_pass"] = True
+        counters = {"requests": len(frame), "questions": 5 * len(frame),
+                    "input_tokens": 1000 * len(frame), "over_max_length": 0}
+        return result, {"model_metadata": {"score_match_quality": {**model, **counters}}}
+
+    monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed)
+    monkeypatch.setattr("matchminer_ai.matching.score_match_quality", score)
+    selected, metadata = retrieve_guideline_patients(
+        cohort, catalog_frame, space_trial_id="a", candidate_k=50, min_match_score=None)
+    assert len(selected) == 50
+    scoring = metadata["model_metadata"]["score_match_quality"]
+    assert scoring["requests"] == 50 and scoring["questions"] == 250
+    assert scoring["input_tokens"] == 50_000 and scoring["model_sha"] == "abc"
+    # A different model between batches is still refused.
+    calls = []
+
+    def changing(frame, **kwargs):
+        calls.append(1)
+        result, meta = score(frame)
+        meta["model_metadata"]["score_match_quality"]["model_sha"] = f"sha{len(calls)}"
+        return result, meta
+
+    monkeypatch.setattr("matchminer_ai.matching.score_match_quality", changing)
+    with pytest.raises(ValueError, match="Match-quality model changed between batches"):
+        retrieve_guideline_patients(cohort, catalog_frame, space_trial_id="a", candidate_k=50,
+                                    min_match_score=None)

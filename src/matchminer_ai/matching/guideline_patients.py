@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 import json
 
@@ -166,6 +167,33 @@ def _precomputed_patients(patients, embeddings):
     return pv, {"model_metadata": embeddings.model_metadata}
 
 
+#: Decision-model metadata that counts one call's work rather than naming the model:
+#: it differs between match-quality batches, so it is summed, never compared.
+_SCORING_COUNTERS = frozenset({"requests", "questions", "input_tokens", "over_max_length"})
+
+
+def _scoring_identity(model_metadata):
+    """Model metadata without per-call counters: equal for every batch of one model."""
+    return {
+        name: ({k: v for k, v in entry.items() if k not in _SCORING_COUNTERS}
+               if isinstance(entry, dict) else entry)
+        for name, entry in model_metadata.items()
+    }
+
+
+def _sum_scoring_counters(metadata, batch_metadata):
+    """``metadata`` with ``batch_metadata``'s per-call counters added to its own."""
+    total = copy.deepcopy(metadata)
+    for name, entry in batch_metadata["model_metadata"].items():
+        if not isinstance(entry, dict):
+            continue
+        for key in _SCORING_COUNTERS & set(entry):
+            mine = total["model_metadata"][name].get(key)
+            if isinstance(mine, (int, float)) and isinstance(entry[key], (int, float)):
+                total["model_metadata"][name][key] = mine + entry[key]
+    return total
+
+
 def retrieve_guideline_patients(
     patient_summaries,
     catalog,
@@ -261,12 +289,15 @@ def retrieve_guideline_patients(
             filter_low_quality=False,
             return_metadata=True,
         )
-        if (
-            metadata is not None
-            and metadata["model_metadata"] != batch_metadata["model_metadata"]
-        ):
+        if metadata is not None and _scoring_identity(
+            metadata["model_metadata"]
+        ) != _scoring_identity(batch_metadata["model_metadata"]):
             raise ValueError("Match-quality model changed between batches.")
-        metadata = batch_metadata
+        metadata = (
+            copy.deepcopy(batch_metadata)
+            if metadata is None
+            else _sum_scoring_counters(metadata, batch_metadata)
+        )
         score_batches.append(batch)
         progress(
             f"Match-quality scored {min(start + 32, len(pairs))}/{len(pairs)} candidate patients"
