@@ -1,8 +1,8 @@
 """Embedding pasted texts with exactly the encoder that made the round's vectors.
 
-EmbeddingGemma 2 (and TrialSpace fitted from it) needs sentence-transformers 6, which the app's own Python
-does not have, so query texts go to a long-lived worker process under the embedding Python
-(``encoder_worker.py``), which runs the inference package's ``open_encoder``. Before any text is embedded,
+Query texts go to a long-lived worker process (``encoder_worker.py``) running the inference package's
+``open_encoder``, by default under this Python (sentence-transformers 6, which EmbeddingGemma 2 and TrialSpace
+fitted from it need; a site may name another environment, ``dashboard.embedding_python``). Before any text is embedded,
 ``EncoderSettings`` are rebuilt from the round manifest and their ``encoder_identity`` must equal the
 manifest's encoder, both here and again in the worker.
 """

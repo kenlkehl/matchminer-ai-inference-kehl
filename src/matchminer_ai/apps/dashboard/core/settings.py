@@ -46,7 +46,9 @@ RECEIPT_FORMAT = "mmai-stage-receipt-v1"
 BASE_DECISION_MODEL = "LiquidAI/d1-2B"
 BASE_DECISION_REVISION = "652f920e544ea37f81e4b0ce89b81d4ed0da90b1"
 # EmbeddingGemma 2 needs sentence-transformers 6. The query encoder runs in its own process, by default with this
-# Python; a site may name another environment and Hub caches (dashboard.embedding_python, .embedding_caches).
+# Python (checked 2026-11-20: the app's environment with sentence-transformers 6.1 embeds a round-3 query exactly
+# as the former separate environment did); a site may name another environment and Hub caches
+# (dashboard.embedding_python, .embedding_caches).
 
 
 @dataclass

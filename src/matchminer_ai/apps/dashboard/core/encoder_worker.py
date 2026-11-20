@@ -1,4 +1,5 @@
-"""Query-embedding worker, run under the embedding Python (sentence-transformers 6, for EmbeddingGemma 2).
+"""Query-embedding worker, run under the embedding Python (by default the app's own; sentence-transformers 6, for
+EmbeddingGemma 2).
 
 Reads one JSON request per stdin line and writes one JSON reply per stdout line:
 
