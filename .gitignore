@@ -19,3 +19,7 @@ interactive/
 # The dashboard's built frontend (cd frontend/dashboard && pnpm build) and its dependencies
 src/matchminer_ai/apps/dashboard/static/
 frontend/dashboard/node_modules/
+
+# The example notebook's run directories (saved trial results and patient checkpoints, which hold note text)
+examples/output/trial_runs/
+examples/output/checkpoints/
