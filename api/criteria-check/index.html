@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1438,7 +1438,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1466,7 +1466,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -1799,6 +1799,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#decision-model-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision-model check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#matchminer_ai.matching.criteria_check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1981,6 +1992,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#decision-model-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision-model check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#matchminer_ai.matching.criteria_check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2085,49 +2107,88 @@
 
 
 <h1 id="criteria-check">Criteria Check<a class="headerlink" href="#criteria-check" title="Permanent link">&para;</a></h1>
-<p><code>check_eligibility_criteria</code> asks the decision model
-(<a href="../match-quality/#decision-model">match quality</a>) about <strong>each line</strong> of a
-cohort's eligibility criteria.</p>
+<p><code>check_eligibility_criteria</code> asks the decision model (<a href="../match-quality/#decision-model">match quality</a>) about <strong>each
+line</strong> of a cohort's eligibility criteria, and <code>check_eligibility_criteria_with_llm</code> asks an LLM.</p>
 <div class="admonition important">
 <p class="admonition-title">Polarity</p>
-<p><strong>Yes (<code>criterion_pass_probability</code>) means the patient does not clearly fail
-the line</strong>: it is met, its information is missing, or the patient could meet
-it by waiting. <strong>No means the patient clearly fails it: an inclusion line
-clearly not met, or an exclusion line clearly met.</strong> A low
-<code>criterion_pass_probability</code> flags a likely failing line for review,
-whichever list the line is on.</p>
+<p><strong>Yes (<code>criterion_pass_probability</code>) means the patient does not clearly fail the line</strong>: it is met, its
+information is missing, the patient could meet it by waiting, or it does not bind this patient. <strong>No means the
+patient clearly fails it: an inclusion line clearly not met, or an exclusion line clearly met.</strong> A low
+<code>criterion_pass_probability</code> flags a likely failing line for review, whichever list the line is on.</p>
 </div>
-<p>Each row of the input is one candidate pair with:</p>
+<p>Each input row is one candidate pair with:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patient_id</code></td>
+<td>Patient identifier</td>
+</tr>
+<tr>
+<td><code>cohort_trial_id</code> (or historical <code>space_trial_id</code>)</td>
+<td>Cohort identifier</td>
+</tr>
+<tr>
+<td><code>cancer_history_summary</code> and <code>general_exclusion_criteria_evidence</code></td>
+<td>The summary's two sections; or one complete <code>patient_summary</code></td>
+</tr>
+<tr>
+<td><code>cohort_criteria_items</code></td>
+<td>The cohort's tagged lines from <a href="../trials/#key-and-boilerplate-criteria"><code>remove_boilerplate_criteria</code></a>: a JSON list of <code>number</code>, <code>heading</code>, <code>text</code>, <code>criterion_type</code> (<code>inclusion</code> or <code>exclusion</code>) and <code>boilerplate</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="decision-model-check">Decision-model check<a class="headerlink" href="#decision-model-check" title="Permanent link">&para;</a></h2>
+<p>For each pair the model reads one state and one question per line.</p>
 <ul>
-<li><code>patient_id</code>;</li>
-<li><code>cohort_trial_id</code> (or historical <code>space_trial_id</code>);</li>
-<li><code>cancer_history_summary</code> and <code>general_exclusion_criteria_evidence</code>, the
-  summary's two sections (or one complete <code>patient_summary</code>);</li>
-<li><code>cohort_criteria_items</code>, the cohort's tagged lines from
-  <a href="../trials/#key-and-boilerplate-criteria"><code>remove_boilerplate_criteria</code></a>: a JSON
-  list of <code>number</code>, <code>heading</code>, <code>text</code>, <code>criterion_type</code> (<code>inclusion</code> or
-  <code>exclusion</code>) and <code>boilerplate</code>.</li>
+<li><strong>State:</strong> the complete patient summary, then the cohort's complete criteria, numbered in their original order
+  under their inclusion and exclusion labels. The state also gives the rules for how a line binds the patient
+  through its role: a sub-item belongs to the line above it; an alternative fails only when the patient clearly fails
+  every alternative of its group; a line introducing others fails when they fail together; a requirement for only
+  some patients fails only when it clearly applies; a standalone requirement fails a patient who lacks what it
+  requires.</li>
+<li><strong>Question:</strong> <em>Is this patient potentially eligible for this cohort after review of the patient summary and the
+  one criterion named below? If the patient is potentially eligible, answer yes; if the patient is clearly
+  ineligible because of this criterion, answer no.</em> It adds the answer rules (benefit of the doubt; missing
+  information and waitable requirements, such as washouts, are not failures) and ends by restating the line, for
+  example <code>[12] Exclusion criterion: Active hepatitis B.</code></li>
 </ul>
-<p>For each pair the model reads one state, the complete patient summary followed
-by the cohort's complete criteria numbered in their original order under their
-inclusion and exclusion labels, and one question per line. The question opens
-<em>Is this patient potentially eligible for this cohort after review of the
-patient summary and the one criterion named below? If the patient is
-potentially eligible, answer yes; if the patient is clearly ineligible because
-of this criterion, answer no</em>, gives the rules (benefit of the doubt, waitable
-washouts are not failures, a sub-item belongs to the criterion above it, a line
-that only introduces others fails only when one of them does) and ends by
-restating the line, for example <code>[12] Exclusion criterion: Active hepatitis B.</code>
-Lines whose type never validated are skipped and counted in the metadata's
-<code>unchecked_lines</code>; identical summary and criteria are asked once.</p>
-<p>The result has one row per pair and line: <code>criterion_number</code>,
-<code>criterion_type</code>, <code>boilerplate</code>, <code>criterion_text</code>,
-<code>criterion_pass_probability</code> and <code>criterion_clearly_fails</code>
-(<code>criterion_pass_probability &lt; criteria_check.fail_cutoff</code>, 0.5 by default).
-<code>filter_failing=True</code> keeps only flagged lines.</p>
-<p>These are screening signals for human review, not eligibility determinations.
-The decision model runs locally by default; patient text reaches only the
-configured model.</p>
+<p>Lines without a validated inclusion or exclusion type, or with empty text, are skipped and counted in the
+metadata's <code>unchecked_lines</code>. Pairs with identical summary and criteria are asked once.</p>
+<table>
+<thead>
+<tr>
+<th>Output column</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patient_id</code>, and <code>cohort_trial_id</code> or <code>space_trial_id</code></td>
+<td>The pair</td>
+</tr>
+<tr>
+<td><code>criterion_number</code>, <code>criterion_type</code>, <code>boilerplate</code>, <code>criterion_text</code></td>
+<td>The line</td>
+</tr>
+<tr>
+<td><code>criterion_pass_probability</code></td>
+<td>P(yes)</td>
+</tr>
+<tr>
+<td><code>criterion_clearly_fails</code></td>
+<td><code>criterion_pass_probability &lt; criteria_check.fail_cutoff</code> (0.5)</td>
+</tr>
+</tbody>
+</table>
+<p>The result has one row per pair and checked line. <code>filter_failing=True</code> keeps only flagged lines.</p>
+<p>These are screening signals for human review, not eligibility determinations. The decision model runs locally;
+patient text reaches only the configured model.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -2231,7 +2292,12 @@ cancer_history_summary and general_exclusion_criteria_evidence : str
                 <code>config</code>
             </td>
             <td>
-                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2535,42 +2601,82 @@ criterion_clearly_fails : bool
     </div>
 
 </div><h2 id="llm-check">LLM check<a class="headerlink" href="#llm-check" title="Permanent link">&para;</a></h2>
-<p><code>check_eligibility_criteria_with_llm</code> is the LLM alternative, with the same
-inputs and the same polarity: <strong>yes means the patient does not clearly fail the
-line; no means the patient clearly fails it.</strong> It sends <strong>one request per tagged
-line</strong> with the per-criterion teacher prompt the decision model's question 7 is
-trained on, <code>criterion_check.labels.user.txt</code> around the decision model's own
-criterion state and question (<code>decision_model.criterion_teacher_messages</code>; the
-<code>criteria</code> label contract, <code>labeling.contract_hash("criteria")</code>). The answer is a
-JSON object with <code>answer</code> (yes/no), <code>criterion_status</code> (<code>met</code>, <code>not_met</code>,
-<code>insufficient_information</code> or <code>not_applicable</code>, as the line binds this patient)
-and <code>reason</code>. On a remote backend it is decoded under
-<code>decision_model.CRITERION_LABEL_JSON_SCHEMA</code>
-(<code>llm_criteria_check.structured_outputs</code>), and it is always validated by
-<code>decision_model.parse_criterion_label</code>: "no" needs <code>not_met</code> on an inclusion
-line and <code>met</code> on an exclusion line, and a response stopped before its end is
-invalid. An invalid answer is asked again with the validation error, up to
-<code>llm_criteria_check.max_attempts</code> (3). A pair's lines go through the
-<code>RequestQueue</code>, <code>chunk_size × chunks_in_flight</code> (64) in flight, sharing the
-prompt prefix; identical summary and criteria are asked once.</p>
-<p>The <code>llm_criteria_check</code> section uses the training teacher's settings:
-Nemotron 3.5 Super, thinking on, 32,768 output tokens and <code>sampling_profile:
-auto</code>, so the served model's own sampling profile applies.</p>
-<p>The result has one row per pair and checkable line, with the decision-model
-check's line columns (<code>criterion_number</code>, <code>criterion_type</code>, <code>boilerplate</code>,
-<code>criterion_text</code>) and <code>llm_criterion_answer</code>, <code>llm_criterion_clearly_fails</code>,
-<code>llm_criterion_status</code>, <code>llm_criterion_reason</code> (None or empty when no attempt
-validated), <code>llm_criterion_finish_reason</code>, <code>llm_criterion_attempts</code> and
-<code>llm_criterion_parse_status</code> (<code>parsed</code> or <code>parse_failed: &lt;error&gt;</code>); with
-<code>debug_mode</code>, the last attempt's <code>llm_criterion_answer_text</code> and
-<code>llm_criterion_reasoning_text</code>. <code>filter_failing=True</code> keeps the lines answered
-no. An optional <code>progress(done, total)</code> callback reports each line's final
-answer. With <code>return_metadata=True</code> the metadata gives the <code>criteria_contract</code>
-and, under <code>model_metadata["check_eligibility_criteria_with_llm"]</code>, the
-endpoint's metadata with <code>lines</code>, <code>requests</code>, <code>retries</code>, <code>parse_failures</code>,
-<code>unchecked_lines</code> and <code>structured_outputs</code>.</p>
-<p>The patient's complete summary reaches the configured LLM endpoint: use an
-endpoint authorized for the sensitivity of the data.</p>
+<p><code>check_eligibility_criteria_with_llm</code> takes the same inputs and has the same polarity: <strong>yes means the patient does
+not clearly fail the line; no means the patient clearly fails it.</strong></p>
+<ul>
+<li><strong>Requests:</strong> one per checkable line, with the per-criterion teacher prompt the decision model is trained on:
+  <code>criterion_check.labels.user.txt</code> around the decision model's own state and question
+  (<code>decision_model.criterion_teacher_messages</code>). Its label contract is <code>labeling.contract_hash("criteria")</code>.</li>
+<li><strong>Answer:</strong> a JSON object with <code>answer</code> (<code>yes</code> or <code>no</code>), <code>criterion_status</code> (<code>met</code>, <code>not_met</code>,
+  <code>insufficient_information</code> or <code>not_applicable</code>, as the line binds this patient) and <code>reason</code>.</li>
+<li><strong>Validation:</strong> on a remote backend the answer is decoded under <code>decision_model.CRITERION_LABEL_JSON_SCHEMA</code>
+  (<code>llm_criteria_check.structured_outputs</code>, default true). Every answer is validated by
+  <code>decision_model.parse_criterion_label</code>: "no" needs <code>not_met</code> on an inclusion line and <code>met</code> on an exclusion line,
+  and a response stopped before its end is invalid. An invalid answer is asked again with the validation error, up
+  to <code>llm_criteria_check.max_attempts</code> (3) requests per line.</li>
+<li><strong>Concurrency:</strong> on a remote backend, <code>chunk_size × chunks_in_flight</code> requests (64) are in flight through the
+  <code>RequestQueue</code>, and a pair's lines share the prompt prefix. A local backend gets batches of <code>chunk_size</code>. Pairs
+  with identical summary and criteria are asked once.</li>
+<li><strong>Model:</strong> the <code>llm_criteria_check</code> section uses the training teacher's settings:
+  <code>nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4</code>, thinking on, 32,768 output tokens, <code>reasoning_effort: xhigh</code>
+  and <code>sampling_profile: auto</code>, so the served model's own sampling profile applies.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Output column</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patient_id</code>, and <code>cohort_trial_id</code> or <code>space_trial_id</code></td>
+<td>The pair</td>
+</tr>
+<tr>
+<td><code>criterion_number</code>, <code>criterion_type</code>, <code>boilerplate</code>, <code>criterion_text</code></td>
+<td>The line, as in the decision-model check</td>
+</tr>
+<tr>
+<td><code>llm_criterion_answer</code></td>
+<td><code>yes</code> or <code>no</code>; None when no attempt validated</td>
+</tr>
+<tr>
+<td><code>llm_criterion_clearly_fails</code></td>
+<td>True when the answer is no; None when no attempt validated</td>
+</tr>
+<tr>
+<td><code>llm_criterion_status</code></td>
+<td>The line's <code>criterion_status</code>; None when no attempt validated</td>
+</tr>
+<tr>
+<td><code>llm_criterion_reason</code></td>
+<td>The model's explanation; empty when no attempt validated</td>
+</tr>
+<tr>
+<td><code>llm_criterion_finish_reason</code></td>
+<td>The last attempt's finish reason (<code>stop</code> when complete)</td>
+</tr>
+<tr>
+<td><code>llm_criterion_attempts</code></td>
+<td>Requests sent for the line</td>
+</tr>
+<tr>
+<td><code>llm_criterion_parse_status</code></td>
+<td><code>parsed</code>, or <code>parse_failed: &lt;the last validation error&gt;</code></td>
+</tr>
+<tr>
+<td><code>llm_criterion_answer_text</code>, <code>llm_criterion_reasoning_text</code></td>
+<td>The last attempt's answer and reasoning; with <code>debug_mode</code> only</td>
+</tr>
+</tbody>
+</table>
+<p><code>filter_failing=True</code> keeps the lines answered no. An optional <code>progress(done, total)</code> callback reports each line's
+final answer. With <code>return_metadata=True</code> the metadata gives the <code>criteria_contract</code> and, under
+<code>model_metadata["check_eligibility_criteria_with_llm"]</code>, the endpoint's metadata with <code>lines</code>, <code>requests</code>, <code>retries</code>,
+<code>parse_failures</code>, <code>unchecked_lines</code> and <code>structured_outputs</code>.</p>
+<p>The patient's complete summary reaches the configured LLM endpoint: use an endpoint authorized for the sensitivity
+of the data.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -2622,8 +2728,8 @@ endpoint authorized for the sensitivity of the data.</p>
 
         <p>Check every eligibility-criterion line of each candidate pair with an LLM, one request per line.</p>
 <p>The LLM alternative to :func:<code>~matchminer_ai.matching.check_eligibility_criteria</code>, with the same
-inputs and the same polarity. Each request is the per-criterion teacher prompt that the decision
-model's question 7 is trained on: <code>criterion_check.labels.user.txt</code> around the decision model's
+inputs and the same polarity. Each request is the per-criterion teacher prompt whose labels the
+decision model's per-criterion question is trained on: <code>criterion_check.labels.user.txt</code> around the decision model's
 own criterion state and question
 (:func:<code>~matchminer_ai.matching.decision_model.criterion_teacher_messages</code>; label contract
 <code>matchminer_ai.labeling.contract_hash("criteria")</code>), that is the complete patient summary, the
@@ -2676,7 +2782,12 @@ fails it: an inclusion line clearly not met, or an exclusion line clearly met.</
                 <code>config</code>
             </td>
             <td>
-                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3005,8 +3116,8 @@ llm_criterion_answer_text, llm_criterion_reasoning_text : str
 <span class="sd">    Check every eligibility-criterion line of each candidate pair with an LLM, one request per line.</span>
 
 <span class="sd">    The LLM alternative to :func:`~matchminer_ai.matching.check_eligibility_criteria`, with the same</span>
-<span class="sd">    inputs and the same polarity. Each request is the per-criterion teacher prompt that the decision</span>
-<span class="sd">    model's question 7 is trained on: ``criterion_check.labels.user.txt`` around the decision model's</span>
+<span class="sd">    inputs and the same polarity. Each request is the per-criterion teacher prompt whose labels the</span>
+<span class="sd">    decision model's per-criterion question is trained on: ``criterion_check.labels.user.txt`` around the decision model's</span>
 <span class="sd">    own criterion state and question</span>
 <span class="sd">    (:func:`~matchminer_ai.matching.decision_model.criterion_teacher_messages`; label contract</span>
 <span class="sd">    ``matchminer_ai.labeling.contract_hash("criteria")``), that is the complete patient summary, the</span>

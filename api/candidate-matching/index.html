@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1438,7 +1438,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1466,7 +1466,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -2117,15 +2117,21 @@
 
 
 <h1 id="candidate-matching">Candidate Matching<a class="headerlink" href="#candidate-matching" title="Permanent link">&para;</a></h1>
-<p><code>generate_candidate_matches</code> ranks TrialSpace vectors from <code>embed_for_matching</code>
-by cosine similarity over the entire supplied corpus. Each table needs exactly
-one identifier column (<code>patient_id</code>, <code>cohort_trial_id</code> or <code>space_trial_id</code>) and
-an <code>embedding</code> vector column. Pass patients first for patient-centric retrieval
-and cohorts first for trial-centric retrieval; <code>k=None</code> returns the full
-ranking. Results keep both identifiers, <code>similarity_score</code> and one-based <code>rank</code>.
-<code>config</code> is accepted for call compatibility and unused. Vectors from different
-TrialSpace models cannot be mixed; changing models requires regenerating both
-sides.</p>
+<p><code>generate_candidate_matches(query_df, corpus_df, k=20)</code> ranks TrialSpace vectors from
+<a href="../embedding/"><code>embed_for_matching</code></a> by cosine similarity over the entire supplied corpus.</p>
+<ul>
+<li><strong>Inputs:</strong> each table has exactly one identifier column (<code>patient_id</code>, <code>cohort_trial_id</code> or the historical
+  <code>space_trial_id</code>), with unique, non-null values, and an <code>embedding</code> column of equal-length vectors.</li>
+<li><strong>Direction:</strong> pass patients first for the cohorts of each patient (patient-centric), and cohorts first for the
+  patients of each cohort (trial-centric).</li>
+<li><strong><code>k</code>:</strong> a positive integer, or <code>None</code> for the full ranking.</li>
+<li><strong>Output:</strong> one row per query and retrieved item, with both identifiers (as strings), <code>similarity_score</code> and
+  one-based <code>rank</code>.</li>
+<li><strong><code>config</code>:</strong> accepted for call compatibility and unused.</li>
+</ul>
+<p>Vectors from different TrialSpace models cannot be mixed; changing models requires embedding both sides again. For
+exact search over large matrices on several devices, see <code>matching.retrieval.score_batches</code> on the
+<a href="../embedding/#large-encoding-jobs">embedding</a> page.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -2335,6 +2341,81 @@ compatibility and unused. Results include both identifiers,
     </div>
 
 </div><h2 id="adaptive-trial-centric-cutoff">Adaptive trial-centric cutoff<a class="headerlink" href="#adaptive-trial-centric-cutoff" title="Permanent link">&para;</a></h2>
+<p>For one cohort, <code>find_trial_centric_cutoff</code> estimates how many of its top-ranked patients are worth sending to the
+full checks, without scoring the whole ranking.</p>
+<ol>
+<li>The first probe is at <code>initial_cutoff_proportion</code> of the ranking (default 0.5). Use a smaller value when few
+   patients are expected to qualify.</li>
+<li>At each proposed cutoff, the <code>patients_per_side</code> patients (default 10) above and below it are scored.</li>
+<li>When passes are a strict majority of the window, the search moves down the ranking; otherwise (including a tie)
+   it moves toward the top. Later probes bisect, and overlapping windows reuse earlier scores.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th><code>check_method</code></th>
+<th>Probe score</th>
+<th>Default <code>score_threshold</code></th>
+<th>Allowed thresholds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"trial_checker"</code> (default; the name is historical)</td>
+<td><code>match_quality_score</code> (0-1) from <code>score_match_quality</code></td>
+<td>0.20</td>
+<td>0-1</td>
+</tr>
+<tr>
+<td><code>"llm"</code></td>
+<td><code>llm_match_quality_score</code> (0-6, -1 when unparsed) from <code>score_match_quality_with_llm</code></td>
+<td>1</td>
+<td>0-5</td>
+</tr>
+</tbody>
+</table>
+<p>A probe patient passes when its score is at least the threshold. The threshold applies to the score, not to
+<code>match_quality_pass</code>.</p>
+<p>The result (<code>TrialCentricCutoffResult</code>) has <code>cutoff</code>, the number of leading patients to check, and the diagnostics
+<code>scored_candidates</code> (every probed patient with its scores and <code>cutoff_probe_score</code>, <code>cutoff_probe_pass</code> and
+<code>cutoff_probe_iteration</code>) and <code>search_history</code> (one row per probe).</p>
+<p>The input is the complete ranking of every patient for one cohort, with contiguous ranks from 1, joined to the
+patient and cohort text. These helpers still use the historical column names: they require <code>patient_id</code>,
+<code>space_trial_id</code>, <code>rank</code>, <code>cancer_history_summary</code> and <code>clinical_space_summary</code>. Rename the cohort identifier, and
+copy the key criteria into <code>clinical_space_summary</code> (the match questions still read <code>cohort_key_criteria</code> when it is
+present):</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_trial_centric_cutoff</span><span class="p">,</span> <span class="n">generate_candidate_matches</span>
+
+<span class="n">cohort</span> <span class="o">=</span> <span class="n">cohort_vectors</span><span class="p">[</span><span class="n">cohort_vectors</span><span class="p">[</span><span class="s2">"cohort_trial_id"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"NCT01234567-cohort-1"</span><span class="p">]</span>
+<span class="n">ranking</span> <span class="o">=</span> <span class="n">generate_candidate_matches</span><span class="p">(</span><span class="n">cohort</span><span class="p">,</span> <span class="n">patient_vectors</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>    <span class="c1"># every patient, ranked</span>
+<span class="n">candidate_pairs</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">ranking</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">patients</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"patient_id"</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">cohorts</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"cohort_trial_id"</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">"cohort_trial_id"</span><span class="p">:</span> <span class="s2">"space_trial_id"</span><span class="p">})</span>
+<span class="p">)</span>
+<span class="n">candidate_pairs</span><span class="p">[</span><span class="s2">"clinical_space_summary"</span><span class="p">]</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="p">[</span><span class="s2">"cohort_key_criteria"</span><span class="p">]</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">find_trial_centric_cutoff</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">initial_cutoff_proportion</span><span class="o">=</span><span class="mf">0.10</span><span class="p">)</span>
+<span class="n">pairs_to_check</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">"rank"</span><span class="p">)</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">cutoff</span><span class="p">)</span>
+</code></pre></div>
+<p>The search assumes that pass rates generally decline with TrialSpace rank. It estimates a compute cutoff; it does not
+establish eligibility. With <code>check_method="llm"</code>, the probe patients' key sections go to the configured LLM
+endpoint, so use only an endpoint authorized for that data.</p>
+<p>To test whether the result depends on the first probe position, run the offline stability helper on synthetic or
+otherwise authorized data. It scores the complete ranking once with <code>score_match_quality</code>, then replays the search
+from each start:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">assess_trial_centric_cutoff_stability</span>
+
+<span class="n">stability</span> <span class="o">=</span> <span class="n">assess_trial_centric_cutoff_stability</span><span class="p">(</span>
+    <span class="n">candidate_pairs</span><span class="p">,</span>
+    <span class="n">initial_cutoff_proportions</span><span class="o">=</span><span class="p">(</span><span class="mf">0.10</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.50</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.90</span><span class="p">),</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">stability</span><span class="o">.</span><span class="n">cutoff_runs</span><span class="p">)</span>
+</code></pre></div>
+<p><code>cutoff_runs</code> has one row per start. <code>selected_cutoff_spread</code> is the range of the selected cutoffs across starts, and
+<code>reasonable_consideration_count_spread</code> the range of the number of threshold-passing patients inside them. These are
+research QA signals, not eligibility determinations.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -2682,7 +2763,12 @@ the same bisection behavior regardless of this starting point.</p>
                 <code>config</code>
             </td>
             <td>
-                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3025,7 +3111,12 @@ Defaults to 0.20 on the 0-1 sigmoid scale.</p>
                 <code>config</code>
             </td>
             <td>
-                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3365,49 +3456,7 @@ and the cutoff and passing-count spreads.</p>
 
     </div>
 
-</div><p>Rank the entire patient corpus, attach the package-format patient and trial
-summary columns, then select the leading prefix reported by the search:</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">find_trial_centric_cutoff</span><span class="p">,</span>
-    <span class="n">generate_candidate_matches</span><span class="p">,</span>
-<span class="p">)</span>
-
-<span class="n">ranking</span> <span class="o">=</span> <span class="n">generate_candidate_matches</span><span class="p">(</span><span class="n">trial_embeddings</span><span class="p">,</span> <span class="n">patient_embeddings</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-<span class="n">candidate_pairs</span> <span class="o">=</span> <span class="p">(</span>
-    <span class="n">ranking</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"patient_id"</span><span class="p">)</span>
-    <span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">trial_spaces</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"space_trial_id"</span><span class="p">)</span>
-<span class="p">)</span>
-<span class="n">cutoff</span> <span class="o">=</span> <span class="n">find_trial_centric_cutoff</span><span class="p">(</span>
-    <span class="n">candidate_pairs</span><span class="p">,</span>
-    <span class="n">check_method</span><span class="o">=</span><span class="s2">"trial_checker"</span><span class="p">,</span>  <span class="c1"># or "llm"</span>
-    <span class="n">score_threshold</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span>           <span class="c1"># use 1 for the default LLM threshold</span>
-    <span class="n">patients_per_side</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
-    <span class="n">initial_cutoff_proportion</span><span class="o">=</span><span class="mf">0.10</span><span class="p">,</span> <span class="c1"># start 10% down when few patients qualify</span>
-<span class="p">)</span>
-<span class="n">pairs_for_both_checkers</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">"rank"</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"stable"</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span>
-    <span class="p">:</span> <span class="n">cutoff</span><span class="o">.</span><span class="n">cutoff</span>
-<span class="p">]</span>
-</code></pre></div>
-<p>LLM probes send the probe patient and trial summaries to the configured LLM
-backend. Use only endpoints authorized for the sensitivity of those inputs.</p>
-<p>To test whether the adaptive result depends on the first boundary position,
-run the offline stability helper on synthetic or otherwise explicitly
-authorized data:</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">assess_trial_centric_cutoff_stability</span>
-
-<span class="n">stability</span> <span class="o">=</span> <span class="n">assess_trial_centric_cutoff_stability</span><span class="p">(</span>
-    <span class="n">candidate_pairs</span><span class="p">,</span>
-    <span class="n">initial_cutoff_proportions</span><span class="o">=</span><span class="p">(</span><span class="mf">0.10</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.50</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.90</span><span class="p">),</span>
-    <span class="n">score_threshold</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span>
-    <span class="n">patients_per_side</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">stability</span><span class="o">.</span><span class="n">cutoff_runs</span><span class="p">)</span>
-</code></pre></div>
-<p>This diagnostic scores the complete ranking once with <code>score_match_quality</code> and reuses
-those scores for every start. <code>selected_cutoff_spread</code> measures allocation
-sensitivity; <code>reasonable_consideration_count_spread</code> measures how many
-threshold-passing patients that sensitivity adds or omits. These are research
-QA signals, not patient eligibility determinations.</p>
+</div>
 
 
 

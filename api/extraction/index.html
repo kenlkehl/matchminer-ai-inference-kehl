@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1438,7 +1438,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1466,7 +1466,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -2473,7 +2473,7 @@ one data model:</p>
 (the record system's label, shown to the model as a hint). Without <code>note_id</code>,
 each note gets a stable id from a hash of its patient, date, type and text, and
 exact duplicate notes are kept once. Dates become <code>YYYY-MM-DD</code>; a missing date
-stays unknown.</p>
+stays unknown and an unparseable one is an error. Rows without text are dropped.</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_default_preset</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.patients</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">extract_document_records</span><span class="p">,</span>
@@ -2493,28 +2493,27 @@ stays unknown.</p>
 </code></pre></div>
 <p>The two stages are independent. Passing <code>patient_records</code> to the document stage
 lists each patient's known diagnoses (<code>D1</code>, <code>D2</code>, ...) in its prompts so that
-items can name the cancer they concern (<code>cancer_ids</code>), as the lung abstraction
-this generalizes did after its patient pass.</p>
+items can name the cancer they concern (<code>cancer_ids</code>).</p>
 <h2 id="records">Records<a class="headerlink" href="#records" title="Permanent link">&para;</a></h2>
-<p>Every record carries <code>schema_version</code> (<code>mmai-clinical-extraction-v2</code>; v1 records, built
-before lab tests and counseling were added on 2026-11-17, have neither list), its
-<code>level</code>, <code>patient_id</code>, the selected <code>extensions</code>, and <code>items</code>: one list per item
-type. A document record adds <code>note_id</code>, <code>note_date</code>, <code>note_type</code>,
-<code>document_type</code> and <code>document_type_text</code>; a patient record adds <code>note_count</code>,
-<code>first_note_date</code>, <code>last_note_date</code>, <code>chunk_count</code> and <code>failed_chunks</code>, and gives
-each item an <code>item_id</code> (<code>D1</code>, <code>B2</code>, <code>T3</code>, ...). <code>record_json_schema(level)</code>
-returns the JSON schema of a record.</p>
+<p>Every record carries <code>schema_version</code> (<code>mmai-clinical-extraction-v2</code>), its <code>level</code>, <code>patient_id</code>, the selected
+<code>extensions</code>, and <code>items</code>: one list per item type. A document record adds <code>note_id</code>, <code>note_date</code>, <code>note_type</code>,
+<code>document_type</code> and <code>document_type_text</code>; a patient record adds <code>note_count</code>, <code>first_note_date</code>,
+<code>last_note_date</code>, <code>chunk_count</code> and <code>failed_chunks</code>, and gives each item an <code>item_id</code> (<code>D1</code>, <code>B2</code>, <code>T3</code>, ...).
+<code>record_json_schema(level)</code> returns the JSON schema of a record.</p>
+<p>Records of the earlier <code>mmai-clinical-extraction-v1</code> schema have no lab test or counseling lists. The workup
+checks treat those types as not extracted for such records, so an empty list there never means "not done".</p>
 <p>Every item has:</p>
 <ul>
 <li><code>item_type</code> and its fields (below). Text the note does not state is <code>""</code>, a
   choice it does not settle is <code>not_stated</code> (where the vocabulary has it), a
-  list is <code>[]</code>, and an integer is <code>0</code>.</li>
+  list is <code>[]</code>, and an unstated <code>line_of_therapy</code> is <code>0</code>.</li>
 <li>dates as <code>{"value": "2024-03", "precision": "month", "source": ...}</code>, with
   <code>precision</code> <code>day</code>, <code>month</code>, <code>year</code> or <code>unknown</code> (value null). <code>source</code> is
   <code>document_text</code> (written in the note), <code>note_date</code> (a report's own study or
   specimen whose date is not written gets the note's date), <code>evidence_note_date</code>
-  (a performed patient-level study or procedure without a written date gets the
-  date of the earliest note quoted: it was done on or before then) or <code>unknown</code>.</li>
+  (a performed patient-level study, procedure, lab test or counseling item without a written date gets the
+  date of the earliest note quoted: it was done on or before then) or <code>unknown</code>. Disease assessments and
+  performance status have no date field: they are dated by their note.</li>
 <li><code>evidence</code>: one to four exact quotes, each with the note's <code>note_id</code>,
   <code>note_date</code> and the <code>start</code>/<code>end</code> character offsets of the quote in the
   note's own text. The model writes the quotes; code locates each one in the
@@ -2607,16 +2606,18 @@ record, <code>relation</code> is <code>this_report</code> (the study an imaging 
 procedure that produced the specimen a pathology report examines),
 <code>previously_performed</code> (an earlier or outside study or procedure the note says
 was done) or <code>planned</code>; <code>source_of_document</code> is true for <code>this_report</code>. In both
-levels <code>status</code> is <code>performed</code> or <code>planned</code>. Procedures, biomarkers,
-treatments and events carry <code>cancer_ids</code> (patient level, and document level when
-<code>patient_records</code> is given). Disease assessments and performance status are
-properties of one note, so they are document-level only, as in the lung
-abstraction; their table date is the note date.</p>
+levels <code>status</code> is <code>performed</code> or <code>planned</code>. Disease assessments and performance status are
+properties of one note, so they are document-level only; events are patient-level only.</p>
+<p><code>cancer_ids</code> lists the patient-level diagnosis ids an item concerns (<code>[]</code> when unclear):</p>
+<ul>
+<li>procedures, biomarkers and treatments carry it at both levels;</li>
+<li>events carry it at the patient level, and document-level diagnoses (the known cancer each one is) and disease
+  assessments at the document level;</li>
+<li>at the document level it is filled only when <code>patient_records</code> is given, and is <code>[]</code> otherwise.</li>
+</ul>
 <p>An imaging report's record must include the study it reads, and a pathology
 report's the procedure that produced its specimens (<code>relation</code> <code>this_report</code>),
-or the answer is retried. Neither was extracted by the lung abstraction: it
-used the record system's scan type only to select reports, and it recorded a
-specimen's procedure only as biopsy or surgical excision.</p>
+or the answer is retried.</p>
 <h3 id="controlled-vocabularies">Controlled vocabularies<a class="headerlink" href="#controlled-vocabularies" title="Permanent link">&para;</a></h3>
 <p>Each choice field has a closed vocabulary (<code>matchminer_ai.patients.extraction.vocabulary</code>)
 that is rendered into the prompt and enforced by the JSON schema. Most end with
@@ -2646,16 +2647,24 @@ that is rendered into the prompt and enforced by the JSON schema. Most end with
 <td><code>with_contrast</code>, <code>without_contrast</code>, <code>with_and_without_contrast</code>, <code>not_stated</code></td>
 </tr>
 <tr>
-<td>Pathology procedure (group)</td>
-<td>histologic biopsy: <code>core_needle_biopsy</code>, <code>needle_biopsy_not_specified</code>, <code>excisional_biopsy</code>, <code>incisional_biopsy</code>, <code>punch_or_shave_biopsy</code>, <code>endoscopic_biopsy</code>, <code>bronchoscopic_biopsy</code>, <code>mediastinoscopy</code>, <code>sentinel_lymph_node_biopsy</code>, <code>biopsy_not_specified</code>; aspiration or cytology: <code>fine_needle_aspiration</code>, <code>ebus_tbna</code>, <code>eus_fna</code>, <code>fluid_cytology</code>, <code>brushing_or_washing_cytology</code>; surgical resection: <code>surgical_resection</code>, <code>lymph_node_dissection</code>; <code>bone_marrow_biopsy</code>; <code>peripheral_blood</code>; <code>other</code>; <code>not_stated</code></td>
+<td>Pathology procedure, by <code>procedure_group</code></td>
+<td><code>histologic_biopsy</code>: <code>core_needle_biopsy</code>, <code>needle_biopsy_not_specified</code>, <code>excisional_biopsy</code>, <code>incisional_biopsy</code>, <code>punch_or_shave_biopsy</code>, <code>endoscopic_biopsy</code>, <code>bronchoscopic_biopsy</code>, <code>mediastinoscopy</code>, <code>sentinel_lymph_node_biopsy</code>, <code>biopsy_not_specified</code>; <code>aspiration_or_cytology</code>: <code>fine_needle_aspiration</code>, <code>ebus_tbna</code>, <code>eus_fna</code>, <code>fluid_cytology</code>, <code>brushing_or_washing_cytology</code>; <code>surgical_resection</code>: <code>surgical_resection</code>, <code>lymph_node_dissection</code>; <code>bone_marrow</code>: <code>bone_marrow_biopsy</code>; <code>blood</code>: <code>peripheral_blood</code>; <code>other</code>: <code>other</code>; and <code>not_stated</code> (no group)</td>
 </tr>
 <tr>
 <td>Image guidance</td>
 <td><code>ct</code>, <code>ultrasound</code>, <code>mri</code>, <code>fluoroscopy</code>, <code>stereotactic</code>, <code>none</code>, <code>not_stated</code></td>
 </tr>
 <tr>
+<td>Laterality</td>
+<td><code>left</code>, <code>right</code>, <code>bilateral</code>, <code>not_stated</code></td>
+</tr>
+<tr>
 <td>Specimen result</td>
 <td><code>malignant</code>, <code>suspicious_or_atypical</code>, <code>negative</code>, <code>nondiagnostic</code>, <code>not_stated</code></td>
+</tr>
+<tr>
+<td>Stage basis / extent at diagnosis</td>
+<td><code>clinical</code>, <code>pathologic</code>, <code>not_stated</code> / <code>localized</code>, <code>regional</code>, <code>distant</code>, <code>not_stated</code></td>
 </tr>
 <tr>
 <td>Biomarker type / result / method / sample / origin</td>
@@ -2668,6 +2677,22 @@ that is rendered into the prompt and enforced by the JSON schema. Most end with
 <tr>
 <td>Disease status</td>
 <td><code>no_evidence_of_disease</code>, <code>response</code>, <code>stable</code>, <code>mixed</code>, <code>progression</code>, <code>indeterminate</code></td>
+</tr>
+<tr>
+<td>Lab test, by group</td>
+<td>hematology: <code>cbc</code>, <code>platelet_count</code>, <code>coagulation</code>, <code>iron_studies</code>; chemistry: <code>cmp</code>, <code>bmp</code>, <code>electrolytes</code>, <code>renal_function</code>, <code>liver_function</code>, <code>calcium</code>, <code>magnesium_phosphate</code>, <code>glucose_hba1c</code>, <code>ldh</code>; endocrine: <code>thyroid_function</code>, <code>hormone_levels</code>; other: <code>pregnancy_test</code>, <code>infectious_serology</code>, <code>protein_electrophoresis</code>, <code>lipid_panel</code>, <code>urinalysis</code>, <code>other</code></td>
+</tr>
+<tr>
+<td>Lab result flag</td>
+<td><code>normal</code>, <code>abnormal</code>, <code>not_stated</code></td>
+</tr>
+<tr>
+<td>Counseling topic</td>
+<td><code>smoking_cessation</code>, <code>genetic_counseling</code>, <code>fertility</code>, <code>sexual_health</code>, <code>contraception_pregnancy</code>, <code>psychosocial_distress</code>, <code>palliative_care</code>, <code>advance_care_planning</code>, <code>nutrition</code>, <code>exercise_rehabilitation</code>, <code>lymphedema</code>, <code>survivorship</code>, <code>financial_social_needs</code>, <code>substance_use</code>, <code>other</code></td>
+</tr>
+<tr>
+<td>Counseling kind</td>
+<td><code>counseling</code>, <code>discussion</code>, <code>screening</code>, <code>referral</code>, <code>consultation</code>, <code>not_stated</code></td>
 </tr>
 <tr>
 <td>Event type</td>
@@ -2684,7 +2709,7 @@ gets <code>agents_ncit</code>: every agent's NCIt concept from the bundled NCIt 
 with the same columns at both levels: <code>patient_id</code>, <code>level</code>, <code>note_id</code>,
 <code>note_date</code>, <code>document_type</code>, <code>item_type</code>, <code>item_id</code>, a uniform <code>date</code>,
 <code>date_precision</code> and <code>date_source</code> (the item's primary date, or the note date
-for a document's assessments), every item field (a date field <code>x</code> becomes <code>x</code>,
+for disease assessments and performance status), every item field (a date field <code>x</code> becomes <code>x</code>,
 <code>x_precision</code> and <code>x_source</code>), <code>evidence</code> and the complete <code>item</code>. Questions a
 workup review asks become DataFrame filters:</p>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
@@ -2729,12 +2754,13 @@ before an answer, and a patient chunk's answer adds its quotes. Set
 completion on a busy server, for example 7,200 seconds; the shared endpoint
 pool retries a timed-out request from the start, so a timeout shorter than a
 completion never finishes.</p>
-<p>Returned DataFrames have <code>extraction_status</code> (<code>complete</code>, <code>partial</code> or
-<code>failed</code>), <code>error</code>, <code>item_count</code> and the <code>record</code> dict (None when failed).
-<code>return_metadata=True</code> adds the schema version, prompt and response-schema
-hashes, extensions, model metadata and every request's attempts (finish reason
-and problem codes, without note text; answers and reasoning only in debug mode).
-<code>return_qc=True</code> adds failed, partial and truncated counts.</p>
+<p>Returned DataFrames have <code>patient_id</code>, <code>extraction_status</code> (<code>complete</code>, <code>partial</code> or <code>failed</code>), <code>error</code>,
+<code>item_count</code> and the <code>record</code> dict (None when failed). The document stage adds <code>note_id</code>, <code>note_date</code>,
+<code>note_type</code> and <code>document_type</code> (one row per note, in patient and date order); the patient stage adds
+<code>note_count</code>, <code>chunk_count</code> and <code>failed_chunks</code> (one row per patient). <code>return_metadata=True</code> adds the schema
+version, prompt and response-schema hashes, extensions, model metadata and every request's attempts (finish
+reason and problem codes, without note text; answers and reasoning only in debug mode). <code>return_qc=True</code> adds
+failed, partial and truncated counts.</p>
 <h2 id="patient-level-chunking">Patient-level chunking<a class="headerlink" href="#patient-level-chunking" title="Permanent link">&para;</a></h2>
 <p>A patient's notes are read in date order, packed into chunks of
 <code>patient_extraction.chunk_tokens</code> tokens (a longer note is split with
@@ -2743,24 +2769,23 @@ without sentence deduplication, so quotes stay exact. Each chunk's request
 shows the record so far (items with their ids, fields and the numbers of the
 notes that support them) and returns only the chunk's new and changed items;
 code merges them, adding each update's evidence to the item's earlier evidence.
-The lung abstraction instead asked for the whole running JSON again on every
-chunk, so its cost grew with the square of the record's length, and a later
-answer could silently drop an item. A chunk whose prompt, with the output
-reserve, would exceed <code>context_tokens</code> fails the patient rather than being
-truncated.</p>
+An answer never restates the whole record, so its length does not grow with the record, and a later answer
+cannot silently drop an earlier item. Chunks are measured with the model's tokenizer
+(<code>remote.tokenizer_name</code>, or the model name). A chunk whose prompt, with the output reserve, would exceed
+<code>context_tokens</code> (default <code>local.engine.max_model_len</code>) fails the patient rather than being truncated.</p>
 <h2 id="checkpoints">Checkpoints<a class="headerlink" href="#checkpoints" title="Permanent link">&para;</a></h2>
 <p>With <code>checkpoint_dir</code>, the document stage appends each finished note to
 <code>document_records.jsonl</code> and the patient stage saves each patient after every
 chunk under <code>patient_records/</code> (files named by a hash of the patient id). A
 rerun with unchanged notes, context and extraction contract (schema version,
-prompt, field guide, extensions and response schema) reuses complete and
-partial results and retries the rest. Checkpoints hold patient-derived text.</p>
+prompt, field guide, extension guidance, response schema and NCIt setting) reuses complete and partial results
+and retries the rest. Checkpoints hold patient-derived text.</p>
 <h2 id="extensions">Extensions<a class="headerlink" href="#extensions" title="Permanent link">&para;</a></h2>
 <p>Disease-specific item types and prompt guidance are added by extensions,
 selected by name in <code>document_extraction.extensions</code> and
 <code>patient_extraction.extensions</code>, without changing the core model. The packaged
 <code>thoracic</code> extension adds a <code>smoking_history</code> item (<code>smoking_status</code>,
-<code>pack_years</code>, <code>quit_date</code>) and the thoracic guidance of the lung abstraction:
+<code>pack_years</code>, <code>quit_date</code>; at most one per record) and thoracic guidance:
 histology and biomarker examples, lobe and nodal-station sites, thoracic
 operations and EBUS-TBNA. New extensions are registered with
 <code>register_extension(Extension(name, description, item_types, guidance))</code>; their
@@ -2786,7 +2811,8 @@ document type, the imaging study or specimen procedure behind a report, and the
 diagnoses, biomarkers, treatments, disease assessments and performance status
 it states); :func:<code>extract_patient_records</code> returns one record per patient from
 all of their notes (diagnoses, biomarkers, treatment lines, procedures, imaging
-history and key dated events). Both use the item types and vocabularies of
+history and key dated events). Schema v2 records also carry lab tests and
+counseling. Both use the item types and vocabularies of
 :mod:<code>.schema</code> and :mod:<code>.vocabulary</code>, carry exact-quote evidence located in the
 notes in code, and flatten to one table with :func:<code>extraction_items</code>.</p>
 

@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1438,7 +1438,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1466,7 +1466,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -2179,9 +2179,8 @@ check every cited quote against its note. <em>Not documented</em> means no extra
 item matched, not that the step was not done. This does not establish overall
 guideline concordance.</p>
 </div>
-<p>This is a second way to check guideline workup, beside the note-reading reviews
-(<code>review_patient_workup</code>, <code>review_population_workup</code>). It reads the records of
-<a href="../extraction/">Structured Clinical Extraction</a> instead of the notes:</p>
+<p>This method checks guideline workup from the records of <a href="../extraction/">Structured Clinical Extraction</a> instead
+of the notes (the note-reading reviews are <code>review_patient_workup</code> and <code>review_population_workup</code>):</p>
 <ol>
 <li><strong>Compile once per requirement.</strong> <code>compile_workup_queries</code> asks the
    <code>workup_query_compile</code> LLM to translate each guideline <code>diagnostic_workup</code>
@@ -2200,25 +2199,32 @@ guideline concordance.</p>
     <span class="n">compile_workup_queries</span><span class="p">,</span>
     <span class="n">extract_document_records</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_guideline_catalog</span>
 
 <span class="n">config</span> <span class="o">=</span> <span class="n">load_default_preset</span><span class="p">()</span>
 <span class="n">config</span><span class="o">.</span><span class="n">remote</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">server_urls</span><span class="o">=</span><span class="p">[</span><span class="s2">"http://localhost:8000/v1"</span><span class="p">],</span>
                      <span class="n">request_timeout</span><span class="o">=</span><span class="mi">14400</span><span class="p">)</span>
 
+<span class="n">space</span> <span class="o">=</span> <span class="n">load_guideline_catalog</span><span class="p">(</span><span class="s2">"catalogs/nsclc"</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>     <span class="c1"># one guideline space</span>
+<span class="n">query_cache</span> <span class="o">=</span> <span class="p">{}</span>                                             <span class="c1"># any mapping; reuse it across calls</span>
 <span class="n">compiled</span> <span class="o">=</span> <span class="n">compile_workup_queries</span><span class="p">(</span>
     <span class="n">space</span><span class="p">[</span><span class="s2">"diagnostic_workup"</span><span class="p">],</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-    <span class="n">population_context</span><span class="o">=</span><span class="n">space</span><span class="p">[</span><span class="s2">"cohort_key_criteria"</span><span class="p">],</span> <span class="n">cache</span><span class="o">=</span><span class="n">my_cache</span><span class="p">,</span>
+    <span class="n">population_context</span><span class="o">=</span><span class="n">space</span><span class="p">[</span><span class="s2">"cohort_key_criteria"</span><span class="p">],</span> <span class="n">cache</span><span class="o">=</span><span class="n">query_cache</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="n">documents</span> <span class="o">=</span> <span class="n">extract_document_records</span><span class="p">(</span><span class="n">notes</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
 <span class="n">report</span> <span class="o">=</span> <span class="n">check_workup_with_extractions</span><span class="p">(</span><span class="n">documents</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>
 </code></pre></div>
-<p><a href="../workup-sql/">SQL-Agent Workup Checks</a> read the same records with queries that an LLM
-agent writes in SQL after exploring the extracted data.</p>
-<p>For a population, <code>matchminer_ai.population.check_population_workup_with_extractions</code>
-takes a cohort (with its space), the compiled queries and the document and
-patient records, links records to the cohort's own notes by note id, and returns
-the cohort with a <code>report</code> in the shape of the full-note population review
-(<code>method</code> <code>extraction_queries</code>).</p>
+<p><code>check_workup_with_extractions</code> also takes patient records (pass a list of record DataFrames), <code>patient_ids</code> (adds
+patients without records, whose results are unknown, and fixes the order), <code>reference_dates</code> (one date, or dates
+by patient id), <code>anchors</code> (a supplied <code>diagnosis_date</code> by patient id) and <code>coverage</code> (counts such as
+<code>notes_without_records</code> by patient id). It returns <code>patients</code> (one review per patient, with an assessment per
+requirement), <code>aggregate</code> and <code>notice</code>.</p>
+<p>For a cohort, <code>matchminer_ai.population.check_population_workup_with_extractions</code> takes the cohort (with its
+space), the compiled queries and the records. It links the records to the cohort's own notes by note id and returns
+the cohort with a <code>report</code> in the shape of the full-note review (<code>method: extraction_queries</code>); see
+<a href="../../user-guide/population-workup/#extraction-based-checks">Population workup review</a>.</p>
+<p><a href="../workup-sql/">SQL-Agent Workup Checks</a> read the same records with SQL queries that an LLM agent writes after
+exploring the extracted data.</p>
 <h2 id="the-query-language">The query language<a class="headerlink" href="#the-query-language" title="Permanent link">&para;</a></h2>
 <p>A query is one JSON object, decoded under <code>query_response_schema()</code> with vLLM
 structured outputs and validated by <code>validate_workup_query()</code>. The schema is
@@ -2237,15 +2243,15 @@ strict and non-recursive (no <code>$ref</code>, <code>null</code>, <code>minLeng
 </tr>
 <tr>
 <td><code>expressible</code></td>
-<td><code>false</code> when the item types cannot check the requirement (examinations, laboratory panels, consultations, multidisciplinary evaluation, counseling). Then <code>criteria</code> is <code>[]</code>, every expression is <code>{"all_of": []}</code> and <code>not_expressible_reason</code> says why; the result is <code>unknown</code>.</td>
+<td><code>false</code> when no item type can check the requirement: physical examination, history taking, organ function tests such as PFTs or ECG, multidisciplinary or tumor board evaluation. Then <code>criteria</code> is <code>[]</code>, every expression is <code>{"all_of": []}</code> and <code>not_expressible_reason</code> says why; the result is <code>unknown</code>. Laboratory tests are <code>lab_test</code> items and counseling, screenings and referrals are <code>counseling</code> items, so those are expressible.</td>
 </tr>
 <tr>
 <td><code>approximations</code></td>
-<td>What was left out or approximated ("upper abdomen" by the abdomen region). Shown as limitations.</td>
+<td>Up to 8 notes on what was left out or approximated ("upper abdomen" by the abdomen region). Shown as limitations.</td>
 </tr>
 <tr>
 <td><code>criteria</code></td>
-<td>Up to 24 named matchers of one item type each: <code>id</code>, <code>label</code>, <code>item_type</code>, <code>status</code> (<code>performed</code>, <code>planned</code>, <code>any</code>), <code>filters</code>, <code>window</code>, <code>min_count</code>.</td>
+<td>Up to 24 named matchers of one item type each: <code>id</code>, <code>label</code>, <code>item_type</code>, <code>status</code> (<code>performed</code>, <code>planned</code>, <code>any</code>), <code>filters</code>, <code>window</code>, <code>min_count</code> (1-20).</td>
 </tr>
 <tr>
 <td><code>requirement</code></td>
@@ -2265,11 +2271,14 @@ strict and non-recursive (no <code>$ref</code>, <code>null</code>, <code>minLeng
 "negated": false}, ...]}, ...]}</code>. Alternatives are literals of one group;
 components that are all required are separate groups; a negated literal holds
 when its criterion does not. A requirement needs at least one criterion that is
-not negated, and every criterion must be used.</p>
-<p>A <strong>filter</strong> is <code>{"field", "op", "values", "if_not_stated"}</code>; all of a
-criterion's filters must hold. Fields are the item type's fields
-(<code>record_json_schema</code>), <code>level</code>, <code>document_type</code>, <code>relation</code> (imaging studies
-and procedures) and <code>procedure_group</code>. Operators:</p>
+not negated, and every criterion must be used by an expression or a window anchor.</p>
+<p>A criterion's <code>status</code> matters for imaging studies, procedures, lab tests, counseling and treatments (a treatment
+is planned when its <code>treatment_status</code> is <code>planned</code>). Items of other types are always performed, so <code>performed</code>
+is read as <code>any</code> for them.</p>
+<p>A <strong>filter</strong> is <code>{"field", "op", "values", "if_not_stated"}</code>; a criterion has up to 8, and all must hold. Fields
+are the item type's non-date fields (<code>record_json_schema</code>), <code>level</code>, <code>document_type</code>, <code>relation</code> (document-level
+imaging studies, procedures, lab tests and counseling) and <code>procedure_group</code>. Dates are tested by the window, not
+by filters. Operators:</p>
 <table>
 <thead>
 <tr>
@@ -2316,9 +2325,9 @@ and procedures) and <code>procedure_group</code>. Operators:</p>
 </tr>
 </tbody>
 </table>
-<p>Choice values must be the field's vocabulary codes. <code>if_not_stated</code> decides what
-a filter means for an item whose field was not stated (<code>not_stated</code>, <code>""</code>, <code>[]</code>,
-or a <code>line_of_therapy</code> of 0): <code>unknown</code> (the usual choice), <code>no_match</code> or <code>match</code>.</p>
+<p>Choice values must be the field's vocabulary codes, and a filter has at most 24 values. <code>if_not_stated</code> decides
+what a filter means for an item whose field was not stated (<code>not_stated</code>, <code>""</code>, <code>[]</code>, or a <code>line_of_therapy</code> of
+0): <code>unknown</code> (the usual choice), <code>no_match</code> or <code>match</code>. A stage text with no recognizable group is unknown.</p>
 <p>A <strong>window</strong> is <code>{"anchor", "anchor_criterion", "days_before", "days_after",
 "if_no_anchor"}</code>: the item's date must lie from <code>days_before</code> days before the
 anchor to <code>days_after</code> days after it (<code>-1</code>: no limit; <code>0</code>: not after or not
@@ -2382,38 +2391,40 @@ the lower, OR the higher, NOT swaps yes and no).</p>
 <td>every day of that month or year</td>
 </tr>
 <tr>
-<td><code>evidence_note_date</code> (a patient-level study dated by its earliest evidence note)</td>
+<td><code>evidence_note_date</code> (a performed patient-level item dated by its earliest evidence note)</td>
 <td>on or before that date</td>
 </tr>
 <tr>
-<td>unknown, document level (for example <code>previously_performed</code> with no date)</td>
-<td>on or before the note's date</td>
+<td>unknown, performed (for example <code>previously_performed</code> with no date)</td>
+<td>on or before the note's date (patient level: the earliest evidence note's)</td>
 </tr>
 <tr>
 <td>unknown, planned</td>
-<td>on or after the note's date</td>
-</tr>
-<tr>
-<td>unknown, patient level</td>
-<td>on or before its earliest evidence note</td>
+<td>on or after that date</td>
 </tr>
 </tbody>
 </table>
-<p>An item is inside a window when its whole interval is, outside when none of it
+<p>Items with no date field of their own (disease assessments, performance status) are dated by their note.
+An item is inside a window when its whole interval is, outside when none of it
 is, and unknown otherwise; anchors are intervals too. So a month-precision CT is
 unknown against "within 30 days" unless the whole month fits, and an undated
 "outside CT was done" mention counts for "any time" but is unknown against a
 recent window.</p>
 <p><strong>Deduplication.</strong> The same study, procedure, result or course documented in
-several notes, or at both levels, is one cluster: same item type and kind (for
-imaging, the modality and overlapping body regions; for procedures, the
-procedure type; for biomarkers, the marker, result and alteration; for
-treatments, the type and agents or regimen), compatible dates and the same
-performed or planned status. An undated or less precise mention joins the most
-recent compatible dated cluster. A cluster is dated by its most precise member,
-and passes a filter when a member does, except that the report's own study
-(<code>this_report</code>) decides when it contradicts a mention. Criteria count clusters:
-a CT report and a later note mentioning that CT count once.</p>
+several notes, or at both levels, is one cluster. Its members share the item type and kind, have compatible dates
+and, except for biomarkers, the same performed or planned status. The kind is:</p>
+<ul>
+<li>imaging: the modality, with overlapping body regions;</li>
+<li>procedures: the procedure type;</li>
+<li>biomarkers: the marker, result and alteration;</li>
+<li>treatments: the type and the agents or regimen;</li>
+<li>lab tests: the test (and its text for <code>other</code>);</li>
+<li>counseling: the topic and kind (and the topic text for <code>other</code>);</li>
+<li>diagnoses: the site and histology; events: the event type; performance status: the scale and score.</li>
+</ul>
+<p>An undated or less precise mention joins the most recent compatible dated cluster. A cluster is dated by its most
+precise member, and passes a filter when a member does, except that the report's own study (<code>this_report</code>) decides
+when it contradicts a mention. Criteria count clusters: a CT report and a later note mentioning that CT count once.</p>
 <p><strong>Criteria.</strong> A criterion holds when at least <code>min_count</code> clusters certainly
 match (status, filters and window), is unknown when enough clusters might, and
 does not hold otherwise. Planned items never satisfy <code>performed</code>.</p>
@@ -2439,7 +2450,7 @@ does not hold otherwise. Planned items never satisfy <code>performed</code>.</p>
 </tr>
 <tr>
 <td><code>unknown</code></td>
-<td>a matching item's date or details leave it open, its anchor is missing, some of the patient's notes failed extraction or have no record, there are no records, or the requirement is not expressible</td>
+<td>a matching item's date or details leave it open, its anchor is missing, some of the patient's notes failed extraction or have no record, there are no records, the requirement is not expressible, or no valid query was compiled</td>
 <td><code>uncertain_dates</code>, <code>fields_not_stated</code>, <code>anchor_unavailable</code>, <code>incomplete_extraction</code>, <code>no_extraction</code>, <code>not_expressible</code>, <code>query_unavailable</code></td>
 </tr>
 <tr>
@@ -2449,36 +2460,43 @@ does not hold otherwise. Planned items never satisfy <code>performed</code>.</p>
 </tr>
 </tbody>
 </table>
+<p>The status vocabulary (<code>STATUSES</code>) also has <code>done_not_recommended</code>, which only the
+<a href="../workup-sql/#results-and-overrides">SQL agent</a> reports.</p>
 <p><code>applicability</code> is <code>applies</code> (no condition, or <code>applies_when</code> holds),
 <code>not_applicable</code> (documented contrary facts) or <code>uncertain</code> (the condition is not
 documented, or the facts conflict). Not applicable always needs documented facts.</p>
-<p>Each result also carries a machine-made <code>bottom_line</code> (for example "Met: CT
-chest: CT (chest, abdomen, pelvis), with contrast, 2024-03-02 (day precision,
-dated by its report, note note-1a2b)"), every criterion's certain and possible
-counts and anchor, the matching clusters with their dates and mentions, the
-<code>closest_non_matches</code> (items of the same kind, such as the same modality or
-marker, that failed only some filters or the window, with what differed; a
-not-documented explanation names the closest one), and the <code>evidence</code> quotes
-with their <code>note_id</code>, <code>note_date</code> and character offsets. Matches are listed
-certain first, then precisely dated before undated mentions, then most recent.
-<code>aggregate_extraction_workup</code> counts statuses, applicability and reasons per
+<p>Each result also carries:</p>
+<ul>
+<li>a machine-made <code>bottom_line</code>, for example "Met: CT chest: CT (chest, abdomen, pelvis), with contrast, 2024-03-02
+  (day precision, dated by its report, note note-1a2b).";</li>
+<li>every criterion's certain and possible counts and anchor, and its matching clusters with their dates and
+  mentions, listed certain first, then precisely dated before undated, then most recent;</li>
+<li>each criterion's <code>closest_non_matches</code>: items of the same kind (such as the same modality or marker) that failed
+  only some filters or the window, with what differed. A not-documented explanation names the closest one;</li>
+<li>the <code>evidence</code> quotes with their <code>note_id</code>, <code>note_date</code> and character offsets;</li>
+<li><code>limitations</code> (the query's approximations, and an incomplete extraction).</li>
+</ul>
+<p><code>aggregate_extraction_workup</code> counts statuses, applicability and reasons per
 requirement; <em>met / applicable assessed</em> counts met among patients it applies to
 whose result is met or not met.</p>
 <h2 id="compile-settings-retries-and-caching">Compile settings, retries and caching<a class="headerlink" href="#compile-settings-retries-and-caching" title="Permanent link">&para;</a></h2>
-<p>The <code>workup_query_compile</code> preset section defaults to Nemotron 3.5 Super with
-<code>sampling_profile: auto</code>, thinking on and structured outputs, 40,000 output
-tokens in a 131,072-token context (its prompt is about 8,000 tokens). An answer
-that is not complete JSON or fails validation is retried with its problems named
-(<code>max_attempts: 3</code>), then once with thinking off (<code>reasoning_off_fallback</code>): three
-retries in all. Each entry records its attempts (finish reasons and problems, no
-reasoning) and <code>first_attempt_valid</code>.</p>
-<p>Distinct requirements are compiled once per call. Pass <code>cache</code> (any mapping, such
-as a dict or a folder of JSON files) to reuse compilations across calls: the key
-(<code>workup_query_cache_key</code>) covers the requirement's name, conditions and
-category, the population context, the extraction schema version, the query
-language version (<code>mmai-workup-query-v1</code>), and the prompt and response-schema
-hashes. A cached query is validated again before use. Compiled queries contain
-guideline text only.</p>
+<p>The <code>workup_query_compile</code> preset section defaults to Nemotron 3.5 Super with <code>sampling_profile: auto</code>,
+<code>reasoning_effort: xhigh</code>, thinking on and structured outputs, and 40,000 output tokens in a 131,072-token local
+context. The prompt (data model, vocabularies, query language and examples) is about 40,000 characters, roughly
+10,000-12,000 tokens. A remote backend keeps <code>batch_size * batches_in_flight</code> (16) requests in flight.</p>
+<p>An answer that is not complete JSON or fails validation is retried with its problems named
+(<code>max_attempts: 3</code>), then once with thinking off (<code>reasoning_off_fallback</code>): three retries in all. A request that
+fails in transport fails its entry. Each entry has <code>requirement</code>, <code>cache_key</code>, <code>status</code> (<code>compiled</code> or <code>failed</code>),
+<code>query</code>, <code>error</code>, <code>attempts</code> (finish reasons and problems, no reasoning), <code>attempt_count</code>,
+<code>first_attempt_valid</code>, <code>cached</code>, <code>model</code> and the compile <code>contract</code>. With <code>return_metadata=True</code> the call also
+returns counts of distinct, cached, compiled and first-attempt-valid queries and requests.</p>
+<p>Queries cover the item types of the extraction extensions that <code>document_extraction</code> and <code>patient_extraction</code>
+select, unless <code>extensions</code> is passed. Distinct requirements are compiled once per call. Pass <code>cache</code> (any mapping,
+such as a dict or a folder of JSON files) to reuse compilations across calls. The key (<code>workup_query_cache_key</code>)
+covers the requirement's name, conditions and category, the population context, the extraction schema version and
+extensions, the query language version (<code>mmai-workup-query-v1</code>), and the prompt and response-schema hashes. Only
+compiled queries are cached, and a cached query is validated again before use. Compiled queries contain guideline
+text only.</p>
 
 
 <div class="doc doc-object doc-module">

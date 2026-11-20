@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1438,7 +1438,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1466,7 +1466,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -1730,6 +1730,17 @@
     <span class="md-ellipsis">
       
         Decision-model scores
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM scores
       
     </span>
   </a>
@@ -2202,6 +2213,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#llm-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM scores
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#decision-model" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2483,30 +2505,48 @@
 
 
 <h1 id="match-quality">Match Quality<a class="headerlink" href="#match-quality" title="Permanent link">&para;</a></h1>
-<p>The decision model's match questions (<code>score_match_quality</code>) and their LLM alternative
-(<code>score_match_quality_with_llm</code>) read <strong>key text only</strong>: the patient summary's
-key section and the cohort's key criteria. Boilerplate is the
-<a href="../exclusion-criteria/">exclusion-criteria</a> stage's. Each row is one candidate
-pair with:</p>
-<ul>
-<li><code>patient_id</code>;</li>
-<li><code>cohort_trial_id</code> (or historical <code>space_trial_id</code>);</li>
-<li><code>cancer_history_summary</code>, the patient's key section (or a complete
-  <code>patient_summary</code>, whose text before <code>Other relevant history:</code> is taken);</li>
-<li><code>cohort_key_criteria</code> (else <code>cohort_eligibility_criteria</code> when the
-  boilerplate step did not run, else historical <code>clinical_space_summary</code>).</li>
-</ul>
+<p><code>score_match_quality</code> asks the decision model five match questions about each candidate pair, and
+<code>score_match_quality_with_llm</code> asks an LLM the same five. Both read <strong>key text only</strong>: the patient summary's key
+section and the cohort's key criteria. Boilerplate is the <a href="../exclusion-criteria/">exclusion-criteria</a> check's.</p>
+<p>Each input row is one candidate pair with:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patient_id</code></td>
+<td>Patient identifier</td>
+</tr>
+<tr>
+<td><code>cohort_trial_id</code> (or historical <code>space_trial_id</code>)</td>
+<td>Cohort identifier</td>
+</tr>
+<tr>
+<td><code>cancer_history_summary</code></td>
+<td>The patient's key section; else a complete <code>patient_summary</code>, whose text before <code>Other relevant history:</code> is taken</td>
+</tr>
+<tr>
+<td><code>cohort_key_criteria</code></td>
+<td>The cohort's key criteria; else <code>cohort_eligibility_criteria</code> when the boilerplate step did not run; else historical <code>clinical_space_summary</code></td>
+</tr>
+</tbody>
+</table>
+<p>Merge the summaries and cohorts onto the candidates from <code>generate_candidate_matches</code> to get these columns (see the
+<a href="../../getting-started/quickstart/#4-score-the-candidates">quickstart</a>).</p>
 <h2 id="match-labels">Match labels<a class="headerlink" href="#match-labels" title="Permanent link">&para;</a></h2>
-<p>One LLM prompt, <code>match_quality.labels.system.txt</code>
-(<code>matchminer_ai.matching.match_labels</code>, schema <code>trial-match-labels-v1</code>), asks
-five yes/no questions about one patient's key section and one cohort's key
-criteria. Each answer carries an <code>evidence_status</code> (<code>supported</code>,
-<code>contradicted</code>, <code>insufficient_information</code> or <code>not_applicable</code>) and a <code>reason</code>.</p>
+<p>One prompt, <code>match_quality.labels.system.txt</code> (<code>matchminer_ai.matching.match_labels</code>, schema
+<code>trial-match-labels-v1</code>), asks five yes/no questions about one patient's key section and one cohort's key criteria.
+The training pipeline's teacher labels pairs with it, the decision model learns one question per label, and
+<code>score_match_quality_with_llm</code> uses it.</p>
 <table>
 <thead>
 <tr>
 <th>Label</th>
-<th>Question</th>
+<th>Yes means</th>
 <th>Points</th>
 </tr>
 </thead>
@@ -2538,42 +2578,145 @@ criteria. Each answer carries an <code>evidence_status</code> (<code>supported</
 </tr>
 </tbody>
 </table>
-<p><code>match_score</code> gives 0–6: 0 unless the patient is reasonable, otherwise 1 plus
-the points of each other yes answer. The training teacher labels pairs with
-this same prompt and contract, and the decision model learns one yes/no
-question per label. <code>score_match_quality_with_llm</code> uses it by default
-(<code>llm_match_quality.prompt_file</code>) and returns <code>llm_match_quality_score</code> (0–6, or
--1 when the answer fails the contract) plus one boolean <code>llm_&lt;label&gt;</code> column per
-label (None when unparsed). Debug mode adds the answer, reasoning and parse
-status.</p>
+<p>The match score (<code>match_score</code>) is 0-6: 0 unless the answer to <code>reasonableness</code> is yes, otherwise 1 plus the points
+of each other yes answer. In the LLM's answer, each label carries an <code>evidence_status</code> (<code>supported</code>, <code>contradicted</code>,
+<code>insufficient_information</code> or <code>not_applicable</code>) and a <code>reason</code>.</p>
 <h2 id="decision-model-scores">Decision-model scores<a class="headerlink" href="#decision-model-scores" title="Permanent link">&para;</a></h2>
-<p><code>score_match_quality</code> asks the decision model
-(<a href="#decision-model"><code>matchminer_ai.matching.decision_model</code></a>; the <code>decision_model</code>
-configuration section, base <code>LiquidAI/d1-2B</code> by default) the five match questions
-about one state: the patient's key section and the cohort's key criteria. Each
-question's instructions are its section of <code>match_quality.labels.system.txt</code>
-(without the teacher's evidence-status bookkeeping), except <code>reasonableness</code>,
-which opens: <em>Is this patient potentially eligible for this cohort after review
-of the patient history and these key criteria? If the patient is potentially
-eligible, answer yes; if the patient is clearly ineligible, answer no.</em> It
-returns each P(yes) as <code>match_quality_&lt;label&gt;</code> and</p>
+<p><code>score_match_quality</code> reads one state per pair, the patient's key section and the cohort's key criteria, and asks the
+five questions together. Each question is its label's section of <code>match_quality.labels.system.txt</code>, without the
+teacher's evidence-status bookkeeping. The <code>reasonableness</code> question is reworded for a yes/no answer: <em>Is this
+patient potentially eligible for this cohort after review of the patient history and these key criteria? If the
+patient is potentially eligible, answer yes; if the patient is clearly ineligible, answer no.</em></p>
+<table>
+<thead>
+<tr>
+<th>Output column</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patient_id</code>, and <code>cohort_trial_id</code> or <code>space_trial_id</code></td>
+<td>The pair, with the input's identifier column</td>
+</tr>
+<tr>
+<td><code>match_quality_score</code></td>
+<td>The expected match score as a fraction of 6, for ranking (formula below)</td>
+</tr>
+<tr>
+<td><code>match_quality_pass</code></td>
+<td><code>match_quality_reasonableness &gt;= match_quality.reasonableness_cutoff</code> (0.5): the model's own potentially-eligible answer</td>
+</tr>
+<tr>
+<td><code>match_quality_reasonableness</code>, <code>match_quality_cancer_type</code>, <code>match_quality_burden</code>, <code>match_quality_treatment_history</code>, <code>match_quality_biomarker</code></td>
+<td>Each question's P(yes)</td>
+</tr>
+</tbody>
+</table>
 <div class="highlight"><pre><span></span><code>match_quality_score = P(reasonable) × (1 + P(cancer_type) + P(burden)
                       + P(treatment_history) + 2·P(biomarker)) / 6
 </code></pre></div>
-<p>the expected match score as a fraction of 6, used for ranking. <code>match_quality_pass</code>
-is <code>match_quality_reasonableness &gt;= match_quality.reasonableness_cutoff</code> (0.5 by
-default), the decision model's own potentially-eligible answer (since 2026-11-17;
-before, a <code>match_quality_score</code> cutoff of 0.2 approximated it).</p>
-<p><code>interpret_match_quality</code> attributes one match question's decision (<code>head</code>,
-default <code>"reasonableness"</code>): gradient times input embedding for the question's
-yes-minus-no logit at its answer slot, read in the same packed sequence as the
-scores. Token offsets refer to the <code>cohort_key_criteria</code> and
-<code>patient_key_summary</code> sources. Attributions are local model sensitivities for
-debugging and human review, not clinical rationales.</p>
-<p>Scores and labels are ranking and screening signals, not eligibility
-determinations. The LLM check sends patient key text to the configured LLM
-endpoint; use only an endpoint authorized for that data.</p>
+<p>By default (<code>filter_low_quality=True</code>) only passing pairs are returned; <code>filter_low_quality=False</code> returns every
+pair. With <code>return_metadata=True</code>, <code>model_metadata["score_match_quality"]</code> records the model, its revision or
+checkpoint fingerprint, a digest of the question texts, and request and token counts.</p>
+<p><code>interpret_match_quality</code> explains one question's answer (<code>head</code>, default <code>"reasonableness"</code>) for specific pairs. It
+computes gradient times input embedding for the question's yes-minus-no logit at its answer slot, in the same packed
+sequence as the scores. It returns the score columns plus <code>attribution_method</code>, <code>attribution_target</code>
+(<code>&lt;head&gt;_yes</code> or <code>&lt;head&gt;_no</code>, by P(yes) ≥ 0.5), <code>token_attributions</code> (the <code>top_k</code> tokens per source, default 30),
+<code>attribution_coverage</code> and <code>attribution_caveat</code>. Token offsets refer to the <code>cohort_key_criteria</code> and
+<code>patient_key_summary</code> sources. Attributions are local model sensitivities for debugging and human review, not
+clinical rationales.</p>
+<h2 id="llm-scores">LLM scores<a class="headerlink" href="#llm-scores" title="Permanent link">&para;</a></h2>
+<p><code>score_match_quality_with_llm</code> sends one request per pair with the <code>llm_match_quality</code> section's model (by default
+<code>nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4</code> with thinking on and 32,768 output tokens) and prompt
+(<code>llm_match_quality.prompt_file</code>, <code>match_quality.labels.system.txt</code>). It returns every pair, unfiltered:</p>
+<table>
+<thead>
+<tr>
+<th>Output column</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>llm_match_quality_score</code></td>
+<td>The match score, 0-6, or -1 when the answer fails the label contract</td>
+</tr>
+<tr>
+<td><code>llm_reasonableness</code>, <code>llm_cancer_type</code>, <code>llm_burden</code>, <code>llm_treatment_history</code>, <code>llm_biomarker</code></td>
+<td>True for a yes answer; None when unparsed</td>
+</tr>
+<tr>
+<td><code>llm_match_quality_answer_text</code>, <code>llm_match_quality_reasoning_text</code>, <code>llm_match_quality_parse_status</code></td>
+<td>With <code>debug_mode</code> only; the status is <code>parsed</code> or <code>parse_failed: &lt;error&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>Scores and labels are ranking and screening signals, not eligibility determinations. The LLM check sends patient key
+text to the configured LLM endpoint; use only an endpoint authorized for that data.</p>
 <h2 id="decision-model">Decision model<a class="headerlink" href="#decision-model" title="Permanent link">&para;</a></h2>
+<p>The decision model (<code>matchminer_ai.matching.decision_model</code>) answers yes/no questions about a state in one forward
+pass, in-process with Transformers. It serves the match questions, the boilerplate question of
+<a href="../exclusion-criteria/"><code>exclusion_criteria_check</code></a> and the per-line question of
+<a href="../criteria-check/"><code>check_eligibility_criteria</code></a>. The <code>decision_model</code> configuration section selects it:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_name</code></td>
+<td><code>LiquidAI/d1-2B</code></td>
+<td>Hub model, or a fine-tuned checkpoint directory from the training pipeline</td>
+</tr>
+<tr>
+<td><code>revision</code></td>
+<td>a pinned commit</td>
+<td>Required for a Hub model, because the model's own code runs (<code>trust_remote_code</code>)</td>
+</tr>
+<tr>
+<td><code>backend</code></td>
+<td><code>transformers</code></td>
+<td>The only backend</td>
+</tr>
+<tr>
+<td><code>device</code>, <code>dtype</code></td>
+<td><code>cuda</code>, <code>bfloat16</code></td>
+<td>Where and in what precision it runs</td>
+</tr>
+<tr>
+<td><code>max_length</code></td>
+<td><code>10000</code></td>
+<td>The fine-tuning length; longer requests still run, without truncation, and are counted in the metadata's <code>over_max_length</code></td>
+</tr>
+<tr>
+<td><code>set_size</code></td>
+<td><code>null</code></td>
+<td>Questions read together after one state; <code>null</code> uses the model's trained size</td>
+</tr>
+<tr>
+<td><code>token_budget</code>, <code>batch_size</code></td>
+<td><code>65536</code>, <code>256</code></td>
+<td>Padded tokens per forward pass; requests per call</td>
+</tr>
+<tr>
+<td><code>compile</code></td>
+<td><code>false</code></td>
+<td>Compile the model</td>
+</tr>
+</tbody>
+</table>
+<p>The section is read from the configuration's raw mapping:</p>
+<div class="highlight"><pre><span></span><code><span class="n">config</span><span class="o">.</span><span class="n">raw</span><span class="p">[</span><span class="s2">"decision_model"</span><span class="p">][</span><span class="s2">"model_name"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"/path/to/decision-model"</span>   <span class="c1"># a fine-tuned checkpoint</span>
+</code></pre></div>
+<p>The preset's default is the base model without fine-tuning. Treat its scores as provisional until a fine-tuned
+checkpoint has been evaluated for your setting. The decision model runs locally, so patient text reaches only that
+model. See <a href="../../user-guide/patient-centric-matching/#the-decision-models-questions">how matching works</a> for the
+questions of all three checks.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -2591,8 +2734,8 @@ endpoint; use only an endpoint authorized for that data.</p>
         <p>The decision model: one System One model (LiquidAI d1) answering seven yes/no question families.</p>
 <p>A decision model reads a <em>state</em> and named questions and returns, for each <code>noul</code> (yes/no)
 question, P(yes) from one forward pass, without generating text. The pinned base model is
-<code>LiquidAI/d1-2B</code>; the training repository fine-tunes it on the teacher's labels of the same
-seven families (<code>train_decision_model.py</code>), and <code>decision_model.model_name</code> in the
+<code>LiquidAI/d1-2B</code>; the training pipeline fine-tunes it on the teacher's labels of the same
+seven families (:mod:<code>matchminer_ai.training.decision_model</code>), and <code>decision_model.model_name</code> in the
 configuration selects either.</p>
 <p>The seven families, and what <strong>yes</strong> means for each:</p>
 <p>1-5. <code>reasonableness</code>, <code>cancer_type</code>, <code>burden</code>, <code>treatment_history</code>, <code>biomarker</code>: the match
@@ -2611,12 +2754,12 @@ configuration selects either.</p>
      or its information is missing, or the patient could meet it by waiting, or it does not bind
      this patient). <strong>No: the patient clearly fails it: an inclusion line clearly not met, or an
      exclusion line clearly met.</strong> A line is judged in its role in the criteria (the state states
-     the rules, 2026-11-13): an alternative fails only when the patient clearly fails every
+     the rules): an alternative fails only when the patient clearly fails every
      alternative of its group, and then all of them fail; an introducing line fails as its lines
      fail together; a requirement for only some of the patients the criteria admit fails only when
      it clearly applies; branches that together define who may enroll fail a patient who fits none;
      and a standalone requirement fails a patient who lacks what it requires.</p>
-<p>These builders are the only definition of the states and questions: the training repository
+<p>These builders are the only definition of the states and questions: the training pipeline
 renders its training examples with them, so inference reads exactly what the model learned.
 Patient text reaches only the configured decision model, which runs locally by default.</p>
 
@@ -3039,7 +3182,12 @@ cohort_key_criteria : str
                 <code>config</code>
             </td>
             <td>
-                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3138,7 +3286,8 @@ match_quality_<label> : float
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/matching/rerank.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 62</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 61</span>
+<span class="normal"> 62</span>
 <span class="normal"> 63</span>
 <span class="normal"> 64</span>
 <span class="normal"> 65</span>
@@ -3234,8 +3383,7 @@ match_quality_<label> : float
 <span class="normal">155</span>
 <span class="normal">156</span>
 <span class="normal">157</span>
-<span class="normal">158</span>
-<span class="normal">159</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_match_quality</span><span class="p">(</span>
+<span class="normal">158</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_match_quality</span><span class="p">(</span>
     <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -3395,7 +3543,12 @@ oppose it.</p>
                 <code>config</code>
             </td>
             <td>
-                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3495,7 +3648,8 @@ return every retained input token.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/matching/rerank.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">162</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">161</span>
+<span class="normal">162</span>
 <span class="normal">163</span>
 <span class="normal">164</span>
 <span class="normal">165</span>
@@ -3571,8 +3725,7 @@ return every retained input token.</p>
 <span class="normal">235</span>
 <span class="normal">236</span>
 <span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">interpret_match_quality</span><span class="p">(</span>
+<span class="normal">238</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">interpret_match_quality</span><span class="p">(</span>
     <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -3755,7 +3908,12 @@ satisfies, its cancer type, burden, treatment history and biomarker requirements
                 <code>config</code>
             </td>
             <td>
-                  <code><span title="matchminer_ai.config.MMAIConfig">MMAIConfig</span></code>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
             </td>
             <td>
               <div class="doc-md-description">

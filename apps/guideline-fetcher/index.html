@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1529,7 +1529,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1557,7 +1557,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -2008,23 +2008,26 @@
 <p><code>matchminer_ai.apps.guideline_fetcher</code> is a local web workspace that turns a patient summary into
 source-preserving guideline considerations, with patient evaluation and population management views. It is a
 FastAPI backend with a plain HTML/CSS/JavaScript frontend (no build step, CDN, analytics or browser storage).
-Install it with the <code>apps</code> extra:</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"matchminer-ai[apps]"</span>
+Install it with the <code>apps</code> extra (add <code>databricks</code> for Claude in the SQL agent):</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[apps]"</span>
 </code></pre></div>
 <h2 id="two-modes">Two modes<a class="headerlink" href="#two-modes" title="Permanent link">&para;</a></h2>
-<p>The mode is chosen only by how the app is started:</p>
+<p>The mode is chosen only by how the app is started, never by the environment:</p>
 <ul>
 <li><strong>Default</strong> (<code>mmai-guideline-fetcher</code>): the non-PHI app, for synthetic data or deployments authorized for your
   records. Population management samples the configured synthetic Parquet files, and model metadata and guideline
-  embeddings are cached under the data root's <code>no_phi/guideline_fetcher_cache</code>. It never opens a DuckDB database
-  or writes to a <code>phi</code> folder. It binds <code>0.0.0.0:8034</code> by default.</li>
+  embeddings are cached under the data root's <code>no_phi/guideline_fetcher_cache</code>. It never opens a population DuckDB
+  database and never reads or writes a <code>phi</code> folder. It binds <code>0.0.0.0:8034</code> by default (<code>--host</code>, <code>--port</code>).</li>
 <li><strong>PHI mode</strong> (<code>mmai-guideline-fetcher --phi</code>): the deployment for real patient records. It loads populations from
-  a population DuckDB database or a preprocessed population cache, listens only on loopback (<code>127.0.0.1:8044</code>),
-  accepts only loopback Host headers, requires an access token and writes only its own
-  <code>phi/guideline_fetcher_phi_cache</code>. Notes and summaries reach the LLM endpoints chosen in the model picker, so use
-  only endpoints authorized for the data.</li>
+  a population DuckDB database or a preprocessed population cache, listens only on loopback (<code>127.0.0.1:8044</code>; a
+  non-loopback <code>--host</code> is refused), accepts only loopback Host headers, requires an access token on every page and
+  API route except sign-in, and writes only its own <code>phi/guideline_fetcher_phi_cache</code>, never a <code>no_phi</code> folder. The
+  token is <code>GUIDELINE_ACCESS_TOKEN</code>, else a private file (<code>GUIDELINE_ACCESS_TOKEN_FILE</code>, default
+  <code>~/.config/guideline-fetcher-phi/access_token</code>) created on first use. Reach the app from another machine with
+  <code>ssh -L</code>.</li>
 </ul>
-<p><code>python -m matchminer_ai.apps.guideline_fetcher</code> is the same command.</p>
+<p><code>python -m matchminer_ai.apps.guideline_fetcher</code> is the same command. Notes and summaries reach the LLM endpoints
+chosen in the model picker, so in either mode use only endpoints authorized for the data.</p>
 <h2 id="workflow">Workflow<a class="headerlink" href="#workflow" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Paste a summary, or import or paste notes and create a patient summary.</li>
@@ -2036,6 +2039,11 @@ Install it with the <code>apps</code> extra:</p>
 <li>Review a space's workup in the raw notes (full-note question answering or agentic note search), with structured
    extraction records, or with the SQL agent over extraction records (<code>extraction_sql</code>).</li>
 </ol>
+<p>The model picker sets one LLM connection per task: patient summarization, note compression, guideline concordance
+checks, the SQL agent (which falls back to the concordance connection) and the two backup reviews. The default backend
+is the Vertex profile <code>gemini4_vertex</code> (<code>MMAI_LLM_BACKEND</code>); a local OpenAI-compatible server (<code>MMAI_ENDPOINT</code>,
+default <code>http://localhost:8000/v1</code>) is also available. Claude through a Databricks AI Gateway (<code>claude_databricks</code>) is
+offered for the SQL agent only.</p>
 <h2 id="data-root-and-site-config">Data root and site config<a class="headerlink" href="#data-root-and-site-config" title="Permanent link">&para;</a></h2>
 <p>Default paths sit under the data root (<code>--data-root</code>, <code>MMAI_DATA_ROOT</code> or the site config's <code>paths.data_root</code>),
 which has no default. Institution-specific values come from the site config (<code>--site-config</code> or
@@ -2054,7 +2062,7 @@ which has no default. Institution-specific values come from the site config (<co
 </tr>
 <tr>
 <td><code>no_phi/guideline_fetcher_cache</code>, <code>phi/guideline_fetcher_phi_cache</code></td>
-<td>Each mode's cache (<code>GUIDELINE_CACHE</code>)</td>
+<td>Each mode's cache (<code>GUIDELINE_CACHE</code>, which must stay on its mode's side)</td>
 </tr>
 <tr>
 <td><code>no_phi/patient_summaries.parquet</code>, <code>no_phi/all_synthetic_notes.parquet</code></td>
@@ -2066,22 +2074,23 @@ which has no default. Institution-specific values come from the site config (<co
 </tr>
 <tr>
 <td><code>phi/guideline_fetcher_population.duckdb</code></td>
-<td>PHI mode's population database (<code>GUIDELINE_POPULATION_DUCKDB</code>; site <code>guideline_fetcher.population_duckdb</code>)</td>
+<td>PHI mode's population database (<code>GUIDELINE_POPULATION_DUCKDB</code>; site <code>guideline_fetcher.population_duckdb</code>); its preprocessed cache and extraction records sit beside it</td>
 </tr>
 </tbody>
 </table>
-<p>Other settings are environment variables: <code>GUIDELINE_ALLOWED_HOSTS</code>, <code>GUIDELINE_ACCESS_TOKEN</code> /
-<code>GUIDELINE_ACCESS_TOKEN_FILE</code> (PHI mode), <code>GUIDELINE_DUCKDB_ROOTS</code>, <code>MMAI_LLM_BACKEND</code> (default <code>gemini4_vertex</code>),
-<code>MMAI_ENDPOINT</code>, <code>MMAI_LLM_MODEL</code>, <code>MMAI_TOKENIZER</code>, <code>MMAI_DEVICE</code>, <code>GUIDELINE_DATABRICKS_HOST</code>,
-<code>GUIDELINE_DATABRICKS_PROFILE</code>, <code>GUIDELINE_DATABRICKS_SONNET_ENDPOINT</code> and <code>OPENAI_API_KEY</code>.</p>
+<p>Other settings are environment variables: <code>GUIDELINE_ALLOWED_HOSTS</code>, <code>GUIDELINE_DUCKDB_ROOTS</code> (folders PHI mode may
+browse; site <code>guideline_fetcher.duckdb_roots</code>), <code>GUIDELINE_POPULATION_CACHE</code>, <code>MMAI_LLM_MODEL</code>, <code>MMAI_TOKENIZER</code>,
+<code>MMAI_DEVICE</code>, <code>GUIDELINE_DATABRICKS_HOST</code>, <code>GUIDELINE_DATABRICKS_PROFILE</code>, <code>GUIDELINE_DATABRICKS_SONNET_ENDPOINT</code>
+(else the site config's <code>databricks.*</code>) and <code>OPENAI_API_KEY</code>.</p>
 <p>A population DuckDB database has a <code>patient_summary</code> table (<code>mrn</code>, <code>patient_summary</code>, <code>patient_boilerplate</code>,
 <code>is_current</code>) and a <code>patient_notes</code> table (<code>id</code>, <code>mrn</code>, <code>rpt_text</code>, <code>narrative_text</code>, <code>event_date</code>,
 <code>note_source</code>).</p>
 <h2 id="offline-tools">Offline tools<a class="headerlink" href="#offline-tools" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>python -m matchminer_ai.apps.guideline_fetcher.preprocess_population</code> builds a PHI population cache (summaries
-  with precomputed TrialSpace embeddings) from a population database.</li>
-<li><code>python -m matchminer_ai.apps.guideline_fetcher.preprocess_extractions</code> builds structured extraction records.</li>
+  with precomputed TrialSpace embeddings, created 0700 with 0600 files) from a population database.</li>
+<li><code>python -m matchminer_ai.apps.guideline_fetcher.preprocess_extractions</code> builds structured extraction records
+  (<code>--phi</code> for a PHI population cache). Every note goes to the LLM endpoint given, so use one authorized for the notes.</li>
 <li><code>examples/guideline_fetcher/workup_sql_spot_check.py</code> spot-checks SQL-agent workup answers;
   <code>benchmark_workup_methods.py</code> and <code>benchmark_biliary_workup.py</code> compare workup methods on synthetic notes.</li>
 </ul>

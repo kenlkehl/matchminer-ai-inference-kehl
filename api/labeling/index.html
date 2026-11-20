@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1438,7 +1438,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1466,7 +1466,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -1685,6 +1685,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#inputs-and-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs and outputs
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#matchminer_ai.labeling.runner" class="md-nav__link">
@@ -1997,6 +2008,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#inputs-and-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs and outputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#matchminer_ai.labeling.runner" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2117,26 +2139,41 @@
 
 
 <h1 id="teacher-labeling">Teacher Labeling<a class="headerlink" href="#teacher-labeling" title="Permanent link">&para;</a></h1>
-<p><code>matchminer_ai.labeling</code> produces resumable teacher labels of patient-cohort pairs for training TrialSpace and
-the decision model. It moved here from the training repository on 2026-11-06, unchanged in behaviour: label
-directories written before the move keep resuming, because the label contracts hash to the same values. The
-training repository's <code>trialspace_label.py</code> stage calls it.</p>
+<p><code>matchminer_ai.labeling</code> produces resumable teacher labels of patient-cohort pairs for training TrialSpace and the
+decision model. The <a href="../../training/">training pipeline</a>'s label stages (<code>label-trialspace-N</code>,
+<code>label-boilerplate-N</code>, <code>label-criteria-N</code>; <code>matchminer_ai.training.trialspace.label</code>) call it.</p>
 <p>Three tasks (<code>matchminer_ai.labeling.tasks</code>):</p>
 <ul>
-<li><code>match</code>: the five match labels of a pair in one request (<code>match_quality.labels.system.txt</code> on the patient's
-  key summary section and the cohort's key criteria), decoded under the match JSON schema and scored 0-6 into
-  a resumable score journal;</li>
-<li><code>boilerplate</code>: whether the patient clearly fails the cohort's boilerplate criteria
-  (<code>llm_exclusion_criteria.user.txt</code>, ending in <code>Yes!</code> or <code>No!</code>);</li>
-<li><code>criteria</code>: one request per tagged criteria line of a pair (<code>criterion_check.labels.user.txt</code>), decoded
-  under its schema; yes means the patient does not clearly fail the line.</li>
+<li><strong><code>match</code>:</strong> the five <a href="../match-quality/#match-labels">match labels</a> of a pair in one request
+  (<code>match_quality.labels.system.txt</code> on the patient's key summary section and the cohort's key criteria), decoded
+  under the match JSON schema and scored 0-6 into a resumable score journal.</li>
+<li><strong><code>boilerplate</code>:</strong> whether the patient clearly fails the cohort's boilerplate criteria
+  (<code>llm_exclusion_criteria.user.txt</code>, ending in <code>Yes!</code> or <code>No!</code>). Pairs whose cohort has no boilerplate criteria are
+  skipped. The decision model's boilerplate question learns the inverse: its yes means not excluded.</li>
+<li><strong><code>criteria</code>:</strong> one request per tagged criteria line of a pair (<code>criterion_check.labels.user.txt</code> around the
+  decision model's per-criterion state and question), decoded under its schema; yes means the patient does not
+  clearly fail the line.</li>
 </ul>
-<p>Requests go through the adaptive teacher pool (<code>matchminer_ai.llm.teacher_pool</code>): prompts rendered on the
-client with the teacher's chat template and sent to <code>/v1/completions</code> on a live server registry, with
-per-server concurrency that follows vLLM's <code>/metrics</code>. Every answer is kept with its reasoning and complete
-prompt (<code>responses/</code>); <code>labels.jsonl</code> is the flattened export and, for <code>match</code>, <code>scores.jsonl</code> with
-<code>scores_ready.json</code> the complete training scores. The prompts carry patient text to the configured servers:
-use synthetic or authorized data and endpoints only.</p>
+<h2 id="inputs-and-outputs">Inputs and outputs<a class="headerlink" href="#inputs-and-outputs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Corpus (<code>--corpus</code>):</strong> a directory with <code>patients.jsonl</code> and <code>cohorts.jsonl</code>, written by the training pipeline.
+  Each entity has an <code>id</code>, a <code>split</code> (<code>train</code>, <code>val</code> or <code>test</code>), its key <code>text</code> and its <code>boilerplate</code> text; cohorts
+  also carry their tagged criteria <code>items</code>.</li>
+<li><strong>Candidates (<code>--candidates</code>):</strong> a JSONL file of pairs (<code>patient_id</code>, <code>cohort_id</code>, <code>split</code>; for <code>criteria</code>, one
+  row per line with its <code>number</code>, <code>criterion_type</code> and the cohort's <code>criteria_digest</code>), built by the training
+  pipeline. Pairs stay within their split.</li>
+<li><strong>Output directory (<code>--output</code>):</strong> every answer is kept with its reasoning and complete prompt in <code>responses/</code>,
+  and answers that fail validation in <code>invalid_responses/</code>. <code>labels.jsonl</code> is the flattened export. For <code>match</code>,
+  <code>scores.jsonl</code> with <code>scores_ready.json</code> holds the complete training scores. <code>status.json</code> reports progress.</li>
+</ul>
+<p>A run resumes where it stopped. <code>labeling_manifest.json</code> records the task, label contract, inputs and teacher
+settings, and a run whose teacher identity differs is refused: use a new directory.</p>
+<p>Requests go through the adaptive teacher pool (<code>matchminer_ai.llm.teacher_pool</code>). Prompts are rendered on the
+client with the teacher's chat template (<code>--teacher-tokenizer</code>) and sent to <code>/v1/completions</code> on a live server
+registry, with per-server concurrency that follows vLLM's <code>/metrics</code>. Each server must advertise <code>--teacher-model</code>
+with a root in the teacher's model family (<code>EQUIVALENT_TEACHER_ROOTS</code> lists approved quantizations of one model).
+The prompts carry patient text to the configured servers: use synthetic or authorized data and endpoints only.</p>
+<p>The full list of flags:</p>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import argparse; from matchminer_ai.labeling import add_label_cli_args; add_label_cli_args(argparse.ArgumentParser()).print_help()"</span>
 </code></pre></div>
 
@@ -2383,11 +2420,11 @@ pairs without cohort boilerplate criteria have nothing to judge and are skipped.
 
     <div class="doc doc-contents first">
 
-        <p>The teacher's label contracts (moved from the training repository's trialspace/contracts.py, 2026-11-06).</p>
+        <p>The teacher's label contracts.</p>
 <ul>
 <li><code>match</code>: the five match labels of a patient–cohort pair (reasonableness and the cancer type,
   burden, treatment history and biomarker specificity answers), asked in ONE prompt per pair
-  (<code>matchminer_ai.matching.match_labels</code>; user instruction 2026-11-04). The patient text is the
+  (<code>matchminer_ai.matching.match_labels</code>). The patient text is the
   summary's key section and the cohort text its key criteria. TrialSpace and the decision model's
   five match questions train on these labels.</li>
 <li><code>boilerplate</code>: whether the patient clearly fails any of the cohort's boilerplate criteria, from
@@ -2400,8 +2437,8 @@ pairs without cohort boilerplate criteria have nothing to judge and are skipped.
   numbered criteria and the line restated with its inclusion/exclusion type. The answer is the
   decision model's target: <strong>yes = the patient does not clearly fail the line; no = an inclusion
   line clearly not met or an exclusion line clearly met</strong>, with the <code>criterion_status</code> of the line as it binds
-  the patient (since 2026-11-13 a line judged in its role: an alternative, a requirement for only some patients
-  or a branch that does not bind this patient is <code>not_applicable</code>).</li>
+  the patient (a line is judged in its role: an alternative, a requirement for only some patients or a branch
+  that does not bind this patient is <code>not_applicable</code>).</li>
 </ul>
 
 

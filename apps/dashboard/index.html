@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1518,7 +1518,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1546,7 +1546,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -1984,9 +1984,9 @@
 
 <h1 id="dashboard">Dashboard<a class="headerlink" href="#dashboard" title="Permanent link">&para;</a></h1>
 <p><code>matchminer_ai.apps.dashboard</code> is a per-disease-center trials dashboard over a site's extracted trial cohorts, with
-patient matching over a synthetic training run's patients. It is a FastAPI server with a React frontend (source
-in <code>frontend/dashboard/</code>, built into the package's <code>static/</code> folder). Research use: patients are synthetic, and
-scores are screening signals for review, not eligibility determinations.</p>
+patient matching over a synthetic training run's patients. It is a FastAPI server with a React frontend (source in
+<code>frontend/dashboard/</code>, built into the package's <code>static/</code> folder). Research use: patients are synthetic, and scores
+are screening signals for review, not eligibility determinations.</p>
 <h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Trials overview per disease center:</strong> an accordion of trial groups (rules in a grouping file), one row per
@@ -1995,24 +1995,27 @@ scores are screening signals for review, not eligibility determinations.</p>
   versions' cohorts (protocol and ClinicalTrials.gov).</li>
 <li><strong>Find patients:</strong> the synthetic patients nearest a cohort's key criteria in TrialSpace, scored by the decision
   model as the page opens; the per-criterion and GoodOption LLM checks run on demand.</li>
-<li><strong>AI search:</strong> trials for a patient summary, with the same scores.</li>
-<li><strong>Status:</strong> the data sources, the TrialSpace round, the decision model and the background jobs.</li>
+<li><strong>Search for trials for a patient:</strong> trials for a synthetic patient or an entered summary, with the same scores.</li>
+<li><strong>Data and Models:</strong> the data sources, the TrialSpace round, the decision model, the background jobs and the LLM
+  checks' endpoint, which can be changed there for the server's session.</li>
 </ul>
 <h2 id="run">Run<a class="headerlink" href="#run" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"matchminer-ai[apps]"</span>
-<span class="nb">cd</span><span class="w"> </span>frontend/dashboard<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>pnpm<span class="w"> </span>install<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>pnpm<span class="w"> </span>build<span class="w">   </span><span class="c1"># once, and after frontend changes</span>
+<p>From a source checkout:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[apps]"</span>
+<span class="nb">cd</span><span class="w"> </span>frontend/dashboard<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>pnpm<span class="w"> </span>install<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>pnpm<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>-<span class="w">   </span><span class="c1"># once, and after frontend changes</span>
 mmai-dashboard<span class="w"> </span>--site-config<span class="w"> </span>site.yaml<span class="w"> </span>--device<span class="w"> </span>cuda:0
 </code></pre></div>
-<p><code>python -m matchminer_ai.apps.dashboard</code> is the same command; <code>mmai-dashboard build</code> builds the store once and
-exits. The server binds <code>127.0.0.1:8781</code> only (it shows confidential protocol content); forward the port with
-<code>ssh -L</code> to reach it from another machine. It accepts only loopback Host headers (<code>--allowed-hosts</code> adds names)
-and refuses cross-origin writes. <code>--require-token</code> also requires an access token (<code>MMAI_DASH_ACCESS_TOKEN</code>, else
-a private <code>~/.config/mmai-dashboard/access_token</code> created on first use), which keeps out other accounts on the
-same machine; the server prints a one-click sign-in link to its terminal. <code>pnpm dev</code> serves the frontend on :5173
-and proxies <code>/api</code> to a running server.</p>
+<p><code>python -m matchminer_ai.apps.dashboard</code> is the same command; <code>mmai-dashboard build</code> builds the store once and exits.
+<code>pnpm dev</code> serves the frontend on :5173 and proxies <code>/api</code> to a running server.</p>
+<p><strong>Access.</strong> The server binds <code>127.0.0.1:8781</code> and refuses a non-loopback <code>--host</code>, because it shows confidential
+protocol content; forward the port with <code>ssh -L</code> to reach it from another machine. It accepts only loopback Host
+headers (<code>--allowed-hosts</code> adds names) and refuses cross-origin writes. <code>--require-token</code> also requires an access
+token (<code>MMAI_DASH_ACCESS_TOKEN</code>, else a private <code>~/.config/mmai-dashboard/access_token</code> created on first use), which
+keeps out other accounts on the same machine. On an interactive terminal the server prints a one-click sign-in link;
+with redirected output it prints only where the token is.</p>
 <h2 id="inputs">Inputs<a class="headerlink" href="#inputs" title="Permanent link">&para;</a></h2>
-<p>Paths come from the command line, <code>MMAI_DASH_*</code> variables, the site config's <code>dashboard</code> section, or folders under
-the data root (<code>--data-root</code>, <code>MMAI_DATA_ROOT</code> or <code>paths.data_root</code>):</p>
+<p>Paths come from the command line, <code>MMAI_DASH_*</code> variables (for example <code>MMAI_DASH_TRIAL_DATA</code>), the site config's
+<code>dashboard</code> section, or folders under the data root (<code>--data-root</code>, <code>MMAI_DATA_ROOT</code> or <code>paths.data_root</code>):</p>
 <table>
 <thead>
 <tr>
@@ -2025,7 +2028,7 @@ the data root (<code>--data-root</code>, <code>MMAI_DATA_ROOT</code> or <code>pa
 <tr>
 <td><code>--trial-data</code> (<code>dashboard.trial_data</code>)</td>
 <td><code>phi/real_time/trial_data</code></td>
-<td>The trial extraction run (<code>inputs.csv</code>, <code>protocol/</code> and <code>ctgov/</code> with per-trial results and <code>cohorts.parquet</code>); new results appear within a poll</td>
+<td>The trial extraction run (<code>inputs.csv</code>, <code>protocol/</code> and <code>ctgov/</code> with per-trial results and <code>cohorts.parquet</code>); new results appear within a poll (<code>--rebuild-poll-seconds</code>, 30)</td>
 </tr>
 <tr>
 <td><code>--oa-db</code> (<code>dashboard.oa_db</code>)</td>
@@ -2054,11 +2057,14 @@ the data root (<code>--data-root</code>, <code>MMAI_DATA_ROOT</code> or <code>pa
 </tr>
 </tbody>
 </table>
-<p>The trial table's name and columns, the site names shown, the home institution's center prefix, branding and
-protocol links are site-config keys (see <a href="../../reference/site-config/">Site configuration</a>). The LLM checks use a Vertex
-profile (default Gemini 4 Hydrogen, in the site's <code>vertex.project</code>) or an OpenAI-compatible endpoint (default the
-site's <code>endpoints.teacher.url</code>); they send the patient summary and the cohort's criteria to that endpoint, so use
-one authorized for the data.</p>
+<p>The decision model is the synthetic run's trained model (<code>--decision-model</code> overrides it, with fallbacks while the
+run is still training; the Data and Models page shows which loaded). It runs on <code>--device</code>, by default <code>cuda:0</code> when
+CUDA is available, else the CPU.</p>
+<p>The trial table's name and columns, the site names shown, the home institution's center prefix, branding and protocol
+links are site-config keys (see <a href="../../reference/site-config/">Site configuration</a>). The LLM checks use a Vertex
+profile (<code>--llm-backend</code>, default Gemini 4 Hydrogen, in the site's <code>vertex.project</code>) or an OpenAI-compatible endpoint
+(<code>--llm-backend openai</code>, <code>--llm-endpoint</code>, default the site's <code>endpoints.teacher.url</code>; <code>none</code> turns the checks off).
+They send the patient summary and the cohort's criteria to that endpoint, so use one authorized for the data.</p>
 
 
 

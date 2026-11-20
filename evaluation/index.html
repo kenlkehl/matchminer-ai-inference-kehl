@@ -158,13 +158,13 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
       </div>
@@ -204,13 +204,13 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/kenlkehl/matchminer-ai-kehl" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
-    dfci/matchminer-ai-inference
+    kenlkehl/matchminer-ai-kehl
   </div>
 </a>
     </div>
@@ -537,7 +537,7 @@
   <span class="md-ellipsis">
     
   
-    Patient-centric matching workflow
+    How matching works
   
 
     
@@ -1516,7 +1516,7 @@
   <span class="md-ellipsis">
     
   
-    Trial Summarization
+    Trials to Cohorts
   
 
     
@@ -1544,7 +1544,7 @@
   <span class="md-ellipsis">
     
   
-    Patient Summarization
+    Patient Summaries
   
 
     
@@ -1985,7 +1985,7 @@
 clinical data (PHI): they read and write only under the data root's <code>phi/</code> tree (or a PHI directory the site config
 names, <code>paths.phi_roots</code>), create files 600 and directories 700, and log counts only. Run them only where that data is
 authorized, with LLM endpoints approved for it (the site config's <code>endpoints.*</code>).</p>
-<p>Install with the evaluation extra: <code>pip install -e '.[training,evaluation]'</code>.</p>
+<p>Install with the evaluation extra: <code>uv pip install -e ".[training,evaluation]"</code>.</p>
 <table>
 <thead>
 <tr>
@@ -1996,11 +1996,11 @@ authorized, with LLM endpoints approved for it (the site config's <code>endpoint
 <tbody>
 <tr>
 <td><code>evaluation.retro_cohorts</code></td>
-<td>Retrospective denominators from an institution's structured EHR extract (its location is the site config's <code>paths.retro_source_root</code>): trial enrollments and standard-of-care (SOC) treatment starts, index dates, note-level datasets cut before the index date with the event's own trial identifiers masked, and their serial summaries.</td>
+<td>Retrospective denominators from an institution's structured EHR extract (its location is the site config's <code>paths.retro_source_root</code>): trial-treatment starts and standard-of-care (SOC) treatment starts with their index dates (<code>pull_denominators</code>), the SOC trial sample (<code>sample_soc_trials</code>), note-level datasets cut before the index date with the event's own trial identifiers masked (<code>build_note_level_dataset</code>), and their serial summaries on the site's teacher server (<code>summarize_retro_cohorts</code>, <code>endpoints.teacher.url</code>).</td>
 </tr>
 <tr>
 <td><code>evaluation.retro_fidelity</code></td>
-<td>Distillation fidelity on those patients, with the teacher's labels as the reference: P@20 of three rankers (base EmbeddingGemma 2; TrialSpace; TrialSpace reranked by the decision model) and the decision model's AUROC, AUPRC, Brier score and calibration for every question family.</td>
+<td>Distillation fidelity on those patients, with the teacher's labels as the reference: P@20 and the mean teacher score of three rankers' top-20 lists (base EmbeddingGemma 2; TrialSpace; TrialSpace reranked by the decision model), and the decision model's AUROC, AUPRC, Brier score and calibration for every question family.</td>
 </tr>
 <tr>
 <td><code>evaluation.dual_judge</code></td>
@@ -2008,21 +2008,23 @@ authorized, with LLM endpoints approved for it (the site config's <code>endpoint
 </tr>
 <tr>
 <td><code>evaluation.cohort_lineitems</code></td>
-<td>Cohorts for a table of ctgov-style listings with training's ctgov extractor.</td>
+<td>One row per cohort for a table of ctgov-style listings, extracted with training's ctgov extractor (<code>training.trials.extract_ctgov_cohorts</code>), under the column names the evaluations read.</td>
 </tr>
 </tbody>
 </table>
 <h2 id="retrospective-fidelity">Retrospective fidelity<a class="headerlink" href="#retrospective-fidelity" title="Permanent link">&para;</a></h2>
-<p>Each stage is a module that writes a path-free <code>stage_receipt.json</code> last and answers <code>--check</code> (0 complete, 10 not
-yet, 20 begun under other settings); the orchestrator runs them in dependency order and resumes:</p>
+<p>The stages (<code>cohorts</code>, <code>prepare</code>, <code>embed</code>, <code>retrieve</code>, <code>lists</code>, <code>label</code>, <code>decide</code>, <code>metrics</code>) are modules of
+<code>evaluation.retro_fidelity</code>. Each writes a path-free <code>stage_receipt.json</code> last and answers <code>--check</code> (0 complete, 10
+not yet, 20 begun under other settings); the orchestrator runs them in dependency order and resumes:</p>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.retro_fidelity.run<span class="w"> </span>--root<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/phi/&lt;evaluation&gt;<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--trials<span class="w"> </span>&lt;denominators&gt;/soc_trial_sample.csv<span class="w"> </span>--summaries<span class="w"> </span>&lt;denominators&gt;/summaries/soc_validation/summaries<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--denominator<span class="w"> </span>&lt;denominators&gt;/soc_validation/processed_soc_treatments.csv
 </code></pre></div>
 <p>Teacher servers come from the site config (<code>endpoints.teacher.url</code>, and optionally <code>endpoints.secondary_teacher.url</code>,
-reached through <code>retro_fidelity.teacher_proxy</code>) or <code>--teacher-url</code> / <code>--secondary-teacher-url</code>. With
-<code>--extraction-source SNAPSHOT</code> the trial cohorts are extracted by a code snapshot (<code>git archive</code> with a
-<code>commits.json</code>) rather than the training run's frozen programs.</p>
+reached through <code>retro_fidelity.teacher_proxy</code>) or <code>--teacher-url</code> / <code>--secondary-teacher-url</code>. By default the trial
+cohorts are extracted with the training run's frozen programs, so they match training's ctgov cohort tables; with
+<code>--extraction-source SNAPSHOT</code> they are extracted by a code snapshot (<code>git archive</code> with a <code>commits.json</code>) instead.
+Results go to <code>metrics.json</code> and <code>report.md</code>; progress to <code>run_status.json</code> and <code>logs/</code>.</p>
 <h2 id="dual-judge">Dual judge<a class="headerlink" href="#dual-judge" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.build_items<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w"> </span>...<span class="w">    </span><span class="c1"># where the data is</span>
 python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.judge_worker<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w"> </span>--judge<span class="w"> </span>vertex
@@ -2031,10 +2033,13 @@ python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation
 python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.adjudicate<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w">         </span><span class="c1"># http://127.0.0.1:8791</span>
 python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.metrics<span class="w"> </span>--run-dir<span class="w"> </span>RUN
 </code></pre></div>
-<p>The judge, comparison, adjudication and metrics modules need only the standard library (plus <code>anthropic[vertex]</code> for
-the Vertex judge), so they can run on another machine that can read and write the run directory. The Vertex project
-is <code>--project</code>, <code>ANTHROPIC_VERTEX_PROJECT_ID</code> or the site config's <code>vertex.project</code>; Azure uses
-<code>AZURE_OPENAI_ENDPOINT</code> and <code>AZURE_OPENAI_DEPLOYMENT</code>. The judge prompts are <code>prompts/judge.*.txt</code>.</p>
+<p>The judge, comparison, adjudication and metrics modules need only the package and the standard library (plus
+<code>anthropic[vertex]</code> for the Vertex judge), so they can run on another machine that can read and write the run
+directory. The Vertex project is <code>--project</code>, <code>ANTHROPIC_VERTEX_PROJECT_ID</code> or the site config's <code>vertex.project</code>;
+Azure uses <code>AZURE_OPENAI_ENDPOINT</code> and <code>AZURE_OPENAI_DEPLOYMENT</code>. <code>judge_worker --dry-run</code> prices the remaining
+requests without sending any, and <code>--max-usd</code> caps a judge's spending. The judge prompts are <code>prompts/judge.*.txt</code>.</p>
+<p>The adjudication app serves PHI: it binds to 127.0.0.1 only, refuses other Host headers and logs nothing about
+requests. Reach it from another machine with <code>ssh -L</code>.</p>
 <h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
 <p>The teacher is the reference, not clinician review: these numbers measure agreement with the teacher on real
 summaries, not clinical accuracy. MatchMiner-AI is a research prioritization tool; its scores are screening signals
