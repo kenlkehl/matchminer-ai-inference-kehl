@@ -15,3 +15,7 @@ site/
 .DS_Store
 **/.DS_Store
 interactive/
+
+# The dashboard's built frontend (cd frontend/dashboard && pnpm build) and its dependencies
+src/matchminer_ai/apps/dashboard/static/
+frontend/dashboard/node_modules/

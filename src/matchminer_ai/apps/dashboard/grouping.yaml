@@ -1,0 +1,315 @@
+# Trial groups for each disease center's dashboard (see grouping.py for the rule keys): the bundled default,
+# generic disease-program rules. A site's own rules go in the file its site config names (dashboard.grouping).
+#
+# Centers are matched by a regular expression over their management group name, in order; the first
+# match wins. Within a center a cohort joins the first group whose rule matches, and groups show in this
+# order. Cohorts that no rule takes are grouped by cancer type after these groups. Patterns are Python
+# regular expressions, case-insensitive (use (?-i:...) for a case-sensitive part such as an abbreviation).
+# Cancer-type keys are in matchminer_ai/apps/dashboard/core/cancer_types.py.
+#
+# The dashboard rebuilds within a minute of this file changing.
+
+centers:
+  # Thoracic oncology: setting, then biomarker, then disease.
+  - match: 'thoracic'
+    groups:
+      # Settings are read from the cohort name and trial titles (eligibility text mentions prior
+      # adjuvant therapy in metastatic trials); a second rule takes explicit resection criteria.
+      - name: 'NSCLC Early Stage – Neoadjuvant / Perioperative'
+        cancer: [lung_nsclc, lung_any]
+        in: [name, title]
+        any: ['neo-?adjuvant', 'peri-?operative', 'pre-?operative', '\bresectable\b(?! or)']
+      - name: 'NSCLC Adjuvant (Resected)'
+        cancer: [lung_nsclc, lung_any]
+        in: [name, title]
+        any: ['\badj(?:uvant)?\b', '\bresected\b', 'post-?operative']
+      - name: 'NSCLC Adjuvant (Resected)'
+        cancer: [lung_nsclc, lung_any]
+        in: [name, inclusion]
+        any: ['completely resected', 'complete (?:surgical )?resection', '\bR0 resection']
+      - name: 'NSCLC Locally Advanced (Unresectable Stage III)'
+        cancer: [lung_nsclc, lung_any]
+        any: ['unresectable,? (?:locally advanced )?stage III', 'stage III\w*,? unresectable', 'definitive (?:concurrent )?chemo-?radi', 'concurrent chemoradi']
+      # Biomarkers: first the cohort's own name, then explicit requirements in its key inclusion lines
+      # (eligibility text often mentions a driver permissively: "patients with EGFR mutations must have
+      # received a TKI"), then the trial title (which applies to every cohort of the trial).
+      - name: 'EGFR'
+        cancer: [lung_nsclc, lung_any]
+        in: [name]
+        any: ['\bEGFR\b', 'exon\s*(?:19|20)', 'L858R', 'T790M', 'C797S']
+      - name: 'ALK / ROS1 / NTRK / RET / Other Drivers'
+        cancer: [lung_nsclc, lung_any, solid_any]
+        in: [name]
+        any: ['\bALK\b', '\bROS-?1\b', '\bNTRK\d?\b', '\bRET\b', '\bBRAF\b', '\bMET\b', '\bNRG-?1\b', '\bFGFR\d?\b', '\bNF2\b']
+      - name: 'KRAS'
+        cancer: [lung_nsclc, lung_any, solid_any, colorectal]
+        in: [name]
+        any: ['\bK-?RAS\b', 'G12[CDV]\b', '\bRAS\b']
+      - name: 'HER2 / HER3'
+        cancer: [lung_nsclc, lung_any, solid_any]
+        in: [name]
+        any: ['\bHER[- ]?[23]\b', '\bERBB[23]\b']
+      - name: 'EGFR'
+        cancer: [lung_nsclc, lung_any]
+        exclude_cancer: [lung_sclc]
+        in: [inclusion]
+        any: ['exon\s*19', 'L858R', 'T790M', 'C797S', 'exon\s*20 insertion', 'EGFR[- ](?:mutant|mutated|mutation[- ]positive|positive)', '(?:activating|sensitizing|classical|atypical|common|uncommon)\s+EGFR', 'EGFR\s+(?:activating|sensitizing|classical|atypical)', '(?:documented|confirmed|harbou?r\w*)\s+(?:\w+\s+){0,3}EGFR']
+      - name: 'ALK / ROS1 / NTRK / RET / Other Drivers'
+        cancer: [lung_nsclc, lung_any, solid_any]
+        exclude_cancer: [lung_sclc]
+        in: [inclusion]
+        any: ['\b(?:ALK|ROS-?1|RET|NTRK\d?|NRG-?1|FGFR\d?)[- ](?:positive|rearrange\w*|fusion\w*|alter\w*|gene fusion)', '\bBRAF[- ](?:V600E?|mutant|mutated|mutation)', 'MET\s*(?:exon\s*14|amplif\w*|overexpress\w*)', 'c-?Met[- ](?:overexpress|high|positive)', '(?:documented|confirmed|harbou?r\w*)\s+(?:\w+\s+){0,3}(?:ALK|ROS1|RET|NTRK|BRAF|MET|NRG1|FGFR)\b']
+      - name: 'KRAS'
+        cancer: [lung_nsclc, lung_any, solid_any, colorectal]
+        exclude_cancer: [lung_sclc]
+        in: [inclusion]
+        any: ['K-?RAS\s*(?:p\.)?G12', 'K-?RAS[- ](?:mutant|mutated|mutation)', '\bRAS[- ](?:mutant|mutated|mutation|altered|pathway)', '(?:documented|confirmed|harbou?r\w*)\s+(?:\w+\s+){0,3}K?RAS\b']
+      - name: 'HER2 / HER3'
+        cancer: [lung_nsclc, lung_any, solid_any]
+        exclude_cancer: [lung_sclc]
+        in: [inclusion]
+        any: ['HER[- ]?2[\s-]*(?:mutant|mutated|mutation|exon\s*20|overexpress\w*|amplif\w*|positive|\+)', 'ERBB2[\s-]*(?:mutant|mutated|mutation|amplif\w*)', 'HER[- ]?3[\s-]*(?:expression|expressing|positive)']
+      - name: 'EGFR'
+        cancer: [lung_nsclc, lung_any]
+        exclude_cancer: [lung_sclc]
+        in: [title]
+        any: ['\bEGFR\b', 'exon\s*(?:19|20)']
+      - name: 'ALK / ROS1 / NTRK / RET / Other Drivers'
+        cancer: [lung_nsclc, lung_any, solid_any]
+        exclude_cancer: [lung_sclc]
+        in: [title]
+        any: ['\bALK\b', '\bROS-?1\b', '\bNTRK\d?\b', '\bRET\b', '\bBRAF\b', '\bc?-?MET\b', '\bNRG-?1\b', '\bNF2\b']
+      - name: 'KRAS'
+        cancer: [lung_nsclc, lung_any, solid_any, colorectal]
+        exclude_cancer: [lung_sclc]
+        in: [title]
+        any: ['\bK-?RAS', 'G12[CDV]\b']
+      - name: 'HER2 / HER3'
+        cancer: [lung_nsclc, lung_any, solid_any]
+        exclude_cancer: [lung_sclc]
+        in: [title]
+        any: ['\bHER[- ]?[23]\b', '\bERBB[23]\b']
+      - name: 'NSCLC SMARCA4, STK11 and KEAP1'
+        cancer: [lung_nsclc, lung_any]
+        exclude_cancer: [lung_sclc]
+        in: [name, inclusion]
+        any: ['SMARCA4', '\bSTK11\b', '\bKEAP1\b']
+      - name: 'NSCLC 1st Line (No Actionable Driver)'
+        cancer: [lung_nsclc, lung_any]
+        sole: true
+        in: [name, inclusion]
+        any: ['first[- ]line', '\b1L\b', 'previously untreated', 'treatment[- ]na[iï]ve', 'no prior (?:systemic|anti-?cancer)', 'not (?:previously )?received (?:any )?(?:prior )?systemic', 'PD-?L1 (?:TPS )?[≥>]']
+      - name: 'NSCLC Previously Treated'
+        cancer: [lung_nsclc, lung_any]
+        sole: true
+        in: [name, inclusion]
+        any: ['previously treated', 'progress\w* (?:on|after|following|during)', 'refractory', 'relapsed', 'second[- ]line', '\b2L\+?', 'prior (?:platinum|PD-?(?:L)?1|immuno|checkpoint|systemic|chemo)', 'at least one prior', 'docetaxel']
+      - name: 'NSCLC – Other'
+        cancer: [lung_nsclc, lung_any]
+        sole: true
+      - name: 'Small Cell Lung Cancer'
+        cancer: [lung_sclc]
+        sole: true
+      - name: 'Small Cell Lung Cancer'
+        cancer: [lung_sclc]
+        in: [name, title]
+        any: ['\bSCLC\b', '(?<!non-)(?<!non )\bsmall[- ]cell lung']
+      - name: 'Mesothelioma'
+        cancer: [mesothelioma]
+        sole: true
+      - name: 'Thymic Malignancies'
+        cancer: [thymic]
+        sole: true
+      - name: 'NUT Carcinoma'
+        any: ['\bNUT\b', 'NUTM1', 'BRD4']
+      - name: 'Lung – Other'
+        cancer: [lung_any]
+        sole: true
+
+  - match: 'breast'
+    groups:
+      - name: 'Early Stage – Adjuvant / Post-neoadjuvant'
+        cancer: [breast]
+        in: [name, title]
+        any: ['\badj(?:uvant)?\b', 'post-?neoadjuvant', 'residual (?:invasive )?disease', 'early[- ]stage', '\beBC\b']
+      - name: 'Early Stage – Neoadjuvant'
+        cancer: [breast]
+        in: [name, title]
+        any: ['neo-?adjuvant', 'pre-?operative']
+      - name: 'Early Stage – Adjuvant / Post-neoadjuvant'
+        cancer: [breast]
+        in: [name, inclusion]
+        any: ['residual invasive disease', 'completed? (?:definitive )?(?:breast )?surgery', 'early[- ]stage', 'stage\s*I{1,3}[ABC]?\b(?!\s*(?:or|-|–|to)\s*IV)']
+        none: ['(?:advanced|unresectable|recurrent)\s*(?:or|and|/|,)\s*metastatic', 'metastatic\s*(?:or|and|/|,)\s*(?:locally advanced|unresectable|recurrent)', '\bmBC\b', 'measurable disease']
+      - name: 'Triple-Negative'
+        cancer: [breast]
+        any: ['triple[- ]negative', '\bTNBC\b', '\bHR[\s-]*(?:negative|-)\s*/\s*HER2[\s-]*(?:negative|-)']
+      - name: 'HER2-Positive'
+        cancer: [breast]
+        any: ['HER[- ]?2[\s-]*(?:\+|positive|pos\b|amplif|overexpress)', 'ERBB2[\s-]*amplif']
+      - name: 'HR-Positive / HER2-Negative'
+        cancer: [breast]
+        any: ['\b(?:HR|ER|PR|hormone[- ]receptor|estrogen[- ]receptor)[\s-]*(?:\+|positive|pos\b)', 'endocrine', 'CDK4/6', 'aromatase', 'fulvestrant']
+      - name: 'HER2-Low'
+        cancer: [breast]
+        any: ['HER[- ]?2[\s-]*(?:ultra)?low']
+      - name: 'Metastatic Breast – Other'
+        cancer: [breast]
+
+  - match: 'lymphoma'
+    groups:
+      - name: 'Primary CNS Lymphoma'
+        any: ['primary (?:CNS|central nervous system)', 'PCNSL', 'CNS lymphoma']
+      - name: 'B-cell NHL – Multiple Subtypes'
+        any: ['diffuse large|DLBCL|large B[- ]cell|LBCL', 'follicular|(?-i:\bFL\b)', 'marginal zone|(?-i:\bMZL\b)', 'mantle[- ]cell|(?-i:\bMCL\b)', 'chronic lymphocytic|(?-i:\bCLL\b)|small lymphocytic']
+        any_count: 2
+      - name: 'Hodgkin Lymphoma'
+        any: ['(?<!non-)(?<!non )\bHodgkin', '(?-i:\bc?HL\b)']
+      - name: 'T-cell / NK-cell Lymphoma'
+        any: ['T[- ]cell lymphoma', '(?-i:\b(?:PTCL|CTCL|ALCL)\b)', 'mycosis fungoides', 'S[eé]zary', 'NK/T', 'anaplastic large', 'angioimmunoblastic']
+      - name: 'Mantle Cell Lymphoma'
+        any: ['mantle[- ]cell', '(?-i:\bMCL\b)']
+      - name: 'CLL / SLL'
+        any: ['chronic lymphocytic', '(?-i:\b(?:CLL|SLL)\b)', 'small lymphocytic']
+      - name: 'Aggressive B-cell (DLBCL / HGBL / PMBCL)'
+        any: ['diffuse large', '(?-i:\b(?:DLBCL|HGBL|PMBCL|LBCL)\b)', 'large B[- ]cell', 'high[- ]grade B', 'primary mediastinal', 'transformed', 'Richter']
+      - name: 'Follicular / Marginal Zone / Indolent'
+        any: ['follicular', '(?-i:\b(?:FL|MZL)\b)', 'marginal zone', 'indolent', 'Waldenstr', 'lymphoplasmacytic']
+      - name: 'B-cell NHL – Other'
+        any: ['non[- ]Hodgkin', '(?-i:\bB?-?NHL\b)', 'B[- ]cell (?:lymphoma|malignanc)']
+
+  - match: 'leukemia|hematologic malignancy'
+    groups:
+      - name: 'Acute Myeloid Leukemia'
+        any: ['acute myeloid', '(?-i:\bAML\b)']
+      - name: 'MDS / CMML'
+        any: ['myelodysplastic', '(?-i:\b(?:MDS|CMML)\b)', 'chronic myelomonocytic']
+      - name: 'Acute Lymphoblastic Leukemia'
+        any: ['acute lymphoblastic', '(?-i:\b[BT]?-?ALL\b)', 'lymphoblastic lymphoma']
+      - name: 'CML / MPN'
+        any: ['chronic myeloid', '(?-i:\b(?:CML|MPN)\b)', 'myeloproliferative', 'myelofibrosis', 'polycythemia', 'thrombocythemia']
+      - name: 'CLL'
+        any: ['chronic lymphocytic', '(?-i:\bCLL\b)']
+      - name: 'Clonal Hematopoiesis / Precursor'
+        any: ['clonal hematopoiesis', '(?-i:\b(?:CHIP|CCUS|MGUS)\b)', 'smoldering', 'precursor']
+
+  - match: 'myeloma'
+    groups:
+      - name: 'Smoldering / Precursor'
+        any: ['smoldering', '(?-i:\b(?:SMM|MGUS)\b)']
+      - name: 'Amyloidosis / Other Plasma Cell'
+        any: ['amyloid', '(?-i:\bAL\b)', 'POEMS', 'plasma cell leukemia', 'Waldenstr']
+      - name: 'Newly Diagnosed'
+        any: ['newly diagnosed', '(?-i:\bNDMM\b)', 'transplant[- ](?:eligible|ineligible)', 'previously untreated', 'front[- ]?line', 'induction therapy']
+      - name: 'Relapsed / Refractory'
+        any: ['relapsed', 'refractory', '(?-i:\bRRMM\b)', 'prior lines?', 'previously treated', 'triple[- ]class']
+
+  - match: 'neuro-oncology'
+    groups:
+      - name: 'Glioblastoma'
+        any: ['glioblastoma', '(?-i:\bGBM\b)', 'grade (?:4|IV) (?:astrocytoma|glioma)']
+      - name: 'IDH-mutant / Lower-grade Glioma'
+        any: ['IDH[12]?[\s-]*mut', 'low(?:er)?[- ]grade glioma', 'oligodendroglioma', 'astrocytoma']
+      - name: 'Brain Metastases / Leptomeningeal'
+        any: ['brain metasta', 'leptomeningeal', 'CNS metasta']
+      - name: 'Meningioma'
+        any: ['meningioma']
+      - name: 'Pediatric / Other CNS Tumors'
+        cancer: [brain_cns, pediatric_solid]
+
+  - match: 'prostate'
+    groups:
+      - name: 'Localized / Biochemical Recurrence'
+        any: ['\blocali[sz]ed\b', 'biochemical(?:ly)? recurr', 'PSA (?:recurrence|progression|persistence)', 'radical prostatectomy', '(?-i:\bnmCRPC\b)', 'non-?metastatic']
+      - name: 'Metastatic Hormone-Sensitive'
+        any: ['hormone[- ]sensitive', 'castration[- ]sensitive', '(?-i:\bm?(?:HSPC|CSPC)\b)']
+      - name: 'Metastatic Castration-Resistant'
+        any: ['castrat\w*[- ]resistant', '(?-i:\bm?CRPC\b)']
+
+  - match: 'kidney'
+    groups:
+      - name: 'Non-clear Cell RCC'
+        any: ['non[- ]clear', 'papillary', 'chromophobe', 'collecting duct', 'translocation', 'FH[- ]deficient', 'medullary']
+      - name: 'Clear Cell RCC'
+        any: ['clear[- ]cell']
+      - name: 'Adjuvant / Localized'
+        any: ['\badjuvant\b', '\bresected\b', 'nephrectomy', '\blocali[sz]ed\b']
+
+  - match: 'genitourinary'
+    groups:
+      - name: 'Bladder / Urothelial'
+        cancer: [bladder]
+      - name: 'Testicular / Germ Cell'
+        cancer: [testicular]
+      - name: 'Penile'
+        cancer: [penile]
+
+  - match: 'gynecologic'
+    groups:
+      - name: 'Ovarian – Platinum-Resistant'
+        cancer: [ovarian]
+        any: ['platinum[- ](?:resistant|refractory)']
+      - name: 'Ovarian / Fallopian / Peritoneal'
+        cancer: [ovarian]
+      - name: 'Endometrial / Uterine'
+        cancer: [endometrial]
+      - name: 'Cervical / Vulvar / Vaginal'
+        cancer: [cervical, vulvar_vaginal]
+
+  - match: 'gastrointestinal'
+    groups:
+      - name: 'Colorectal'
+        cancer: [colorectal]
+      - name: 'Gastroesophageal'
+        cancer: [gastric, esophageal]
+      - name: 'Pancreatic'
+        cancer: [pancreatic]
+      - name: 'Hepatobiliary'
+        cancer: [liver, biliary]
+      - name: 'Neuroendocrine'
+        cancer: [neuroendocrine]
+      - name: 'Anal / Small Bowel / Appendiceal'
+        cancer: [anal, small_bowel]
+
+  - match: 'head and neck'
+    groups:
+      - name: 'Recurrent / Metastatic'
+        any: ['recurrent', 'metastatic', '(?-i:\bR/M\b)', 'incurable', 'not amenable to (?:curative|local)']
+      - name: 'Locally Advanced / Curative Intent'
+        any: ['locally advanced', 'definitive', 'chemo-?radi', 'curative', '\bresect', 'neo-?adjuvant', '\badjuvant\b']
+      - name: 'Thyroid'
+        cancer: [thyroid]
+
+  - match: 'melanoma|cutaneous'
+    groups:
+      - name: 'Melanoma – Adjuvant / Neoadjuvant'
+        cancer: [melanoma]
+        in: [name, title]
+        any: ['\badj(?:uvant)?\b', 'neo-?adjuvant', '\bresected\b', 'resectable', 'peri-?operative']
+      - name: 'Melanoma – Advanced / Metastatic'
+        cancer: [melanoma]
+      - name: 'Non-melanoma Skin Cancer'
+        cancer: [skin_other]
+
+  - match: 'sarcoma'
+    groups:
+      - name: 'GIST'
+        cancer: [gist]
+      - name: 'Desmoid'
+        any: ['desmoid']
+      - name: 'Bone Sarcoma'
+        any: ['osteosarcoma', 'Ewing', 'chondrosarcoma', 'chordoma', '\bbone sarcoma']
+      - name: 'Soft Tissue Sarcoma'
+        cancer: [sarcoma]
+
+  # Phase I and early-drug-development programs: by the alteration a basket selects, then by tumor type.
+  - match: 'phase i|experimental therapeutics|early drug development'
+    groups:
+      - name: 'KRAS / RAS-altered'
+        any: ['\bK-?RAS\b', '\b[NH]RAS\b', 'G12[CDV]\b', '\bRAS[- ](?:mutant|mutated|mutation|altered)']
+      - name: 'HER2 / HER3'
+        any: ['\bHER[- ]?2\b', '\bERBB2\b', '\bHER[- ]?3\b']
+      - name: 'Other Biomarker-selected Solid Tumors'
+        any: ['\b(?:BRAF|EGFR|ALK|ROS1|RET|MET|NTRK\d?|FGFR\d?|PIK3CA|AKT\d?|PTEN|BRCA[12]?|ATM|CDKN2A|MTAP|CCNE1|NF[12]|KEAP1|STK11|SMARCA4|IDH[12]|NRG1|CLDN18|TROP-?2|B7-H[34]|DLL3|NECTIN-?4|FOLR1|CDH6)\b', 'MSI-H', '\bdMMR\b', 'TMB-H', 'amplif', '\bfusion', 'rearrange']
+      - name: 'Solid Tumors – Dose Escalation / All-comers'
+        cancer: [solid_any]

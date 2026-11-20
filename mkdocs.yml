@@ -27,6 +27,7 @@ nav:
       - Note-search question answering: user-guide/note-search-qa.md
       - Population workup review: user-guide/population-workup.md
   - Apps:
+      - Dashboard: apps/dashboard.md
       - Guideline fetcher: apps/guideline-fetcher.md
       - Site configuration: apps/site-config.md
   - Reference:
