@@ -77,26 +77,43 @@ class Catalogs:
         return paths
 
 
+def pdf_pages(content):
+    """Each page's text, through the package's PDF reader (``matchminer_ai.documents.ocr_pdf``: the embedded text
+    layer, else local RapidOCR; nothing leaves this machine). The upload is written to a private temporary folder
+    that is removed afterwards."""
+    from tempfile import TemporaryDirectory
+
+    from matchminer_ai.documents import PDFOCRError, PDFOCRNoTextError, ocr_pdf
+    from matchminer_ai.documents.ocr import _PAGE_SEPARATOR
+
+    with TemporaryDirectory(prefix="guideline-fetcher-pdf-") as folder:
+        source = Path(folder) / "upload.pdf"
+        source.write_bytes(content)
+        try:
+            text = ocr_pdf(source, Path(folder) / "upload.txt").read_text(encoding="utf-8")
+        except PDFOCRNoTextError:
+            raise InputError("PDF page 1 has no readable text, even with OCR; no pages were imported.") from None
+        except PDFOCRError:
+            raise InputError("This PDF could not be opened. If it is password protected, upload an unlocked "
+                             "copy.") from None
+    return [page.strip() for page in text.rstrip("\n").split(_PAGE_SEPARATOR)]
+
+
 def parse_upload(name, content):
     suffix = Path(name).suffix.lower()
     if suffix == ".pdf":
-        from pypdf import PdfReader
-
-        reader = PdfReader(io.BytesIO(content))
-        if reader.is_encrypted and not reader.decrypt(""):
-            raise InputError("This PDF is password protected. Upload an unlocked copy.")
-        blocks = []
-        for i, page in enumerate(reader.pages, 1):
-            text = (page.extract_text() or "").strip()
+        pages = pdf_pages(content)
+        for i, text in enumerate(pages, 1):
             if not text:
                 raise InputError(
-                    f"PDF page {i} has no readable text. OCR it before uploading; no pages were imported."
+                    f"PDF page {i} has no readable text, even with OCR; no pages were imported."
                 )
-            blocks.append(f"[PDF page {i}; note date unavailable]\n{text}")
+        blocks = [f"[PDF page {i}; note date unavailable]\n{text}" for i, text in enumerate(pages, 1)]
         return {
             "text": "\n\n".join(blocks),
             "notes": None,
-            "notice": "PDF order preserved. Dates were not inferred from file metadata. Text PDFs only; verify tables and layout.",
+            "notice": "PDF order preserved. Dates were not inferred from file metadata. Pages without a text "
+                      "layer were read with local OCR; verify tables, layout and OCR text.",
         }
     if suffix in {".txt", ".md"}:
         return {

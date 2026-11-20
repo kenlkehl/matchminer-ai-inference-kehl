@@ -286,13 +286,14 @@ def test_upload_and_summary_adapter(setup):
 
 
 def test_unreadable_pdf_does_not_silently_skip_pages():
-    PdfWriter = pytest.importorskip("pypdf").PdfWriter
     import io
 
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument.new()
+    document.new_page(100, 100)  # blank: no text layer, nothing for OCR
     buffer = io.BytesIO()
-    writer = PdfWriter()
-    writer.add_blank_page(width=100, height=100)
-    writer.write(buffer)
+    document.save(buffer)
     with pytest.raises(InputError, match="page 1"):
         parse_upload("scan.pdf", buffer.getvalue())
 

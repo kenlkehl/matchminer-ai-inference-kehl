@@ -509,7 +509,8 @@ def create_app(settings=None, inference=None, access_token=None):
         if not data:
             raise InputError("The uploaded file is empty.")
         try:
-            result = parse_upload(file.filename or "", data)
+            # A PDF may need OCR: off the event loop.
+            result = await asyncio.to_thread(parse_upload, file.filename or "", data)
         except InputError:
             raise
         except Exception:

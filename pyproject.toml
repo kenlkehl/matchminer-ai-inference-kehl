@@ -70,7 +70,6 @@ apps = [
   "uvicorn>=0.30,<1",
   "python-multipart>=0.0.20",
   "duckdb>=1.1",
-  "pypdf>=6,<7",
 ]
 dev = [
   "pre-commit>=3.7",
