@@ -26,6 +26,9 @@ nav:
       - NCI PDQ catalogs: user-guide/pdq-catalogs.md
       - Note-search question answering: user-guide/note-search-qa.md
       - Population workup review: user-guide/population-workup.md
+  - Apps:
+      - Guideline fetcher: apps/guideline-fetcher.md
+      - Site configuration: apps/site-config.md
   - Reference:
       - Configuration: reference/configuration.md
       - QC Metrics: reference/qc-metrics.md
