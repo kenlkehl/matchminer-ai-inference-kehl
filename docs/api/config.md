@@ -18,7 +18,7 @@ its attribute when it has one.
 
 | Access | Sections |
 | --- | --- |
-| Attributes | `remote`, `trial`, `patient`, `embedding`, `protocol_cohort_extraction`, `trial_space_criteria_extraction`, `synthetic_protocol_generation`, `llm_match_quality`, `llm_exclusion_criteria`, `llm_good_option`, `good_option_catalog`, `guideline`, `document_extraction`, `patient_extraction`, `workup_query_compile`, `workup_sql_agent` |
+| Attributes | `remote`, `trial`, `patient`, `embedding`, `protocol_cohort_extraction`, `synthetic_protocol_generation`, `llm_match_quality`, `llm_exclusion_criteria`, `llm_good_option`, `good_option_catalog`, `guideline`, `document_extraction`, `patient_extraction`, `workup_query_compile`, `workup_sql_agent` |
 | `config.raw` | `decision_model`, `match_quality`, `exclusion_criteria`, `criteria_check`, `llm_criteria_check`, `good_option_prompt`, `good_option_check`, `good_option_checker` |
 
 ```python

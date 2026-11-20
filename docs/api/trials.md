@@ -36,9 +36,8 @@ protocol_cohorts = process_trials(protocols, source="protocol", config=config, o
 ```
 
 - **`source`:** `"ctgov"` (the default) reads ClinicalTrials.gov listings with `extract_cohorts` and uses the `trial`
-  settings for every step; it needs `trial.extraction_method: cohorts`, the preset's value. `"protocol"` reads full
-  protocols with `extract_protocol_cohorts` and uses the `protocol_cohort_extraction` settings for every step;
-  `text_output_dir` and `progress_callback` apply only here.
+  settings for every step. `"protocol"` reads full protocols with `extract_protocol_cohorts` and uses the
+  `protocol_cohort_extraction` settings for every step; `text_output_dir` and `progress_callback` apply only here.
 - **Result:** one row per merged cohort of each accepted trial, with all the columns below. The extractor's
   decisions stay in `cohorts.attrs`.
 - **Metadata:** with `return_metadata=True`, each step's metadata under `extraction`, `merge` and `boilerplate`.
@@ -163,9 +162,10 @@ A trial's decision (schema `trial-cohorts-stepwise-v1`) is `{"cancer_treatment_t
 }
 ```
 
-- **`attrs`:** the result's `attrs` always hold `extraction_method`, `schema_version`, `representation_version`
-  (`trial-treatment-cohorts-v5`), `prompt_sha256`, `structured_outputs`, `trial_decisions`, `trial_rejections`
-  (rejected trial ID to decision) and `trial_errors` (failed trial ID to its last validation error).
+- **`attrs`:** the result's `attrs` always hold `extraction_method` (`cohorts`, or `protocol_cohorts` from
+  `extract_protocol_cohorts`), `schema_version`, `representation_version` (`trial-treatment-cohorts-v5`),
+  `prompt_sha256`, `structured_outputs`, `trial_decisions`, `trial_rejections` (rejected trial ID to decision) and
+  `trial_errors` (failed trial ID to its last validation error).
 - **`return_metadata=True`:** the same keys plus `prompt_sha256_by_step`, `trial_cohort_names`,
   `trial_merged_cohorts` (cohorts combined for identical criteria), `trial_attempts` (per step, and per cohort for
   criteria: finish reason, validation error and serving endpoint), `model_metadata` and `config_snapshot`.
@@ -291,29 +291,6 @@ listings = pd.DataFrame([{"trial_id": document.nct_id, "trial_title": document.t
                           "eligibility_criteria": document.eligibility_criteria}])
 ```
 
-## Criteria for one population from an OCR text file
-
-`extract_trial_space_eligibility_criteria(trial_space, eligibility_checklist_path, config=config)` takes a
-description of one trial population (a "trial space", such as a cohort's name and key criteria) and a UTF-8 text
-file produced by OCR, such as an eligibility checklist. It sends both to the LLM configured under `trial_space_criteria_extraction` and returns the
-criteria that apply to that population:
-
-```json
-{
-  "trial_space": "the population description, as given",
-  "inclusion_criteria": ["complete relevant criterion"],
-  "exclusion_criteria": ["complete relevant criterion"]
-}
-```
-
-- **Grounding:** every criterion must occur verbatim in the OCR text after conservative normalization (whitespace
-  collapsed, a split ordinal such as `9 th` joined, repeated page-edge text and referenced page-end footnotes
-  removed). Invalid, ungrounded, duplicated or overlapping lists are retried and then rejected.
-- **Scope:** universal criteria and criteria of ambiguous scope are kept; criteria explicitly limited to an
-  incompatible population are left out.
-- **Privacy:** no web search is used; the whole document reaches the configured endpoint. Compare the output with
-  the complete, current protocol.
-
 ## Synthetic protocols
 
 `generate_synthetic_protocols` writes one fabricated full protocol per ctgov seed (`trial_id` and optional `title`,
@@ -322,14 +299,6 @@ messily specified eligibility text. Each trial gets one of the weighted eligibil
 `synthetic_protocol_layouts.json`. With `output_dir`, each trial's `protocol.md`, `reasoning.txt` and `meta.json`
 are written as it returns and completed trials are skipped on rerun. Outputs are fabricated and must be labeled
 synthetic wherever they are used. See [synthetic protocols](../training/synthetic-protocols.md).
-
-## Legacy space extraction
-
-`trial.extraction_method: hierarchical` or `one_shot` makes `extract_cohorts` produce the older trial-space table
-instead of cohorts: `space_trial_id`, `trial_id`, `clinical_space_number`, `clinical_space_summary` and
-`general_exclusion_criteria` (settings `trial.hierarchy` and `trial.prompt_files`). Space text is not
-interchangeable with cohort criteria, and their embeddings must not be compared. `process_trials` and the merge and
-boilerplate steps need cohorts.
 
 ## Guideline and PDQ catalogs
 
@@ -348,7 +317,6 @@ are described in [guideline extraction](../user-guide/guideline-extraction.md) a
         - merge_equivalent_cohorts
         - remove_boilerplate_criteria
         - screen_trials
-        - extract_trial_space_eligibility_criteria
         - generate_synthetic_protocols
         - list_guidelines
         - summarize_guidelines

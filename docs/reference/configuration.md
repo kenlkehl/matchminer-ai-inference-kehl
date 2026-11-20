@@ -189,13 +189,12 @@ sets the provider in its own section.
 ## LLM sections
 
 These sections each configure one LLM task: `trial`, `patient`, `document_extraction`, `patient_extraction`,
-`workup_query_compile`, `workup_sql_agent`, `trial_space_criteria_extraction`, `protocol_cohort_extraction`,
-`synthetic_protocol_generation`, `llm_criteria_check`, `llm_match_quality`, `llm_exclusion_criteria`,
-`llm_good_option` and `guideline`. Every one except `guideline` (remote only, [below](#guideline)) defaults to
-`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`, locally and remotely, with thinking on. In-process, the NVFP4
-build needs a GPU with native FP4 (Blackwell); see [LLM runtime](llm-runtime.md#nvidia-nemotron-35-super-vl-default).
-In the section tables, `max_tokens` stands for both `local.generation.max_tokens` and
-`remote.request_params.max_tokens`.
+`workup_query_compile`, `workup_sql_agent`, `protocol_cohort_extraction`, `synthetic_protocol_generation`,
+`llm_criteria_check`, `llm_match_quality`, `llm_exclusion_criteria`, `llm_good_option` and `guideline`. Every one
+except `guideline` (remote only, [below](#guideline)) defaults to `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`,
+locally and remotely, with thinking on. In-process, the NVFP4 build needs a GPU with native FP4 (Blackwell); see
+[LLM runtime](llm-runtime.md#nvidia-nemotron-35-super-vl-default). In the section tables, `max_tokens` stands for
+both `local.generation.max_tokens` and `remote.request_params.max_tokens`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -234,8 +233,8 @@ In the section tables, `max_tokens` stands for both `local.generation.max_tokens
   The profiles and their values are listed in [LLM runtime](llm-runtime.md#model-profiles).
 - **Sections without `sampling_profile`** send their own fixed sampling. The one exception is Nemotron 3.5 Super,
   whose profile replaces a section's fixed sampling (keeping an explicit thinking switch). In the preset this applies
-  to `trial_space_criteria_extraction` and `llm_good_option`: their greedy settings are not used while the model is
-  Nemotron. Set `sampling_profile: none` to keep a section's own values.
+  to `llm_good_option`: its greedy settings are not used while the model is Nemotron. Set `sampling_profile: none`
+  to keep a section's own values.
 - **Thinking:** turn it off with `chat_template_kwargs.enable_thinking: false` (local and `remote.extra_body`).
   Qwen's profile then switches to its non-thinking sampling.
 - **`reasoning_effort`:** used by Qwen 3.8 (`xhigh`, `medium` or `low`, sent as an API field and a chat-template
@@ -260,15 +259,11 @@ with `section="trial"` (the default). See [Trials](../api/trials.md).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `extraction_method` | `cohorts` | `cohorts`: the three-step cohort workflow. `hierarchical` and `one_shot` are earlier trial-space methods that write `space_trial_id` / `clinical_space_summary` rows ([Legacy space extraction](../api/trials.md#legacy-space-extraction)); `process_trials` requires `cohorts` |
 | `cohorts.max_attempts` | `3` | Attempts per request for an answer that fails validation (1-10) |
 | `cohorts.structured_outputs` | `true` | Constrain each remote answer to its step's JSON schema |
 | `cohorts.chunk_size` | `500` | See below |
 | `cohorts.chunks_in_flight` | `2` | See below (1-16) |
 | `cohorts.prompt_files` | unset | Maps `screen`, `list` and `criteria` to other packaged prompt files |
-| `hierarchy` | `max_attempts: 4`, `max_nodes: 4096`, `max_calls: 20000`, `batch_size: 256`, `active_trials: 32` | Limits of the `hierarchical` method only |
-| `prompt_files` | `trial.user.primer.txt`, `trial.user.question.txt` | Prompts of the `one_shot` method only |
-| `boilerplate_marker` | `Boilerplate exclusions` | Heading that starts the boilerplate section in the earlier methods' output |
 | `local.engine.max_model_len` | `100000` | Local context |
 | `max_tokens` | `50000` | Output budget (`local.generation`, `remote.request_params`) |
 
@@ -409,26 +404,6 @@ reach that endpoint, so use only an endpoint authorized for the records.
 | `max_concurrent_items` | `8` | Requirements explored at once, sharing one SQL worker |
 | `query_timeout_seconds`, `final_timeout_seconds` | `20`, `120` | Exploration and final-query timeouts |
 | `worker_memory_mb`, `duckdb_memory_mb` | `4096`, `2048` | Worker and DuckDB memory |
-
-## `trial_space_criteria_extraction`
-
-`trials.extract_trial_space_eligibility_criteria`: the complete inclusion and exclusion criteria relevant to one trial
-space, taken from a UTF-8 OCR text file
-([Criteria for one population](../api/trials.md#criteria-for-one-population-from-an-ocr-text-file)). The section reads
-only `local`, `remote` and `reasoning_parser` of the LLM keys.
-
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `max_document_characters` | `120000` | Longer documents fail rather than being truncated |
-| `max_criteria_per_type` | `256` | Inclusion criteria, and exclusion criteria, accepted from the model |
-| `response_retry_limit` | `2` | Retries for malformed JSON, invalid schemas, duplicate criteria and criteria not found in the text |
-| `remote.request_params.response_format` | `{type: json_object}` | JSON-object responses |
-| `local.engine.max_model_len` | `100000` | Context |
-| `max_tokens` | `50000` | Output budget |
-
-The whole document and trial space reach the configured backend; no web search is used. Every accepted criterion must
-match the source after conservative normalization (whitespace, ordinal suffixes, repeated page edges, referenced
-trailing footnotes).
 
 ## `protocol_cohort_extraction`
 

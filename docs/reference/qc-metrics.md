@@ -55,30 +55,13 @@ The token-limit check loads the TrialSpace tokenizer from `embedding.model_path`
 
 ## Cohort extraction
 
-Returned by `extract_cohorts` with the default `cohorts` method. IDs are `trial_id`s, and each denominator is the
-number of input trials.
+Returned by `extract_cohorts`. IDs are `trial_id`s, and each denominator is the number of input trials.
 
 | Metric | Flags |
 | --- | --- |
 | `trials_rejected_cancer_treatment` | Trials the screen judged not to be cancer treatment trials. They have no cohort rows; their decisions are in the `trial_rejections` metadata. |
 | `trials_failed_inference` | Trials with a step whose answer was still invalid or incomplete after `trial.cohorts.max_attempts` attempts. These are errors, not rejections. |
 | `trials_truncated_llm_response` | Trials with at least one response, in any step, that stopped at its token limit. Such a response is invalid and retried, so the trial may still succeed. |
-
-### Legacy trial-space extraction
-
-The legacy `hierarchical` and `one_shot` methods (`trial.extraction_method`), which write trial spaces instead of
-cohorts, report a different set. IDs are `trial_id`s, or `space_trial_id`s for the space metrics.
-
-| Metric | Flags |
-| --- | --- |
-| `trials_missing_in_output` | Input trials with no space in the output, or a blank space summary |
-| `trials_truncated_llm_response` | Trials whose response stopped at its token limit |
-| `trials_failed_inference` | Trials whose LLM request still failed after retries; removed before postprocessing |
-| `spaces_exceed_embedding_token_limit` | Space summaries longer than `embedding.max_seq_length` TrialSpace tokens, prompt included |
-| `spaces_per_trial_min`, `spaces_per_trial_median`, `spaces_per_trial_max` | The statistic itself (no denominator or IDs) |
-| `trials_with_non_distinct_spaces` | Trials with duplicate space numbers or duplicate space text |
-| `spaces_dropped_missing_keyword:<keyword>` | Spaces dropped for missing a required field: `Age`, `Sex`, `Cancer primary site`, `Histology`, `Disease state`, `Prior treatment requirements`, `Biomarker requirements` (older field names are accepted) |
-| `trials_exclusion_criteria_not_extracted` | Trials with a space whose `general_exclusion_criteria` is empty or `None` |
 
 ## Guideline catalogs
 
