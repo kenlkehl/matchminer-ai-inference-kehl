@@ -13,12 +13,12 @@ from .adaptive_cutoff import (
     find_trial_centric_cutoff,
 )
 from .criteria_check import check_eligibility_criteria
-from .exclusion_check import exclusion_criteria_check, interpret_exclusion_criteria
+from .exclusion_check import exclusion_criteria_check, exclusion_criteria_check_pairs, interpret_exclusion_criteria
 from .llm_checks import check_eligibility_criteria_with_llm
 from .llm_checks import exclusion_criteria_check_with_llm
 from .llm_checks import score_match_quality_with_llm
 from .match import generate_candidate_matches, rank_similarity
-from .rerank import interpret_match_quality, score_match_quality
+from .rerank import interpret_match_quality, score_match_quality, score_match_quality_pairs
 from .guidelines import retrieve_guideline_considerations
 from .guideline_patients import (
     PatientEmbeddings,
@@ -39,6 +39,7 @@ __all__ = [
     "check_eligibility_criteria",
     "check_eligibility_criteria_with_llm",
     "exclusion_criteria_check",
+    "exclusion_criteria_check_pairs",
     "exclusion_criteria_check_with_llm",
     "generate_candidate_matches",
     "rank_similarity",
@@ -46,6 +47,7 @@ __all__ = [
     "interpret_exclusion_criteria",
     "interpret_match_quality",
     "score_match_quality",
+    "score_match_quality_pairs",
     "score_match_quality_with_llm",
     "retrieve_guideline_considerations",
     "retrieve_guideline_patients",

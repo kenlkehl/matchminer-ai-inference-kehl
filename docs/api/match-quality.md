@@ -59,6 +59,13 @@ By default (`filter_low_quality=True`) only passing pairs are returned; `filter_
 pair. With `return_metadata=True`, `model_metadata["score_match_quality"]` records the model, its revision or
 checkpoint fingerprint, a digest of the question texts, and request and token counts.
 
+`score_match_quality_pairs(cancer_history_summaries=..., cohort_key_criteria=...)` is the service-layer form, for
+callers that keep their own identifiers and data types, such as a live matching service. It takes two equal-length
+lists of text, where pair `i` is the `i`-th summary with the `i`-th criteria; to check one patient against many
+cohorts, repeat its summary. It returns one dict per pair with the columns above (without the identifiers), in
+input order, and the model metadata. `score_match_quality` is built on it. A bare string, a non-string value or
+lists of different lengths raise, and an empty input returns no rows without loading the model.
+
 `interpret_match_quality` explains one question's answer (`head`, default `"reasonableness"`) for specific pairs. It
 computes gradient times input embedding for the question's yes-minus-no logit at its answer slot, in the same packed
 sequence as the scores. It returns the score columns plus `attribution_method`, `attribution_target`
@@ -126,6 +133,7 @@ questions of all three checks.
     options:
       members:
         - score_match_quality
+        - score_match_quality_pairs
         - interpret_match_quality
 
 ::: matchminer_ai.matching.llm_checks

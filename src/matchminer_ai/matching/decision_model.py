@@ -324,6 +324,16 @@ def noul(instructions: str) -> dict[str, str]:
     return {"type": "noul", "instructions": instructions}
 
 
+def no_request_metadata(config: Any = None) -> dict[str, Any]:
+    """The metadata :func:`run_decisions` would report for no requests, without loading the model."""
+    settings = decision_settings(config)
+    local = Path(str(settings["model_name"])).expanduser().is_dir()
+    return {"model_name": str(settings["model_name"]), "revision": None if local else settings.get("revision"),
+            "backend": settings["backend"], "questions_sha256": questions_digest(),
+            "max_length": settings["max_length"], "requests": 0, "questions": 0, "input_tokens": 0,
+            "over_max_length": 0}
+
+
 def run_decisions(
     requests: Sequence[tuple[str, Mapping[str, str]]],
     *,
@@ -442,4 +452,4 @@ __all__ = ["BASE_MODEL", "BASE_REVISION", "BOILERPLATE", "CRITERION", "CRITERION
            "FAMILIES", "attribute_decision", "boilerplate_question", "boilerplate_state", "checkable_items",
            "clear_decision_model_cache", "criteria_state", "criterion_name", "criterion_question",
            "criterion_teacher_messages", "decision_settings", "load_decision_model", "match_questions", "match_state",
-           "noul", "oriented", "parse_criterion_label", "questions_digest", "run_decisions"]
+           "noul", "no_request_metadata", "oriented", "parse_criterion_label", "questions_digest", "run_decisions"]

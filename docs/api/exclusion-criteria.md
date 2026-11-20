@@ -37,6 +37,12 @@ patient could meet by waiting, such as washout periods, are not failures.
 
 Every pair is returned unless `filter_excluded=True`, which keeps only passing pairs.
 
+`exclusion_criteria_check_pairs(general_exclusion_criteria_evidence=..., cohort_boilerplate_criteria=...)` is the
+service-layer form: two equal-length lists of text in, one dict per pair with the columns above (without the
+identifiers) out, in input order, with the model metadata. `exclusion_criteria_check` is built on it. Like
+[`score_match_quality_pairs`](match-quality.md#decision-model-scores), it rejects inputs that would misalign and
+loads no model for an empty input.
+
 `interpret_exclusion_criteria` adds gradient-times-input token attributions for the reported decision
 (`attribution_target` `exclusion_criteria_pass` or `exclusion_criteria_fail`), with token offsets in the
 `patient_boilerplate_summary` and `cohort_boilerplate_criteria` sources. Attributions are local model sensitivities
@@ -62,6 +68,7 @@ boilerplate section to the configured LLM endpoint; use only an endpoint authori
     options:
       members:
         - exclusion_criteria_check
+        - exclusion_criteria_check_pairs
         - interpret_exclusion_criteria
 
 ::: matchminer_ai.matching.llm_checks

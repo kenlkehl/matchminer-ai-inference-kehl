@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Sequence
 
 import pandas as pd
 
 from matchminer_ai._metadata import package_metadata
 from matchminer_ai.config import config_snapshot, load_default_preset
 from .decision_model import (
-    attribute_decision, match_questions, match_state, match_state_with_ranges, oriented, run_decisions,
+    attribute_decision, match_questions, match_state, match_state_with_ranges, no_request_metadata, oriented,
+    run_decisions,
 )
 from .inference import TOKEN_ATTRIBUTION_CAVEAT
 
@@ -49,6 +50,83 @@ def reasonableness_cutoff(config: MMAIConfig) -> float:
     if not 0.0 <= value <= 1.0:
         raise ValueError("match_quality.reasonableness_cutoff must be between 0 and 1")
     return value
+
+
+def _text_list(name: str, values: Sequence[str]) -> list[str]:
+    """``values`` as a list of strings; a bare str (iterable as characters) or a non-string element raises."""
+    if isinstance(values, str):
+        raise TypeError(f"{name} must be a list of strings, not a single str.")
+    texts = list(values)
+    bad = [i for i, text in enumerate(texts) if not isinstance(text, str)]
+    if bad:
+        raise TypeError(f"{name} must contain only strings; non-string values at indices {bad}.")
+    return texts
+
+
+def _same_length(first: tuple[str, list[str]], second: tuple[str, list[str]]) -> None:
+    if len(first[1]) != len(second[1]):
+        raise ValueError(f"{first[0]} and {second[0]} must be the same length; "
+                         f"got {len(first[1])} and {len(second[1])}.")
+
+
+def score_match_quality_pairs(
+    *,
+    cancer_history_summaries: Sequence[str],
+    cohort_key_criteria: Sequence[str],
+    config: MMAIConfig | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Score patient-cohort text pairs with the decision model's five match questions, in input order.
+
+    The service-layer form of :func:`score_match_quality`: plain text in, no identifiers or
+    DataFrames, for callers that keep their own data types (such as a live matching service).
+    ``score_match_quality`` is built on it. Pair ``i`` is ``(cancer_history_summaries[i],
+    cohort_key_criteria[i])``; to check one patient against many cohorts, repeat its summary.
+
+    Parameters
+    ----------
+    cancer_history_summaries : sequence of str
+        Each patient summary's key section (``cancer_history_summary``).
+    cohort_key_criteria : sequence of str
+        Each cohort's key criteria (``cohort_key_criteria``), the same length.
+    config : MMAIConfig, optional
+        ``decision_model`` (the model) and ``match_quality.reasonableness_cutoff``. Uses the default
+        preset when omitted.
+
+    Returns
+    -------
+    tuple[list[dict], dict]
+        One dict per pair with the columns of :func:`score_match_quality`:
+        ``match_quality_score``, ``match_quality_pass`` and ``match_quality_<label>`` for
+        reasonableness, cancer_type, burden, treatment_history and biomarker; and the decision
+        model's metadata. With no pairs the model is not loaded.
+
+    Raises
+    ------
+    TypeError
+        If either argument is a single str or holds a non-string value.
+    ValueError
+        If the two sequences differ in length.
+    """
+    from .match_labels import LABELS
+    patients = _text_list("cancer_history_summaries", cancer_history_summaries)
+    cohorts = _text_list("cohort_key_criteria", cohort_key_criteria)
+    _same_length(("cancer_history_summaries", patients), ("cohort_key_criteria", cohorts))
+    resolved_config = config or load_default_preset()
+    cutoff = reasonableness_cutoff(resolved_config)
+    if not patients:
+        return [], no_request_metadata(resolved_config)
+    questions = match_questions()
+    answers, metadata = run_decisions(
+        [(match_state(patient, cohort), questions) for patient, cohort in zip(patients, cohorts, strict=True)],
+        config=resolved_config)
+    scores, heads = _scores(answers)
+    rows = []
+    for i, score in enumerate(scores):
+        row: dict[str, Any] = {"match_quality_score": score,
+                               "match_quality_pass": heads["reasonableness"][i] >= cutoff}
+        row.update({f"match_quality_{label}": heads[label][i] for label in LABELS})
+        rows.append(row)
+    return rows, metadata
 
 
 def _decide(candidate_pairs: pd.DataFrame, config: MMAIConfig) -> tuple[list[dict[str, float]], dict]:
@@ -126,18 +204,16 @@ def score_match_quality(
     tuple[pd.DataFrame, dict]
         When return_metadata is True, returns the DataFrame plus a metadata dict.
     """
-    trial_id, _, _ = _pair_inputs(candidate_pairs)
+    from .match_labels import LABELS
+    trial_id, cohorts, patients = _pair_inputs(candidate_pairs)
     resolved_config = config or load_default_preset()
-    cutoff = reasonableness_cutoff(resolved_config)
-    answers, model_metadata = _decide(candidate_pairs, resolved_config)
+    rows, model_metadata = score_match_quality_pairs(
+        cancer_history_summaries=patients, cohort_key_criteria=cohorts, config=resolved_config)
 
-    # Convert the answers into a compact, derived result table.
+    # The pair results as a compact, derived result table, in input order.
     output = candidate_pairs[["patient_id", trial_id]].copy()
-    confidence_scores, heads = _scores(answers)
-    output["match_quality_score"] = confidence_scores
-    output["match_quality_pass"] = [p >= cutoff for p in heads["reasonableness"]]
-    for label, values in heads.items():
-        output[f"match_quality_{label}"] = values
+    for column in ("match_quality_score", "match_quality_pass", *(f"match_quality_{label}" for label in LABELS)):
+        output[column] = [row[column] for row in rows]
 
     # Optionally keep only matches that pass the quality threshold.
     if filter_low_quality:
@@ -238,4 +314,4 @@ def interpret_match_quality(
     return output
 
 
-__all__ = ["interpret_match_quality", "score_match_quality"]
+__all__ = ["interpret_match_quality", "score_match_quality", "score_match_quality_pairs"]

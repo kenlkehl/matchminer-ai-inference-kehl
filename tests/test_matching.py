@@ -7,6 +7,8 @@ import pytest
 
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.matching import (
+    exclusion_criteria_check_pairs,
+    score_match_quality_pairs,
     rank_similarity,
     exclusion_criteria_check,
     exclusion_criteria_check_with_llm,
@@ -650,4 +652,57 @@ def test_rank_similarity_breaks_ties_by_corpus_order_deterministically():
     corpus = [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 0.0]]
     expected = [[(0, pytest.approx(1.0)), (2, pytest.approx(1.0)), (3, pytest.approx(1.0))]]
     assert all(rank_similarity([[1.0, 0.0]], corpus, k=3) == expected for _ in range(20))
+
+
+def test_score_match_quality_pairs_scores_text_pairs_in_input_order(monkeypatch):
+    """The service-layer function gives score_match_quality's rows for plain text, patient text first in each state
+    (ported from upstream #11 for the decision model)."""
+    fake = _FakeDecisions(lambda state, name: 0.9 if "Lung" in state else 0.1)
+    monkeypatch.setattr("matchminer_ai.matching.rerank.run_decisions", fake)
+    rows, metadata = score_match_quality_pairs(
+        cancer_history_summaries=["Breast cancer.", "Lung adenocarcinoma."],
+        cohort_key_criteria=["Melanoma.", "Metastatic NSCLC."], config=_config())
+    assert [row["match_quality_pass"] for row in rows] == [False, True]
+    assert fake.requests[1][0].index("Lung adenocarcinoma.") < fake.requests[1][0].index("Metastatic NSCLC.")
+    frame = score_match_quality(pd.DataFrame({
+        "patient_id": ["P1", "P2"], "cohort_trial_id": ["T1-cohort-1", "T2-cohort-1"],
+        "cancer_history_summary": ["Breast cancer.", "Lung adenocarcinoma."],
+        "cohort_key_criteria": ["Melanoma.", "Metastatic NSCLC."]}), config=_config(), filter_low_quality=False)
+    assert frame.drop(columns=["patient_id", "cohort_trial_id"]).to_dict("records") == rows
+    assert metadata["model_name"] == "LiquidAI/d1-2B"
+
+
+@pytest.mark.parametrize("function, names", [
+    (score_match_quality_pairs, ("cancer_history_summaries", "cohort_key_criteria")),
+    (exclusion_criteria_check_pairs, ("general_exclusion_criteria_evidence", "cohort_boilerplate_criteria")),
+])
+def test_pair_functions_reject_inputs_that_would_misalign_and_skip_the_model_when_empty(monkeypatch, function, names):
+    def never(*args, **kwargs):
+        raise AssertionError("no pairs: the decision model must not run")
+    monkeypatch.setattr("matchminer_ai.matching.rerank.run_decisions", never)
+    monkeypatch.setattr("matchminer_ai.matching.exclusion_check.run_decisions", never)
+    first, second = names
+    with pytest.raises(TypeError, match="single str"):
+        function(**{first: "one patient", second: ["a cohort"]}, config=_config())
+    with pytest.raises(TypeError, match="non-string"):
+        function(**{first: ["text", None], second: ["a", "b"]}, config=_config())
+    with pytest.raises(ValueError, match="same length"):
+        function(**{first: ["text"], second: ["a", "b"]}, config=_config())
+    rows, metadata = function(**{first: [], second: []}, config=_config())
+    assert rows == [] and metadata["requests"] == 0
+
+
+def test_exclusion_criteria_check_pairs_matches_the_dataframe_function(monkeypatch):
+    fake = _FakeDecisions(lambda state, name: 0.9 if "ECOG 1" in state else 0.2)
+    monkeypatch.setattr("matchminer_ai.matching.exclusion_check.run_decisions", fake)
+    evidence, criteria = ["ECOG 1.", "Active hepatitis B."], ["ECOG 0-1. No active hepatitis B."] * 2
+    rows, _ = exclusion_criteria_check_pairs(general_exclusion_criteria_evidence=evidence,
+                                             cohort_boilerplate_criteria=criteria, config=_config())
+    assert [row["exclusion_criteria_pass"] for row in rows] == [True, False]
+    assert rows[1]["exclusion_score"] == pytest.approx(0.8)
+    assert fake.requests[0][0].index("ECOG 1.") < fake.requests[0][0].index("ECOG 0-1.")
+    frame = exclusion_criteria_check(pd.DataFrame({
+        "patient_id": ["P1", "P2"], "cohort_trial_id": ["T1-cohort-1"] * 2,
+        "general_exclusion_criteria_evidence": evidence, "cohort_boilerplate_criteria": criteria}), config=_config())
+    assert frame.drop(columns=["patient_id", "cohort_trial_id"]).to_dict("records") == rows
 
