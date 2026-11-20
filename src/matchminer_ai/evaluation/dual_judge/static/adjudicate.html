@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MatchMiner-AI judge adjudication</title>
+<script>
+  // Theme and text size before the first paint: dark unless the user chose light; size remembered too.
+  document.documentElement.dataset.theme = localStorage.getItem('adj-theme') || 'dark';
+  document.documentElement.style.setProperty('--scale', localStorage.getItem('adj-scale') || '1');
+</script>
+<style>
+  /* Light and dark themes (dark by default; the header toggle and text size are remembered in this browser). */
+  :root { --scale:1; color-scheme:light;
+          --bg:#f7f7f5; --pane:#fff; --line:#ddd; --ink:#222; --mute:#6b6b6b; --good:#2e7d32; --bad:#c62828;
+          --warn:#a35f00; --accent:#1f5fa8; --on-accent:#fff; --mark:#ffe58a; --mark-ink:#222; --button:#fff;
+          --soft:#f3f7fc; --soft-bad:#fdf0f0; --chip:#eee; --chip-ink:#333; --tint-bad:#fde2e1; --tint-warn:#fff1d6;
+          --tint-accent:#e3eefb; --tint-good:#e5f3e6; }
+  :root[data-theme=dark] { color-scheme:dark;
+          --bg:#121417; --pane:#1c1f24; --line:#3a3f47; --ink:#e8e8e8; --mute:#a3a9b0; --good:#8fd19e; --bad:#f4a19a;
+          --warn:#f6d47a; --accent:#8ab4f8; --on-accent:#10131a; --mark:#7a6300; --mark-ink:#fff; --button:#262a31;
+          --soft:#232a35; --soft-bad:#3a2626; --chip:#2c3038; --chip-ink:#d6d6d6; --tint-bad:#4a2b2b; --tint-warn:#4a3d1f;
+          --tint-accent:#243650; --tint-good:#23402b; }
+  html { font-size:calc(14px * var(--scale)); }
+  * { box-sizing: border-box; }
+  body { margin:0; font:1rem/1.5 system-ui, sans-serif; color:var(--ink); background:var(--bg); height:100vh;
+         display:flex; flex-direction:column; }
+  header { display:flex; gap:12px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line);
+           background:var(--pane); flex-wrap:wrap; }
+  header h1 { font-size:1.07rem; margin:0 8px 0 0; }
+  button, select, input[type=text] { font:inherit; color:var(--ink); background:var(--button);
+                                     border:1px solid var(--line); border-radius:4px; }
+  select, input[type=text] { padding:3px 6px; }
+  .tab { padding:4px 10px; cursor:pointer; }
+  .tab.on { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  main { flex:1; display:flex; min-height:0; }
+  #source { flex:1 1 50%; display:flex; flex-direction:column; border-right:1px solid var(--line); min-width:0; }
+  #source .bar { display:flex; gap:6px; padding:6px 8px; border-bottom:1px solid var(--line); background:var(--pane); }
+  #sourceText { flex:1; overflow:auto; padding:8px 12px; background:var(--pane); }
+  .note h4 { margin:10px 0 2px; font-size:.86rem; color:var(--accent); position:sticky; top:-8px; background:var(--pane); }
+  pre { white-space:pre-wrap; word-wrap:break-word; margin:0; font:.93rem/1.5 ui-monospace, monospace; }
+  mark { background:var(--mark); color:var(--mark-ink); }
+  #review { flex:1 1 50%; overflow:auto; padding:10px 14px; }
+  .card { background:var(--pane); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin:0 0 10px; }
+  .card.focus { outline:2px solid var(--accent); }
+  .card.done { opacity:.8; }
+  .target { font-weight:600; margin-bottom:6px; white-space:pre-wrap; }
+  .badge { font-size:.79rem; padding:1px 6px; border-radius:8px; margin-left:6px; background:var(--chip); color:var(--chip-ink); }
+  .badge.disputed { background:var(--tint-bad); color:var(--bad); } .badge.single { background:var(--tint-warn); color:var(--warn); }
+  .badge.audit { background:var(--tint-accent); color:var(--accent); } .badge.agreed { background:var(--tint-good); color:var(--good); }
+  .judges { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:6px 0; }
+  .judge { border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:.93rem; }
+  .judge .v { font-weight:700; }
+  .k { color:var(--mute); }
+  .quote { display:block; margin:3px 0; padding:2px 6px; border-left:3px solid var(--accent); cursor:pointer;
+           background:var(--soft); font-size:.9rem; }
+  .quote.ungrounded { border-left-color:var(--bad); background:var(--soft-bad); }
+  .choices { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+  .choices button { padding:3px 10px; cursor:pointer; }
+  .choices button.picked { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  .choices input { flex:1; min-width:160px; }
+  .reveal { margin-top:6px; font-size:.9rem; background:var(--soft); padding:4px 8px; border-radius:4px; }
+  .stale { color:var(--warn); }
+  .question { font-size:.93rem; margin:0 0 6px; padding:4px 8px; background:var(--soft); border-radius:4px; }
+  .refs { margin-top:6px; font-size:.9rem; border:1px solid var(--line); border-radius:4px; }
+  .refs > div { padding:4px 8px; } .refs > div + div { border-top:1px solid var(--line); }
+  .refs .who { font-weight:600; }
+  .ans-yes { color:var(--good); font-weight:700; } .ans-no { color:var(--bad); font-weight:700; }
+  .muted { color:var(--mute); }
+  table.verdicts { border-collapse:collapse; margin:6px 0 2px; font-size:.93rem; }
+  table.verdicts th, table.verdicts td { border:1px solid var(--line); padding:3px 9px; text-align:left; }
+  table.verdicts th { color:var(--mute); font-weight:600; background:var(--soft); }
+  table.verdicts td.hidden, .strip .hidden { color:var(--mute); font-style:italic; }
+  .strip { font-size:.9rem; margin:0 0 6px; display:flex; flex-wrap:wrap; gap:4px 14px; }
+  .strip .who { color:var(--mute); }
+  .help { font-size:.86rem; color:var(--mute); }
+  .lines { font-size:.9rem; margin:4px 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Judge adjudication</h1>
+  <span id="tabs"></span>
+  <select id="itemSel" title="Item"></select>
+  <button class="tab" id="prev" title="Previous item with open units ([)">&#8592;</button>
+  <button class="tab" id="next" title="Next item with open units (])">&#8594;</button>
+  <label class="help"><input type="checkbox" id="showAll"> show agreed units</label>
+  <label class="help" title="Decision questions: show the Nemotron teacher's and the decision model's answers before you decide (unblinds you)"><input type="checkbox" id="showRef"> show teacher and model before deciding</label>
+  <button class="tab" id="theme" title="Switch between dark and light">&#9789; dark</button>
+  <button class="tab" id="smaller" title="Smaller text">A&minus;</button>
+  <button class="tab" id="larger" title="Larger text">A+</button>
+  <span class="help">keys: j/k move &middot; 1/2 take judge 1/2 &middot; a,b,c&hellip; pick a choice &middot; n note &middot; s skip &middot; [ ] item</span>
+</header>
+<main>
+  <section id="source">
+    <div class="bar">
+      <input type="text" id="find" placeholder="Search the source (Enter)" style="flex:1">
+      <select id="dateIdx" title="Jump to note"></select>
+    </div>
+    <div id="sourceText"></div>
+  </section>
+  <section id="review"></section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = String(text); return e; };
+let state = null, component = 'summary', current = null, focus = 0, blocks = [];
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method:'POST', headers:{'Content-Type':'application/json'},
+                                      body:JSON.stringify(body)} : {});
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  return data;
+}
+
+async function loadState() {
+  state = await api('/api/state');
+  const tabs = $('#tabs'); tabs.textContent = '';
+  for (const [name, c] of Object.entries(state.components)) {
+    const b = el('button', 'tab' + (name === component ? ' on' : ''), `${name} ${c.decided}/${c.queued}`);
+    b.onclick = () => { component = name; loadState().then(() => openItem(firstOpen())); };
+    tabs.appendChild(b);
+  }
+  const sel = $('#itemSel'); sel.textContent = '';
+  for (const it of state.components[component].items) {
+    const o = el('option', null, `${it.title} [${it.stratum || ''}] ${it.decided}/${it.queued}`);
+    o.value = it.item_id; sel.appendChild(o);
+  }
+  if (current && current.component === component) sel.value = current.item_id;
+}
+
+function firstOpen() {
+  const items = state.components[component].items;
+  const open = items.find(i => i.decided < i.queued);
+  return (open || items[0] || {}).item_id;
+}
+
+function step(dir) {
+  const items = state.components[component].items;
+  let i = items.findIndex(x => x.item_id === (current && current.item_id));
+  for (let n = 0; n < items.length; n++) {
+    i = (i + dir + items.length) % items.length;
+    if (items[i].decided < items[i].queued) return openItem(items[i].item_id);
+  }
+}
+
+async function openItem(itemId) {
+  if (!itemId) { $('#review').textContent = 'No items.'; return; }
+  current = await api(`/api/item?component=${encodeURIComponent(component)}&item_id=${encodeURIComponent(itemId)}` +
+                      ($('#showRef').checked ? '&reference=1' : ''));
+  $('#itemSel').value = itemId; focus = 0;
+  renderSource(current.view.source); renderReview();
+}
+
+function renderSource(src) {
+  const box = $('#sourceText'); box.textContent = ''; blocks = [];
+  const idx = $('#dateIdx'); idx.textContent = '';
+  if (src.kind === 'notes') {
+    const parts = src.text.split(/=== Clinical Note dated (.+?) ===\n?/);
+    if (parts[0].trim()) parts.unshift('');  // text before the first header
+    for (let i = 1; i < parts.length; i += 2) {
+      const div = el('div', 'note'); div.appendChild(el('h4', null, parts[i]));
+      const pre = el('pre', null, parts[i + 1] || ''); div.appendChild(pre); box.appendChild(div);
+      blocks.push({pre, text: parts[i + 1] || '', date: parts[i], div});
+      const o = el('option', null, parts[i]); o.value = blocks.length - 1; idx.appendChild(o);
+    }
+    idx.style.display = '';
+  } else {
+    const pre = el('pre', null, src.text); box.appendChild(pre);
+    blocks.push({pre, text: src.text, date: null, div: pre}); idx.style.display = 'none';
+  }
+}
+
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function highlight(quote, date) {
+  for (const b of blocks) { if (b.marked) { b.pre.textContent = b.text; b.marked = false; } }
+  const piece = String(quote).split(/\.\.\.|…/).map(s => s.trim()).filter(Boolean)[0];
+  if (!piece) return false;
+  const re = new RegExp(piece.split(/\s+/).map(escapeRe).join('\\s+'), 'i');
+  const order = [...blocks].sort((a, b) => (b.date === date) - (a.date === date));
+  for (const b of order) {
+    const m = re.exec(b.text);
+    if (!m) continue;
+    b.pre.textContent = '';
+    b.pre.append(b.text.slice(0, m.index));
+    const mk = el('mark', null, m[0]); b.pre.appendChild(mk);
+    b.pre.append(b.text.slice(m.index + m[0].length)); b.marked = true;
+    mk.scrollIntoView({block:'center'}); return true;
+  }
+  return false;
+}
+
+function quoteEl(text, grounded, date) {
+  const q = el('span', 'quote' + (grounded === false ? ' ungrounded' : ''),
+               (date ? date + ': ' : '') + '“' + text + '”' + (grounded === false ? '  (not found in source)' : ''));
+  q.onclick = () => { if (!highlight(text, date)) q.title = 'not found'; };
+  return q;
+}
+
+function answerEl(value, q) {
+  const span = el('span');
+  if (value === null || value === undefined) { span.append('—'); return span; }
+  span.appendChild(el('span', value === 'yes' ? 'ans-yes' : value === 'no' ? 'ans-no' : 'v', value));
+  if (q && q.answers && q.answers[value]) span.append(` — ${q.answers[value]}`);
+  return span;
+}
+
+function statusEl(field, value, q) {
+  const d = el('div');
+  d.appendChild(el('span', 'k', (field || 'status').replace(/_/g, ' ') + ': '));
+  d.appendChild(el('b', null, String(value).replace(/_/g, ' ')));
+  if (q && q.statuses && q.statuses[value]) d.append(` — ${q.statuses[value]}`);
+  return d;
+}
+
+function decisionDetailEl(detail, q) {
+  const box = el('div');
+  if (!detail) { box.appendChild(el('div', 'muted', 'no answer (refused, truncated, invalid or not run)')); return box; }
+  if (q.status_field && detail[q.status_field] !== undefined) box.appendChild(statusEl(q.status_field, detail[q.status_field], q));
+  if (detail.reason) { const r = el('div'); r.appendChild(el('span', 'k', 'reason: ')); r.append(detail.reason); box.appendChild(r); }
+  return box;
+}
+
+function verdictSpan(value, extra) {
+  const span = el('span', value === 'yes' ? 'ans-yes' : value === 'no' ? 'ans-no' : 'hidden',
+                  value === null || value === undefined ? 'no answer' : value);
+  const box = el('span'); box.appendChild(span); if (extra) box.append(extra); return box;
+}
+
+function verdicts(u) {
+  // The five answers side by side: both judges, the teacher, the decision model and the user's decision.
+  const ref = u.reference;
+  const p = ref && ref.model.p_yes !== null && ref.model.p_yes !== undefined ? ` (P=${Number(ref.model.p_yes).toFixed(2)})` : '';
+  return [
+    ['Judge 1', u.judges[0] ? verdictSpan(u.judges[0].compared) : null],
+    ['Judge 2', u.judges[1] ? verdictSpan(u.judges[1].compared) : null],
+    ['Teacher (Nemotron)', ref ? verdictSpan(ref.teacher.answer) : null],
+    ['Decision model', ref ? verdictSpan(ref.model.answer, p) : null],
+    ['You', u.decision ? verdictSpan(u.decision.value) : el('span', 'hidden', 'not decided')],
+  ];
+}
+
+function hiddenCell() { return el('span', 'hidden', 'hidden until you decide'); }
+
+function verdictTable(units) {
+  const t = el('table', 'verdicts');
+  const head = el('tr'); head.appendChild(el('th', null, 'Question'));
+  for (const [who] of verdicts(units[0])) head.appendChild(el('th', null, who));
+  t.appendChild(head);
+  for (const u of units) {
+    const row = el('tr'); row.appendChild(el('td', null, u.label));
+    for (const [, cell] of verdicts(u)) { const td = el('td'); td.appendChild(cell || hiddenCell()); row.appendChild(td); }
+    t.appendChild(row);
+  }
+  return t;
+}
+
+function referenceEl(ref, q) {
+  const box = el('div', 'refs');
+  const t = el('div'); t.appendChild(el('span', 'who', 'Teacher (Nemotron 3.5 Super, the training label): '));
+  t.appendChild(answerEl(ref.teacher.answer, q));
+  if (ref.teacher.raw) t.append(`  (it answered "${ref.teacher.raw}" to "Is this patient clearly excluded?")`);
+  if (ref.teacher.status) t.appendChild(statusEl(q.status_field, ref.teacher.status, q));
+  if (ref.teacher.reason) { const r = el('div'); r.appendChild(el('span', 'k', 'reason: ')); r.append(ref.teacher.reason); t.appendChild(r); }
+  box.appendChild(t);
+  const m = el('div'); m.appendChild(el('span', 'who', 'Decision model (fine-tuned d1-2B): '));
+  if (ref.model.p_yes === null || ref.model.p_yes === undefined) m.append('no score');
+  else { m.append(`P(yes) = ${Number(ref.model.p_yes).toFixed(3)} \u2192 `); m.appendChild(answerEl(ref.model.answer, q));
+         m.append(`  (yes when P(yes) \u2265 ${ref.model.threshold})`); }
+  box.appendChild(m);
+  return box;
+}
+
+function detailEl(detail) {
+  const box = el('div');
+  if (!detail) { box.appendChild(el('div', 'muted', 'no answer (refused, truncated, invalid or not run)')); return box; }
+  const skip = new Set(['line', 'n', 'cohort']);
+  for (const [k, v] of Object.entries(detail)) {
+    if (skip.has(k) || v === '' || v === null || (Array.isArray(v) && !v.length)) continue;
+    if (k === 'evidence') { for (const e of v) box.appendChild(quoteEl(e.quote, e.grounded, e.date)); continue; }
+    if (k === 'missing' || k === 'omissions') {
+      for (const m of v) {
+        const d = el('div'); d.appendChild(el('span', 'k', `${m.severity}${m.section ? ' · ' + m.section : ''}: `));
+        if (m.description) d.append(m.description);
+        box.appendChild(d);
+        if (m.listing_text) box.appendChild(quoteEl(m.listing_text, m.grounded));
+        for (const e of (m.evidence || [])) box.appendChild(quoteEl(e.quote, e.grounded, e.date));
+      }
+      continue;
+    }
+    const d = el('div'); d.appendChild(el('span', 'k', k.replace(/_/g, ' ') + ': '));
+    d.append(Array.isArray(v) ? v.join('; ') : String(v)); box.appendChild(d);
+  }
+  return box;
+}
+
+function visibleUnits() {
+  const all = $('#showAll').checked;
+  return current.units.filter(u => all || u.queued || u.decision);
+}
+
+function renderReview() {
+  const box = $('#review'); box.textContent = '';
+  const v = current.view;
+  const head = el('div', 'card');
+  head.appendChild(el('div', 'target', `${v.title}`));
+  if (v.kind === 'extraction') {
+    head.appendChild(el('div', 'muted', `screen: ${v.screen}; cohort names: ${(v.cohort_names || []).join(' | ') || 'none'}`));
+    for (const c of v.cohorts) {
+      head.appendChild(el('div', null, `Cohort ${c.number}: ${c.name}` +
+        ((c.merged_from_names || []).length > 1 ? `  (merged from ${c.merged_from_names.join(' | ')})` : '')));
+      const lines = el('div', 'lines');
+      for (const it of c.items) lines.appendChild(el('div', null,
+        `[${it.number}] (${it.criterion_type}; ${it.boilerplate ? 'boilerplate' : 'key'}) ${it.text}`));
+      head.appendChild(lines);
+    }
+  } else if (v.kind === 'summary') {
+    const lines = el('div', 'lines'); let section = null;
+    for (const s of v.statements) {
+      if (s.section !== section) { section = s.section; lines.appendChild(el('div', 'muted', `(${section})`)); }
+      lines.appendChild(el('div', null, `[${s.n}] ${s.text}`));
+    }
+    head.appendChild(lines);
+  } else {
+    head.appendChild(el('div', 'muted', 'The source pane shows the task exactly as the teacher and both judges received it.'));
+    if (current.units.length) {
+      head.appendChild(verdictTable(current.units));
+      head.appendChild(el('div', 'help', 'yes/no in the decision model\u2019s polarity; each card below says what yes and no mean. ' +
+        'Teacher and model answers stay hidden until you decide a question, unless "show teacher and model before deciding" is ticked.'));
+    }
+  }
+  box.appendChild(head);
+  const units = visibleUnits();
+  if (!units.length) box.appendChild(el('div', 'card muted', 'Nothing queued in this item (tick "show agreed units" to review them anyway).'));
+  units.forEach((u, i) => box.appendChild(unitCard(u, i)));
+}
+
+function unitCard(u, i) {
+  const card = el('div', 'card' + (i === focus ? ' focus' : '') + (u.decision ? ' done' : ''));
+  card.dataset.unit = u.unit_id;
+  const t = el('div', 'target', u.target);
+  t.appendChild(el('span', 'badge ' + (u.queue_reason || u.status), u.queue_reason || u.status));
+  t.appendChild(el('span', 'badge', u.label));
+  card.appendChild(t);
+  const q = u.question;
+  if (q) {
+    const strip = el('div', 'strip');
+    for (const [who, cell] of verdicts(u)) {
+      const w = el('span'); w.appendChild(el('span', 'who', who + ': ')); w.appendChild(cell || hiddenCell()); strip.appendChild(w);
+    }
+    card.appendChild(strip);
+    const qb = el('div', 'question');
+    qb.appendChild(el('div', null, 'Question: ' + q.text));
+    qb.appendChild(el('div', 'meaning', `yes = ${q.answers.yes}; no = ${q.answers.no}`));
+    if (q.note) qb.appendChild(el('div', 'muted', q.note));
+    card.appendChild(qb);
+  }
+  const js = el('div', 'judges');
+  for (const j of u.judges) {
+    const d = el('div', 'judge');
+    const top = el('div'); top.appendChild(el('span', 'k', `Judge ${j.slot}: `));
+    if (q) top.appendChild(answerEl(j.compared, q));
+    else {
+      top.appendChild(el('span', 'v', j.compared === null ? '—' : j.compared));
+      if (j.value !== null && j.value !== j.compared) top.appendChild(el('span', 'k', ` (${j.value})`));
+    }
+    d.appendChild(top); d.appendChild(q ? decisionDetailEl(j.detail, q) : detailEl(j.detail)); js.appendChild(d);
+  }
+  card.appendChild(js);
+  if (u.reference) card.appendChild(referenceEl(u.reference, q || {}));
+  const ch = el('div', 'choices');
+  u.choices.forEach((c, n) => {
+    const b = el('button', u.decision && u.decision.value === c ? 'picked' : '', `${String.fromCharCode(97 + n)}) ${c}`);
+    b.onclick = () => decide(u, c, 'other'); ch.appendChild(b);
+  });
+  const note = el('input'); note.type = 'text'; note.placeholder = 'note (optional)';
+  note.value = u.decision ? u.decision.note : ''; ch.appendChild(note);
+  const skip = el('button', null, 's) skip'); skip.onclick = () => decide(u, null, 'skip'); ch.appendChild(skip);
+  card.appendChild(ch);
+  if (u.decision) {
+    const r = el('div', 'reveal');
+    r.append(`You decided: ${u.decision.value} (${u.decision.at}). Judge 1 = ${u.reveal.judges[1]}; Judge 2 = ${u.reveal.judges[2]}.`);
+    if (u.decision.stale) r.appendChild(el('div', 'stale', 'The judges’ answers changed after this decision; check it again.'));
+    card.appendChild(r);
+  }
+  card.onclick = () => { const k = [...document.querySelectorAll('#review .card[data-unit]')].indexOf(card);
+                         if (k >= 0) { focus = k; markFocus(); } };
+  return card;
+}
+
+function markFocus() {
+  const cards = [...document.querySelectorAll('#review .card[data-unit]')];
+  cards.forEach((c, k) => c.classList.toggle('focus', k === focus));
+  if (cards[focus]) cards[focus].scrollIntoView({block:'nearest'});
+}
+
+async function decide(u, value, choice) {
+  const card = document.querySelector(`#review .card[data-unit="${CSS.escape(u.unit_id)}"]`);
+  const note = card ? card.querySelector('input').value : '';
+  current = await api('/api/decide', {unit_id: u.unit_id, value, choice, note, show_reference: $('#showRef').checked});
+  const keep = focus; renderReview();
+  const cards = [...document.querySelectorAll('#review .card[data-unit]')];
+  const next = cards.findIndex((c, k) => k > keep && !c.classList.contains('done'));
+  focus = next >= 0 ? next : keep; markFocus();
+  loadState();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+    if (e.key === 'Escape') e.target.blur();
+    if (e.key === 'Enter' && e.target.id === 'find') { highlight(e.target.value); }
+    return;
+  }
+  const units = current ? visibleUnits() : [];
+  const u = units[focus];
+  if (e.key === 'j') { focus = Math.min(focus + 1, units.length - 1); markFocus(); }
+  else if (e.key === 'k') { focus = Math.max(focus - 1, 0); markFocus(); }
+  else if (e.key === ']') step(1);
+  else if (e.key === '[') step(-1);
+  else if (!u) return;
+  else if (e.key === '1' || e.key === '2') {
+    const j = u.judges[Number(e.key) - 1];
+    if (j && j.compared !== null) decide(u, j.compared, 'judge' + e.key);
+  } else if (e.key === 's') decide(u, null, 'skip');
+  else if (e.key === 'n') { e.preventDefault(); document.querySelectorAll('#review .card[data-unit]')[focus].querySelector('input').focus(); }
+  else if (/^[a-h]$/.test(e.key)) { const c = u.choices[e.key.charCodeAt(0) - 97]; if (c) decide(u, c, 'other'); }
+});
+$('#itemSel').onchange = (e) => openItem(e.target.value);
+$('#prev').onclick = () => step(-1);
+$('#next').onclick = () => step(1);
+$('#showAll').onchange = () => { focus = 0; renderReview(); };
+$('#showRef').onchange = () => { if (current) openItem(current.item_id); };
+function showTheme() {
+  $('#theme').innerHTML = document.documentElement.dataset.theme === 'dark' ? '&#9728; light' : '&#9789; dark';
+}
+$('#theme').onclick = () => {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next; localStorage.setItem('adj-theme', next); showTheme();
+};
+function scaleBy(step) {
+  const now = parseFloat(localStorage.getItem('adj-scale') || '1');
+  const next = Math.min(1.8, Math.max(0.8, Math.round((now + step) * 10) / 10));
+  document.documentElement.style.setProperty('--scale', String(next)); localStorage.setItem('adj-scale', String(next));
+}
+$('#smaller').onclick = () => scaleBy(-0.1);
+$('#larger').onclick = () => scaleBy(0.1);
+showTheme();
+$('#dateIdx').onchange = (e) => { const b = blocks[Number(e.target.value)]; if (b) b.div.scrollIntoView(); };
+loadState().then(() => openItem(firstOpen())).catch(err => { $('#review').textContent = 'Error: ' + err.message; });
+</script>
+</body>
+</html>

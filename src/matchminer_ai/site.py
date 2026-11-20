@@ -19,8 +19,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 SITE_CONFIG_ENV = "MMAI_SITE_CONFIG"
 DATA_ROOT_ENV = "MMAI_DATA_ROOT"
 _MISSING = object()
@@ -67,6 +65,8 @@ def load_site_config(path: str | os.PathLike | None = None) -> SiteConfig:
     resolved = Path(chosen).expanduser().resolve()
     key = (str(resolved), resolved.stat().st_mtime)
     if key not in _CACHE:
+        import yaml
+
         values = yaml.safe_load(resolved.read_text(encoding="utf-8")) or {}
         if not isinstance(values, dict):
             raise ValueError(f"site config {resolved} must be a YAML mapping")

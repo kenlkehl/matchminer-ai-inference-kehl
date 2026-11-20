@@ -55,6 +55,8 @@ dependencies = [
 [project.scripts]
 matchminer-ai-llm-trial-check = "matchminer_ai.cli.llm_trial_check:main"
 matchminer-ai-build-good-option-catalog = "matchminer_ai.cli.build_good_option_catalog:main"
+# The training pipeline (matchminer_ai.training.pipeline): stages from the ctgov export to the decision model.
+mmai-train = "matchminer_ai.training.pipeline:main"
 
 [project.optional-dependencies]
 guideline-conversion = ["pypdf>=6.10,<7"]
@@ -62,6 +64,19 @@ guideline-conversion = ["pypdf>=6.10,<7"]
 sql = ["duckdb>=1.1"]
 # Claude through a Databricks AI Gateway (provider databricks_anthropic).
 databricks = ["anthropic>=2.4", "databricks-sdk>=0.60"]
+# Model and data production (matchminer_ai.training): embedder fits, the decision model, mining metrics.
+training = [
+  "accelerate>=1.12",
+  "datasets>=4.6",
+  "requests>=2.32",
+  "scikit-learn>=1.8",
+  "scipy>=1.14",
+]
+# Evaluations (matchminer_ai.evaluation): retrospective fidelity metrics and the dual frontier-LLM judge.
+evaluation = [
+  "anthropic[vertex]>=2.4",
+  "scipy>=1.14",
+]
 dev = [
   "pre-commit>=3.7",
   "pytest>=8.0",
@@ -99,6 +114,7 @@ matchminer_ai = [
   "data/*.json",
   "data/*.zip",
   "data/*.md",
+  "evaluation/dual_judge/static/*.html",
 ]
 
 [tool.pytest.ini_options]
