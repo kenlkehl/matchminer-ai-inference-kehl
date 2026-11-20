@@ -36,6 +36,8 @@ import time
 
 from matchminer_ai.site import load_site_config
 
+from matchminer_ai.trials.cohort_run import read_run_cohorts, read_trial_results
+
 from .core.cache import file_stamp, text_key
 
 from . import drugs as drug_catalog
@@ -177,85 +179,16 @@ class FileCache:
         return value
 
 
-def _items_from_entry(entry: dict) -> list[dict]:
-    """deboilerplate.json items in the ``cohort_criteria_items`` form the decision model reads."""
-    return [{"number": int(i["number"]), "heading": i.get("label") or "", "text": i.get("text") or "",
-             "criterion_type": i.get("criterion_type"), "boilerplate": bool(i.get("boilerplate"))}
-            for i in entry.get("items") or [] if "text" in i]
-
-
-def _criteria_from_items(items: list[dict], boilerplate: bool | None) -> str:
-    """The items (all, or the key / boilerplate ones) under their headings, as gather_criteria lays them out."""
-    lines, heading = [], None
-    for item in items:
-        if boilerplate is not None and bool(item["boilerplate"]) != boilerplate:
-            continue
-        if item["heading"] and item["heading"] != heading:
-            lines.append(item["heading"])
-        heading = item["heading"]
-        lines.append(item["text"])
-    return "\n".join(lines)
-
-
 def _version_trial(directory: Path, version: str, trial_id: str, files: FileCache, fallback: dict) -> dict:
-    """One version of one trial: its state and merged cohorts, from the per-trial files (else the run's parquet)."""
-    folder = directory / version / "trials" / trial_id
-    extraction = files.json(folder / "extraction.json") if version == "protocol" else None
-    merge = files.json(folder / "merge.json")
-    final = files.json(folder / "deboilerplate.json")
-    out = {"version": version, "state": "pending", "cohorts": [], "completed_at": None, "screen": None,
-           "extracted_cohorts": None}
-    if extraction:
-        decision = extraction.get("decision") or {}
-        out["screen"] = decision.get("cancer_treatment_trial")
-        out["extracted_cohorts"] = len(decision.get("cohorts") or [])
-        if decision.get("cancer_treatment_trial") == "no":
-            out.update(state="not_treatment", completed_at=extraction.get("completed_at"))
-            return out
-    groups = (merge or {}).get("groups") or []
-    if final and final.get("cohorts") is not None:
-        stale = bool(extraction and (extraction.get("completed_at") or "") > (final.get("completed_at") or ""))
-        out.update(state="stale" if stale else "complete", completed_at=final.get("completed_at"))
-        for entry in final["cohorts"]:
-            items = _items_from_entry(entry)
-            number = int(entry["cohort_number"])
-            if "key_criteria" in entry:
-                key, common = entry.get("key_criteria") or "", entry.get("boilerplate_criteria") or ""
-            else:  # "every item was classified as boilerplate": the criteria are kept whole, as the package does
-                key, common = _criteria_from_items(items, None), ""
-            out["cohorts"].append({
-                "number": number, "name": entry.get("cohort_name") or f"Cohort {number + 1}",
-                "key": key, "boilerplate": common, "items": items,
-                "merged_from": len(groups[number]) if number < len(groups) else 1})
-        return out
-    rows = fallback.get((version, trial_id))
-    if rows:
-        out.update(state="complete", completed_at=None)
-        for row in rows:
-            items = json.loads(row["cohort_criteria_items"]) if row.get("cohort_criteria_items") else []
-            merged = _literal(row.get("merged_from")) or [0]
-            out["cohorts"].append({"number": int(row["cohort_number"]), "name": row.get("cohort_name") or "",
-                                   "key": row.get("cohort_key_criteria") or "",
-                                   "boilerplate": row.get("cohort_boilerplate_criteria") or "", "items": items,
-                                   "merged_from": len(merged) if isinstance(merged, list) else 1})
-    elif extraction:
-        out["state"] = "extracting"
-    return out
+    """One version of one trial: its state and merged cohorts, from the per-trial files (else the run's parquet;
+    ``matchminer_ai.trials.cohort_run``)."""
+    return {"version": version, **read_trial_results(
+        directory / version / "trials" / trial_id, screened=version == "protocol",
+        fallback_rows=fallback.get((version, trial_id)), read_json=files.json)}
 
 
 def _parquet_rows(directory: Path, version: str) -> dict:
-    path = directory / version / "cohorts.parquet"
-    if not path.exists():
-        return {}
-    import pyarrow.parquet as pq
-
-    columns = ["trial_id", "cohort_number", "cohort_name", "merged_from", "cohort_key_criteria",
-               "cohort_boilerplate_criteria", "cohort_criteria_items"]
-    table = pq.read_table(path, columns=columns).to_pylist()
-    rows: dict = {}
-    for row in table:
-        rows.setdefault((version, row["trial_id"]), []).append(row)
-    return rows
+    return {(version, trial_id): rows for trial_id, rows in read_run_cohorts(directory / version).items()}
 
 
 def read_oa_trials(db_path: Path) -> dict[str, dict]:
