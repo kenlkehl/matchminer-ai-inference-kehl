@@ -460,12 +460,12 @@ synthetic_protocol_generation:
         enable_thinking: true
 embedding:
   # TrialSpace embeds key text only: cohort key criteria and patient key sections.
-  # The n=5000 run's round-2 TrialSpace (google/embeddinggemma-2 fine-tuned by the training
-  # repository's finetune_embedder.py; stage receipt d7ef7270...), a local, unpublished directory
-  # on purpose (user, 2026-11-12): where it is missing or unreadable, embedding fails rather than
-  # mix vectors from another model. Nothing falls back to TrialSpace-0526 or any Hub model.
-  # Loading it needs sentence-transformers >= 6.1, which saved it.
-  model_path: "/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/trialspace/models/trialspace_round2"
+  # model_path names your TrialSpace checkpoint (google/embeddinggemma-2 fine-tuned by
+  # matchminer_ai.training). Unset, it comes from the site config's paths.trialspace_model;
+  # with neither, embedding fails. Nothing falls back to TrialSpace-0526 or any Hub model, so
+  # vectors from different models are never mixed. Loading a checkpoint saved by
+  # sentence-transformers >= 6.1 needs that version.
+  model_path: null
   device: cuda
   # Encoded as training's mining encodes it (trialspace/mining.py encoder_settings): float32
   # weights with bfloat16 autocast on CUDA, the trialspace prompt profile (patients get

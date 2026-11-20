@@ -35,9 +35,9 @@ See the [GPU recommendations](gpu-recommendations.md) for memory sizes and the h
 
 ## Models
 
-- **TrialSpace checkpoint:** you supply it. The default preset's `embedding.model_path` names a local checkpoint that
-  is not published, and embedding fails rather than fall back to another model. Set it to your own TrialSpace model
-  directory, and embed patients and cohorts with the same model.
+- **TrialSpace checkpoint:** you supply it. The default preset leaves `embedding.model_path` unset, and embedding fails
+  rather than fall back to another model. Set it to your own TrialSpace model directory (or `paths.trialspace_model`
+  in a [site config](../reference/site-config.md)), and embed patients and cohorts with the same model.
 - **Decision model:** `LiquidAI/d1-2B` at a pinned revision is downloaded from Hugging Face on first use. It runs its
   own model code (`trust_remote_code`). Set `decision_model.model_name` to a fine-tuned checkpoint to use one.
 - **LLM:** downloaded from Hugging Face when it runs in-process. In either setup, `summarize_patients` loads the LLM's

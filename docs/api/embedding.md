@@ -40,14 +40,15 @@ and the model metadata. Without `entity_type` it uses the model's shared `query`
 
 ## Model and settings
 
-The `embedding` configuration section selects the model and how it encodes. The preset's `model_path` is a local
-TrialSpace checkpoint that is not published (`google/embeddinggemma-2` fine-tuned by the training pipeline), so set
-it to your own. A local path that is missing or unreadable raises `FileNotFoundError`; embedding never falls back to
+The `embedding` configuration section selects the model and how it encodes. The preset leaves `model_path` unset:
+set it to your TrialSpace checkpoint (`google/embeddinggemma-2` fine-tuned by the training pipeline), or name it as
+`paths.trialspace_model` in the [site config](../reference/site-config.md). With neither, embedding raises
+`ValueError`; a local path that is missing or unreadable raises `FileNotFoundError`. Embedding never falls back to
 another model.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `model_path` | a local checkpoint | TrialSpace directory or Hugging Face model ID |
+| `model_path` | `null` (the site config's `paths.trialspace_model`) | TrialSpace directory or Hugging Face model ID |
 | `device` | `cuda` | One device |
 | `dtype`, `autocast` | `float32`, `bfloat16` | Weight precision; autocast precision, applied on CUDA only |
 | `prompt_profile` | `trialspace` | Per-side prompts (see below) |

@@ -573,20 +573,18 @@ and `patient_summary.json` to an external `--output-dir`:
 python examples/retrieve_guideline_considerations.py \
   --catalog /path/to/private/catalogs/breast \
   --patient-summaries /path/to/private/summaries.parquet --patient-id P001 \
-  --output-dir /path/to/private/review/P001
+  --trialspace /path/to/trialspace --output-dir /path/to/private/review/P001
 ```
 
 | Option | Meaning |
 | --- | --- |
 | `--patient-id-column`, `--summary-column` | Input columns (default `patient_id`, `cancer_history_summary`); for example `pseudo_mrn` and `patient_summary` for training tables |
+| `--trialspace` | The TrialSpace checkpoint (default: `embedding.model_path`, else the site config's `paths.trialspace_model`) |
 | `--top-n`, `--candidate-k` | As in the API (default 5 and 20) |
 | `--device` | Device for both models (default `cpu`); `--cpu-threads` sets torch threads (default 8) |
 | `--embedding-cache-dir` | The persistent catalog-vector cache |
 | `--model-cache-dir`, `--metadata-cache-dir`, `--offline` | Hugging Face cache, model-metadata cache and offline mode |
 | `--synthetic-notes` | A synthetic note table in which the selected ID must occur; recorded as provenance |
-
-The script has no option for the TrialSpace checkpoint: it uses the default preset's `embedding.model_path`, which
-must exist on the machine.
 
 To find the patients of a population for one space, see [Population workup review](population-workup.md)
 (`retrieve_guideline_patients`).

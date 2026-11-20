@@ -20,6 +20,9 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--top-n", type=int, default=5)
     parser.add_argument("--candidate-k", type=int, default=20)
+    parser.add_argument("--trialspace", type=Path,
+                        help="TrialSpace checkpoint (default: embedding.model_path, else the site config's "
+                             "paths.trialspace_model)")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--cpu-threads", type=int, default=8)
     parser.add_argument("--model-cache-dir", type=Path)
@@ -105,6 +108,8 @@ def main():
             linked_synthetic_note_rows=note_ids.num_rows,
         )
     config = load_default_preset()
+    if args.trialspace:
+        config.embedding["model_path"] = str(args.trialspace)
     config.embedding["device"] = args.device
     config.raw["decision_model"]["device"] = args.device
     config.model_metadata_cache_dir = str(

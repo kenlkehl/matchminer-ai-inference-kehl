@@ -466,7 +466,7 @@ TrialSpace embedding (`embedding.embed_for_matching`). Retrieval embeds key text
 
 | Key | Default | Absent | Meaning |
 | --- | --- | --- | --- |
-| `model_path` | a local checkpoint | required | TrialSpace directory or Hugging Face model ID |
+| `model_path` | `null` | required | TrialSpace directory or Hugging Face model ID; `null` uses the site config's `paths.trialspace_model` |
 | `device` | `cuda` | `cpu` | One device |
 | `dtype` | `float32` | model's own | Weight precision: `float32` or `bfloat16` |
 | `autocast` | `bfloat16` | off | CUDA autocast precision |
@@ -478,9 +478,10 @@ TrialSpace embedding (`embedding.embed_for_matching`). Retrieval embeds key text
 | `prompt_file` | `embedding.txt` | required | `query` prompt for a model that saved none and has no `prompt_profile`, prepended exactly (only its final newline removed) |
 | `max_seq_length` | `4096` | required | Truncation length in tokens, also used by QC to flag key text over the limit |
 
-- **`model_path`:** the preset points at a local TrialSpace checkpoint that is not published (`google/embeddinggemma-2`
-  fine-tuned by `mmai-train`), so set it to your own. A path that starts with `/` or `.`, or that exists, must be a
-  readable directory, or embedding raises `FileNotFoundError`. Nothing falls back to another model. The checkpoint
+- **`model_path`:** your TrialSpace checkpoint (`google/embeddinggemma-2` fine-tuned by `mmai-train`). The preset
+  leaves it unset; then the [site config](site-config.md)'s `paths.trialspace_model` is used, and with neither,
+  embedding raises `ValueError`. A path that starts with `/` or `.`, or that exists, must be a readable directory, or
+  embedding raises `FileNotFoundError`. Nothing falls back to another model. The checkpoint
   was saved by sentence-transformers 6.1 and needs 6.1 or later. The newest public model, `ksg-dfci/TrialSpace-0526`,
   is a different model family with a different text format.
 - **Model-specific keys:** `dtype`, `autocast`, `prompt_profile`, `default_prompt_name`, `include_prompt_in_pooling`,

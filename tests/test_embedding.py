@@ -420,7 +420,7 @@ def test_generate_embeddings_does_not_mask_other_runtime_errors(monkeypatch):
 
 
 def test_a_missing_local_model_fails_and_never_falls_back(monkeypatch, tmp_path):
-    """The default is a local directory on purpose: absent, nothing loads from anywhere else."""
+    """A missing local model directory fails: nothing loads from anywhere else."""
 
     class NeverLoaded:
         def __init__(self, *args, **kwargs):
@@ -434,7 +434,7 @@ def test_a_missing_local_model_fails_and_never_falls_back(monkeypatch, tmp_path)
               "prompt_file": "embedding.txt", "max_seq_length": 4096}
     for call in (lambda: generate_embeddings(["Age: 64."], embedding_config=config),
                  lambda: embedding_inference.count_embedding_tokens(["Age: 64."], embedding_config=config)):
-        with pytest.raises(FileNotFoundError, match="nothing falls back"):
+        with pytest.raises(FileNotFoundError, match="Nothing falls back"):
             call()
 
 
@@ -530,3 +530,22 @@ def test_a_models_saved_prompt_is_applied_by_name_and_never_replaced(monkeypatch
     seen.clear()
     assert embedding_inference.count_embedding_tokens(["Age: 64."], embedding_config=config) == [len(saved) + 8]
     assert seen == [saved + "Age: 64."]  # token counts see exactly what is encoded
+
+
+def test_trialspace_path_comes_from_the_config_or_the_site_config(tmp_path, monkeypatch):
+    """The preset names no TrialSpace; the site config's paths.trialspace_model fills it, and with
+    neither, embedding refuses instead of falling back to another model."""
+    import pytest
+
+    from matchminer_ai.embedding.inference import _model_path
+
+    model = tmp_path / "trialspace"
+    model.mkdir()
+    monkeypatch.delenv("MMAI_SITE_CONFIG", raising=False)
+    with pytest.raises(ValueError, match="No TrialSpace model"):
+        _model_path({"model_path": None})
+    site = tmp_path / "site.yaml"
+    site.write_text(f"paths:\n  trialspace_model: {model}\n")
+    monkeypatch.setenv("MMAI_SITE_CONFIG", str(site))
+    assert _model_path({"model_path": None}) == str(model)
+    assert _model_path({"model_path": str(model)}) == str(model)

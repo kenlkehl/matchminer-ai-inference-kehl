@@ -55,8 +55,8 @@ use the training teacher's prompts.
   either in-process with vLLM or on any OpenAI-compatible server. Other models (Gemma 4, Qwen 3.5, Reflection Beam)
   are selected per section with `model_name`, and their sampling settings come with them; see
   [LLM runtime](docs/reference/llm-runtime.md).
-- **TrialSpace.** The retriever is `google/embeddinggemma-2` fine-tuned by the training pipeline. The default preset's
-  `embedding.model_path` names a local checkpoint that is not yet published. Set it to your own TrialSpace model:
+- **TrialSpace.** The retriever is `google/embeddinggemma-2` fine-tuned by the training pipeline. The default preset leaves
+  `embedding.model_path` unset. Set it to your own TrialSpace model (or `paths.trialspace_model` in a site config):
   embedding fails rather than fall back to a different model. Never compare vectors made by different TrialSpace
   models; re-embed both sides instead.
 - **Decision model.** [`LiquidAI/d1-2B`](https://huggingface.co/LiquidAI/d1-2B) answers yes/no questions about a

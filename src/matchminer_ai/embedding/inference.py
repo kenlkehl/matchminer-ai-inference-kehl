@@ -38,23 +38,28 @@ def _load_prompt_text(filename: str) -> str:
 
 
 def _model_path(embedding_config: Dict[str, Any]) -> str:
-    """The configured model. A local path must be a readable directory; it never falls back.
+    """The TrialSpace model: ``embedding.model_path``, else the site config's ``paths.trialspace_model``.
 
-    The default is a local, unpublished TrialSpace on purpose: where that directory is
-    missing or unreadable, embedding fails instead of using another model's vectors.
+    A local path must be a readable directory. Nothing falls back to another model, so vectors
+    from different TrialSpace models are never mixed.
     """
     model_path = os.path.expanduser(str(embedding_config.get("model_path") or "").strip())
     if not model_path:
-        raise ValueError("embedding.model_path is not set.")
+        from matchminer_ai.site import load_site_config
+
+        model_path = os.path.expanduser(str(load_site_config().get("paths.trialspace_model") or "").strip())
+    if not model_path:
+        raise ValueError(
+            "No TrialSpace model: set embedding.model_path to your TrialSpace checkpoint "
+            "(or paths.trialspace_model in the site config)."
+        )
     local = Path(model_path)
     if model_path.startswith(("/", ".")) or local.exists():
         if not (local.is_dir() and os.access(local, os.R_OK | os.X_OK)):
             raise FileNotFoundError(
                 f"The TrialSpace model directory {model_path} is missing or unreadable. "
-                "The default embedding.model_path is a local, unpublished TrialSpace on "
-                "purpose, so embedding stops here; nothing falls back to another model. "
-                "Run where that directory is readable, or set embedding.model_path to "
-                "another TrialSpace and embed both sides again with it."
+                "Nothing falls back to another model: make it readable, or set "
+                "embedding.model_path to another TrialSpace and embed both sides again with it."
             )
     return model_path
 
