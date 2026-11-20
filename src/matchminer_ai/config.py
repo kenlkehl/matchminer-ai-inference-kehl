@@ -28,7 +28,6 @@ class MMAIConfig:
     llm_exclusion_criteria: dict[str, Any] = field(default_factory=dict)
     llm_good_option: dict[str, Any] = field(default_factory=dict)
     good_option_catalog: dict[str, Any] = field(default_factory=dict)
-    trial_space_criteria_extraction: dict[str, Any] = field(default_factory=dict)
     protocol_cohort_extraction: dict[str, Any] = field(default_factory=dict)
     synthetic_protocol_generation: dict[str, Any] = field(default_factory=dict)
     guideline: dict[str, Any] = field(default_factory=dict)
@@ -54,9 +53,6 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
             "llm_exclusion_criteria": deepcopy(config.llm_exclusion_criteria),
             "llm_good_option": deepcopy(config.llm_good_option),
             "good_option_catalog": deepcopy(config.good_option_catalog),
-            "trial_space_criteria_extraction": deepcopy(
-                config.trial_space_criteria_extraction
-            ),
             "protocol_cohort_extraction": deepcopy(config.protocol_cohort_extraction),
             "synthetic_protocol_generation": deepcopy(config.synthetic_protocol_generation),
             "guideline": deepcopy(config.guideline),
@@ -68,6 +64,26 @@ def config_snapshot(config: MMAIConfig) -> dict[str, Any]:
         }
     )
     return snapshot
+
+
+# Keys of the hierarchical and one_shot trial-space methods. A saved config that still has them loads; they are
+# left out of ``trial`` and stay only in ``raw``.
+_REMOVED_TRIAL_KEYS = frozenset({"extraction_method", "hierarchy", "prompt_files", "boilerplate_marker"})
+
+
+def trial_settings(trial: dict[str, Any]) -> dict[str, Any]:
+    """The ``trial`` section without the removed trial-space methods' keys.
+
+    Raises ValueError when ``extraction_method`` names a method other than ``cohorts``, so that such a
+    config fails rather than silently extracting cohorts.
+    """
+    method = trial.get("extraction_method", "cohorts")
+    if method != "cohorts":
+        raise ValueError(
+            f"trial.extraction_method is {method!r}: the hierarchical and one_shot trial-space methods were "
+            "removed, and cohort extraction is the only trial method. Remove trial.extraction_method from the config."
+        )
+    return {key: value for key, value in trial.items() if key not in _REMOVED_TRIAL_KEYS}
 
 
 def _load_preset_data(name: str) -> dict[str, Any]:
@@ -83,7 +99,7 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
     return MMAIConfig(
         preset_name=preset_name,
         debug_mode=bool(data["debug_mode"]),
-        trial=dict(data["trial"]),
+        trial=trial_settings(data["trial"]),
         patient=dict(data["patient"]),
         local=dict(data.get("local", {})),
         remote=dict(data.get("remote", {})),
@@ -92,9 +108,6 @@ def _config_from_data(data: dict[str, Any], preset_name: str) -> MMAIConfig:
         llm_exclusion_criteria=dict(data.get("llm_exclusion_criteria", {})),
         llm_good_option=dict(data.get("llm_good_option", {})),
         good_option_catalog=dict(data.get("good_option_catalog", {})),
-        trial_space_criteria_extraction=dict(
-            data.get("trial_space_criteria_extraction", {})
-        ),
         protocol_cohort_extraction=dict(data.get("protocol_cohort_extraction", {})),
         synthetic_protocol_generation=dict(data.get("synthetic_protocol_generation", {})),
         guideline=dict(data.get("guideline", {})),

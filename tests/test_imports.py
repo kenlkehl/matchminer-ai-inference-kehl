@@ -29,7 +29,6 @@ from matchminer_ai.patients import (
 )
 from matchminer_ai.trials import (
     audit_guideline_catalog,
-    extract_trial_space_eligibility_criteria,
     get_guideline_considerations,
     list_guidelines,
     load_guideline_catalog,
@@ -45,7 +44,6 @@ def test_imports():
     assert load_config is not None
     assert ocr_pdf is not None
     assert extract_cohorts is not None
-    assert extract_trial_space_eligibility_criteria is not None
     assert summarize_patients is not None
     assert compress_patient_note is not None
     assert compress_patient_notes is not None

@@ -1,14 +1,8 @@
-"""Trial prompt builders."""
+"""Packaged prompt text for the guideline modules."""
 
 from __future__ import annotations
 
 from importlib import resources
-from typing import TYPE_CHECKING
-
-from matchminer_ai.llm.reasoning import reasoning_system_prompt
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 
 def load_prompt_text(filename: str) -> str:
@@ -16,46 +10,3 @@ def load_prompt_text(filename: str) -> str:
     prompt_path = resources.files("matchminer_ai.prompts").joinpath(filename)
     with prompt_path.open("r", encoding="utf-8") as handle:
         return handle.read()
-
-
-def format_trial_text(
-    trial_text: str, primer_filename: str, question_filename: str
-) -> str:
-    """Wrap a trial document in the configured prompt template."""
-    return (
-        load_prompt_text(primer_filename)
-        + "Here is a clinical trial document: \n"
-        + trial_text
-        + "\n"
-        + load_prompt_text(question_filename)
-    )
-
-
-def get_filled_trial_prompt(
-    trial_text: str, primer_filename: str, question_filename: str,
-    *, model_name: str = "",
-) -> list[dict[str, str]]:
-    """Prepare the chat-style prompt for a trial document."""
-    return [
-        {
-            "role": "system",
-            "content": reasoning_system_prompt(model_name),
-        },
-        {
-            "role": "user",
-            "content": format_trial_text(
-                trial_text, primer_filename, question_filename
-            ),
-        },
-    ]
-
-
-def build_trial_text(trials: "pd.DataFrame") -> "pd.Series":
-    """Create trial text while preserving source-field formatting."""
-    return (
-        trials["trial_title"].fillna("")
-        + "\n"
-        + trials["brief_summary"].fillna("")
-        + "\n"
-        + trials["eligibility_criteria"].fillna("")
-    )

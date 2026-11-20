@@ -18,11 +18,6 @@ import warnings
 from matchminer_ai._metadata import package_metadata
 from matchminer_ai.config import MMAIConfig, config_snapshot
 
-from .eligibility import (
-    TrialSpaceCriteriaExtractionError,
-    TrialSpaceCriteriaProgress,
-    extract_trial_space_eligibility_criteria,
-)
 from .cohort_merge import merge_equivalent_cohorts
 from .cohort_boilerplate import remove_boilerplate_criteria
 from .cohort_screen import screen_trials
@@ -68,7 +63,7 @@ def extract_cohorts(
         One row per trial with unique, nonempty ``trial_id`` and the text columns
         ``trial_title``, ``brief_summary``, and ``eligibility_criteria``.
     config : MMAIConfig, optional
-        Defaults to the package preset, with ``trial.extraction_method=cohorts``.
+        Defaults to the package preset.
     return_metadata : bool, optional
         Also return package/config/model provenance, the prompt hashes, validated
         ``trial_decisions``, ``trial_cohort_names``, ``trial_rejections``,
@@ -80,7 +75,7 @@ def extract_cohorts(
     Returns
     -------
     pd.DataFrame or tuple
-        With the default ``cohorts`` method, one row per accepted population:
+        One row per accepted population:
         ``cohort_trial_id`` (``<trial_id>-cohort-<number>``), ``trial_id``,
         zero-based ``cohort_number``, ``cohort_name``, ``cohort_eligibility_criteria``,
         ``cohort_criteria_source`` (``"ctgov"``; older runs say ``"registry"``), ``cancer_treatment_trial``, and
@@ -98,17 +93,10 @@ def extract_cohorts(
 
         Optional results are ``(rows, metadata)``, ``(rows, qc)`` or
         ``(rows, metadata, qc)`` according to the flags.
-
-        The explicitly selected legacy ``hierarchical`` and ``one_shot`` methods
-        retain ``space_trial_id``, ``trial_id``, ``clinical_space_number``,
-        ``clinical_space_summary``, and ``general_exclusion_criteria``. Full
-        cohort criteria are not interchangeable with those model inputs or
-        their saved embeddings.
     """
     from matchminer_ai.config import MMAIConfig, load_default_preset
 
-    from .postprocess import postprocess_trial_summaries
-    from .summarize import run_llm_summarization
+    from .cohorts import summarize_trial_cohorts
 
     logger = logging.getLogger(__name__)
     resolved_config = config or load_default_preset()
@@ -130,62 +118,16 @@ def extract_cohorts(
         )
 
     logger.info("Starting trial summarization for %d trials.", len(trials))
-    if resolved_config.trial.get("extraction_method", "cohorts") == "cohorts":
-        from .cohorts import summarize_trial_cohorts
-
-        result, metadata, qc_report = summarize_trial_cohorts(trials, resolved_config)
-        metadata_payload = {
-            "package": package_metadata(),
-            "config_snapshot": config_snapshot(resolved_config),
-            **{key: value for key, value in metadata.items() if key != "model_metadata"},
-            "model_metadata": {"extract_cohorts": metadata["model_metadata"]},
-        }
-        if return_metadata and return_qc:
-            return result, metadata_payload, qc_report
-        if return_metadata:
-            return result, metadata_payload
-        if return_qc:
-            return result, qc_report
-        return result
-
-    (
-        trials_with_summaries,
-        metadata,
-        truncated_llm_qc_artifact,
-        failed_llm_qc_artifact,
-    ) = run_llm_summarization(trials, resolved_config)
-    logger.info("Completed LLM summarization. Beginning postprocessing.")
-    # Capture unfiltered spaces for QC before keyword filtering.
-    result, unfiltered_spaces = postprocess_trial_summaries(
-        trials_with_summaries,
-        resolved_config,
-    )
-    logger.info("Postprocessing complete. Produced %d rows.", len(result))
-
-    # Build QC report
-    from matchminer_ai._qc.trials import trial_qc_report
-
-    qc_report = trial_qc_report(
-        result,
-        trial_source=trials,
-        unfiltered_spaces=unfiltered_spaces,
-        truncated_llm_qc_artifact=truncated_llm_qc_artifact,
-        failed_llm_qc_artifact=failed_llm_qc_artifact,
-        config=resolved_config,
-    )
-
-    # Depending on flags, decide what to return
+    result, metadata, qc_report = summarize_trial_cohorts(trials, resolved_config)
+    metadata_payload = {
+        "package": package_metadata(),
+        "config_snapshot": config_snapshot(resolved_config),
+        **{key: value for key, value in metadata.items() if key != "model_metadata"},
+        "model_metadata": {"extract_cohorts": metadata["model_metadata"]},
+    }
+    if return_metadata and return_qc:
+        return result, metadata_payload, qc_report
     if return_metadata:
-        metadata_payload = {
-            "package": package_metadata(),
-            "config_snapshot": config_snapshot(resolved_config),
-            "model_metadata": {
-                "extract_cohorts": metadata["model_metadata"],
-            },
-            "trial_rejections": metadata.get("trial_rejections", {}),
-        }
-        if return_qc:
-            return result, metadata_payload, qc_report
         return result, metadata_payload
     if return_qc:
         return result, qc_report
@@ -235,8 +177,7 @@ def process_trials(
     source : {"ctgov", "protocol"}, optional
         What each row is; see above.
     config : MMAIConfig, optional
-        Defaults to the package preset. For ``"ctgov"`` its ``trial`` section must use the
-        ``cohorts`` method.
+        Defaults to the package preset.
     output_dir : str or Path, optional
         Saves each trial's results under ``<output_dir>/<trial_id>/`` (for protocols also the
         extraction) and reuses them while the inputs and prompts are unchanged.
@@ -266,8 +207,6 @@ def process_trials(
     if source == "ctgov":
         if text_output_dir is not None or progress_callback is not None:
             raise ValueError("text_output_dir and progress_callback apply only to source='protocol'")
-        if resolved_config.trial.get("extraction_method", "cohorts") != "cohorts":
-            raise ValueError("process_trials requires trial.extraction_method=cohorts")
         section = "trial"
         cohorts, extraction = extract_cohorts(trials, config=resolved_config, return_metadata=True)
     elif source == "protocol":
@@ -290,9 +229,6 @@ def process_trials(
 
 
 __all__ = [
-    "TrialSpaceCriteriaExtractionError",
-    "TrialSpaceCriteriaProgress",
-    "extract_trial_space_eligibility_criteria",
     "ProtocolCohortProgress",
     "extract_protocol_cohorts",
     "merge_equivalent_cohorts",

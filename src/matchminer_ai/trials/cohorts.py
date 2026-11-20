@@ -7,6 +7,7 @@ from copy import deepcopy
 import pandas as pd
 
 from matchminer_ai._qc.common import build_qc_artifact, qc_artifact_to_report_row
+from matchminer_ai.config import trial_settings
 from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
 
 from .cohort_workflow import (
@@ -78,11 +79,9 @@ def summarize_trial_cohorts(trials, config):
     frame["trial_text"] = [ctgov_trial_text(*values) for values in
                            frame[["trial_title", "brief_summary", "eligibility_criteria"]].itertuples(index=False)]
 
-    trial_config = deepcopy(config.trial)
+    trial_config = trial_settings(deepcopy(config.trial))
     settings = trial_config.pop("cohorts", {})
     max_attempts, chunk_size, chunks_in_flight, structured_setting = cohort_settings(settings, "trial.cohorts")
-    trial_config.pop("extraction_method", None)
-    trial_config.pop("hierarchy", None)
     prompts = load_prompts(settings.get("prompt_files"))
     runtime = build_llm_runtime_config("trial", trial_config, config=config)
     structured = structured_setting and runtime["backend_mode"] == "remote"

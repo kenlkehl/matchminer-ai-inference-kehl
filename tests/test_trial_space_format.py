@@ -1,11 +1,7 @@
-"""Combined positive/negative clauses survive consumers of trial-space text."""
-import pandas as pd
+"""Combined positive/negative clauses survive consumers of saved trial-space text."""
 import pytest
 
 from matchminer_ai._trial_space_format import has_required_space_fields
-from matchminer_ai._qc.trials import trial_qc_report
-from matchminer_ai.trials.postprocess import flatten_trial_to_spaces
-from matchminer_ai.trials.hierarchy import FIELDS, OUTPUT_FIELDS, VERSION
 
 SPACE = (
     'Age range allowed: 18+. Sex allowed: Any. Cancer primary site allowed: lung. '
@@ -20,29 +16,9 @@ LEGACY = SPACE.replace('Cancer primary site allowed', 'Cancer type allowed').rep
           'Biomarkers required: KRAS G12D. Biomarkers excluded: EGFR mutation')
 
 
-def test_seven_level_contract_matches_authored_layout():
-    assert VERSION == 'trial-hierarchy-v5'
-    assert len(FIELDS) == len(OUTPUT_FIELDS) == 7
-    assert [key for key, _ in FIELDS][-2:] == [
-        'prior_treatment_requirements', 'biomarker_requirements']
-    assert all(f'{label}:' in SPACE for _, label in OUTPUT_FIELDS)
-
-
 @pytest.mark.parametrize('space', [SPACE, LEGACY])
-def test_both_formats_survive_postprocess_and_qc_without_rewriting(space):
+def test_both_formats_have_the_required_fields(space):
     assert has_required_space_fields(space)
-    source = pd.DataFrame([dict(trial_id='T', trial_answer_text=f'1. {space}\nBoilerplate exclusions:\nNone')])
-    rows = flatten_trial_to_spaces(source, 'Boilerplate exclusions')
-    assert rows.clinical_space_summary.tolist() == [space]
-    rows['space_trial_id'] = 'T-0'
-    rows['general_exclusion_criteria'] = 'None'
-    empty = dict(numerator=0, denominator=1, ids=[])
-    qc = trial_qc_report(rows, trial_source=source, unfiltered_spaces=rows,
-        truncated_llm_qc_artifact=dict(metric='truncated', **empty),
-        failed_llm_qc_artifact=dict(metric='failed', **empty))
-    missing = qc[qc.metric.str.contains('missing_keyword')]
-    assert len(missing) == 7
-    assert (missing.value == 0).all()
 
 
 @pytest.mark.parametrize('label', ['Prior treatment requirements:', 'Biomarker requirements:'])

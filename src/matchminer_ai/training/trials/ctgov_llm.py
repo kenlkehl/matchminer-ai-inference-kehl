@@ -45,7 +45,6 @@ def make_config(args):
     family = args.tokenizer_model or args.model
     if apply_model_profile(config, family, sections=['trial']) is None:
         raise ValueError('No vendor sampling profile; supply a recognized --tokenizer-model')
-    config.trial['extraction_method'] = 'cohorts'
     config.trial['cohorts'] = {'max_attempts': args.max_attempts}
     config.trial['remote'].update(model_name=args.model, tokenizer_name=family)
     config.trial['remote']['request_params']['max_tokens'] = args.max_tokens

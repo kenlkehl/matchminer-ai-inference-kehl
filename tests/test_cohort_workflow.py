@@ -234,7 +234,7 @@ def test_debug_mode_keeps_each_steps_answer(config, cohort_backend):
 
 def test_default_preset_uses_the_three_step_prompts():
     config = load_default_preset()
-    assert config.trial["extraction_method"] == "cohorts" and "cohorts" not in config.trial["prompt_files"]
+    assert "prompt_files" not in config.trial["cohorts"]
     assert "prompt_file" not in config.protocol_cohort_extraction
     assert config.trial["cohorts"]["structured_outputs"] is True
 
