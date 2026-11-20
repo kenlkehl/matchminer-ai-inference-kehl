@@ -4,10 +4,9 @@ import os
 
 import pytest
 
-pytest.importorskip("fastapi")
 # The Databricks gateway host is a site value; tests use a placeholder (read when settings is imported).
 os.environ.setdefault("GUIDELINE_DATABRICKS_HOST", "https://workspace.example.cloud.databricks.com")
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
 from matchminer_ai.apps.guideline_fetcher.settings import Settings
 

@@ -12,7 +12,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-pytest.importorskip("fastapi")
 
 # A fabricated site config: the trial table's name and columns, site names, the home-institution prefix, the
 # teacher endpoint and the Vertex project (placeholders only).
