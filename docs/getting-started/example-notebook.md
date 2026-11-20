@@ -3,6 +3,7 @@
 [`examples/run_examples.ipynb`](https://github.com/kenlkehl/matchminer-ai-kehl/blob/main/examples/run_examples.ipynb)
 runs the matching workflow on the sample data in `examples/data/`: ClinicalTrials.gov listings and the notes of
 twelve synthetic patients. It runs:
+
 1. `process_trials`, from trials to cohorts;
 2. `summarize_patients`, including an update with newer notes;
 3. TrialSpace embedding and retrieval in both directions;
@@ -18,8 +19,9 @@ jupyter lab run_examples.ipynb
 ```
 
 Before running, set the TrialSpace checkpoint (`embedding.model_path`) and choose where the LLM steps run:
+
 - in-process vLLM, the default;
 - an OpenAI-compatible server (`USE_SERVER = True`).
 
-The notebook writes its results to `examples/output/`. Its trial and patient checkpoints there are not tracked by
-git. The [quickstart](quickstart.md) explains the same steps.
+The notebook writes its results to `examples/output/`, which git ignores. The [quickstart](quickstart.md) explains
+the same steps.

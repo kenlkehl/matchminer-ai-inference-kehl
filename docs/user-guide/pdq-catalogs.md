@@ -1,34 +1,26 @@
 # NCI PDQ catalogs
 
-The PDQ source adapter creates the same TrialSpace population, diagnostic/workup,
-and treatment-menu records as the guideline extraction API. It reuses extraction
-ownership, source-backed consolidation, population coverage, exact excerpt repair,
-checkpoint resume, export and final audit, working from complete PDQ documents.
+The PDQ source adapter builds guideline catalogs from NCI PDQ health-professional summaries instead of a local NCCN
+library. It uses the same pipeline and produces the same records: spaces with nine population fields and
+cohort-style key criteria, workup and treatment menus, exact source evidence and uncertainties. Configuration,
+extraction stages, checks and retries, output files, audit, resume, loading and retrieval work as described in
+[Guideline extraction](guideline-extraction.md). This page covers what differs for PDQ.
 
-Every generation prompt opens with the library's purpose, the meaning of a clinical
-space, and how its nine population fields support later patient-summary matching.
-The opening also distinguishes this source-extraction task from patient advice and
-explains that organizing PDQ evidence does not make it a clinical practice guideline.
-The PDQ system message also includes the complete current `trial.user.primer.txt`
-and `trial.user.question.txt` directly from the package, verbatim, as the population
-format reference. A PDQ adaptation preserves JSON output, source-only care populations,
-explicit treatment history, and fixed-definition stage boundaries; the trial prompt's
-plain-text output, boilerplate section, assumed sex criteria and trial washout rules
-do not override those requirements. Both trial prompt files and the adaptation are
-fingerprinted in PDQ checkpoints. Changing them requires a new output directory;
-they are not dependencies of NCCN catalog checkpoints.
+[NCI describes PDQ](https://www.cancer.gov/publications/pdq/information-summaries) summaries as reviewed,
+referenced evidence summaries, explicitly not clinical practice guidelines. A PDQ catalog is a distinct,
+source-defined reference for care review. It keeps that identity and separates expected care, acceptable
+alternatives and descriptions of research. Like any catalog, it is research extraction that needs human review, not
+treatment advice or an eligibility determination.
 
 ## Snapshot sources
 
-Choose complete NCI PDQ **health-professional** summary URLs. A disease can use one
-document or an ordered list of related documents. The package downloads only these
-documents; it does not follow article citations, fetch images or search using
-patient data.
+Choose complete PDQ **health-professional** summary URLs. A disease can use one document or an ordered list of
+related documents.
 
 ```python
-from matchminer_ai.trials import prepare_pdq_library, list_guidelines
+from matchminer_ai.trials import list_guidelines, prepare_pdq_library
 
-sources = "/local/data/pdq/sources-2026-10-07"
+sources = "/path/to/pdq/sources-2026-10"
 prepare_pdq_library(
     {
         "nsclc": "https://www.cancer.gov/types/lung/hp/non-small-cell-lung-treatment-pdq",
@@ -40,27 +32,35 @@ prepare_pdq_library(
 print(list_guidelines(sources))
 ```
 
-The external directory retains original HTML bytes, timestamps, document URLs,
-headings and anchors, all article text, nested lists, table cells with span
-attributes, references and reuse notices. Images are not interpreted; visual-source
-limitations are recorded. Update histories and editorial sections remain saved
-but are excluded from population-extraction ownership. References remain available
-as context and must not be turned into clinical recommendations.
+| Parameter | Meaning |
+| --- | --- |
+| `summaries` | Disease names (lowercase slugs such as `nsclc` or `small-cell-lung`) mapped to a URL or an ordered list of URLs |
+| `output_dir` | The snapshot directory, outside the code repository: empty, or an earlier snapshot of the same selection |
+| `request_timeout` | Seconds per download (default 60) |
+| `progress_callback` | Receives progress strings |
 
-Each derived section is verified by reparsing the original HTML, comparing its
-text and provenance, and checking hashes. Unsupported page layouts fail rather
-than silently falling back to a shortened text excerpt. Sections are never cut
-to an arbitrary character budget. Very large required sections can exceed the
-configured LLM context; that remains an explicit failure, not a truncated success.
+It returns the same inventory table as `list_guidelines`.
 
-Repeating the call with the same URL mapping verifies and reuses the snapshot
-without network calls. An interrupted download can reuse completed disease
-snapshots. Use a **new source directory** to fetch updated articles. The visible
-updated date and NCI content metadata date are retained separately when they
-differ. The version identifier derives from the original HTML hashes; retrieval
-time is not presented as a clinical publication date.
+- **What is fetched:** only the listed documents, over HTTPS from `www.cancer.gov`, following validated redirects, at
+  most 32 MiB each. It does not follow article links or citations, download images, or search with patient data.
+- **What is kept:** the original HTML bytes, retrieval times, document URLs, headings and anchors, all article text,
+  nested lists, table cells with their span attributes, references and reuse notices. Images are not interpreted;
+  that limitation is recorded with the source.
+- **Sections:** each document is split into sections (the citation unit, in place of NCCN's PDF pages) under
+  `markdown/<disease>/sections/`. "Latest Updates", "Changes to This Summary" and "About This PDQ" sections are kept
+  but used only as context, never mined for populations. References are context and are never turned into
+  recommendations.
+- **Verification:** every section is checked by reparsing the original HTML and comparing its text, provenance and
+  hashes. An unsupported page layout fails rather than falling back to a shortened excerpt. Sections are never cut
+  to a character budget; a required section larger than the LLM's context fails explicitly.
 
-## Extract populations and considerations
+Repeating the call with the same mapping verifies and reuses the snapshot without network calls, and an interrupted
+download resumes from the diseases already captured. A different selection needs a **new directory**, as does an
+update of the articles. The edition (`version`, `snapshot-<hash>`) comes from the HTML hashes. The page's visible
+updated date and NCI's content metadata date are kept separately when they differ; the retrieval time is not
+presented as a publication date.
+
+## Extract a catalog
 
 ```python
 from matchminer_ai import load_default_preset
@@ -69,16 +69,15 @@ from matchminer_ai.trials import summarize_pdq
 config = load_default_preset()
 config.remote.update(
     enabled=True,
-    server_urls=["http://your-selected-server:8001/v1"],
+    server_urls=["http://localhost:8000/v1"],
     max_concurrent_requests=8,
     request_timeout=7200,
 )
-config.guideline["remote"]["model_name"] = None  # discover the served model
 
 spaces, metadata, qc = summarize_pdq(
     sources,
     disease="nsclc",
-    output_dir="/local/data/pdq/catalogs-2026-10-07/nsclc",
+    output_dir="/path/to/pdq/catalogs-2026-10/nsclc",
     config=config,
     return_metadata=True,
     return_qc=True,
@@ -86,250 +85,185 @@ spaces, metadata, qc = summarize_pdq(
 )
 ```
 
-`summarize_guidelines` also accepts the same prepared library and selects the PDQ
-profile from its verified manifest. `summarize_pdq` is an explicit wrapper that
-rejects non-PDQ libraries. Both use `config.guideline` and `config.remote`, full
-discovered context, the normal 100,000-token output reserve, reasoning enabled,
-and automatic vendor sampling. Qwen 3.8 uses xhigh effort by default. An endpoint
-must be supplied explicitly; neither function starts or substitutes a server.
-Separate processes must have their combined concurrency budget managed by the
-caller when sharing a server with other catalog jobs.
+`summarize_pdq` takes the same parameters as `summarize_guidelines`, including `allow_endpoint_change`, and rejects a
+library that is not a PDQ snapshot. `summarize_guidelines` also accepts a PDQ snapshot and selects the PDQ profile
+from its manifest. Both use `config.guideline` and `config.remote` with the defaults in
+[Configure the endpoint](guideline-extraction.md#configure-the-endpoint); the endpoint must be given explicitly.
 
-All clinical extraction is performed by the configured endpoint. PDQ prompting
-distinguishes explicit care options from trial enrollment criteria, historical
-comparators, protocol-mandated tests and exploratory research. It preserves
-source-supported prior drugs/classes, disease setting and response in prior-treatment
-fields, plus population-defining biomarkers. Space names and fields use explicit
-history rather than ordinal treatment-line shorthand. An undefined line heading
-does not authorize inventing regimen counts or progression requirements; its
-remaining ambiguity is retained with source evidence.
-The `category` field retains PDQ evidence-grade wording when supplied; it is not
-converted to an NCCN recommendation category. Applicability, timing, alternative
-methods and investigational status remain explicit conditions or uncertainties.
-These prompt rules require evaluation on real outputs; a passing mechanical audit
-does not establish clinical correctness or completeness.
+**Prompts.** The PDQ system message (`pdq.system.txt`, `pdq.trial_space_reference.txt`) states the library's purpose
+and that organizing PDQ evidence does not make it a guideline. It includes the package's trial-space prompt
+(`trial.user.primer.txt`, `trial.user.question.txt`) verbatim as the reference for what a population is, followed by
+PDQ adaptations: JSON output, care populations defined by the source only, explicit treatment history and fixed
+definitions in later stages. The trial prompt's plain-text output, boilerplate section, assumed sex criteria and
+washout rules do not apply. These files are part of a PDQ run's checkpoint identity, not of NCCN runs.
 
-Exports remain `paradigms.jsonl`, `trial_spaces.csv`, `report.md`, `sources.json`,
-`run_config.json` and `validation.json`, with source and model checkpoints.
-Identifiers use a `pdq-`/`pdq:` namespace. Each evidence item has exact text and line
-addresses plus `source_url`, `section_number` and `section_path`; it has no invented
-PDF page number. Catalog and patient-retrieval reports link to the source section.
-Prompt identities for existing NCCN runs exclude PDQ-only prompt files.
+**Content rules.** The prompts separate explicit care options from trial enrollment criteria, historical
+comparators, protocol-mandated tests and exploratory research.
+
+- **Prior treatment:** the fields keep the source's prior drugs or classes, disease setting and response, and the
+  biomarkers that define a population. Names and fields use explicit history rather than treatment-line shorthand,
+  and an undefined line heading does not license invented regimen counts or progression requirements.
+- **Category:** an item's `category` keeps PDQ's evidence-grade wording where given; it is not converted to an NCCN
+  recommendation category.
+- **Conditions:** applicability, timing, alternative methods and investigational status stay explicit conditions or
+  uncertainties.
+
+These are prompt rules whose effect needs evaluation on real outputs; a passing audit does not establish clinical
+correctness or completeness.
+
+**Records.** The output files and columns are those of
+[an NCCN catalog](guideline-extraction.md#catalog-records), with these differences:
+
+| Field | PDQ value |
+| --- | --- |
+| `space_trial_id`, `paradigm_id` | `pdq-<disease>-<hash>` |
+| `trial_id` | `pdq:<disease>:<version>` |
+| `evidence` items | `page_id` (the section), `line_ids`, `source_lines`, `quote`, `source_url`, `section_number`, `section_path`, `printed_label`; no PDF page |
+| `source` | Also `source_kind: nci_pdq`, `is_clinical_practice_guideline: false`, the documents and the PDQ notice |
+
+`report.md` links each cited section to its URL and its saved copy. The patient retrieval report links evidence to
+the section URLs and names each source document with its attribution and update date.
+
+## Use a PDQ catalog
+
+The catalog APIs take PDQ catalogs without conversion:
 
 ```python
-from matchminer_ai.trials import audit_guideline_catalog, get_guideline_considerations
 from matchminer_ai.matching import retrieve_guideline_considerations
 from matchminer_ai.patients import review_patient_workup
+from matchminer_ai.trials import audit_guideline_catalog, get_guideline_considerations
 
-catalog = "/local/data/pdq/catalogs-2026-10-07/nsclc"
-audit_guideline_catalog(sources, disease="nsclc", output_dir=catalog)  # offline
-exact = get_guideline_considerations(catalog, space_trial_id=spaces.iloc[0].space_trial_id)
-ranked = retrieve_guideline_considerations(
-    patient_summaries, catalog, candidate_k=5, top_n=1, config=config,
-)
+# patient_summaries: DataFrame with patient_id and cancer_history_summary
+# raw_patient_notes: one patient's notes (text, or a DataFrame with note_text and optional note_date)
+catalog = "/path/to/pdq/catalogs-2026-10/nsclc"
+audit_guideline_catalog(sources, disease="nsclc", output_dir=catalog)    # offline
+record = get_guideline_considerations(catalog, space_trial_id=spaces.iloc[0]["space_trial_id"])
+
+ranked = retrieve_guideline_considerations(patient_summaries, catalog, top_n=1, candidate_k=5, config=config)
 review = review_patient_workup(
     raw_patient_notes,
-    ranked.iloc[0].diagnostic_workup,
-    population_context=ranked.iloc[0].clinical_space_summary,
+    ranked.iloc[0]["diagnostic_workup"],
+    population_context=ranked.iloc[0]["cohort_key_criteria"],
     config=config,
 )
 ```
 
-The retrieval API uses local TrialSpace and the decision model. Workup review sends raw
-notes to the configured patient LLM. It checks documentation and applicability
-of the stored PDQ considerations, retaining their conditions and source evidence.
-It does not imply that all alternative tests were required or establish NCCN
-concordance. Patient data must only reach an authorized endpoint.
+Retrieval runs TrialSpace and the decision model locally (set `config.embedding["model_path"]` to your TrialSpace
+checkpoint; see [Retrieve considerations for patients](guideline-extraction.md#retrieve-considerations-for-patients)).
+`review_patient_workup` sends raw notes to the configured patient LLM, so the endpoint must be authorized for patient
+data. It checks whether the stored PDQ workup items are documented and applicable, keeping their conditions and
+evidence. It does not imply that every alternative test was required and does not establish NCCN concordance.
 
-For a source-checkout CLI, put the URL mapping in an external JSON file:
+## Command-line runners
 
-```bash
-PYTHONPATH=src python examples/extract_pdq.py \
-  --summaries /local/data/pdq/summaries.json \
-  --source-dir /local/data/pdq/sources-2026-10-07 \
-  --output-dir /local/data/pdq/catalogs-2026-10-07 \
-  --endpoint http://your-selected-server:8001/v1 --concurrency 8
-```
+All runners keep sources, catalogs and collection metadata outside the code repository, take an explicit
+`--endpoint`, and discover the served model unless `--model` gives its exact ID.
 
-Use `--download-only` without endpoint/output arguments to prepare sources without
-LLM calls. The existing `extract_guideline_collection.py` runner can process the
-prepared library with multiple disease workers sharing its endpoint cap.
-
-## Expand a treatment collection without waiting for catalog tails
-
-`examples/plan_pdq_treatment_collection.py` snapshots NCI's adult and pediatric
-treatment indexes and writes an external `inventory.json` and `jobs.json`.
-Repeated index aliases become one job; distinct adult/child sources remain
-separate. Overview indexes, financial toxicity, survivorship, genomics and the
-general transplant overview are explicitly recorded as excluded supporting
-topics. Unrecognized links fail for review instead of silently disappearing.
+**One snapshot, several diseases.** `examples/extract_pdq.py` takes the URL mapping as a JSON file, prepares the
+snapshot, then extracts each disease to `<output-dir>/<disease>/` with progress in `<output-dir>/collection.json`:
 
 ```bash
-PYTHONPATH=src python examples/plan_pdq_treatment_collection.py \
-  --inventory-dir /local/data/pdq/treatment-index-snapshot \
-  --source-dir /local/data/pdq/treatment-sources \
-  --catalog-dir /local/data/pdq/treatment-catalogs
-
-PYTHONPATH=src python examples/extract_pdq_collection.py \
-  --plan /local/data/pdq/treatment-index-snapshot/jobs.json \
-  --output-dir /local/data/pdq/treatment-catalogs \
-  --endpoint http://your-selected-server:8000/v1 --concurrency 32
+python examples/extract_pdq.py \
+  --summaries /path/to/pdq/summaries.json \
+  --source-dir /path/to/pdq/sources-2026-10 \
+  --output-dir /path/to/pdq/catalogs-2026-10 \
+  --endpoint http://localhost:8000/v1 --concurrency 8
 ```
 
-To expand an existing `extract_pdq.py` run, also give the planner
-`--existing-summaries`, `--existing-source` and `--existing-output`. It preserves
-those disease names and source/output paths, including all accepted checkpoints.
-Stop the old worker before starting the expanded collection: the shared cap is
-process-wide, not shared between independent processes. Changing the plan requires
-a new collection metadata directory, but compatible disease output directories
-can stay unchanged. Changing an endpoint requires `--allow-endpoint-change` and
-the normal per-catalog compatibility checks.
+| Option | Meaning |
+| --- | --- |
+| `--summaries`, `--source-dir` | Required: the URL mapping and the snapshot directory |
+| `--download-only` | Prepare the snapshot only; `--output-dir` and `--endpoint` are then not needed |
+| `--output-dir`, `--endpoint` | Required for extraction |
+| `--model` | Exact served model ID; omit to discover it |
+| `--concurrency` | Requests in flight (default 8), shared by all diseases |
+| `--disease-workers` | Optional cap on diseases running at once; default up to `--concurrency` |
+| `--request-timeout` | Seconds per request (default 7200) |
+| `--allow-endpoint-change` | Resume unfinished catalogs on another server of the same model |
 
-The public API is `summarize_pdq_collection(jobs, output_dir=..., config=...)`.
-Each job supplies `source_directory`, `output_directory`, and optionally `urls`.
-Existing-source jobs resume immediately; newly downloaded sources enter generation
-as soon as ready. Downloads default to two concurrent workers independently of
-the shared generation cap. A slow source or a serial consolidation stage does not
-hold up other catalogs. Source failures remain visible in `collection.json` while
-healthy jobs continue; rerunning reuses verified sources and compatible results.
-The returned state's `completed_catalogs` list can be passed directly to
-`load_guideline_catalog`, including catalogs in their original directories.
+`examples/extract_guideline_collection.py` also accepts a prepared PDQ snapshot as `--source`.
 
-## Interrupt, resume, or move to another endpoint
-
-The PDQ and NCCN collection runners share the same capacity-allocation policy.
-By default, up to `--concurrency` available diseases run in parallel. Each disease
-can use the full shared endpoint request cap, so finishing catalogs immediately
-free slots for remaining work, including the last catalog. `--disease-workers`
-is an optional explicit limit on disease preparation, rather than a default
-two-disease restriction. Dependencies, source packing and the remaining number
-of independent jobs can keep actual traffic below the cap.
-
-The runner writes `collection.json` with the effective disease-worker count,
-allocation policy,
-its PID, endpoint, stage messages, failures and per-disease completion/audit counts.
-Each disease retains the pipeline's independently saved request/response checkpoints.
-A directory lock prevents two batch owners from writing to the same output.
-
-Send SIGTERM or Ctrl-C to the runner, or create an empty `STOP` file in its output
-directory. These stop local dispatch and mark the batch interrupted. A request
-already accepted by the remote server may briefly continue there. Only fully
-saved, validated responses are reusable; an interrupted stream is retried.
-Remove `STOP` and repeat the original command to resume. Do not start a replacement
-worker until the original process has exited.
-
-Concurrency and the explicit disease-worker override may change on resume without
-changing clinical checkpoint identities. Omit `--disease-workers` to restore
-automatic allocation. Run the collection in one process where possible: separate
-processes have independent request caps and need an explicitly managed combined
-budget. Automatic allocation does not raise `--concurrency` or choose a server.
-
-To move unfinished work to another instance of the **same model**, repeat the
-command with the new explicit `--endpoint` and `--allow-endpoint-change`. The
-new server must advertise the same model ID and full context limit. Sampling,
-reasoning, source and clinical prompt settings must still match. No fallback
-server is selected automatically. Cached token counts are scoped to the actual
-destination so the new server's tokenizer performs new packing checks.
-
-For the public API, pass `allow_endpoint_change=True` to `summarize_pdq` or
-`summarize_guidelines`. Both PDQ and NCCN catalogs support this opt-in migration.
-Original checkpoint identities and raw responses stay intact; `run_config.json`
-retains the original `base_url` and current `transport_base_url`, and
-`endpoint_history.json` records destinations. Each new request attempt records
-its actual transport, which the final audit checks against that history.
-The existing general collection runner retains its stricter endpoint ownership;
-use the public API for migrating an existing NCCN disease run.
-
-Switching model IDs, context sizes, or generation settings requires a separate
-output directory. Keep completed audited catalogs and the previous run's files;
-do not relabel old responses as having come from the new model. The endpoint's
-advertised ID is a compatibility check, not a verification of model weights.
-Resume/retry failed runs only after diagnosing their recorded errors.
-
-## Recover a failed subset
-
-Create a new job plan containing only failed diseases, preserving each job's exact
-source/output paths and URLs from the original collection's `identity.jobs`.
-Use a separate directory for recovery metadata and point `--parent-collection` at
-the original report:
+**The full treatment collection.** `examples/plan_pdq_treatment_collection.py` snapshots NCI's adult and pediatric
+treatment indexes and writes a job plan; `examples/extract_pdq_collection.py` runs it:
 
 ```bash
-PYTHONPATH=src python examples/extract_pdq_collection.py \
-  --plan /local/data/pdq/failed-jobs.json \
-  --output-dir /local/data/pdq/recovery \
-  --parent-collection /local/data/pdq/treatment-catalogs/collection.json \
-  --endpoint http://your-selected-server:8000/v1 --concurrency 32
+python examples/plan_pdq_treatment_collection.py \
+  --inventory-dir /path/to/pdq/treatment-index \
+  --source-dir /path/to/pdq/treatment-sources \
+  --catalog-dir /path/to/pdq/treatment-catalogs
+
+python examples/extract_pdq_collection.py \
+  --plan /path/to/pdq/treatment-index/jobs.json \
+  --output-dir /path/to/pdq/treatment-collection \
+  --endpoint http://localhost:8000/v1 --concurrency 32
 ```
 
-The recovery worker locks both collection directories, updates the original
-report as each disease progresses, and leaves completed catalogs outside its plan
-untouched. Stop the original worker first. The Python API accepts the same option
-as `parent_collection=...`. Interrupt/resume and explicit endpoint migration work
-the same way as for a full collection.
+- **Planner:** writes the index snapshots, `inventory.json` and `jobs.json` to `--inventory-dir`, with one job per
+  summary whose source and catalog go under `--source-dir/<disease>` and `--catalog-dir/<disease>`. A summary listed
+  under several labels becomes one job; adult and pediatric summaries stay separate. Overview indexes, financial
+  toxicity, survivorship and late effects, genomics and the general transplant overview are recorded as excluded
+  topics, and an unrecognized link fails for review rather than being dropped. A changed plan needs a new
+  `--inventory-dir`.
+- **Reusing an `extract_pdq.py` run:** give the planner `--existing-summaries`, `--existing-source` and
+  `--existing-output` together. Those diseases keep their names, snapshot and catalog directories, and accepted
+  checkpoints.
+- **Runner options:** `--plan`, `--output-dir` (collection metadata) and `--endpoint` are required. `--model`,
+  `--concurrency` (default 32), `--source-workers` (concurrent downloads, default 2), `--disease-workers`,
+  `--request-timeout` (default 7200), `--allow-endpoint-change` and `--parent-collection` (see below) are optional.
 
-Recovery is part of the shared PDQ/NCCN pipeline. Exhausted extraction tasks can
-split into smaller, uniquely owned page groups; final population-coverage failures
-can narrow affected consolidation batches. Both keep durable split records and
-reuse compatible accepted checkpoints. When optional cross-batch deduplication
-repeatedly omits or rewrites populations, the pipeline retains all validated
-definitions, records that semantic duplicates may remain, and still requires the
-full population-coverage check to pass.
+The Python API is `summarize_pdq_collection(jobs, output_dir=..., config=...)`, with `source_workers`,
+`disease_workers`, `allow_endpoint_change`, `progress_callback` (receives dicts) and `parent_collection`.
 
-The same retention path handles a repetitive deduplication response. If selection
-passes its local review but fails the final original-population review, the
-pipeline first restores the complete validated union and checks coverage again.
-The rejected selection and review stay in the audit record; source batches are
-revisited only if the complete union still fails. Exhausted extraction responses
-with ambiguous Boolean grouping receive focused feedback and retry headroom while
-retaining all owned source pages and the full output reserve.
-If an exhausted extraction confuses table rows or display wrapping with literal
-source line addresses, a bounded retry repeats the owned section and restricts
-the address schema to actual primary pages and nonblank line numbers. The source
-is not renumbered, clinical content is generated by the endpoint, and all original
-field, page-accounting, ownership and citation checks still apply. A branch on a
-different owner's page does not qualify for this retry.
+- **Jobs:** each maps a disease slug to `source_directory`, `output_directory` and optional `urls`. A job with `urls`
+  downloads its snapshot first; one without starts at once.
+- **Scheduling:** downloads run beside generation, so a slow source or a serial consolidation stage does not hold up
+  other catalogs. A failed source or catalog is recorded in `collection.json` while the others continue, and a rerun
+  reuses verified sources and compatible results.
+- **Result:** the returned state's `completed_catalogs` can be passed straight to `load_guideline_catalog`.
+- **Changes:** a changed plan needs a new collection directory, but compatible disease directories can stay where
+  they are.
 
-Targeted retries can constrain immutable population fields and coverage names to
-their exact supplied values. Citation repair chooses literal supporting source
-text, treating the rejected draft as fallible. These retries do not relax exact
-quotation, population coverage, source ownership, or final audit requirements.
-Clinical output remains model-generated and retains its raw-response provenance.
+## Interrupt, resume and recover
 
-When exact-definition deduplication combines records, their original clinical names
-are retained in `population_names`, together with the union of source evidence and
-batch provenance. Detail generation receives those names and associated candidate
-menus. Coverage can recognize an exact original population through that audited name
-history; a matching name with different clinical restrictions still requires review.
+The PDQ runners share the NCCN runner's scheduling: each active disease can use the endpoint's full request cap, so
+finishing catalogs free their slots at once, and `--disease-workers` is only an optional limit. `collection.json`
+records the endpoint, concurrency, effective disease workers, the runner's PID, stage messages, failures and each
+disease's completion and audit status. A directory lock prevents two runners from writing the same output.
 
-Output-limited coverage reviews split into smaller input groups while retaining the
-complete proposed catalog. Exhausted extraction prompts can repack whole optional
-supporting pages to reserve 8,192 input tokens for retry feedback; every owned primary
-page and the configured output-token reserve remain intact. Boolean diagnostics
-identify the complete offending parenthesis group, including errors late in a field.
+- **Stop:** send SIGTERM or Ctrl-C, or create an empty `STOP` file in the output directory. Local dispatch stops and
+  the batch is marked interrupted. A request already accepted by the server may briefly continue there; only fully
+  saved, validated responses are reused, and an interrupted stream is retried.
+- **Resume:** wait for the process to exit, remove `STOP` and repeat the command. Concurrency and `--disease-workers`
+  may change without affecting checkpoints. Separate processes have independent request caps, so keep one runner per
+  endpoint where possible.
+- **Another server of the same model:** repeat the command with the new `--endpoint` and `--allow-endpoint-change`
+  (`allow_endpoint_change=True` in the API). The rules are those of
+  [endpoint changes](guideline-extraction.md#resume-and-change-endpoints); no fallback server is chosen
+  automatically.
+- **Another model, context size or generation settings:** use new output directories. Keep completed catalogs and
+  the previous run's files, and never relabel old responses as coming from the new model.
 
-If a singleton consolidation exhausts its coverage retries, the pipeline can send its
-original extraction owner back to the endpoint for source review. Both the original
-extraction and the conflicting review are presented as fallible. The model re-extracts
-the entire owned packet with the original validation rules. This is bounded to one
-review per packet and two packets per catalog. `extraction_source_reviews.json` keeps
-the original extraction and trigger; changed candidates cause downstream artifacts
-to move to `superseded_candidate_artifacts/` before rebuilding. Raw provider responses
-remain intact, and final audit verifies both original and replacement provenance.
-An unresolved disagreement still fails; no clinical field is patched by Python.
+**Recover a failed subset.** Write a plan with only the failed diseases, copying each job's source and output paths
+and URLs from the original `collection.json` (`identity.jobs`). Run it with a separate metadata directory and point
+`--parent-collection` (`parent_collection=` in the API) at the original report:
 
-## Source meaning and reuse
+```bash
+python examples/extract_pdq_collection.py \
+  --plan /path/to/pdq/failed-jobs.json \
+  --output-dir /path/to/pdq/recovery \
+  --parent-collection /path/to/pdq/treatment-collection/collection.json \
+  --endpoint http://localhost:8000/v1 --concurrency 32
+```
 
-[NCI describes PDQ](https://www.cancer.gov/publications/pdq/information-summaries)
-as reviewed, referenced evidence summaries, explicitly not clinical practice
-guidelines. A PDQ-derived catalog can provide a distinct, source-defined benchmark
-for care review; it must retain that identity and distinguish expected care,
-acceptable alternatives and research descriptions.
+Stop the original runner first. The recovery locks both directories, refuses jobs whose paths differ from the parent
+plan or that would rerun completed catalogs, and updates the original report as each disease progresses. Diagnose
+the recorded errors before retrying a failed run.
 
-[PDQ evidence grades](https://www.cancer.gov/publications/pdq/levels-evidence/treatment)
-describe evidence rather than NCCN recommendation categories.
-[NCI's reuse policy](https://www.cancer.gov/policies/copyright-reuse) permits reuse
-of much of its text with attribution, subject to page-specific exceptions for
-third-party material. Tables and reproduced material may carry such notices.
-Do not treat a derived catalog as an unchanged official PDQ product or an NCI
-endorsement. Source snapshots and generated catalogs are deliberately not bundled
-with this package. Review the relevant notices before redistributing them.
+## Source reuse
+
+[PDQ evidence grades](https://www.cancer.gov/publications/pdq/levels-evidence/treatment) describe evidence, not NCCN
+recommendation categories. [NCI's reuse policy](https://www.cancer.gov/policies/copyright-reuse) permits reuse of
+much of its text with attribution, with page-specific exceptions for third-party material; tables and reproduced
+material can carry such notices. Do not present a derived catalog as an unchanged official PDQ product or as
+endorsed by NCI. Source snapshots and generated catalogs are not bundled with this package; review the relevant
+notices before redistributing them.

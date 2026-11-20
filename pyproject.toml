@@ -106,9 +106,9 @@ release = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/dfci/matchminer-ai-inference"
-Repository = "https://github.com/dfci/matchminer-ai-inference"
-Issues = "https://github.com/dfci/matchminer-ai-inference/issues"
+Homepage = "https://github.com/kenlkehl/matchminer-ai-kehl"
+Repository = "https://github.com/kenlkehl/matchminer-ai-kehl"
+Issues = "https://github.com/kenlkehl/matchminer-ai-kehl/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -1,60 +1,79 @@
-# GPU Recommendations
+# GPU recommendations
 
-Determining the type of GPUs needed to run an AI pipeline can be complicated.  The minimum GPU and compute requirements for matchminer-ai-inference also vary for each step. While we cannot summarize all factors which impact AI performance, this guide provides information on the following:
+GPU needs differ by step. The LLM is by far the largest model and is the only one that can run on another machine.
+TrialSpace and the decision model always run in-process on the machine running `matchminer-ai`. This page covers
+model sizes, memory settings, the software stack and the hardware we use.
 
-1. [Models used in our pipeline](#models-used-in-our-pipeline);
-2. [Estimating Minimum GPU memory for a LLM model](#minimum-gpu-memory);
-3. [Minimum requirements for the software stack](#minimum-software-stack-requirements); and
-4. [Our experience](#our-experience).
+## Models
 
-## Models Used In Our Pipeline
-MatchMiner-AI is a pipeline which uses 3 different models:
+| Model | Default | Size | GPU memory |
+| --- | --- | --- | --- |
+| LLM | [`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4) | 120B parameters, 12B active per token | About 70 GB of NVFP4 weights, plus KV cache |
+| TrialSpace | Your checkpoint, fine-tuned from [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) | About 270M (text tower only) | About 1 GB of float32 weights, plus activations |
+| Decision model | [`LiquidAI/d1-2B`](https://huggingface.co/LiquidAI/d1-2B), or a fine-tuned checkpoint | About 1.9B | About 3.8 GB of bfloat16 weights, plus activations |
 
-- An LLM for patient summarization and trial 'space' extraction. The default is NVIDIA's Nemotron 3.5 Super, [nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4) (a 120B-parameter hybrid Mamba-Transformer mixture of experts with 12B active parameters, served text only). Earlier releases used variants of Google's Gemma-4-31B-IT, which remains supported.
-- 'TrialSpace' - an embedding model. The default is, for now and on purpose, a local unpublished checkpoint: the n=5000 training run's round-2 TrialSpace, fine-tuned from Google's EmbeddingGemma 2 [https://huggingface.co/google/embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2) (about 270M parameters; float32 weights with bfloat16 autocast take about 1 GB of GPU memory plus activations). The published release [https://huggingface.co/ksg-dfci/TrialSpace-0526](https://huggingface.co/ksg-dfci/TrialSpace-0526) was fine-tuned from Qwen 3 0.6B Embedding [https://huggingface.co/Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B).
-- The decision model - a 1.9B-parameter System One model that answers the match, boilerplate and per-criterion yes/no questions: [https://huggingface.co/LiquidAI/d1-2B](https://huggingface.co/LiquidAI/d1-2B) by default (LFM Open License v1.0), or a checkpoint fine-tuned from it by the training repository. In bfloat16 it needs a few GB of GPU memory plus activations for `decision_model.token_budget` (65,536) tokens per forward pass.
+- **LLM:** Nemotron 3.5 Super is a hybrid Mamba-Transformer mixture of experts, served text only
+  (`language_model_only`). Only 8 of its 88 layers are attention layers, so long contexts need little KV-cache memory.
+  The NVFP4 build needs native FP4 kernels, which means a Blackwell GPU. The preset runs it on one GPU per engine
+  (`tensor_parallel_size: 1`, `gpu_memory_utilization: 0.9`), with a 100,000-token context for trials and 200,000 for
+  patients.
+- **Without Blackwell:** select the FP8 build,
+  [`RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8`](https://huggingface.co/RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8),
+  by setting each LLM section's `model_name`. In-process, also raise `local.engine.tensor_parallel_size` to fit it
+  across GPUs. It gets the same sampling profile. Or run the LLM on an OpenAI-compatible server elsewhere; see
+  [choosing an inference setup](../user-guide/local-vs-remote.md).
+- **Other LLMs:** smaller models with a registered profile, such as Gemma 4, are selected the same way; see
+  [LLM runtime](../reference/llm-runtime.md). The preset's token budgets and settings were chosen for Nemotron.
+- **TrialSpace:** float32 weights with bfloat16 autocast on CUDA. `embedding.batch_size` (32) and
+  `embedding.max_seq_length` (4,096 tokens) bound activation memory.
+- **Decision model:** bfloat16. Activations scale with `decision_model.token_budget`, the padded tokens per forward
+  pass (65,536). Lower it if the GPU runs out of memory.
 
-For any given model, minimum compute/GPU requirements could be determined from others' experiences either with the model itself (e.g. Nemotron 3.5 Super or Gemma-4-31B-IT) or with the base (pre-trained) models (EmbeddingGemma 2, d1-2B).
+### Sharing GPUs
 
-## Minimum GPU Memory
-Nvidia provides some guidance and a short-hand metric for determining how much GPU VRAM is required to run a given LLM. (See [GPU Memory Essentials for AI Performance](https://developer.nvidia.com/blog/gpu-memory-essentials-for-ai-performance/)).  Specifically, it recommends having at least Parameter * Precision * 2 VRAM. Where Parameter is the number of parameters in the model and Precision is the bytes per parameter for the model's precision format -- FP32, FP16, FP8 or FP4.  (See conversion table below.)
+An in-process vLLM engine reserves `gpu_memory_utilization` (90%) of each GPU it uses for as long as it stays loaded.
+TrialSpace and the decision model cannot load on that GPU at the same time. Either:
 
-Precision Bytes per Parameter. From [GPU Memory Essentials for AI Performance](https://developer.nvidia.com/blog/gpu-memory-essentials-for-ai-performance/)
+- put them on another GPU (`embedding.device: cuda:1`, `decision_model.device: cuda:1`);
+- release the engine first (`matchminer_ai.llm.backends.clear_local_llm_cache()`), or run the LLM steps in a separate
+  process;
+- or run the LLM on a server.
 
-| Precision | Bytes per Parameter |
-|-----------|----------------------|
-| INT32/FP32 | 4 |
-| INT16/FP16 | 2 |
-| INT8/FP8 | 1 |
-| INT4/FP4 | 0.5 |
+## Estimating memory
 
-For example, when we run [RedHatAI/gemma-4-31B-it-FP8-Dynamic](https://huggingface.co/RedHatAI/gemma-4-31B-it-FP8-Dynamic) for patient and trial summarization, we should have at least
+Model weights take the number of parameters times the bytes per parameter of their precision. Leave room on top for
+the KV cache, activations and the framework. NVIDIA's
+[GPU Memory Essentials for AI Performance](https://developer.nvidia.com/blog/gpu-memory-essentials-for-ai-performance/)
+discusses the overheads.
 
-*31,000,000,000 parameter* (31 billion parameters) * *1 byte/parameter* * *2 VRAM* (~62 GB)
+| Precision | Bytes per parameter |
+| --- | --- |
+| FP32 | 4 |
+| BF16, FP16 | 2 |
+| FP8, INT8 | 1 |
+| FP4, INT4 | 0.5 |
 
-In practice, we run RedHatAI/gemma-4-31B-it-FP8-Dynamic on H100 (NVL PCIe) GPUs with 94GB VRAM each.
+For example, Nemotron 3.5 Super has 120 billion parameters: about 60 GB at FP4 and about 120 GB at FP8. Its NVFP4
+checkpoint is about 70 GB on disk.
 
-Nemotron 3.5 Super's NVFP4 build needs native FP4 kernels (a Blackwell GPU). We serve it with tensor parallel size 1, one server per GPU, on GB300 and RTX Pro 6000 (96 GB) GPUs; only 8 of its 88 layers are attention layers, so long contexts need little KV-cache memory. On H100s, which lack native FP4, we serve the FP8 build, [RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8](https://huggingface.co/RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8), across four H100 NVL 96 GB GPUs; select it by setting each section's `model_name`.
+## Software stack
 
-## Minimum Software Stack Requirements
-The [dependencies in our pipeline](https://github.com/dfci/matchminer-ai-inference/blob/main/pyproject.toml) include packages which have particular compute/GPU requirments.  Currently these include:
+The package's GPU-dependent requirements (see `pyproject.toml`):
 
-- "torch>=2.11.0"
-- "vllm>=0.20.2"
+- `torch>=2.11.0`
+- `vllm>=0.20.2`
+- `transformers>=5.19.0`
+- `sentence-transformers>=6.1`, which saved the TrialSpace checkpoints
 
-Documentation for each package is available online:
-- [PyTorch (torch)](https://pytorch.org/get-started/locally/)
-- [vllm](https://docs.vllm.ai/en/v0.6.5/getting_started/installation.html)
+For Nemotron 3.5 Super, NVIDIA recommends vLLM 0.32.0 or its documented nightly. Install a PyTorch build that
+matches your CUDA driver; see the [PyTorch](https://pytorch.org/get-started/locally/) and
+[vLLM](https://docs.vllm.ai/) installation guides.
 
-Other software such as sentence-transformers and transformers are dependent on the torch version.
+## Our experience
 
-## Our Experience
-We have successfully run the entire pipeline on the following machines:
+| GPU | How we run the LLM |
+| --- | --- |
+| NVIDIA GB300, RTX Pro 6000 (96 GB) | Nemotron 3.5 Super NVFP4, one vLLM server per GPU at tensor parallel size 1 |
+| NVIDIA H100 NVL (94 GB), without native FP4 | Nemotron 3.5 Super FP8, one vLLM server across four GPUs |
 
-| Machine | Notes |
-|---------|-------|
-| RTX Pro 6000 (available on the cloud) | Has native FP4 kernels, so can run NVFP4 versions of Gemma 4, such as nvidia/Gemma-4-31B-IT-NVFP4. |
-| H100 NVL PCI / 300W, which have native FP8 but not native FP4 | Can run RedHatAI/gemma-4-31B-it-FP8-Dynamic, albeit slowly. (See comment below.) |
-| NVIDIA A100 80GB | We have run the example notebook steps with google/gemma-4-31B-it as the LLM on this machine type.|
-
-RedHatAI/gemma-4-31B-it-FP8-Dynamic at the context lengths we need runs slowly on our H100 machines. It runs faster as an NVFP4 quant (eg [https://huggingface.co/nvidia/Gemma-4-31B-IT-NVFP4](https://huggingface.co/nvidia/Gemma-4-31B-IT-NVFP4) ) on a Blackwell GPU, eg, the RTX Pro 6000.
+TrialSpace and the decision model each use one GPU.

@@ -45,6 +45,7 @@ cohorts, trial_metadata = process_trials(trials, config=config, output_dir="runs
 ```
 
 `process_trials` runs four steps:
+
 1. It screens each trial for cancer treatment.
 2. It lists the trial's cohorts and extracts each cohort's complete criteria.
 3. It merges cohorts whose criteria are equivalent.
@@ -63,9 +64,10 @@ It returns one row per cohort:
 Trials that are not cancer treatment trials have no rows. Their decisions are in
 `trial_metadata["extraction"]["trial_rejections"]`.
 
-With `output_dir`, each trial's results are saved and reused while the inputs and prompts are unchanged. The steps
-are also public functions on their own: `extract_cohorts`, `merge_equivalent_cohorts` and
-`remove_boilerplate_criteria`. See [trials](../api/trials.md).
+With `output_dir`, the merge and line-tagging results are saved per trial and reused while the inputs and prompts
+are unchanged; for protocols the extraction is saved too, while ctgov listings are extracted again on every run.
+The steps are also public functions on their own: `extract_cohorts`, `merge_equivalent_cohorts` and
+`remove_boilerplate_criteria`. See [trials](../api/trials.md#saved-results-and-reuse).
 
 ## 2. Notes to patient summaries
 
@@ -77,6 +79,7 @@ patients = summarize_patients(notes, config=config, checkpoint_dir="runs/patient
 ```
 
 Each patient's notes are summarized serially.
+
 - **Preparation:** the notes are sorted by date, repeated sentences are removed, and the record is split into
   overlapping chunks.
 - **Updates:** each chunk updates the running summary.

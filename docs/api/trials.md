@@ -1,103 +1,156 @@
 # Trials
 
-::: matchminer_ai.trials
-    options:
-      members:
-        - extract_trial_space_eligibility_criteria
-        - extract_protocol_cohorts
-        - generate_synthetic_protocols
-        - extract_cohorts
-        - process_trials
-        - merge_equivalent_cohorts
-        - remove_boilerplate_criteria
-        - screen_trials
-        - list_guidelines
-        - summarize_guidelines
-        - add_guideline_cohort_criteria
-        - prepare_pdq_library
-        - summarize_pdq
-        - audit_guideline_catalog
-        - load_guideline_catalog
-        - get_guideline_considerations
+`matchminer_ai.trials` turns trial documents into cohorts: the groups of people a trial enrolls, each with its
+complete eligibility criteria, split into key and boilerplate criteria and tagged line by line.
+[How matching works](../user-guide/patient-centric-matching.md) explains how the later steps use them. The outputs
+are research abstractions for human review, not eligibility determinations.
 
-## Trial steps, separately or end to end
+## The trial steps
 
-Each step is its own function, so a caller can run some and skip others: `extract_cohorts`
-(ClinicalTrials.gov, "ctgov", listings; named `summarize_trials` before November 2026, a deprecated alias) or
-`extract_protocol_cohorts` (full protocols) screen for cancer treatment and extract each
-cohort's complete criteria; `merge_equivalent_cohorts` combines a trial's cohorts with
-essentially the same criteria; `remove_boilerplate_criteria` splits each cohort's criteria
-into key and boilerplate criteria; `screen_trials` runs only the screen. `process_trials`
-runs the screen, cohort extraction, merge and boilerplate removal in the order training uses
-them, on ctgov listings (`source="ctgov"`, the default) or full protocols
-(`source="protocol"`, with that section's settings for every step), and returns merged cohorts with `cohort_key_criteria` and
-`cohort_boilerplate_criteria` (each step's metadata with `return_metadata=True`;
-`output_dir` saves and reuses each trial's results). Until November 2026 the package called
-ClinicalTrials.gov "registry"; outputs from then keep `cohort_criteria_source="registry"`.
+| Step | Function | Adds |
+| --- | --- | --- |
+| 1. Screen for cancer treatment | `extract_cohorts` (ctgov listings) or `extract_protocol_cohorts` (full protocols) | Rejected trials get no rows |
+| 2. List the cohorts and extract each one's complete criteria | the same extractor | `cohort_name`, `cohort_eligibility_criteria` |
+| 3. Merge cohorts whose criteria are equivalent | `merge_equivalent_cohorts` | `merged_from` |
+| 4. Tag every criteria line inclusion or exclusion, and key or boilerplate | `remove_boilerplate_criteria` | `cohort_key_criteria`, `cohort_boilerplate_criteria`, `cohort_criteria_items` |
 
-## Three-step treatment screening and cohort extraction
+`process_trials` runs all four, in this order:
 
-The default `trial.extraction_method` is `cohorts`. `extract_cohorts` accepts
-one row per trial with `trial_id`, `trial_title`, `brief_summary`, and
-`eligibility_criteria`; IDs must be unique and nonempty. Each listing becomes
-one document, `Title: ...`, `Brief summary:` and `Eligibility criteria:` with
-source formatting preserved, and goes through the same workflow and prompts as
-full protocols (`extract_protocol_cohorts`, below;
-`matchminer_ai.trials.cohort_workflow`). Every trial gets separate requests:
+```python
+import pandas as pd
+from matchminer_ai import load_preset
+from matchminer_ai.trials import process_trials
 
-1. **Screen** (`trial.cohorts.screen.user.txt`): `{"cancer_treatment_trial": "yes"}`
-   or `{"cancer_treatment_trial": "no"}`. Only direct anti-cancer treatment
-   strategies qualify (including PK/PD, safety, dose or surrogate-endpoint
-   studies); diagnostic, supportive-care, survivorship, primary-prevention and
-   non-cancer trials do not. A "no" ends the trial.
-2. **Cohort names** (`trial.cohorts.list.user.txt`):
-   `{"cohorts": ["Part A, dose escalation", "Part B, dose expansion (disease X)"]}`,
-   one or more distinct names in source order: the cohorts the trial defines
-   (parts, phases, arms or groups that enroll participants), at the lowest level
-   of any hierarchy, without comparing their criteria. Stratification factors,
-   crossover, extension and rollover phases, and optional sub-studies are not
-   cohorts; closed cohorts are kept, and cohorts limited to countries that
-   exclude the United States are omitted. A single population is one cohort
-   (for example "All participants").
-3. **Criteria, one request per cohort** (`trial.cohorts.criteria.user.txt`):
-   `{"eligibility_criteria": "Inclusion criteria:\n...\nExclusion criteria:\n..."}`,
-   the complete criteria of the named cohort: criteria stated for every
-   participant, for a part or group containing it, or for a disease it can
-   include, and no criterion that applies only to other cohorts. The request
-   lists every cohort name and ends with the target name.
+config = load_preset("default")
 
-The criteria prompt keeps enrollment criteria only and copies every criterion
-that applies to the cohort verbatim, boilerplate included: consent, compliance,
-samples or biopsies, measurable disease, contraception, pregnancy and
-lactation, vaccine restrictions, study-staff and catch-all investigator-judgment
-exclusions are never left out. The optional boilerplate step
-([below](#key-and-boilerplate-criteria)) separates them afterwards. Criteria
-that apply only to people already in the study (crossover, retreatment,
-rollover) or to optional sub-studies are omitted. Only United States versions
-of country-specific criteria are kept, references are resolved by restating
-their content, applicability lead-ins and mentions of other cohorts are removed
-once a criterion's placement is decided, qualifiers are never deleted, and gaps
-or damaged source text are flagged with a "Source limitation:" statement.
+listings = pd.DataFrame([{
+    "trial_id": "NCT01234567",
+    "trial_title": "A Phase 2 Study of Drug X in Advanced Solid Tumors",
+    "brief_summary": "This study tests drug X in two cohorts ...",
+    "eligibility_criteria": "Inclusion Criteria:\n- ...\nExclusion Criteria:\n- ...",
+}])
+cohorts, metadata = process_trials(listings, config=config, output_dir="runs/trials", return_metadata=True)
 
-Every prompt starts with the same preamble and document, and the criteria
-prompt puts the cohort list and target name last, so a server's prefix cache
-reuses a trial's document across its requests. Each answer is validated by its
-own contract (`parse_screen`, `parse_cohort_list`, `parse_criteria`): exactly
-the one field, lowercase "yes"/"no", distinct nonempty names, nonempty criteria
-that are not placeholders, a `stop` finish. One complete outer Markdown fence
-is accepted; duplicate keys, extra fields, surrounding prose and truncation
-fail validation and never become negative decisions. With a remote backend and
-`trial.cohorts.structured_outputs: true` (the default), each request sets a
-`response_format` with its step's schema (`JSON_SCHEMAS`). Only failed
-requests are retried, with the full document, the original instructions and
-the validation error, up to `trial.cohorts.max_attempts`; a cohort that fails
-every attempt fails its trial. A remote backend keeps
-`trial.cohorts.chunk_size * chunks_in_flight` requests in flight, each sent as
-another returns; a local backend gets batches of `chunk_size` requests of one
-step, `chunks_in_flight` at once. Cohorts whose
-extracted criteria are identical are combined into one row with both names.
+protocols = pd.DataFrame([{"trial_id": "NCT01234567", "protocol_path": "protocols/NCT01234567.pdf"}])
+protocol_cohorts = process_trials(protocols, source="protocol", config=config, output_dir="runs/protocols")
+```
 
-A trial's decision (schema `trial-cohorts-stepwise-v1`) is
+- **`source`:** `"ctgov"` (the default) reads ClinicalTrials.gov listings with `extract_cohorts` and uses the `trial`
+  settings for every step; it needs `trial.extraction_method: cohorts`, the preset's value. `"protocol"` reads full
+  protocols with `extract_protocol_cohorts` and uses the `protocol_cohort_extraction` settings for every step;
+  `text_output_dir` and `progress_callback` apply only here.
+- **Result:** one row per merged cohort of each accepted trial, with all the columns below. The extractor's
+  decisions stay in `cohorts.attrs`.
+- **Metadata:** with `return_metadata=True`, each step's metadata under `extraction`, `merge` and `boilerplate`.
+  Rejected trials are in `metadata["extraction"]["trial_rejections"]`.
+- **`output_dir`:** saves per-trial results and reuses them; see [saved results](#saved-results-and-reuse).
+
+The steps are also public functions, so a caller can run some and skip others. Without step 4, TrialSpace and the
+decision model's match questions read `cohort_eligibility_criteria` (all the criteria), while
+`exclusion_criteria_check` and `check_eligibility_criteria` need its columns. The merge and boilerplate steps take
+`section="trial"` (listings, the default) or `section="protocol_cohort_extraction"` (protocols) for their settings.
+
+## Inputs
+
+**ctgov listings** (`extract_cohorts`): one row per trial with a unique, nonempty `trial_id` and the text columns
+`trial_title`, `brief_summary` and `eligibility_criteria` (strings or missing; each trial needs some text). Each
+listing becomes one document, `Title: ...`, `Brief summary:` and `Eligibility criteria:`, with the source formatting
+kept. [`ctgov_records`](#clinicaltrialsgov-records) fetches a listing by NCT ID.
+
+**Full protocols** (`extract_protocol_cohorts`): one row per trial with a unique `trial_id` and a `protocol_path` to
+a PDF or a UTF-8 `.txt` or `.md` file.
+
+- **PDFs** are converted locally with [`ocr_pdf`](documents.md). Pass `text_output_dir` to keep the text; otherwise
+  it goes to a temporary directory that is removed.
+- **Length:** each request carries the whole document. A document longer than
+  `protocol_cohort_extraction.max_document_characters` (800,000) fails; it is never truncated.
+- **Privacy:** the whole document reaches the configured LLM endpoint. Use documents without patient data unless the
+  endpoint is authorized for their sensitivity.
+
+## Cohort extraction
+
+Both extractors send each trial document through the same three prompts (`matchminer_ai.trials.cohort_workflow`):
+
+1. **Screen** (`trial.cohorts.screen.user.txt`), answered `{"cancer_treatment_trial": "yes"}` or `"no"`. Yes means
+   the trial evaluates a direct anti-cancer treatment in people with cancer. That includes adjuvant, maintenance and
+   recurrence-prevention treatment, comparisons of treatment strategies, and studies whose only endpoints are PK, PD,
+   safety, dose or other surrogate endpoints. Diagnostic, screening, supportive-care, toxicity-prevention,
+   survivorship, primary-prevention and non-cancer trials are no, as are anti-cancer drugs given to people without
+   cancer. A "no" ends the trial.
+2. **Cohort names** (`trial.cohorts.list.user.txt`), answered `{"cohorts": ["Part A, dose escalation", ...]}`: the
+   parts, phases, arms or groups the trial enrolls, at the lowest level of any nesting, in document order.
+    - A group is a cohort even without its own eligibility section: regimens given to separate groups, parts the
+      summary names or the numbering implies, cohorts the criteria name. Closed cohorts are kept.
+    - Not cohorts: stratification factors; crossover, extension, retreatment and rollover phases; optional
+      sub-studies; cohorts limited to countries that exclude the United States.
+    - A name only identifies a group and never narrows it. Examples given with "such as" keep that wording or are
+      left out.
+3. **Criteria**, one request per cohort (`trial.cohorts.criteria.user.txt`), answered
+   `{"eligibility_criteria": "Inclusion criteria:\n...\nExclusion criteria:\n..."}`: the cohort's complete
+   enrollment criteria. The request lists every cohort name and ends with the target cohort.
+
+The criteria prompt's rules:
+
+- **Complete:** every criterion that applies to the cohort (stated for every participant, for a part or group that
+  contains it, or for a disease it can include) and none that applies only to other cohorts. Boilerplate is copied
+  too: consent, compliance, samples and biopsies, measurable disease, contraception, pregnancy and lactation,
+  vaccines, study-staff and investigator-judgment exclusions. Step 4 separates it.
+- **Verbatim:** wording, numbers, units, operators and negation are copied. The only changes: lines split by PDF
+  conversion are rejoined, lead-ins that only say where a criterion applies ("For Part 2 only:") are removed, and
+  references ("see Section 5.1", "criterion 9") are replaced by their content. Qualifiers that limit a criterion to
+  some people are kept.
+- **Defined by the document:** what defines the cohort (disease, histology, biomarker, prior therapy, age, sex) is
+  stated as separate criteria, taken from the document and never from the cohort's name. Features given only as
+  examples are not requirements, and a document criterion is never rewritten to fit the cohort.
+- **Enrollment only:** no treatment, discontinuation or in-study rules (crossover, retreatment, rollover), no
+  optional sub-studies, and only the United States version of a country-specific criterion.
+- **Gaps:** missing references, conflicts and text damaged by conversion get an explicit "Source limitation:"
+  statement; nothing is invented.
+- **Protocols:** eligibility is searched for throughout the document (study design, part or module sections,
+  appendices, tables, footnotes). The body wins over an abbreviated synopsis, and current text over superseded
+  amendment text.
+
+How requests run:
+
+- **Validation:** each answer is checked by its own contract (`parse_screen`, `parse_cohort_list`,
+  `parse_criteria`): exactly its one field, lowercase "yes" or "no", distinct nonempty names, nonempty criteria
+  that are not a placeholder, and a `stop` finish. One complete outer Markdown fence is accepted. Duplicate keys,
+  extra fields, surrounding prose and truncation fail validation; an invalid answer is never a rejection.
+- **Structured outputs:** with a remote backend and `structured_outputs: true` (the default), each request carries
+  its step's JSON schema as `response_format`. Local generation relies on validation.
+- **Retries:** only a failed request is retried, with the full document, the original instructions and the
+  validation error, up to `max_attempts` (default 3). A cohort whose criteria fail every attempt fails its trial.
+- **Concurrency:** a remote backend keeps `chunk_size * chunks_in_flight` requests (500 × 2) in flight, each sent
+  as another returns, and sends later steps first so started trials finish. A local backend gets batches of
+  `chunk_size` requests of one step, `chunks_in_flight` at once.
+- **Prefix cache:** every prompt starts with the same preamble and document, and the criteria prompt puts the cohort
+  list and target last, so a server's prefix cache reuses a trial's document across its requests.
+- **Identical criteria:** cohorts whose extracted criteria are identical (ignoring whitespace and case) become one
+  row, with the names joined by "; ".
+
+These settings are under `trial.cohorts` for listings and `protocol_cohort_extraction` for protocols, each with an
+optional `prompt_files` mapping `screen`, `list` and `criteria` to other packaged prompt files. The section's other
+keys set the LLM. See [configuration](../reference/configuration.md#trial).
+
+### Cohort rows
+
+| Column | Meaning |
+| --- | --- |
+| `cohort_trial_id` | `<trial_id>-cohort-<n>`, with `n` the zero-based cohort number. |
+| `trial_id` | The source trial. |
+| `cohort_number` | Zero-based, in document order. |
+| `cohort_name` | The name from step 2, also for a single population (for example "All participants"). It identifies the cohort and is not part of its criteria or embeddings. |
+| `cohort_eligibility_criteria` | The cohort's complete criteria from its own request. |
+| `cohort_criteria_source` | `ctgov` or `protocol` (older ctgov outputs say `registry`). |
+| `cancer_treatment_trial` | `yes` on every row. |
+| `multiple_cohorts` | `yes` when the trial has more than one cohort. |
+| `trial_input_text` | The document sent, with `debug_mode` (listings only). |
+
+Rejected and failed trials get no rows; an empty or all-rejected result keeps the columns.
+
+### Decisions, metadata and QC
+
+A trial's decision (schema `trial-cohorts-stepwise-v1`) is `{"cancer_treatment_trial": "no"}` or
 
 ```json
 {
@@ -110,399 +163,213 @@ A trial's decision (schema `trial-cohorts-stepwise-v1`) is
 }
 ```
 
-or `{"cancer_treatment_trial": "no"}`; `multiple_cohorts` is derived from the
-number of cohorts. The returned DataFrame contains accepted cohorts only:
-
-| Column | Meaning |
-| --- | --- |
-| `cohort_trial_id` | `<trial_id>-cohort-<zero-based number>`; distinct from legacy space IDs. |
-| `trial_id` | Source trial identifier. |
-| `cohort_number` | Zero-based population index in source order. |
-| `cohort_name` | The cohort's name from step 2, also for a single population. Kept out of eligibility text and embeddings. |
-| `cohort_eligibility_criteria` | That cohort's complete criteria from its own request. |
-| `cohort_criteria_source` | `ctgov` (`extract_cohorts`; `registry` before November 2026) or `protocol` (`extract_protocol_cohorts`). Older outputs used `llm` and `eligibility_criteria`. |
-| `cancer_treatment_trial` | `yes` for every returned row. |
-| `multiple_cohorts` | `yes` when the trial has more than one cohort. |
-
-Rows use `representation_version="trial-treatment-cohorts-v5"`. Earlier
-generations (single-request schemas `trial-registry-cohorts-v1` and
-`trial-protocol-cohorts-v2`, rows v4 with `cohort_specific_eligibility_criteria`
-and `common_eligibility_criteria`) remain readable with
-`cohort_schema.parse_cohort_response` for audits, but are not produced. Rejected
-trials produce no rows; empty and all-rejected runs keep the column schema.
+- **`attrs`:** the result's `attrs` always hold `extraction_method`, `schema_version`, `representation_version`
+  (`trial-treatment-cohorts-v5`), `prompt_sha256`, `structured_outputs`, `trial_decisions`, `trial_rejections`
+  (rejected trial ID to decision) and `trial_errors` (failed trial ID to its last validation error).
+- **`return_metadata=True`:** the same keys plus `prompt_sha256_by_step`, `trial_cohort_names`,
+  `trial_merged_cohorts` (cohorts combined for identical criteria), `trial_attempts` (per step, and per cohort for
+  criteria: finish reason, validation error and serving endpoint), `model_metadata` and `config_snapshot`.
+  `extract_protocol_cohorts` adds `source_documents` (path, SHA-256, character and page counts, text path) and
+  `skipped_completed`. `debug_mode` adds `trial_responses`, every step's answer and reasoning.
+- **`return_qc=True`** (`extract_cohorts` only): QC rows `trials_rejected_cancer_treatment`,
+  `trials_failed_inference` and `trials_truncated_llm_response`; see [QC metrics](../reference/qc-metrics.md).
 
 ```python
 from matchminer_ai.trials import extract_cohorts
 
-cohorts, metadata, qc = extract_cohorts(
-    trials, config=config, return_metadata=True, return_qc=True
-)
-print(metadata["trial_decisions"])
-print(metadata["trial_cohort_names"])
-print(metadata["trial_errors"])
+cohorts, metadata, qc = extract_cohorts(listings, config=config, return_metadata=True, return_qc=True)
+metadata["trial_rejections"]    # {"NCT07654321": {"cancer_treatment_trial": "no"}}
+metadata["trial_errors"]        # trial ID -> last validation error
 ```
-
-Decisions, rejections, errors, schema and representation versions, and the
-prompt-set hash (`prompt_sha256`, with `prompt_sha256_by_step`) also appear in
-`cohorts.attrs`. Returned metadata includes each trial's attempts per step (with
-serving endpoints), cohort names, combined cohorts and model provenance. Debug
-mode adds every step's answer and reasoning and each row's input document. QC
-separates treatment rejections, exhausted inference errors and truncated
-responses.
-
-Do not rename these columns to legacy space columns or reuse saved space
-embeddings as if the representations were interchangeable. `hierarchical` and
-`one_shot` remain explicit legacy modes with their previous space schema; the
-current Space applications opt into that mode.
-
-## Cohort extraction from full protocol documents
-
-`extract_protocol_cohorts` runs the same three steps and prompts on complete
-protocol documents. It accepts one row per trial with a unique `trial_id` and a
-`protocol_path` to a PDF or a UTF-8 text file (`.txt` or `.md`). PDFs are
-converted locally with `ocr_pdf`; pass `text_output_dir` to keep the converted
-text, which is otherwise written to a temporary directory and removed. Each
-document is sent whole; documents longer than
-`protocol_cohort_extraction.max_document_characters` fail rather than being
-truncated. The prompts cover protocol-specific sources: eligibility anywhere in
-the document (study design, part or module sections, appendices), body text
-over abbreviated synopsis criteria, current text over superseded amendment
-text, and PDF-conversion damage.
-
-Settings come from `protocol_cohort_extraction` (`max_attempts`, `chunk_size`,
-`chunks_in_flight`, `structured_outputs`, and optional `prompt_files` mapping
-`screen`/`list`/`criteria` to other packaged prompt files). With `output_dir`,
-each decided trial is saved as soon as it is decided to
-`<output_dir>/<trial_id>/extraction.json` (decision, cohort names, combined
-cohorts, every attempt per step with its serving endpoint, prompt hashes,
-schema version and source-document SHA-256) with `reasoning.json`. A rerun with
-the same `output_dir` reuses a saved decision only when the prompts, schema and
-document bytes are unchanged, and sends the rest.
-
-The result has the `extract_cohorts` cohort columns, with
-`cohort_criteria_source` set to `"protocol"`; `return_metadata=True` adds
-per-trial decisions, attempts and errors, source-document hashes and page
-counts, and the config snapshot. The whole document reaches the configured LLM
-endpoint, so use only documents without patient data unless that endpoint is
-authorized for their sensitivity. Outputs are research abstractions for human
-review, not eligibility determinations.
 
 ## Merging equivalent cohorts
 
-`merge_equivalent_cohorts` takes cohort rows from either extractor and asks the
-LLM once per trial with more than one cohort (`trial.cohorts.merge.user.txt`)
-which cohorts have essentially the same criteria, such as arms that differ only
-in treatment or dose. The model returns only a grouping of cohort numbers; each
-group becomes its first cohort's row, with the merged names joined by "; ",
-renumbered `cohort_number` and `cohort_trial_id`, and `merged_from`. Criteria
-are never regenerated. A trial whose answer never validates keeps its cohorts
-unmerged (`merge_errors`). With `output_dir`, each grouping is saved to
-`<output_dir>/<trial_id>/merge.json` and reused while the prompt and the
-trial's cohorts are unchanged.
+`merge_equivalent_cohorts` takes cohort rows from either extractor (other columns are kept) and sends one request
+per trial with more than one cohort (`trial.cohorts.merge.user.txt`), listing the cohorts by number with their
+criteria.
+
+- **Rule:** cohorts belong together when everyone who meets one cohort's criteria would meet the other's. Only the
+  treatment the trial assigns (agent, dose, schedule) may differ. A required background or concurrent therapy is
+  eligibility and keeps cohorts apart. Differences of wording, or a shared criterion one extraction left out, do
+  not. When unsure, the model keeps cohorts apart.
+- **Answer:** only a grouping, `{"groups": [[1, 3], [2]]}`, validated as a partition of the cohort numbers and
+  retried on failure.
+- **Result:** each group becomes its first cohort's row, with the names joined by "; ", `cohort_number` and
+  `cohort_trial_id` renumbered, `multiple_cohorts` recomputed, and `merged_from` listing the original cohort numbers
+  (JSON). The criteria are the first cohort's; none are regenerated.
+- **Failures:** a trial whose answer never validates keeps its cohorts unmerged and is listed in `merge_errors`.
+- **Metadata:** `trial_groups`, `merge_errors`, `trial_attempts` (with answers and reasoning), `skipped_completed`,
+  `cohorts_in` and `cohorts_out`, with the schema version and prompt hash.
 
 ## Key and boilerplate criteria
 
-`remove_boilerplate_criteria` separates each cohort's **key criteria**, the
-criteria that define its population, from its **boilerplate criteria**, the
-general requirements most cancer trials share: consent, compliance, samples and
-biopsies, measurable disease, prognosis, performance status, organ function,
-brain metastases, toxicities of earlier treatment, washout periods of 30 days
-or less, recovery from recent major surgery, non-cancer conditions, unrelated
-other cancers, simultaneous participation in another trial, contraception,
-pregnancy and lactation, vaccines, and study-staff and catch-all exclusions,
-each unless it is central to what the trial studies. Each cohort's criteria are
-split into one item per line, and each item gets its own request
-(`trial.cohorts.deboilerplate.user.txt`, schema `trial-cohorts-deboilerplate-v4`)
-showing the cohort's numbered criteria and asking two things, answered as
-`{"criterion_type": "inclusion" | "exclusion", "boilerplate": true | false}`:
-whether the item is an inclusion or an exclusion criterion (an item under an
-"Inclusion criteria:" or "Exclusion criteria:" heading takes that heading's type
-even when worded negatively; sub-items, notes and introductory lines take the
-type of the criterion they belong to), and whether it is boilerplate. Code sorts
-the unchanged items, so no criterion is lost or reworded.
+`remove_boilerplate_criteria` separates each cohort's **key criteria**, which define its population, from its
+**boilerplate criteria**, the general requirements most cancer trials share, and tags every line as an inclusion or
+exclusion criterion.
 
-The result keeps `cohort_eligibility_criteria` unchanged (all the criteria) and
-adds:
+Boilerplate covers consent, compliance, samples and biopsies, measurable disease, prognosis, performance status,
+organ function, brain metastases, toxicities of earlier treatment, washout periods of 30 days or less, recovery from
+recent major surgery, non-cancer conditions, unrelated other cancers, simultaneous participation in another trial,
+legal and administrative requirements, vaccines, investigator-judgment and study-staff exclusions, and
+contraception, pregnancy and lactation. Each is boilerplate unless it is central to what the trial studies, such as
+brain metastasis criteria in a trial for brain metastases.
+
+- **One request per line:** each cohort's criteria are split into items, one per nonblank line other than the
+  "Inclusion criteria:" and "Exclusion criteria:" headings. Each item gets its own request
+  (`trial.cohorts.deboilerplate.user.txt`) showing the cohort's numbered criteria, answered
+  `{"criterion_type": "inclusion" | "exclusion", "boilerplate": true | false}`.
+- **Inclusion or exclusion:** an item under a heading takes that heading's type, even when worded negatively.
+  Sub-items, notes and introductory lines take the type of the criterion they belong to.
+- **No rewriting:** code sorts the unchanged lines, so no criterion is lost or reworded.
+
+The rows keep `cohort_eligibility_criteria` unchanged and gain:
 
 | Column | Meaning |
 | --- | --- |
-| `cohort_key_criteria` | The criteria that are not boilerplate; all the criteria for a cohort in `deboilerplate_errors`. Read by TrialSpace retrieval and the decision model's match questions. |
-| `cohort_boilerplate_criteria` | The boilerplate criteria; None for a cohort in `deboilerplate_errors`. Read by the decision model's boilerplate question. |
-| `cohort_criteria_items` | Every item with its tags, as a JSON string: a list of `{"number", "heading", "text", "criterion_type", "boilerplate"}` in the original order (`criterion_type` null for an item whose answer never validated). Read by [`check_eligibility_criteria`](criteria-check.md). |
+| `cohort_key_criteria` | The lines that are not boilerplate, under their headings. Read by TrialSpace retrieval and the decision model's match questions. |
+| `cohort_boilerplate_criteria` | The boilerplate lines. Read by the decision model's boilerplate question. |
+| `cohort_criteria_items` | Every line with its tags, as a JSON string: a list of `{"number", "heading", "text", "criterion_type", "boilerplate"}` in the original order. Read by [`check_eligibility_criteria`](criteria-check.md). |
 
-A cohort without items, or whose items are all classified as boilerplate, is
-reported in `deboilerplate_errors`; an item whose answer never validates counts
-as key, has no criterion type, and is reported in `unclassified_items`. The
-metadata's `criterion_type_heading_disagreements` counts items whose type differs
-from the heading above them. With `output_dir`, each trial's
-results are saved to `<output_dir>/<trial_id>/deboilerplate.json`: per cohort,
-`key_criteria` and `boilerplate_criteria` (or `error`) and every item's attempts
-with their answers and reasoning. Classifications are reused while the prompt
-and the cohort's name and criteria are unchanged.
+- **Unanswered lines:** a line whose answer never validates counts as key, has `criterion_type` null and is listed
+  in `unclassified_items`.
+- **Unsplittable cohorts:** a cohort without lines, or whose lines are all boilerplate, keeps all its criteria as
+  `cohort_key_criteria`, has `cohort_boilerplate_criteria` None and is listed in `deboilerplate_errors`.
+- **Metadata:** also `criterion_type_heading_disagreements` (lines whose type differs from their heading),
+  `items`, `items_reused`, `skipped_completed` and `trial_cohorts` (every line's attempts with answers and
+  reasoning).
 
-Both steps are optional at inference. They take `section="trial"` (ctgov
-listings) or `"protocol_cohort_extraction"` (protocols) for their LLM settings;
-training runs the merge first, then the boilerplate step.
+Guideline catalog spaces have no boilerplate criteria. `load_guideline_catalog` gives each space a
+`cohort_key_criteria`: the protocol-style criteria the catalog stores, or for a catalog without them, the space's
+nine population fields laid out as criteria. See the
+[guideline extraction guide](../user-guide/guideline-extraction.md#key-criteria).
 
-Guideline catalog spaces have no boilerplate. Their `cohort_key_criteria` come from one of two sources:
-- **Since 2026-11-14:** the endpoint writes protocol-style criteria for each space and stores them as
-  `key_criteria`. For an older catalog, `add_guideline_cohort_criteria` writes a derived edition that has them.
-- **Older catalogs:** `load_guideline_catalog` lays the nine population fields out the same way.
+## Saved results and reuse
 
-See the [guideline extraction guide](../user-guide/guideline-extraction.md#key-criteria).
+With `output_dir`, each step writes its per-trial results atomically as each trial finishes, and a rerun with the
+same directory sends only the requests whose inputs changed.
+
+| File | Written by | Contents | Reused while unchanged |
+| --- | --- | --- | --- |
+| `<trial_id>/extraction.json`, `<trial_id>/reasoning.json` | `extract_protocol_cohorts` | The decision, cohort names, combined cohorts, every attempt per step with its serving endpoint, prompt hashes, schema and representation versions and source-document SHA-256; each step's reasoning | Prompts, schema and document bytes |
+| `<trial_id>/merge.json` | `merge_equivalent_cohorts` | The grouping, cohort names and attempts | Prompt and the trial's cohort names and criteria |
+| `<trial_id>/deboilerplate.json` | `remove_boilerplate_criteria` | Per cohort, `key_criteria` and `boilerplate_criteria` (or `error`) and every line's tags and attempts; written once all the trial's lines are answered | Per line: prompt, schema and its cohort's name and criteria |
+| `screen.jsonl` | `screen_trials` | One line per trial: decision and attempts | Prompt and the trial's document |
+
+`extract_cohorts` saves nothing, so `process_trials(source="ctgov")` extracts listings again on every run and reuses
+merge and boilerplate results only where the extracted cohorts come out the same.
+
+`matchminer_ai.trials.cohort_run.read_trial_results(trial_dir)` reads one trial's files during or after a run and
+reports its state (`complete`, `stale`, `not_treatment`, `extracting` or `pending`) and cohorts; the dashboard uses
+it.
 
 ## Cancer-treatment screen only
 
-`screen_trials` runs only the workflow's first step
-(`trial.cohorts.screen.user.txt`, with the same settings and response contract)
-on listings (`title` or `trial_title`, `brief_summary`, `eligibility_criteria`)
-or full documents (`trial_text`). It returns `trial_id`,
-`cancer_treatment_trial` ("yes", "no", or None when no answer validated) and
-`screen_error`; a trial whose answer never validates is reported, not rejected.
-With `output_dir`, every attempt's answer and reasoning is appended to
-`<output_dir>/screen.jsonl` as requests return, and saved decisions are reused
-while the prompt and the trial's document are unchanged. Training draws its
+`screen_trials` runs only the screen, with the same prompt, settings (`section`) and response contract. Rows hold
+`trial_id` and either `trial_text` or a listing's `title` (or `trial_title`), `brief_summary` and
+`eligibility_criteria`. It returns `trial_id`, `cancer_treatment_trial` ("yes", "no", or None when no answer
+validated) and `screen_error`; a trial whose answer never validates is reported, not rejected. Training draws its
 trial sample from the trials this screen accepts.
-
-## Synthetic protocols seeded by ctgov records
-
-`generate_synthetic_protocols` writes one fabricated full protocol per ctgov
-seed, for building training corpora of realistic, often messily specified
-eligibility text. Seeds have a unique `trial_id` and optional `title`,
-`brief_summary`, `detailed_description` and `eligibility_criteria` strings;
-missing fields are marked as not provided. The record is a seed, not a
-specification. The prompt pair `trial.synthetic_protocol.system.txt` and
-`trial.synthetic_protocol.user.txt` asks for a prospective sponsor-style
-protocol in Markdown with no synthetic-document disclaimer, and assigns each
-trial one of the weighted eligibility layouts in
-`data/synthetic_protocol_layouts.json` (stable per trial ID).
-
-Requests run through the configured backend in chunks, with several chunks in
-flight. Remote runs use the shared endpoint pool, so adaptive concurrency,
-vLLM load feedback and `remote.server_urls_file` registries (which can give
-each endpoint its own served model ID) apply. With `output_dir`, each trial's
-`protocol.md`, `reasoning.txt` and `meta.json` are written as its chunk
-returns, completed trials with the same prompt hash are skipped on rerun, and
-the returned frame holds file paths. Empty or truncated outputs are retried.
-Outputs are fabricated and must be labeled as synthetic wherever they are used.
-
-## Hierarchical extraction
-
-Set `trial.extraction_method` to `hierarchical` to use the legacy space workflow.
-It builds a tree in this
-fixed order: age, cancer primary site, sex, histology, disease state, prior
-treatment requirements, and biomarker requirements. One request handles one parent and one field, returning a JSON array
-of alternative values rather than a full list of spaces. Independent parents
-are batched through the configured backend. A trial with one branch throughout
-uses eight logical calls: seven fields and one separate boilerplate call.
-
-Every population-field request includes:
-
-1. The hierarchy's purpose and the current field.
-2. The complete trial source.
-3. "For a patient with this set of characteristics:" followed by the inherited
-   characteristics of exactly one candidate branch and its source-grounded scope.
-4. "What sets of [age ranges / prior treatment requirements / biomarker
-   requirements / etc.] are relevant for determining eligibility for this trial?"
-5. Shared anti-boilerplate instructions and authored omissions.
-6. Only the current field's verbatim instructions and examples from the active
-   `trial.user.primer.txt`, followed by the JSON response contract.
-
-Other fields' definitions are absent. The shared anti-boilerplate boundary uses
-the primer's definition and examples of general exclusions; the omission text
-retains its measurable-disease/biopsy-target and treatment-washout instructions.
-The primary-site request includes the exact diagnosis-enumeration
-paragraph now contained in that authored section. Biomarker requests also receive the exact treatment-defining population
-example. Each branch adds only the current field and retains shared requirements.
-A condition assigned to this field must survive in its value, not only its scope.
-Biomarker fields include only restrictions on results: positive or negative status,
-specific alterations, or expression thresholds. A requirement to test or know a
-biomarker's status, while allowing either result, is omitted; use `NA` when no
-result restriction remains. Screening-assessment notes accompany actual result
-restrictions only. This rule is shared with one-shot extraction through the primer.
-The separate single boilerplate request uses the full source, a trial-wide scope,
-the authored boilerplate paragraph (including logical negation examples), and
-shared omissions. It does not receive the population fields' definitions.
-
-The internal `scope` describes the applicable eligibility pathway. It preserves
-cross-field dependencies and conditional exceptions; it is not included in the
-final space text. Equal values with different scopes remain separate until the
-remaining fields are resolved. No Cartesian product of independent field lists
-is made. Python copies ancestors into each completed leaf, removes exact
-duplicate leaves, renders all seven labels, and adds numbering. Public column
-names and zero-based space IDs remain unchanged.
-
-The model returns `{"branches": [{"value": "...", "scope": "..."}],
-"prune_reason": ""}` for a field. Empty branches require an explicit source
-incompatibility and cannot be used at the root. Boilerplate instead returns
-`{"exclusions": ["..."]}` and retains subgroup qualifications. Malformed JSON,
-wrong keys, multiline values and truncated answers are rejected. Retries include
-the specific error, latest rejected answer, and a valid JSON structure, including
-explicit array/object closure guidance. After two invalid answers (or on the last
-retry with a smaller budget), thinking stays off; Beam stays at low reasoning
-effort. After repeated failures, the malformed draft is omitted and the model
-regenerates from the original source plus the error and schema. Exhausted nodes still fail the trial rather than exporting
-only its successful branches.
-
-When every population branch is explicitly pruned, a separate study-scope call
-reviews the full source. It must independently confirm that there is no human
-therapeutic cancer population and supply a verbatim source excerpt. Confirmed
-rejections produce no spaces and are recorded in `metadata.trial_rejections`,
-separately from inference failures. A `review` decision triggers targeted
-re-extraction of the pruned fields, with the review explanation and original
-parent context. Up to two recovery rounds are allowed per trial. Recovery
-feedback does not authorize inventing eligibility, changing parent fields, or
-overriding the source. Corrective requests have distinct checkpoint keys and
-retain their recovery round and replaced request key in traces. Completed nodes
-remain reusable; replaying a previously failed trial reaches these new recovery
-requests instead of permanently repeating its cached pruning decision.
-Exhausted recovery, malformed reviews and unsupported rejection excerpts remain
-failures. This is a targeted
-review of empty trees, not a replacement screening pass. Original field prompts,
-successful node identities, and the seven-field space format are unchanged.
-
-Configuration under `trial.hierarchy`:
-
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `max_attempts` | 4 | Validation attempts per node; backend transport retries remain separate. |
-| `max_nodes` | 4096 | Maximum branches at a field; exceeding it fails rather than truncates. |
-| `max_calls` | 20000 | Logical node calls per trial, excluding retries. |
-| `batch_size` | 256 | Maximum parent requests in a synchronous local backend batch. |
-| `active_trials` | 32 | Minimum rolling remote trial window; enlarged to at least total endpoint concurrency. |
-| `checkpoint_dir` | unset | Optional directory of successful node responses. |
-
-Remote extraction uses one dependency-ready queue across trials and field levels.
-Each validated parent immediately releases its children, without waiting for
-siblings or other trials. Boilerplate starts independently of the field tree.
-A finished trial admits another immediately. Persistent clients share the
-configured `remote.max_concurrent_requests` cap per endpoint across all these
-requests, including retries. Only parent-child dependencies impose ordering;
-calls for the same branch cannot skip ahead. Leaves retain the model's original
-branch order, so response timing does not affect space IDs and cached wave-based
-responses keep their existing numbering. Synchronous local vLLM
-generation retains batched field waves with one resident model.
-
-Set the remote request cap in the top-level `remote` configuration, for example
-`config.remote["max_concurrent_requests"] = 32`, or in YAML:
-
-```yaml
-remote:
-  max_concurrent_requests: 32
-```
-
-The default is 32 per server. With N endpoints the total ceiling is N times
-this value, shared across trials, field branches, boilerplate and retries within
-one extraction call. `trial.hierarchy.active_trials` controls how much work is
-available; it does not multiply the request cap. Separately launched clients
-each have their own cap. Set the value before starting extraction.
-
-Node checkpoints fingerprint source, parent, scope, prompts, algorithm version,
-and runtime configuration. Changed inputs/configuration never reuse old nodes.
-Trial extraction defaults to a 50,000-token output ceiling (reasoning plus final
-answer) and a 100,000-token local context. Each request still reduces its output
-allowance when necessary to fit the configured context without truncating source.
-Debug `trial_reasoning_text` contains a JSON audit of the node responses,
-reasoning and validation attempts. Configured context limits reserve output
-space without truncating the source. Model sampling and parser selection still
-use the existing backend profiles.
-
-The shared introduction and JSON response contracts live in
-`src/matchminer_ai/prompts/trial.hierarchy.*.txt`. Each field component expands
-`{{field_rules}}` with its exact section from `trial.user.primer.txt`, under
-`FIELD-SPECIFIC INSTRUCTIONS (verbatim):`. The combined treatment field receives the
-original treatment section, and the combined biomarker field receives the original
-biomarker section. Age retains its existing instructions because the primer has
-no separate age section. Changed section boundaries fail explicitly rather than
-silently dropping guidance. One-shot extraction uses the same active primer;
-it now emits the same seven labels. `trial.user.question.txt` is unchanged.
-The shared engine, hierarchy prompts and primer are mirrored in training, with
-cross-repository contract tests.
-
-This hierarchy is `trial-hierarchy-v5`, the combined-requirements prompt contract.
-Primary site is still fixed before sex; final text retains the established age,
-sex, primary-site label order. Prompt and version fingerprints prevent reuse of
-v1/v2/v3/v4 extraction checkpoints. Compatible treatment screening can be retained.
-
-This design increases the number of calls and repeats source text. It improves
-structural control but does not establish clinical completeness: an erroneous
-early branch or an unsupported model interpretation can still propagate. Review
-the node traces and final populations against the source before adopting new
-spaces or regenerating embeddings. Existing saved spaces are not migrated.
 
 ## ClinicalTrials.gov records
 
-`matchminer_ai.trials.ctgov_records` fetches one public ClinicalTrials.gov API v2
-study by NCT ID and accepts no patient context. `fetch_trial_eligibility_criteria`
-reads `protocolSection.eligibilityModule.eligibilityCriteria`, preserves multiline
-criteria formatting, and returns the NCT ID, public study URL, retrieval timestamp,
-and ctgov last-update date with the text. `fetch_trial_ctgov_document` also accepts
-an official ClinicalTrials.gov study URL and wrangles the official or brief title,
-brief summary, detailed description, and eligibility criteria into explicit fields
-for `extract_cohorts` consumers. URL parsing never changes the request host: the
-API request is always sent to ClinicalTrials.gov using the normalized NCT ID. The
-GoodOption catalog fetches its studies with `fetch_trial_study`.
+`matchminer_ai.trials.ctgov_records` fetches one study from the public ClinicalTrials.gov API v2. Requests carry
+only the NCT ID, never patient context.
 
-::: matchminer_ai.trials.ctgov_records
-    options:
-      members:
-        - fetch_trial_eligibility_criteria
-        - fetch_trial_ctgov_document
-        - normalize_nct_reference
-
-## Trial-space eligibility criteria
-
-`extract_trial_space_eligibility_criteria` accepts one clinical-space summary
-and the path to a UTF-8 `.txt` file produced by OCR. It sends the complete text
-and trial space to the configured local or OpenAI-compatible LLM backend and
-returns one JSON-compatible object:
+- **`fetch_trial_ctgov_document`** takes an NCT ID or an official study URL and returns the official (or brief)
+  title, brief summary, detailed description and eligibility criteria, with the study URL, retrieval time and last
+  update date. The request always goes to ClinicalTrials.gov with the normalized NCT ID, whatever host a URL names.
+- **`fetch_trial_eligibility_criteria`** returns only the eligibility criteria, with line breaks kept, and the
+  same provenance.
+- **`fetch_trial_study`** (async) returns the raw study; the GoodOption catalog uses it.
 
 ```python
-from matchminer_ai.trials import extract_trial_space_eligibility_criteria
+from matchminer_ai.trials.ctgov_records import fetch_trial_ctgov_document
 
-criteria = extract_trial_space_eligibility_criteria(
-    clinical_space_summary,
-    "Eligibility-Eligibility_Checklist.txt",
-    config=config,
-)
+document = fetch_trial_ctgov_document("NCT01234567")
+listings = pd.DataFrame([{"trial_id": document.nct_id, "trial_title": document.trial_title,
+                          "brief_summary": document.brief_summary,
+                          "eligibility_criteria": document.eligibility_criteria}])
 ```
+
+## Criteria for one population from an OCR text file
+
+`extract_trial_space_eligibility_criteria(trial_space, eligibility_checklist_path, config=config)` takes a
+description of one trial population (a "trial space", such as a cohort's name and key criteria) and a UTF-8 text
+file produced by OCR, such as an eligibility checklist. It sends both to the LLM configured under `trial_space_criteria_extraction` and returns the
+criteria that apply to that population:
 
 ```json
 {
-  "trial_space": "the original clinical-space summary",
+  "trial_space": "the population description, as given",
   "inclusion_criteria": ["complete relevant criterion"],
   "exclusion_criteria": ["complete relevant criterion"]
 }
 ```
 
-The original trial space is attached by code. Every criterion must be a
-verbatim excerpt from the OCR text after conservative OCR normalization. This
-collapses whitespace, joins a line-broken ordinal suffix such as `9 th`,
-removes repeated page-edge boilerplate, and skips a trailing footnote only when
-its marker is referenced earlier on that page. Invalid, ungrounded, duplicated,
-or overlapping lists are retried and then rejected.
-Universal criteria and criteria whose scope is ambiguous remain in scope, while
-criteria explicitly limited to an incompatible population are omitted.
+- **Grounding:** every criterion must occur verbatim in the OCR text after conservative normalization (whitespace
+  collapsed, a split ordinal such as `9 th` joined, repeated page-edge text and referenced page-end footnotes
+  removed). Invalid, ungrounded, duplicated or overlapping lists are retried and then rejected.
+- **Scope:** universal criteria and criteria of ambiguous scope are kept; criteria explicitly limited to an
+  incompatible population are left out.
+- **Privacy:** no web search is used; the whole document reaches the configured endpoint. Compare the output with
+  the complete, current protocol.
 
-No web search is used. With a remote backend, the entire OCR document reaches
-the configured endpoint. Use protocol documents without patient data unless
-the endpoint is authorized for the document's sensitivity. OCR and LLM outputs
-must be compared with the complete, current protocol and do not establish
-eligibility.
+## Synthetic protocols
 
-New space text uses `Cancer primary site allowed`, `Prior treatment requirements`,
-and `Biomarker requirements`. Treatment and biomarker fields each retain both
-positive and negative conditions. Extraction postprocessing, QC
-and training's 0c sampling accept these seven fields as well as saved legacy
-nine-field spaces; they do not rewrite saved text or mix extraction checkpoints.
-Match-label and synthetic-patient prompts preserve clause polarity and AND/OR
-logic. The PDQ catalog retains its separate JSON required/excluded fields.
-Existing trained models can consume the new text, but their quality on this prompt
-generation still requires evaluation; regenerate embeddings for changed spaces.
+`generate_synthetic_protocols` writes one fabricated full protocol per ctgov seed (`trial_id` and optional `title`,
+`brief_summary`, `detailed_description` and `eligibility_criteria`), for training corpora with realistic, often
+messily specified eligibility text. Each trial gets one of the weighted eligibility layouts in the packaged
+`synthetic_protocol_layouts.json`. With `output_dir`, each trial's `protocol.md`, `reasoning.txt` and `meta.json`
+are written as it returns and completed trials are skipped on rerun. Outputs are fabricated and must be labeled
+synthetic wherever they are used. See [synthetic protocols](../training/synthetic-protocols.md).
 
-Hierarchical response parsing accepts one complete outer Markdown code fence
-(`json`, case-insensitive, or no language tag). It then applies the same strict
-JSON/schema, duplicate-key, and completion-status validation. Prose outside the
-fence, malformed JSON, and truncated responses still fail. Raw responses and
-reasoning remain unchanged in the audit. This presentation-only parser fix is
-compatible with existing v5 prompts and successful node checkpoints.
+## Legacy space extraction
+
+`trial.extraction_method: hierarchical` or `one_shot` makes `extract_cohorts` produce the older trial-space table
+instead of cohorts: `space_trial_id`, `trial_id`, `clinical_space_number`, `clinical_space_summary` and
+`general_exclusion_criteria` (settings `trial.hierarchy` and `trial.prompt_files`). Space text is not
+interchangeable with cohort criteria, and their embeddings must not be compared. `process_trials` and the merge and
+boilerplate steps need cohorts.
+
+## Guideline and PDQ catalogs
+
+The guideline functions below build and read NCCN and NCI PDQ catalogs, whose spaces are matched like cohorts. They
+are described in [guideline extraction](../user-guide/guideline-extraction.md) and
+[NCI PDQ catalogs](../user-guide/pdq-catalogs.md).
+
+## API reference
+
+::: matchminer_ai.trials
+    options:
+      members:
+        - process_trials
+        - extract_cohorts
+        - extract_protocol_cohorts
+        - merge_equivalent_cohorts
+        - remove_boilerplate_criteria
+        - screen_trials
+        - extract_trial_space_eligibility_criteria
+        - generate_synthetic_protocols
+        - list_guidelines
+        - summarize_guidelines
+        - add_guideline_cohort_criteria
+        - review_guideline_citations
+        - audit_guideline_catalog
+        - load_guideline_catalog
+        - get_guideline_considerations
+        - prepare_pdq_library
+        - summarize_pdq
+        - summarize_pdq_collection
+
+::: matchminer_ai.trials.ctgov_records
+    options:
+      members:
+        - fetch_trial_ctgov_document
+        - fetch_trial_eligibility_criteria
+        - normalize_nct_reference
+
+::: matchminer_ai.trials.cohort_run
+    options:
+      members:
+        - read_trial_results
+        - read_run_cohorts

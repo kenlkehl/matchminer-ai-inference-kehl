@@ -1,7 +1,7 @@
 site_name: MatchMiner-AI
 site_description: Documentation for the matchminer-ai Python package
-repo_url: https://github.com/dfci/matchminer-ai-inference
-repo_name: dfci/matchminer-ai-inference
+repo_url: https://github.com/kenlkehl/matchminer-ai-kehl
+repo_name: kenlkehl/matchminer-ai-kehl
 
 theme:
   name: material
@@ -19,7 +19,7 @@ nav:
       - Quickstart: getting-started/quickstart.md
       - Example Notebook: getting-started/example-notebook.md
   - User Guide:
-      - Patient-centric matching workflow: user-guide/patient-centric-matching.md
+      - How matching works: user-guide/patient-centric-matching.md
       - How the Good Options pipeline works: user-guide/good-options-pipeline.md
       - Choosing an Inference Setup: user-guide/local-vs-remote.md
       - Guideline extraction: user-guide/guideline-extraction.md
@@ -44,8 +44,8 @@ nav:
   - Package API:
       - Config Loading: api/config.md
       - PDF Document OCR: api/documents.md
-      - Trial Summarization: api/trials.md
-      - Patient Summarization: api/patients.md
+      - Trials to Cohorts: api/trials.md
+      - Patient Summaries: api/patients.md
       - Structured Clinical Extraction: api/extraction.md
       - Extraction-Based Workup Checks: api/workup-queries.md
       - SQL-Agent Workup Checks: api/workup-sql.md
@@ -80,4 +80,8 @@ markdown_extensions:
       permalink: true
   - pymdownx.details
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

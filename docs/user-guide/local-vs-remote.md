@@ -1,86 +1,98 @@
-# Choosing an Inference Setup
+# Choosing an inference setup
 
-LLM-backed steps in `matchminer-ai` can run in three setups. Pick based on
-where your GPUs are and whether you want a persistent server:
+The LLM steps (`process_trials`, `summarize_patients`, the `*_with_llm` checks and the other LLM-backed tools) run
+the LLM in one of two modes, chosen by `remote.enabled`:
 
-| Package mode | Setup                         | Use when                                                        |
-| ------------ | ------------------------------ | ----------------------------------------------------------------- |
-| Local        | Run the model directly         | You have local GPUs and want the simplest setup                  |
-| Remote       | Connect to a local vLLM server | You have local GPUs but want to run a persistent, reusable VLLM server on them to be used by MatchMiner-AI        |
-| Remote       | Connect to another endpoint    | The model is hosted elsewhere (another machine, cluster, service) |
+| Mode | Setup | Use when |
+| --- | --- | --- |
+| Local (`remote.enabled: false`, the preset default) | The package runs the model in-process with vLLM | You have suitable local GPUs and want one self-contained run |
+| Remote (`remote.enabled: true`) | A vLLM server on the same machine | You have local GPUs and want the model to stay loaded across runs |
+| Remote | Any OpenAI-compatible endpoint elsewhere | The model is hosted on another machine, a cluster or an approved service |
 
-The two remote setups configure identically — you provide an endpoint URL
-either way. The only difference is where that endpoint lives. Local mode is
-the odd one out: no URL, no server process, nothing to manage.
+Both remote setups are configured the same way, with endpoint URLs; only where the endpoint lives differs. The mode
+affects only the LLM. TrialSpace and the decision model always run in-process; see the
+[GPU recommendations](../getting-started/gpu-recommendations.md).
 
-While local mode is easiest to implement, there can be efficiency gains when using remote mode on a local vLLM server. Please see [Remote Package Mode](#remote-package-mode) for more information.
+## Local mode
 
-## Local Package Mode
+The package loads the model with vLLM in the workflow's own process. There is no server to start or manage.
 
-### Run the Model Directly
+- **Configuration:** each LLM section's `local` block sets `model_name`, `engine` (keyword arguments for `vllm.LLM`,
+  such as `max_model_len`, `tensor_parallel_size` and `gpu_memory_utilization`), `generation` (sampling parameters)
+  and `chat_template_kwargs`. See the [configuration reference](../reference/configuration.md).
+- **Engines:** an engine loads on first use and stays loaded until the process ends. Sections with different engine
+  settings get separate engines (the preset gives trials a 100,000-token context and patients 200,000), and up to two
+  stay loaded. Each reserves `gpu_memory_utilization` (0.9) of its GPUs' memory, so release the first with
+  `matchminer_ai.llm.backends.clear_local_llm_cache()` before the next step, and before TrialSpace or the decision
+  model needs the same GPU.
+- **Requests:** prompts go to the engine in batches. Answers are validated and retried, but not constrained to a JSON
+  schema; structured outputs need a server.
 
-`matchminer-ai` loads and runs the model in-process, using its built-in vLLM
-backend — no separate server to start or manage. This is the simplest option
-when the machine running `matchminer-ai` has enough GPU memory.
+Local mode suits one-off runs and testing.
 
-The model unloads when the workflow process ends, so this fits one-off runs
-and testing better than long-running deployments.
+![Local mode: the package runs the model directly on the machine's GPUs.](../assets/images/local_server_mode.png)
 
-Model and vLLM settings are provided through the package
-[configuration](../reference/configuration.md).
+## Remote mode
 
-![Figure 2: Trial and patient summarization using the in-process vLLM backend.](../assets/images/local_server_mode.png)
+The package sends requests to OpenAI-compatible Chat Completions endpoints instead of loading the model, even when
+the server runs on the same machine.
 
-## Remote Package Mode
+```python
+from matchminer_ai import load_preset
 
-Both setups below use remote mode: `matchminer-ai` talks to the model over an
-OpenAI-compatible API instead of loading it in-process — even when the model
-is running on the same machine.
+config = load_preset("default")
+config.remote["enabled"] = True
+config.remote["server_urls"] = ["http://localhost:8000/v1"]
+```
 
-### Connect to a Local vLLM Server
+- **Model name:** each LLM section's `remote.model_name` is the model the endpoint serves (by default
+  `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`), with `request_params` and `extra_body` for the request.
+  To adopt whatever a server serves, `configure_served_model` reads its `/v1/models` and applies that model's
+  sampling profile to the sections you name; see [LLM server helper](../api/llm.md#model-sampling-profiles).
+- **Throughput:** requests flow continuously through one adaptive pool over every URL in `remote.server_urls`, and
+  each patient's next note chunk is sent as soon as the previous one is final. See
+  [LLM runtime](../reference/llm-runtime.md#remote-endpoint-pool).
+- **Structured outputs:** cohort extraction and the other structured steps constrain each answer to their JSON schema
+  (`structured_outputs: true`).
+- **Keys:** set `OPENAI_API_KEY` if the server needs one.
+- **Remote only:** guideline catalogs (`summarize_guidelines`, `summarize_pdq`) require remote mode.
 
-Run the model in a separate vLLM server process on the same machine, and
-point `matchminer-ai` at it. This keeps the model loaded and reusable across
-multiple calls or workflows, rather than reloading it each run.
+### A vLLM server on the same machine
 
-It can also be faster for larger batches: the remote backend sends bounded
-concurrent requests and can distribute work across configured server URLs.
-Actual gains depend on the model, hardware, vLLM server settings, prompt
-sizes, and configured concurrency.
+A separate server keeps the model loaded across calls and workflows. `start_vllm_servers()` starts one `vllm serve`
+process for each URL in `remote.server_urls` (one at `localhost:8000` by default). Each serves the `task` section's
+local model and engine settings under its `remote.model_name`, with the model's reasoning and tool-call parsers:
 
-`matchminer-ai` provides the
-[`start_vllm_servers()`](../api/llm.md) helper to start one local
-OpenAI-compatible vLLM server for each endpoint URL in the package
-[configuration](../reference/configuration.md). With the default
-configuration, this starts one server at a `localhost` URL.
+```python
+from matchminer_ai.llm.vllm_server import start_vllm_servers
 
-![Figure 3: Remote mode connecting to a vLLM server on the same machine.](../assets/images/local_remote_server_mode.png)
+servers = start_vllm_servers(config=config)    # waits until each answers /v1/models
+...
+for server in servers:
+    server.terminate()
+```
 
-### Connect to Another Endpoint
+The default preset's LLM sections all use the same model, so one server serves all of them. See
+[LLM server helper](../api/llm.md).
 
-Point `matchminer-ai` at a model hosted elsewhere — another machine, a
-compute cluster, or an approved service with an OpenAI-compatible chat
-completions API.
+![Remote mode with a vLLM server on the same machine, reached through a localhost URL.](../assets/images/local_remote_server_mode.png)
 
-The model host manages GPU resources and the inference server; you only
-configure the [endpoint URL](../reference/configuration.md). It doesn't have
-to be a vLLM server.
+### An endpoint elsewhere
 
-The remote backend includes a `google_agent_platform` provider profile for
-managed open-model MaaS endpoints. These endpoints expose OpenAI-compatible
-Chat Completions but use refreshable Google ADC OAuth tokens instead of a static
-OpenAI API key. See the configuration reference for the endpoint and model
-settings. vLLM-only `extra_body` fields are omitted automatically.
+Point `remote.server_urls` at a model hosted on another machine, a compute cluster or an approved service. The host
+manages the GPUs and the server, which does not have to be vLLM.
 
-Remote mode expects the endpoint to return the final answer text in
-`message.content`. The default tested setup is a vLLM server with a compatible
-reasoning parser, which separates reasoning text from final answer text. Other
-OpenAI-compatible endpoints may work only if they return final answer text in
-`message.content`; endpoints that include reasoning text in `message.content`
-are not currently supported.
+- **Answers and reasoning:** the endpoint must return the final answer in `message.content` and any reasoning
+  separately (`message.reasoning` or `reasoning_content`), as vLLM does with a reasoning parser. Endpoints that mix
+  reasoning into `message.content` are not supported.
+- **Providers:** `remote.provider` selects authentication.
+    - `openai` (default): any OpenAI-compatible endpoint, with the key from `OPENAI_API_KEY`.
+    - `google_agent_platform`: Google Agent Platform endpoints, with refreshable Google Application Default Credentials
+      for the project in `remote.google_project_id`. vLLM-only `extra_body` fields are left out.
+    - `databricks_anthropic` serves only structured requests, such as the SQL workup agent, not the matching steps.
 
 !!! warning
-    Before sending clinical text to an endpoint outside your local environment,
-    confirm that the endpoint is approved for your data and institution.
+    Before sending clinical text to an endpoint outside your local environment, confirm that the endpoint is
+    approved for your data and institution.
 
-![Figure 4: Remote mode connecting to a model hosted on another machine, cluster, or approved service.](../assets/images/remote_server_mode.png)
+![Remote mode with a model hosted on another machine, cluster or approved service.](../assets/images/remote_server_mode.png)

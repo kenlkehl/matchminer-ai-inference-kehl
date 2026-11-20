@@ -21,8 +21,8 @@ formats and schemas the runtime uses.
 
 - **Matching.** Seven steps: trials to cohorts, notes to patient summaries, TrialSpace embedding, retrieval, and
   three checks of each candidate pair by the decision model (match quality, boilerplate criteria, criteria line by
-  line). The [quickstart](getting-started/quickstart.md) runs them end to end, and the
-  [matching workflow](user-guide/patient-centric-matching.md) explains the concepts behind them.
+  line). The [quickstart](getting-started/quickstart.md) runs them end to end, and
+  [How matching works](user-guide/patient-centric-matching.md) explains the concepts behind them.
 - **Related review tools.**
     - [GoodOption drug evidence](user-guide/good-options-pipeline.md);
     - guideline catalogs from [NCCN](user-guide/guideline-extraction.md) and [PDQ](user-guide/pdq-catalogs.md);

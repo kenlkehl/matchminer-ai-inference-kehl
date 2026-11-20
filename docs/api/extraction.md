@@ -20,7 +20,7 @@ Both accept the note table `summarize_patients` takes: `patient_id`,
 (the record system's label, shown to the model as a hint). Without `note_id`,
 each note gets a stable id from a hash of its patient, date, type and text, and
 exact duplicate notes are kept once. Dates become `YYYY-MM-DD`; a missing date
-stays unknown.
+stays unknown and an unparseable one is an error. Rows without text are dropped.
 
 ```python
 from matchminer_ai import load_default_preset
@@ -43,31 +43,31 @@ items = extraction_items(documents)  # one row per extracted item
 
 The two stages are independent. Passing `patient_records` to the document stage
 lists each patient's known diagnoses (`D1`, `D2`, ...) in its prompts so that
-items can name the cancer they concern (`cancer_ids`), as the lung abstraction
-this generalizes did after its patient pass.
+items can name the cancer they concern (`cancer_ids`).
 
 ## Records
 
-Every record carries `schema_version` (`mmai-clinical-extraction-v2`; v1 records, built
-before lab tests and counseling were added on 2026-11-17, have neither list), its
-`level`, `patient_id`, the selected `extensions`, and `items`: one list per item
-type. A document record adds `note_id`, `note_date`, `note_type`,
-`document_type` and `document_type_text`; a patient record adds `note_count`,
-`first_note_date`, `last_note_date`, `chunk_count` and `failed_chunks`, and gives
-each item an `item_id` (`D1`, `B2`, `T3`, ...). `record_json_schema(level)`
-returns the JSON schema of a record.
+Every record carries `schema_version` (`mmai-clinical-extraction-v2`), its `level`, `patient_id`, the selected
+`extensions`, and `items`: one list per item type. A document record adds `note_id`, `note_date`, `note_type`,
+`document_type` and `document_type_text`; a patient record adds `note_count`, `first_note_date`,
+`last_note_date`, `chunk_count` and `failed_chunks`, and gives each item an `item_id` (`D1`, `B2`, `T3`, ...).
+`record_json_schema(level)` returns the JSON schema of a record.
+
+Records of the earlier `mmai-clinical-extraction-v1` schema have no lab test or counseling lists. The workup
+checks treat those types as not extracted for such records, so an empty list there never means "not done".
 
 Every item has:
 
 - `item_type` and its fields (below). Text the note does not state is `""`, a
   choice it does not settle is `not_stated` (where the vocabulary has it), a
-  list is `[]`, and an integer is `0`.
+  list is `[]`, and an unstated `line_of_therapy` is `0`.
 - dates as `{"value": "2024-03", "precision": "month", "source": ...}`, with
   `precision` `day`, `month`, `year` or `unknown` (value null). `source` is
   `document_text` (written in the note), `note_date` (a report's own study or
   specimen whose date is not written gets the note's date), `evidence_note_date`
-  (a performed patient-level study or procedure without a written date gets the
-  date of the earliest note quoted: it was done on or before then) or `unknown`.
+  (a performed patient-level study, procedure, lab test or counseling item without a written date gets the
+  date of the earliest note quoted: it was done on or before then) or `unknown`. Disease assessments and
+  performance status have no date field: they are dated by their note.
 - `evidence`: one to four exact quotes, each with the note's `note_id`,
   `note_date` and the `start`/`end` character offsets of the quote in the
   note's own text. The model writes the quotes; code locates each one in the
@@ -103,17 +103,19 @@ record, `relation` is `this_report` (the study an imaging report reads, or the
 procedure that produced the specimen a pathology report examines),
 `previously_performed` (an earlier or outside study or procedure the note says
 was done) or `planned`; `source_of_document` is true for `this_report`. In both
-levels `status` is `performed` or `planned`. Procedures, biomarkers,
-treatments and events carry `cancer_ids` (patient level, and document level when
-`patient_records` is given). Disease assessments and performance status are
-properties of one note, so they are document-level only, as in the lung
-abstraction; their table date is the note date.
+levels `status` is `performed` or `planned`. Disease assessments and performance status are
+properties of one note, so they are document-level only; events are patient-level only.
+
+`cancer_ids` lists the patient-level diagnosis ids an item concerns (`[]` when unclear):
+
+- procedures, biomarkers and treatments carry it at both levels;
+- events carry it at the patient level, and document-level diagnoses (the known cancer each one is) and disease
+  assessments at the document level;
+- at the document level it is filled only when `patient_records` is given, and is `[]` otherwise.
 
 An imaging report's record must include the study it reads, and a pathology
 report's the procedure that produced its specimens (`relation` `this_report`),
-or the answer is retried. Neither was extracted by the lung abstraction: it
-used the record system's scan type only to select reports, and it recorded a
-specimen's procedure only as biopsy or surgical excision.
+or the answer is retried.
 
 ### Controlled vocabularies
 
@@ -127,12 +129,18 @@ that is rendered into the prompt and enforced by the JSON schema. Most end with
 | Imaging modality | `ct`, `mri`, `pet_ct`, `pet_mri`, `pet`, `xray`, `ultrasound`, `echocardiography`, `mammography`, `bone_scan`, `nuclear_medicine_other`, `fluoroscopy`, `bone_densitometry`, `other`, `not_stated` |
 | Body region (list) | `brain`, `head_and_neck`, `spine`, `chest`, `breast`, `heart`, `abdomen`, `pelvis`, `extremity`, `whole_body`, `other` |
 | Contrast | `with_contrast`, `without_contrast`, `with_and_without_contrast`, `not_stated` |
-| Pathology procedure (group) | histologic biopsy: `core_needle_biopsy`, `needle_biopsy_not_specified`, `excisional_biopsy`, `incisional_biopsy`, `punch_or_shave_biopsy`, `endoscopic_biopsy`, `bronchoscopic_biopsy`, `mediastinoscopy`, `sentinel_lymph_node_biopsy`, `biopsy_not_specified`; aspiration or cytology: `fine_needle_aspiration`, `ebus_tbna`, `eus_fna`, `fluid_cytology`, `brushing_or_washing_cytology`; surgical resection: `surgical_resection`, `lymph_node_dissection`; `bone_marrow_biopsy`; `peripheral_blood`; `other`; `not_stated` |
+| Pathology procedure, by `procedure_group` | `histologic_biopsy`: `core_needle_biopsy`, `needle_biopsy_not_specified`, `excisional_biopsy`, `incisional_biopsy`, `punch_or_shave_biopsy`, `endoscopic_biopsy`, `bronchoscopic_biopsy`, `mediastinoscopy`, `sentinel_lymph_node_biopsy`, `biopsy_not_specified`; `aspiration_or_cytology`: `fine_needle_aspiration`, `ebus_tbna`, `eus_fna`, `fluid_cytology`, `brushing_or_washing_cytology`; `surgical_resection`: `surgical_resection`, `lymph_node_dissection`; `bone_marrow`: `bone_marrow_biopsy`; `blood`: `peripheral_blood`; `other`: `other`; and `not_stated` (no group) |
 | Image guidance | `ct`, `ultrasound`, `mri`, `fluoroscopy`, `stereotactic`, `none`, `not_stated` |
+| Laterality | `left`, `right`, `bilateral`, `not_stated` |
 | Specimen result | `malignant`, `suspicious_or_atypical`, `negative`, `nondiagnostic`, `not_stated` |
+| Stage basis / extent at diagnosis | `clinical`, `pathologic`, `not_stated` / `localized`, `regional`, `distant`, `not_stated` |
 | Biomarker type / result / method / sample / origin | `mutation`, `fusion_or_rearrangement`, `copy_number_change`, `protein_expression`, `genomic_signature`, `serum_tumor_marker`, `cytogenetic`, `other` / `positive`, `negative`, `equivocal`, `indeterminate`, `not_stated` / `ngs`, `pcr`, `fish`, `ihc`, `karyotype`, `flow_cytometry`, `serum_assay`, `other`, `not_stated` / `tissue`, `plasma`, `blood`, `bone_marrow`, `other`, `not_stated` / `somatic`, `germline`, `not_stated` |
 | Treatment type / status / setting / best response | `systemic_therapy`, `surgery`, `radiation_therapy`, `local_therapy`, `stem_cell_transplant`, `other` / `planned`, `ongoing`, `completed`, `discontinued`, `not_stated` / `neoadjuvant`, `adjuvant`, `definitive`, `advanced_or_metastatic`, `maintenance`, `not_stated` / `complete_response`, `partial_response`, `stable_disease`, `mixed_response`, `progressive_disease`, `not_evaluable`, `not_stated` |
 | Disease status | `no_evidence_of_disease`, `response`, `stable`, `mixed`, `progression`, `indeterminate` |
+| Lab test, by group | hematology: `cbc`, `platelet_count`, `coagulation`, `iron_studies`; chemistry: `cmp`, `bmp`, `electrolytes`, `renal_function`, `liver_function`, `calcium`, `magnesium_phosphate`, `glucose_hba1c`, `ldh`; endocrine: `thyroid_function`, `hormone_levels`; other: `pregnancy_test`, `infectious_serology`, `protein_electrophoresis`, `lipid_panel`, `urinalysis`, `other` |
+| Lab result flag | `normal`, `abnormal`, `not_stated` |
+| Counseling topic | `smoking_cessation`, `genetic_counseling`, `fertility`, `sexual_health`, `contraception_pregnancy`, `psychosocial_distress`, `palliative_care`, `advance_care_planning`, `nutrition`, `exercise_rehabilitation`, `lymphedema`, `survivorship`, `financial_social_needs`, `substance_use`, `other` |
+| Counseling kind | `counseling`, `discussion`, `screening`, `referral`, `consultation`, `not_stated` |
 | Event type | `initial_diagnosis`, `recurrence`, `progression`, `new_metastasis`, `remission`, `hospitalization`, `hospice_enrollment`, `death`, `clinical_trial_enrollment`, `other` |
 
 Sites, histologies, stages, regimens and biomarker names are text as written;
@@ -146,7 +154,7 @@ gets `agents_ncit`: every agent's NCIt concept from the bundled NCIt snapshot
 with the same columns at both levels: `patient_id`, `level`, `note_id`,
 `note_date`, `document_type`, `item_type`, `item_id`, a uniform `date`,
 `date_precision` and `date_source` (the item's primary date, or the note date
-for a document's assessments), every item field (a date field `x` becomes `x`,
+for disease assessments and performance status), every item field (a date field `x` becomes `x`,
 `x_precision` and `x_source`), `evidence` and the complete `item`. Questions a
 workup review asks become DataFrame filters:
 
@@ -198,12 +206,13 @@ completion on a busy server, for example 7,200 seconds; the shared endpoint
 pool retries a timed-out request from the start, so a timeout shorter than a
 completion never finishes.
 
-Returned DataFrames have `extraction_status` (`complete`, `partial` or
-`failed`), `error`, `item_count` and the `record` dict (None when failed).
-`return_metadata=True` adds the schema version, prompt and response-schema
-hashes, extensions, model metadata and every request's attempts (finish reason
-and problem codes, without note text; answers and reasoning only in debug mode).
-`return_qc=True` adds failed, partial and truncated counts.
+Returned DataFrames have `patient_id`, `extraction_status` (`complete`, `partial` or `failed`), `error`,
+`item_count` and the `record` dict (None when failed). The document stage adds `note_id`, `note_date`,
+`note_type` and `document_type` (one row per note, in patient and date order); the patient stage adds
+`note_count`, `chunk_count` and `failed_chunks` (one row per patient). `return_metadata=True` adds the schema
+version, prompt and response-schema hashes, extensions, model metadata and every request's attempts (finish
+reason and problem codes, without note text; answers and reasoning only in debug mode). `return_qc=True` adds
+failed, partial and truncated counts.
 
 ## Patient-level chunking
 
@@ -214,11 +223,10 @@ without sentence deduplication, so quotes stay exact. Each chunk's request
 shows the record so far (items with their ids, fields and the numbers of the
 notes that support them) and returns only the chunk's new and changed items;
 code merges them, adding each update's evidence to the item's earlier evidence.
-The lung abstraction instead asked for the whole running JSON again on every
-chunk, so its cost grew with the square of the record's length, and a later
-answer could silently drop an item. A chunk whose prompt, with the output
-reserve, would exceed `context_tokens` fails the patient rather than being
-truncated.
+An answer never restates the whole record, so its length does not grow with the record, and a later answer
+cannot silently drop an earlier item. Chunks are measured with the model's tokenizer
+(`remote.tokenizer_name`, or the model name). A chunk whose prompt, with the output reserve, would exceed
+`context_tokens` (default `local.engine.max_model_len`) fails the patient rather than being truncated.
 
 ## Checkpoints
 
@@ -226,8 +234,8 @@ With `checkpoint_dir`, the document stage appends each finished note to
 `document_records.jsonl` and the patient stage saves each patient after every
 chunk under `patient_records/` (files named by a hash of the patient id). A
 rerun with unchanged notes, context and extraction contract (schema version,
-prompt, field guide, extensions and response schema) reuses complete and
-partial results and retries the rest. Checkpoints hold patient-derived text.
+prompt, field guide, extension guidance, response schema and NCIt setting) reuses complete and partial results
+and retries the rest. Checkpoints hold patient-derived text.
 
 ## Extensions
 
@@ -235,7 +243,7 @@ Disease-specific item types and prompt guidance are added by extensions,
 selected by name in `document_extraction.extensions` and
 `patient_extraction.extensions`, without changing the core model. The packaged
 `thoracic` extension adds a `smoking_history` item (`smoking_status`,
-`pack_years`, `quit_date`) and the thoracic guidance of the lung abstraction:
+`pack_years`, `quit_date`; at most one per record) and thoracic guidance:
 histology and biomarker examples, lobe and nodal-station sites, thoracic
 operations and EBUS-TBNA. New extensions are registered with
 `register_extension(Extension(name, description, item_types, guidance))`; their

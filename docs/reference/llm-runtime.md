@@ -9,7 +9,13 @@ patient-cohort pair. The section-by-section configuration keys are in [Configura
 LLM sections with `sampling_profile: auto` recognize the model by name and apply its publisher's sampling settings.
 Explicit sampling parameters in a request or section still override them, and `apply_model_profile` replaces a
 previous model's sampling settings rather than merging them. A served alias the package cannot recognize can name a
-profile explicitly.
+profile explicitly: `gemma4`, `qwen3.5`, `qwen3.8`, `nemotron-3.5-super-vl` or `reflection-beam`.
+
+- **Sections without a profile** fix their own sampling, such as greedy extraction, and get no vendor settings.
+  Nemotron is the exception: its profile replaces that fixed sampling, so every workflow it serves sends NVIDIA's
+  settings.
+- **`sampling_profile: none`** sends only the section's own keys.
+- **Unknown models** get no guessed parameters.
 
 ### NVIDIA Nemotron 3.5 Super VL (default)
 
@@ -36,6 +42,20 @@ GoodOption checks), locally and remotely. Gemma 4 and the other profiles remain 
   `enable_thinking=true, medium_effort=true`. Reasoning and the answer share the output-token budget, so sections
   with long tasks leave room for 10-15k reasoning tokens: the LLM match and exclusion checks reserve the training
   teacher's 32,768 tokens.
+
+### Gemma 4
+
+Names containing `gemma-4` (for example `google/gemma-4-31B-it` or an NVFP4 re-upload) get Google's
+[model-card](https://ai.google.dev/gemma/docs/core/model_card_4) defaults: temperature 1.0, top-p 0.95 and top-k 64.
+Thinking is a switch, `chat_template_kwargs.enable_thinking` (on unless the section turns it off), with no graded
+effort. Explicit profile name: `gemma4`.
+
+### Qwen 3.8
+
+Qwen 3.8 names, such as `Qwen/Qwen3.8-Flash-Next`, get Alibaba's defaults: temperature 1.0, top-p 0.95 and presence
+penalty 0 with thinking on; 0.7, 0.8 and 1.5 with `enable_thinking=false`; top-k 20, min-p 0 and repetition penalty
+1.0 in both modes. Qwen 3.8 has graded effort: `chat_template_kwargs.reasoning_effort` is `xhigh` (the default),
+`medium` or `low`, and `preserve_thinking` is on. Explicit profile name: `qwen3.8`.
 
 ### Qwen 3.5
 

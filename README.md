@@ -143,9 +143,9 @@ boilerplate = exclusion_criteria_check(pairs, config=config)
 failing_lines = check_eligibility_criteria(pairs, config=config, filter_failing=True)
 ```
 
-The [example notebook](examples/run_examples.ipynb) walks through an earlier version of the workflow on the sample
-data in `examples/data/`. It uses the legacy hierarchical trial-space extraction
-(`config.trial["extraction_method"] = "hierarchical"`).
+The [example notebook](examples/run_examples.ipynb) runs the same workflow on the sample data in `examples/data/`,
+in both directions, and ends with a review table of the scored pairs.
+[How matching works](docs/user-guide/patient-centric-matching.md) explains the concepts behind each step.
 [Choosing an inference setup](docs/user-guide/local-vs-remote.md) compares in-process and server-based LLMs.
 
 ## Configuration
