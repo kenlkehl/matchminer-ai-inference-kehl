@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import gc
 import json
+import logging
 import os
 import threading
 from datetime import datetime, timezone
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Dict, cast
 
 from matchminer_ai.llm.prompt_rendering import Prompt
@@ -139,21 +139,57 @@ def get_endpoint_model_metadata(
         }
 
 
-@lru_cache(maxsize=2)
+# One local engine at a time: each reserves gpu_memory_utilization (0.9 in the preset) of its GPUs,
+# so an engine for a section with other engine settings cannot start while another is loaded.
+_LOCAL_LLM: dict[str, Any] = {"key": None, "engine": None}
+_LOCAL_LLM_LOCK = threading.RLock()
+
+
 def _get_local_llm(
     model_name: str,
     llm_kwargs_json: str,
 ):
-    """Load and cache a local vLLM model instance from config kwargs."""
-    from vllm import LLM
+    """The local vLLM engine for these settings, loaded on first use.
 
-    llm_kwargs = json.loads(llm_kwargs_json)
-    return LLM(model=model_name, **llm_kwargs)
+    A request with other settings (another model, or a section with another ``max_model_len``)
+    shuts the loaded engine down first, so only one engine holds GPU memory at a time.
+    """
+    key = (model_name, llm_kwargs_json)
+    with _LOCAL_LLM_LOCK:
+        if _LOCAL_LLM["key"] == key:
+            return _LOCAL_LLM["engine"]
+        _release_local_llm()
+        from vllm import LLM
+
+        engine = LLM(model=model_name, **json.loads(llm_kwargs_json))
+        _LOCAL_LLM.update(key=key, engine=engine)
+        return engine
+
+
+def _release_local_llm() -> None:
+    """Shut down the loaded engine, if any, so its GPU memory is freed."""
+    engine = _LOCAL_LLM["engine"]
+    _LOCAL_LLM.update(key=None, engine=None)
+    if engine is None:
+        return
+    # vLLM's engine core runs in its own process; shut it down rather than wait for collection.
+    core = getattr(getattr(engine, "llm_engine", None), "engine_core", None)
+    shutdown = getattr(core, "shutdown", None)
+    if callable(shutdown):
+        try:
+            shutdown()
+        except Exception as exc:  # the engine may already be dead
+            logging.getLogger(__name__).warning("Shutting down the local vLLM engine failed: %s", exc)
+    del engine, core, shutdown
 
 
 def clear_local_llm_cache() -> None:
-    """Release cached local vLLM engine handles and clear Python/GPU caches."""
-    _get_local_llm.cache_clear()
+    """Shut down the loaded local vLLM engine and clear Python/GPU caches.
+
+    Call it before TrialSpace or the decision model loads on the GPU the engine used.
+    """
+    with _LOCAL_LLM_LOCK:
+        _release_local_llm()
     gc.collect()
     try:
         import torch

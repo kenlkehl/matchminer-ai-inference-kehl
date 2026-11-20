@@ -73,12 +73,10 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     ] == {"enable_thinking": True}
 
     assert config.embedding.get("backend", "sequence") == "sequence"
-    # The round-2 TrialSpace, local on purpose (2026-11-12): absent, embedding fails. Encoded as
+    # No TrialSpace in the preset: it comes from embedding.model_path or the site config. Encoded as
     # training's mining encodes it (trialspace/mining.py encoder_settings), with the fit's 4,096-token cap.
     from matchminer_ai.embedding.trialspace_contract import model_prompts
-    assert config.embedding["model_path"] == (
-        "/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/"
-        "trialspace/models/trialspace_round2")
+    assert config.embedding["model_path"] is None
     assert {key: config.embedding[key] for key in (
         "dtype", "autocast", "prompt_profile", "default_prompt_name", "include_prompt_in_pooling",
         "text_only", "batch_size", "max_seq_length")} == dict(
@@ -183,14 +181,14 @@ def test_default_local_engine_settings_reach_vllm(monkeypatch):
     )
     config = load_default_preset()
     runtime = backends.build_llm_runtime_config("patient", config.patient, config=config)
-    backends._get_local_llm.cache_clear()
+    backends.clear_local_llm_cache()
     try:
         backends.LocalBackend().generate_llm_outputs(
             prompt_list=[Prompt(row_idx=0, prompt_text="synthetic prompt", max_tokens=8)],
             llm_config=runtime,
         )
     finally:
-        backends._get_local_llm.cache_clear()
+        backends.clear_local_llm_cache()
     kwargs = mock_vllm.LLM.call_args.kwargs
     assert kwargs["model"] == MODEL
     assert {key: kwargs[key] for key in NEMOTRON_ENGINE} == NEMOTRON_ENGINE

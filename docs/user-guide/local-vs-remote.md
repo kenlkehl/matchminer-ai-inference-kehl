@@ -20,11 +20,12 @@ The package loads the model with vLLM in the workflow's own process. There is no
 - **Configuration:** each LLM section's `local` block sets `model_name`, `engine` (keyword arguments for `vllm.LLM`,
   such as `max_model_len`, `tensor_parallel_size` and `gpu_memory_utilization`), `generation` (sampling parameters)
   and `chat_template_kwargs`. See the [configuration reference](../reference/configuration.md).
-- **Engines:** an engine loads on first use and stays loaded until the process ends. Sections with different engine
-  settings get separate engines (the preset gives trials a 100,000-token context and patients 200,000), and up to two
-  stay loaded. Each reserves `gpu_memory_utilization` (0.9) of its GPUs' memory, so release the first with
-  `matchminer_ai.llm.backends.clear_local_llm_cache()` before the next step, and before TrialSpace or the decision
-  model needs the same GPU.
+- **Engines:** an engine loads on first use and stays loaded. One engine is loaded at a time: a section with
+  different engine settings (the preset gives trials a 100,000-token context and patients 200,000) shuts the loaded
+  engine down and loads its own, so moving between the trial and patient steps reloads the model. The engine
+  reserves `gpu_memory_utilization` (0.9) of its GPUs' memory: call
+  `matchminer_ai.llm.backends.clear_local_llm_cache()` before TrialSpace or the decision model loads on the same
+  GPU.
 - **Requests:** prompts go to the engine in batches. Answers are validated and retried, but not constrained to a JSON
   schema; structured outputs need a server.
 
