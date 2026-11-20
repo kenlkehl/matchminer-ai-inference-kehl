@@ -1093,7 +1093,8 @@ def test_summarize_patients_returns_metadata_and_qc(monkeypatch):
         MagicMock(
             return_value=(
                 summaries_df,
-                {"model_metadata": {"model_name": "summ", "model_sha": "sha"}},
+                {"model_metadata": {"model_name": "summ", "model_sha": "sha"},
+                 "summary_quality": {"attempts": 3, "rejected_attempts": 1}},
                 qc_report,
             )
         ),
@@ -1111,6 +1112,7 @@ def test_summarize_patients_returns_metadata_and_qc(monkeypatch):
     assert metadata["config_snapshot"]["config"] == "snapshot"
     assert metadata["config_snapshot"]["patient"] == _config().patient
     assert metadata["model_metadata"]["summarize_patients"]["model_sha"] == "sha"
+    assert metadata["summary_quality"] == {"attempts": 3, "rejected_attempts": 1}
 
 
 def test_summarize_patients_does_not_request_qc_by_default(monkeypatch, tmp_path):

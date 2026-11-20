@@ -171,7 +171,9 @@ def summarize_patients(
             final chunk for each patient; see
             patient_answer_text above.
     tuple[pd.DataFrame, dict]
-        When return_metadata is True, returns the DataFrame plus a metadata dict.
+        When return_metadata is True, returns the DataFrame plus a metadata dict:
+        ``package``, ``config_snapshot``, ``model_metadata`` and ``summary_quality``
+        (attempt and rejection counts of the summary quality checks).
     tuple[pd.DataFrame, pd.DataFrame]
         When return_qc is True, returns the DataFrame plus a QC report DataFrame.
     tuple[pd.DataFrame, dict, pd.DataFrame]
@@ -245,6 +247,9 @@ def summarize_patients(
                 "summarize_patients": metadata["model_metadata"],
             },
         }
+        if "summary_quality" in metadata:
+            # Attempt and rejection counts of the summary quality checks.
+            metadata_payload["summary_quality"] = metadata["summary_quality"]
         if return_qc:
             return summaries, metadata_payload, qc_report
         return summaries, metadata_payload

@@ -104,9 +104,8 @@ Serial summarization checks each chunk's answer before it becomes the next chunk
   attempts.
 - **Not regenerated:** matching only the core cancer fields, which stays a review signal.
 - **Trace:** `patient.summary_quality_trace_dir` keeps every prompt, answer and reasoning trace in a local directory,
-  rejected attempts included. Debug output includes `patient_summary_attempts`, and the metadata of
-  `summarize_patient_notes`, which `summarize_patients` wraps, reports attempt and rejection counts
-  (`summary_quality`).
+  rejected attempts included. Debug output includes `patient_summary_attempts`, and the metadata
+  (`return_metadata=True`) reports attempt and rejection counts (`summary_quality`).
 
 ## Updating existing summaries
 
