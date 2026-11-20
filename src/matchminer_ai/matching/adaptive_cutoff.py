@@ -8,21 +8,26 @@ from typing import TYPE_CHECKING, Callable, Literal
 
 import pandas as pd
 
+from matchminer_ai._texts import TRIAL_KEY_COLUMNS, trial_id_column
+
 from .llm_checks import score_match_quality_with_llm
-from .rerank import score_match_quality
+from .rerank import reasonableness_cutoff, score_match_quality
 
 if TYPE_CHECKING:
     from matchminer_ai.config import MMAIConfig
 
 
-CutoffCheckMethod = Literal["trial_checker", "llm"]
+CutoffCheckMethod = Literal["decision_model", "llm"]
 TrialCentricCutoffProgress = Callable[[int, int, str], None]
 
-DEFAULT_TRIAL_CHECKER_CUTOFF_THRESHOLD = 0.20
 DEFAULT_LLM_CUTOFF_THRESHOLD = 1.0
 DEFAULT_CUTOFF_PATIENTS_PER_SIDE = 10
 DEFAULT_INITIAL_CUTOFF_PROPORTION = 0.5
 DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS = (0.10, 0.25, 0.50, 0.75, 0.90)
+
+# The probe score of each method: the decision model's P(reasonable), or the LLM's 0-6 match score.
+_SCORE_COLUMNS: dict[str, str] = {"decision_model": "match_quality_reasonableness",
+                                  "llm": "llm_match_quality_score"}
 
 _HISTORY_COLUMNS = [
     "iteration",
@@ -94,31 +99,27 @@ class TrialCentricCutoffStabilityResult:
 
 def _normalize_check_method(value: str) -> CutoffCheckMethod:
     normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
-    aliases: dict[str, CutoffCheckMethod] = {
-        "trial_checker": "trial_checker",
-        "trialchecker": "trial_checker",
-        "llm": "llm",
-        "llm_check": "llm",
-    }
-    try:
-        return aliases[normalized]
-    except KeyError as exc:
-        raise ValueError(
-            "check_method must be either 'trial_checker' or 'llm'."
-        ) from exc
+    if normalized not in _SCORE_COLUMNS:
+        raise ValueError("check_method must be either 'decision_model' or 'llm'.")
+    return normalized  # type: ignore[return-value]
 
 
 def _resolve_score_threshold(
     check_method: CutoffCheckMethod,
     score_threshold: float | None,
+    config: MMAIConfig | None = None,
 ) -> float:
-    default = (
-        DEFAULT_TRIAL_CHECKER_CUTOFF_THRESHOLD
-        if check_method == "trial_checker"
-        else DEFAULT_LLM_CUTOFF_THRESHOLD
-    )
-    threshold = default if score_threshold is None else float(score_threshold)
-    maximum = 1.0 if check_method == "trial_checker" else 5.0
+    """The probe pass threshold: for the decision model a P(reasonable) cutoff, by default
+    ``match_quality.reasonableness_cutoff`` (the rule of ``match_quality_pass``); for the LLM a
+    0-6 match score, by default 1 (the LLM judged the pair reasonable)."""
+    if score_threshold is not None:
+        threshold = float(score_threshold)
+    elif check_method == "decision_model":
+        from matchminer_ai.config import load_default_preset
+        threshold = reasonableness_cutoff(config or load_default_preset())
+    else:
+        threshold = DEFAULT_LLM_CUTOFF_THRESHOLD
+    maximum = 1.0 if check_method == "decision_model" else 6.0
     if not math.isfinite(threshold) or not 0.0 <= threshold <= maximum:
         raise ValueError(
             f"score_threshold must be between 0 and {maximum:g} for "
@@ -149,24 +150,25 @@ def _validate_initial_cutoff_proportion(value: float) -> float:
     return resolved
 
 
-def _prepare_ranked_candidates(candidate_pairs: pd.DataFrame) -> pd.DataFrame:
-    required = [
-        "patient_id",
-        "space_trial_id",
-        "rank",
-        "cancer_history_summary",
-        "clinical_space_summary",
-    ]
-    missing = [column for column in required if column not in candidate_pairs.columns]
+def _prepare_ranked_candidates(candidate_pairs: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    """The ranking sorted by rank, and its trial identifier column."""
+    missing = [column for column in ("patient_id", "rank") if column not in candidate_pairs.columns]
+    if not any(column in candidate_pairs.columns for column in ("cancer_history_summary", "patient_summary")):
+        missing.append("cancer_history_summary")
+    if not any(column in candidate_pairs.columns for column in TRIAL_KEY_COLUMNS):
+        missing.append("cohort_key_criteria")
+    if not any(column in candidate_pairs.columns for column in ("cohort_trial_id", "space_trial_id")):
+        missing.append("cohort_trial_id")
     if missing:
         raise ValueError(
             "candidate_pairs is missing required columns: " + ", ".join(missing)
         )
+    trial_id = trial_id_column(candidate_pairs)
     if candidate_pairs.empty:
-        return candidate_pairs.copy().reset_index(drop=True)
-    if candidate_pairs["space_trial_id"].nunique(dropna=False) != 1:
+        return candidate_pairs.copy().reset_index(drop=True), trial_id
+    if candidate_pairs[trial_id].nunique(dropna=False) != 1:
         raise ValueError(
-            "candidate_pairs must contain the ranking for exactly one trial space."
+            "candidate_pairs must contain the ranking for exactly one cohort."
         )
     if candidate_pairs["patient_id"].duplicated().any():
         raise ValueError("candidate_pairs must contain unique patient_id values.")
@@ -188,21 +190,16 @@ def _prepare_ranked_candidates(candidate_pairs: pd.DataFrame) -> pd.DataFrame:
             "candidate_pairs must contain a complete TrialSpace ranking with "
             "contiguous ranks starting at 1."
         )
-    return ranked.reset_index(drop=True)
+    return ranked.reset_index(drop=True), trial_id
 
 
-def _empty_scored_candidates(check_method: CutoffCheckMethod) -> pd.DataFrame:
-    score_column = (
-        "match_quality_score"
-        if check_method == "trial_checker"
-        else "llm_match_quality_score"
-    )
+def _empty_scored_candidates(check_method: CutoffCheckMethod, trial_id: str) -> pd.DataFrame:
     return pd.DataFrame(
         columns=[
             "patient_id",
-            "space_trial_id",
+            trial_id,
             "rank",
-            score_column,
+            _SCORE_COLUMNS[check_method],
             "cutoff_probe_score",
             "cutoff_probe_pass",
             "cutoff_probe_iteration",
@@ -218,6 +215,7 @@ def _run_cutoff_search(
     radius: int,
     starting_proportion: float,
     score_rows: Callable[[pd.DataFrame], pd.DataFrame],
+    trial_id: str,
     progress_callback: TrialCentricCutoffProgress | None = None,
 ) -> TrialCentricCutoffResult:
     """Run the adaptive search with either live or already-cached scores."""
@@ -230,15 +228,11 @@ def _run_cutoff_search(
             score_threshold=threshold,
             patients_per_side=radius,
             initial_cutoff_proportion=starting_proportion,
-            scored_candidates=_empty_scored_candidates(method),
+            scored_candidates=_empty_scored_candidates(method, trial_id),
             search_history=pd.DataFrame(columns=_HISTORY_COLUMNS),
         )
 
-    score_column = (
-        "match_quality_score"
-        if method == "trial_checker"
-        else "llm_match_quality_score"
-    )
+    score_column = _SCORE_COLUMNS[method]
     score_cache: dict[int, float] = {}
     scored_records: list[dict[str, object]] = []
     history: list[dict[str, object]] = []
@@ -341,7 +335,7 @@ def _run_cutoff_search(
 
     scored_candidates = pd.DataFrame.from_records(scored_records)
     if scored_candidates.empty:
-        scored_candidates = _empty_scored_candidates(method)
+        scored_candidates = _empty_scored_candidates(method, trial_id)
     else:
         scored_candidates = scored_candidates.sort_values(
             "rank",
@@ -363,16 +357,16 @@ def _run_cutoff_search(
 def find_trial_centric_cutoff(
     candidate_pairs: pd.DataFrame,
     *,
-    check_method: str = "trial_checker",
+    check_method: str = "decision_model",
     score_threshold: float | None = None,
     patients_per_side: int = DEFAULT_CUTOFF_PATIENTS_PER_SIDE,
     initial_cutoff_proportion: float = DEFAULT_INITIAL_CUTOFF_PROPORTION,
     config: MMAIConfig | None = None,
     progress_callback: TrialCentricCutoffProgress | None = None,
 ) -> TrialCentricCutoffResult:
-    """Find how many TrialSpace-ranked patients should receive both checkers.
+    """Find how many TrialSpace-ranked patients should receive the full match checks.
 
-    The input must contain the complete patient ranking for one trial space,
+    The input must contain the complete patient ranking for one cohort,
     normally produced with ``generate_candidate_matches(..., k=None)`` and
     joined to the patient and trial summary text. By default the search starts
     halfway down the ranking; ``initial_cutoff_proportion`` can move that first
@@ -385,15 +379,18 @@ def find_trial_centric_cutoff(
     Parameters
     ----------
     candidate_pairs : pd.DataFrame
-        Complete TrialSpace-ranked patient pairs for exactly one trial space.
-        Required columns are ``patient_id``, ``space_trial_id``, ``rank``,
-        ``cancer_history_summary``, and ``clinical_space_summary``.
-    check_method : {"trial_checker", "llm"}, default "trial_checker"
-        Use the decision model's 0-1 match-quality score or the LLM checker's 0-6 score for
-        the boundary probes.
+        Complete TrialSpace-ranked patient pairs for exactly one cohort, with
+        ``patient_id``, ``rank``, ``cohort_trial_id``, ``cohort_key_criteria``
+        and ``cancer_history_summary`` (the historical ``space_trial_id`` and
+        ``clinical_space_summary`` are also accepted).
+    check_method : {"decision_model", "llm"}, default "decision_model"
+        Probe the boundary with the decision model's reasonableness answer
+        (``match_quality_reasonableness``, P(yes)) or the LLM's 0-6 match score.
     score_threshold : float, optional
-        Score at or above which a probe patient passes. Defaults to 0.20 for
-        the decision model and 1 for the LLM checker.
+        Score at or above which a probe patient passes. Defaults to
+        ``match_quality.reasonableness_cutoff`` (0.5, the rule of
+        ``match_quality_pass``) for the decision model and 1 (the LLM judged
+        the pair reasonable) for the LLM.
     patients_per_side : int, default 10
         Number of patients to probe on each side of a proposed cutoff. Windows
         are clipped at the top and bottom of the ranking.
@@ -418,13 +415,13 @@ def find_trial_centric_cutoff(
     patient eligibility or replace review of the complete current protocol.
     """
     method = _normalize_check_method(check_method)
-    threshold = _resolve_score_threshold(method, score_threshold)
+    threshold = _resolve_score_threshold(method, score_threshold, config)
     radius = _validate_patients_per_side(patients_per_side)
     starting_proportion = _validate_initial_cutoff_proportion(initial_cutoff_proportion)
-    ranked = _prepare_ranked_candidates(candidate_pairs)
+    ranked, trial_id = _prepare_ranked_candidates(candidate_pairs)
 
     def score_rows(rows: pd.DataFrame) -> pd.DataFrame:
-        if method == "trial_checker":
+        if method == "decision_model":
             return score_match_quality(
                 rows,
                 config=config,
@@ -439,6 +436,7 @@ def find_trial_centric_cutoff(
         radius=radius,
         starting_proportion=starting_proportion,
         score_rows=score_rows,
+        trial_id=trial_id,
         progress_callback=progress_callback,
     )
 
@@ -466,13 +464,16 @@ def _score_complete_ranking_for_stability(
     ranked: pd.DataFrame,
     *,
     threshold: float,
+    trial_id: str,
     config: MMAIConfig | None,
 ) -> pd.DataFrame:
+    score_column = _SCORE_COLUMNS["decision_model"]
     output_columns = [
         "patient_id",
-        "space_trial_id",
+        trial_id,
         "rank",
         "match_quality_score",
+        score_column,
         "stability_score_pass",
     ]
     if ranked.empty:
@@ -483,7 +484,7 @@ def _score_complete_ranking_for_stability(
         config=config,
         filter_low_quality=False,
     )
-    required = ["patient_id", "space_trial_id", "match_quality_score"]
+    required = ["patient_id", trial_id, "match_quality_score", score_column]
     missing = [column for column in required if column not in checker_output.columns]
     if missing:
         raise ValueError(
@@ -496,7 +497,7 @@ def _score_complete_ranking_for_stability(
             "stability ranking."
         )
 
-    key_columns = ["patient_id", "space_trial_id"]
+    key_columns = ["patient_id", trial_id]
     if checker_output.duplicated(key_columns).any():
         raise ValueError("Match-quality stability output contains duplicate pairs.")
     scored = ranked[key_columns + ["rank"]].merge(
@@ -512,13 +513,11 @@ def _score_complete_ranking_for_stability(
             "Match-quality stability output does not match the complete ranking."
         )
     scored = scored.drop(columns="_merge")
-    scored["match_quality_score"] = pd.to_numeric(
-        scored["match_quality_score"],
-        errors="coerce",
-    )
+    for column in ("match_quality_score", score_column):
+        scored[column] = pd.to_numeric(scored[column], errors="coerce")
     scored["stability_score_pass"] = [
         bool(math.isfinite(score) and score >= threshold)
-        for score in scored["match_quality_score"]
+        for score in scored[score_column]
     ]
     return scored[output_columns]
 
@@ -556,8 +555,9 @@ def assess_trial_centric_cutoff_stability(
         Unique first-probe positions between 0 and 1. Defaults to 10%, 25%,
         50%, 75%, and 90% of the complete ranking.
     score_threshold : float, optional
-        match-quality score at or above which a patient passes for this QA run.
-        Defaults to 0.20 on the 0-1 sigmoid scale.
+        The decision model's P(reasonable) at or above which a patient passes
+        for this QA run. Defaults to ``match_quality.reasonableness_cutoff``
+        (0.5, the rule of ``match_quality_pass``).
     patients_per_side : int, default 10
         Number of patients on each side of every replayed boundary probe.
     config : MMAIConfig, optional
@@ -573,22 +573,23 @@ def assess_trial_centric_cutoff_stability(
         and the cutoff and passing-count spreads.
     """
     proportions = _validate_stability_proportions(initial_cutoff_proportions)
-    threshold = _resolve_score_threshold("trial_checker", score_threshold)
+    threshold = _resolve_score_threshold("decision_model", score_threshold, config)
     radius = _validate_patients_per_side(patients_per_side)
-    ranked = _prepare_ranked_candidates(candidate_pairs)
+    ranked, trial_id = _prepare_ranked_candidates(candidate_pairs)
     total_candidates = len(ranked)
     scored = _score_complete_ranking_for_stability(
         ranked,
         threshold=threshold,
+        trial_id=trial_id,
         config=config,
     )
 
-    score_lookup = scored[["patient_id", "space_trial_id", "match_quality_score"]]
+    score_lookup = scored[["patient_id", trial_id, "match_quality_score", _SCORE_COLUMNS["decision_model"]]]
 
     def cached_score_rows(rows: pd.DataFrame) -> pd.DataFrame:
-        return rows[["patient_id", "space_trial_id"]].merge(
+        return rows[["patient_id", trial_id]].merge(
             score_lookup,
-            on=["patient_id", "space_trial_id"],
+            on=["patient_id", trial_id],
             how="left",
             validate="one_to_one",
             sort=False,
@@ -598,11 +599,12 @@ def assess_trial_centric_cutoff_stability(
     for run_number, proportion in enumerate(proportions, start=1):
         result = _run_cutoff_search(
             ranked,
-            method="trial_checker",
+            method="decision_model",
             threshold=threshold,
             radius=radius,
             starting_proportion=proportion,
             score_rows=cached_score_rows,
+            trial_id=trial_id,
         )
         selected = result.cutoff
         reasonable_count = int(
@@ -663,7 +665,6 @@ __all__ = [
     "DEFAULT_INITIAL_CUTOFF_PROPORTION",
     "DEFAULT_LLM_CUTOFF_THRESHOLD",
     "DEFAULT_STABILITY_INITIAL_CUTOFF_PROPORTIONS",
-    "DEFAULT_TRIAL_CHECKER_CUTOFF_THRESHOLD",
     "CutoffCheckMethod",
     "TrialCentricCutoffProgress",
     "TrialCentricCutoffResult",

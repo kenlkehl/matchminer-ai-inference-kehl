@@ -10,12 +10,12 @@ def _ranked_candidates(count: int) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "patient_id": [f"P{rank:03d}" for rank in range(1, count + 1)],
-            "space_trial_id": ["T1-1"] * count,
+            "cohort_trial_id": ["T1-cohort-1"] * count,
             "rank": list(range(1, count + 1)),
             "cancer_history_summary": [
                 f"Synthetic patient summary {rank}" for rank in range(1, count + 1)
             ],
-            "clinical_space_summary": ["Synthetic trial space"] * count,
+            "cohort_key_criteria": ["Synthetic cohort key criteria"] * count,
         }
     )
 
@@ -32,8 +32,9 @@ def test_find_trial_centric_cutoff_bisects_and_caches_probe_scores(monkeypatch):
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [0.9 if rank <= 20 else 0.1 for rank in ranks],
+                "match_quality_reasonableness": [0.9 if rank <= 20 else 0.1 for rank in ranks],
                 "match_quality_pass": [rank <= 20 for rank in ranks],
             }
         )
@@ -52,8 +53,8 @@ def test_find_trial_centric_cutoff_bisects_and_caches_probe_scores(monkeypatch):
 
     assert result.cutoff == 20
     assert result.total_candidates == 64
-    assert result.check_method == "trial_checker"
-    assert result.score_threshold == pytest.approx(0.2)
+    assert result.check_method == "decision_model"
+    assert result.score_threshold == pytest.approx(0.5)
     assert result.initial_cutoff_proportion == pytest.approx(0.5)
     assert result.search_history.iloc[0]["proposed_cutoff"] == 32
     assert len(progress) == len(result.search_history)
@@ -79,8 +80,9 @@ def test_find_trial_centric_cutoff_can_reach_both_ranking_edges(
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [score] * len(rows),
+                "match_quality_reasonableness": [score] * len(rows),
                 "match_quality_pass": [score >= 0.2] * len(rows),
             }
         )
@@ -111,8 +113,9 @@ def test_find_trial_centric_cutoff_applies_custom_pass_threshold(
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [0.5] * len(rows),
+                "match_quality_reasonableness": [0.5] * len(rows),
                 "match_quality_pass": [True] * len(rows),
             }
         )
@@ -142,8 +145,9 @@ def test_find_trial_centric_cutoff_starts_at_requested_ranking_proportion(
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [0.1] * len(rows),
+                "match_quality_reasonableness": [0.1] * len(rows),
                 "match_quality_pass": [False] * len(rows),
             }
         )
@@ -182,8 +186,9 @@ def test_find_trial_centric_cutoff_accepts_ranking_endpoint_starts(
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [score] * len(rows),
+                "match_quality_reasonableness": [score] * len(rows),
                 "match_quality_pass": [score >= 0.2] * len(rows),
             }
         )
@@ -216,7 +221,7 @@ def test_find_trial_centric_cutoff_uses_llm_scale_and_default_threshold(monkeypa
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "llm_match_quality_score": [1 if rank <= 4 else 0 for rank in ranks],
             }
         )
@@ -250,8 +255,9 @@ def test_find_trial_centric_cutoff_treats_a_tied_window_conservatively(monkeypat
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [0.9 if rank <= 10 else 0.1 for rank in ranks],
+                "match_quality_reasonableness": [0.9 if rank <= 10 else 0.1 for rank in ranks],
                 "match_quality_pass": [rank <= 10 for rank in ranks],
             }
         )
@@ -277,16 +283,16 @@ def test_find_trial_centric_cutoff_validates_complete_single_space_ranking():
         find_trial_centric_cutoff(ranked)
 
     ranked = _ranked_candidates(3)
-    ranked.loc[2, "space_trial_id"] = "T2-1"
-    with pytest.raises(ValueError, match="exactly one trial space"):
+    ranked.loc[2, "cohort_trial_id"] = "T2-cohort-1"
+    with pytest.raises(ValueError, match="exactly one cohort"):
         find_trial_centric_cutoff(ranked)
 
 
 @pytest.mark.parametrize(
     ("method", "threshold", "message"),
     [
-        ("trial_checker", 1.1, "between 0 and 1"),
-        ("llm", 5.1, "between 0 and 5"),
+        ("decision_model", 1.1, "between 0 and 1"),
+        ("llm", 6.1, "between 0 and 6"),
         ("unknown", 0.2, "check_method"),
     ],
 )
@@ -310,3 +316,20 @@ def test_find_trial_centric_cutoff_validates_initial_proportion(proportion):
             _ranked_candidates(0),
             initial_cutoff_proportion=proportion,
         )
+
+
+def test_find_trial_centric_cutoff_accepts_historical_space_columns(monkeypatch):
+    ranked = _ranked_candidates(8).rename(
+        columns={"cohort_trial_id": "space_trial_id", "cohort_key_criteria": "clinical_space_summary"})
+
+    def fake_score(rows, *, config, filter_low_quality):
+        return pd.DataFrame({"patient_id": rows["patient_id"].tolist(),
+                             "space_trial_id": rows["space_trial_id"].tolist(),
+                             "match_quality_score": [0.1] * len(rows),
+                             "match_quality_reasonableness": [0.9] * len(rows)})
+
+    monkeypatch.setattr("matchminer_ai.matching.adaptive_cutoff.score_match_quality", fake_score)
+    result = find_trial_centric_cutoff(ranked, patients_per_side=2)
+    # Every probe is judged reasonable, whatever its low match score: the whole ranking passes.
+    assert result.cutoff == 8
+    assert "space_trial_id" in result.scored_candidates

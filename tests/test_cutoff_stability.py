@@ -10,12 +10,12 @@ def _ranked_candidates(count: int) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "patient_id": [f"P{rank:03d}" for rank in range(1, count + 1)],
-            "space_trial_id": ["T1-1"] * count,
+            "cohort_trial_id": ["T1-cohort-1"] * count,
             "rank": list(range(1, count + 1)),
             "cancer_history_summary": [
                 f"Synthetic patient summary {rank}" for rank in range(1, count + 1)
             ],
-            "clinical_space_summary": ["Synthetic trial space"] * count,
+            "cohort_key_criteria": ["Synthetic cohort key criteria"] * count,
         }
     )
 
@@ -32,8 +32,9 @@ def test_stability_scores_complete_ranking_once_and_reuses_scores(monkeypatch):
         output = pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [0.9 if rank <= 7 else 0.1 for rank in ranks],
+                "match_quality_reasonableness": [0.9 if rank <= 7 else 0.1 for rank in ranks],
             }
         )
         return output.iloc[::-1].reset_index(drop=True)
@@ -74,8 +75,9 @@ def test_stability_uses_requested_threshold_for_retained_pass_count(monkeypatch)
         return pd.DataFrame(
             {
                 "patient_id": rows["patient_id"].tolist(),
-                "space_trial_id": rows["space_trial_id"].tolist(),
+                "cohort_trial_id": rows["cohort_trial_id"].tolist(),
                 "match_quality_score": [0.5] * len(rows),
+                "match_quality_reasonableness": [0.5] * len(rows),
             }
         )
 
@@ -104,7 +106,7 @@ def test_stability_uses_requested_threshold_for_retained_pass_count(monkeypatch)
     assert failing.cutoff_runs["reasonable_consideration_count"].tolist() == [0, 0]
 
 
-def test_stability_empty_ranking_does_not_load_trial_checker(monkeypatch):
+def test_stability_empty_ranking_does_not_load_the_decision_model(monkeypatch):
     def fail_score(*args, **kwargs):
         del args, kwargs
         raise AssertionError("TrialChecker should not run for an empty ranking")

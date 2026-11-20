@@ -34,33 +34,26 @@ full checks, without scoring the whole ranking.
 
 | `check_method` | Probe score | Default `score_threshold` | Allowed thresholds |
 | --- | --- | --- | --- |
-| `"trial_checker"` (default; the name is historical) | `match_quality_score` (0-1) from `score_match_quality` | 0.20 | 0-1 |
-| `"llm"` | `llm_match_quality_score` (0-6, -1 when unparsed) from `score_match_quality_with_llm` | 1 | 0-5 |
+| `"decision_model"` (default) | `match_quality_reasonableness`, the decision model's P(reasonable), from `score_match_quality` | `match_quality.reasonableness_cutoff` (0.5) | 0-1 |
+| `"llm"` | `llm_match_quality_score` (0-6, -1 when unparsed) from `score_match_quality_with_llm` | 1 | 0-6 |
 
-A probe patient passes when its score is at least the threshold. The threshold applies to the score, not to
-`match_quality_pass`.
+A probe patient passes when its score is at least the threshold. With the defaults that is the checks' own pass
+call: `match_quality_pass` for the decision model, and a reasonable answer from the LLM (any score of 1 or more).
 
 The result (`TrialCentricCutoffResult`) has `cutoff`, the number of leading patients to check, and the diagnostics
 `scored_candidates` (every probed patient with its scores and `cutoff_probe_score`, `cutoff_probe_pass` and
 `cutoff_probe_iteration`) and `search_history` (one row per probe).
 
 The input is the complete ranking of every patient for one cohort, with contiguous ranks from 1, joined to the
-patient and cohort text. These helpers still use the historical column names: they require `patient_id`,
-`space_trial_id`, `rank`, `cancer_history_summary` and `clinical_space_summary`. Rename the cohort identifier, and
-copy the key criteria into `clinical_space_summary` (the match questions still read `cohort_key_criteria` when it is
-present):
+patient and cohort text: `patient_id`, `rank`, `cohort_trial_id`, `cohort_key_criteria` and `cancer_history_summary`
+(the historical `space_trial_id` and `clinical_space_summary` are also accepted).
 
 ```python
 from matchminer_ai.matching import find_trial_centric_cutoff, generate_candidate_matches
 
 cohort = cohort_vectors[cohort_vectors["cohort_trial_id"] == "NCT01234567-cohort-1"]
 ranking = generate_candidate_matches(cohort, patient_vectors, k=None)    # every patient, ranked
-candidate_pairs = (
-    ranking.merge(patients, on="patient_id")
-    .merge(cohorts, on="cohort_trial_id")
-    .rename(columns={"cohort_trial_id": "space_trial_id"})
-)
-candidate_pairs["clinical_space_summary"] = candidate_pairs["cohort_key_criteria"]
+candidate_pairs = ranking.merge(patients, on="patient_id").merge(cohorts, on="cohort_trial_id")
 
 result = find_trial_centric_cutoff(candidate_pairs, config=config, initial_cutoff_proportion=0.10)
 pairs_to_check = candidate_pairs.sort_values("rank").head(result.cutoff)
@@ -72,7 +65,8 @@ endpoint, so use only an endpoint authorized for that data.
 
 To test whether the result depends on the first probe position, run the offline stability helper on synthetic or
 otherwise authorized data. It scores the complete ranking once with `score_match_quality`, then replays the search
-from each start:
+from each start; a patient passes when P(reasonable) is at least `score_threshold` (default
+`match_quality.reasonableness_cutoff`):
 
 ```python
 from matchminer_ai.matching import assess_trial_centric_cutoff_stability
