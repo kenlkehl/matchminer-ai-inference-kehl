@@ -57,7 +57,7 @@ print(list_guidelines(source))  # Use the disease folder name from this table.
 
 config = load_default_preset()
 config.remote["enabled"] = True
-config.remote["server_urls"] = ["http://camus:8002/v1"]
+config.remote["server_urls"] = ["http://localhost:8002/v1"]
 config.remote["request_timeout"] = 7200
 config.remote["max_concurrent_requests"] = 32
 

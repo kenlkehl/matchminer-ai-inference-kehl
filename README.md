@@ -222,7 +222,7 @@ ranked by cosine similarity in either direction. **For now the default
 (`google/embeddinggemma-2` fine-tuned by `matchminer-ai-training`'s
 `finetune_embedder.py`) at
 `/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/trialspace/models/trialspace_round2`.
-Where that directory is missing or unreadable (off camus or its NFS mount),
+Where that directory is missing or unreadable (on a machine without it),
 embedding fails with `FileNotFoundError` instead of mixing its vectors with
 another model's; nothing falls back to `ksg-dfci/TrialSpace-0526` or any Hub
 model. It needs sentence-transformers 6.1 or later, which saved it. The

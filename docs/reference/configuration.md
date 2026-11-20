@@ -110,16 +110,16 @@ Databricks AI Gateway's Anthropic Messages route, authenticated with a Databrick
 profile (`databricks_profile`). Only structured requests support it, such as the SQL
 workup agent; see [SQL-agent workup checks](../api/workup-sql.md).
 
-For example, Gemma 4 26B A4B IT MaaS in a project named `profile-notes` uses:
+For example, Gemma 4 26B A4B IT MaaS in a project named `my-gcp-project` uses:
 
 ```python
 config.remote.update(
     {
         "enabled": True,
         "provider": "google_agent_platform",
-        "google_project_id": "profile-notes",
+        "google_project_id": "my-gcp-project",
         "server_urls": [
-            "https://aiplatform.googleapis.com/v1/projects/profile-notes/"
+            "https://aiplatform.googleapis.com/v1/projects/my-gcp-project/"
             "locations/global/endpoints/openapi"
         ],
     }
@@ -649,7 +649,7 @@ Sentence-transformer model path or Hub id passed to `SentenceTransformer(...)`.
 (`google/embeddinggemma-2` fine-tuned by `finetune_embedder.py`). A path that
 starts with `/` or `.`, or that exists, must be a readable directory; otherwise
 embedding (and embedding token counts) fail with `FileNotFoundError`, so runs
-off camus or its NFS mount stop instead of mixing vectors. Nothing falls back
+on a machine without that directory stop instead of mixing vectors. Nothing falls back
 to `ksg-dfci/TrialSpace-0526` or any Hub model. The model was saved by
 sentence-transformers 6.1 and needs 6.1 or later to load.
 

@@ -8,7 +8,7 @@ applied to every catalog LLM stage.
     matchminer-ai-build-good-option-catalog \
         --nct-ids-file data/no_phi/trial_ids.txt \
         --output data/no_phi/good_option_catalog_v12 \
-        --server-url http://sn4622130540:8001/v1
+        --server-url http://gpu-server.example:8001/v1
 """
 
 from __future__ import annotations

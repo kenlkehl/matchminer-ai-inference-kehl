@@ -86,7 +86,7 @@ def answer_schema(task):
     """The JSON schema a task's answer is decoded under (vLLM structured outputs, after the reasoning),
     or None for free text. The JSON tasks (``match``, ``criteria``) are constrained: unconstrained,
     Nemotron 3.5 Super dropped the opening quote of a ``reason`` string in about one answer in six
-    (2026-11-05 test on 172.24.216.113:8002). ``boilerplate`` ends in a free-text Yes!/No!."""
+    (2026-11-05 test on an FP8 server). ``boilerplate`` ends in a free-text Yes!/No!."""
     return {'match': MATCH_LABELS_JSON_SCHEMA, 'criteria': CRITERION_LABEL_JSON_SCHEMA}.get(task)
 
 

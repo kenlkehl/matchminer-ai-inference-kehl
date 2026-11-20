@@ -405,7 +405,7 @@ def test_google_agent_platform_uses_adc_callback_and_user_first_messages(
         prompt_list=[prompt],
         llm_config=_llm_config(
             provider="google_agent_platform",
-            google_project_id="profile-notes",
+            google_project_id="my-gcp-project",
             remote={
                 "model_name": "google/gemma-4-26b-a4b-it-maas",
                 "request_params": {"max_tokens": 10},

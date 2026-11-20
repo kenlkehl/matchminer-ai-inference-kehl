@@ -338,11 +338,11 @@ def test_check_google_agent_platform_uses_minimal_chat_completion(monkeypatch):
 
     result = check_openai_endpoint(
         (
-            "https://aiplatform.googleapis.com/v1/projects/profile-notes/"
+            "https://aiplatform.googleapis.com/v1/projects/my-gcp-project/"
             "locations/global/endpoints/openapi"
         ),
         provider="google_agent_platform",
-        google_project_id="profile-notes",
+        google_project_id="my-gcp-project",
         model_name="google/gemma-4-26b-a4b-it-maas",
         timeout=4,
     )

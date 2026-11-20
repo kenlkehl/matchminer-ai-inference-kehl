@@ -9,14 +9,14 @@ import pytest
 from matchminer_ai.llm.remote_inference import build_remote_request_config
 from matchminer_ai.llm.structured import StructuredClient, resolve_structured_config
 
-ENDPOINT = "https://aiplatform.googleapis.com/v1/projects/profile-notes/locations/global/endpoints/openapi"
+ENDPOINT = "https://aiplatform.googleapis.com/v1/projects/my-gcp-project/locations/global/endpoints/openapi"
 MODEL = "google/gemma-4-26b-a4b-it-maas"
 
 
 def runtime(thinking=True, stream=False):
     return {
         "provider": "google_agent_platform",
-        "google_project_id": "profile-notes",
+        "google_project_id": "my-gcp-project",
         "server_urls": [ENDPOINT],
         "model_name": MODEL,
         "context_window": 262144,

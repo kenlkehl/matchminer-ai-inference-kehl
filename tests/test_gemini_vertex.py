@@ -14,13 +14,13 @@ from matchminer_ai.llm.structured import (
     resolve_structured_config,
 )
 
-ENDPOINT = "https://aiplatform.googleapis.com/v1/projects/profile-notes/locations/global/endpoints/openapi"
+ENDPOINT = "https://aiplatform.googleapis.com/v1/projects/my-gcp-project/locations/global/endpoints/openapi"
 MODEL = "google/gemini-3.8-flash"
 
 
 def runtime(**overrides):
     return {
-        "provider": "google_agent_platform", "google_project_id": "profile-notes",
+        "provider": "google_agent_platform", "google_project_id": "my-gcp-project",
         "model_name": MODEL, "server_urls": [ENDPOINT], "context_window": 1048576,
         "tokenizer_mode": "bytes", "stream": False, "sampling_profile": "auto",
         "reasoning_effort": "xhigh", "max_concurrent_requests": 1,
@@ -78,7 +78,7 @@ def test_structured_wire_uses_fresh_adc_and_no_vllm_parameters(monkeypatch, stre
         assert body["response_format"]["type"] == "json_schema"
         assert body["max_tokens"] == 65536
         assert not {"temperature", "top_p", "top_k", "chat_template_kwargs"} & body.keys()
-    assert auth_calls == [{"provider": "google_agent_platform", "google_project_id": "profile-notes"}] * 2
+    assert auth_calls == [{"provider": "google_agent_platform", "google_project_id": "my-gcp-project"}] * 2
 
 
 @pytest.mark.parametrize("url", ["http://aiplatform.googleapis.com/v1", "https://untrusted.test/v1",

@@ -9,7 +9,7 @@ holds the input identifier and one normalized `embedding` vector, and
 `google/embeddinggemma-2` fine-tuned for one epoch after round 2 by the training
 repository's `finetune_embedder.py` (stage receipt `d7ef7270…`), at
 `/ksg/kehl_mm_data/mmai/v23/data/no_phi/synthetic_dataset_n5000_screened_20261106/trialspace/models/trialspace_round2`.
-Runs where it is missing or unreadable, such as off camus or its NFS mount,
+Runs where it is missing or unreadable, such as on a machine without that directory,
 fail with `FileNotFoundError` rather than mix vectors from different models:
 nothing falls back to `ksg-dfci/TrialSpace-0526` or any Hub model. Loading it
 needs sentence-transformers 6.1 or later (the version that saved it).

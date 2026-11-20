@@ -452,7 +452,7 @@ After verifying the server health and reported model, run:
 
 ```bash
 python examples/note_search_qa_smoke.py \
-  --endpoint http://sn4622130540:8001/v1 \
+  --endpoint http://gpu-server.example:8001/v1 \
   --model Inferact/Qwen3.8-Flash-Next-NVFP4
 ```
 
@@ -465,7 +465,7 @@ not a service bundled with the package.
 
 ### Development smoke result, 2026-09-29
 
-On the verified `sn4622130540:8001` endpoint serving
+On a verified endpoint serving
 `Inferact/Qwen3.8-Flash-Next-NVFP4`, the example returned the expected answers for
 all four fabricated questions: HER2 testing completed, its result not yet
 returned, CT chest explicitly not performed, and ECG documentation unknown.
