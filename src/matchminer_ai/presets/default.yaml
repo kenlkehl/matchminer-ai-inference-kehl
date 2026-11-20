@@ -22,7 +22,6 @@ remote:
   batch_size: 1000
   retry_backoff_base: 1.0
 trial:
-  extraction_method: cohorts
   cohorts:
     # ctgov listings and protocols share the three cohort prompts
     # (trials/cohort_workflow.py): screen, cohort names, criteria per cohort.
@@ -33,12 +32,6 @@ trial:
     # each sent as another returns; a local one gets batches of chunk_size.
     chunk_size: 500
     chunks_in_flight: 2
-  hierarchy:
-    max_attempts: 4
-    max_nodes: 4096
-    max_calls: 20000
-    batch_size: 256
-    active_trials: 32
   sampling_profile: auto
   reasoning_effort: xhigh
   reasoning_parser: auto
@@ -71,10 +64,6 @@ trial:
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true
-  prompt_files:
-    primer: trial.user.primer.txt
-    question: trial.user.question.txt
-  boilerplate_marker: Boilerplate exclusions
 patient:
   sampling_profile: auto
   reasoning_effort: xhigh
@@ -331,50 +320,6 @@ workup_sql_agent:
     request_params:
       max_tokens: 32000
     extra_body:
-      skip_special_tokens: false
-      chat_template_kwargs:
-        enable_thinking: true
-trial_space_criteria_extraction:
-  max_document_characters: 120000
-  max_criteria_per_type: 256
-  response_retry_limit: 2
-  reasoning_parser: auto
-  local:
-    model_name: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
-    engine:
-      max_model_len: 100000
-      tensor_parallel_size: 1
-      gpu_memory_utilization: 0.9
-      language_model_only: true
-      trust_remote_code: true
-      enable_prefix_caching: true
-      mamba_backend: flashinfer
-      mamba_ssm_cache_dtype: float16
-      enable_mamba_cache_stochastic_rounding: true
-      mamba_cache_philox_rounds: 5
-      mamba_cache_mode: align
-    chat_template_kwargs:
-      enable_thinking: true
-    generation:
-      temperature: 0.0
-      top_k: 1
-      top_p: 1.0
-      min_p: 0.0
-      max_tokens: 50000
-      repetition_penalty: 1.05
-      skip_special_tokens: false
-  remote:
-    model_name: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
-    request_params:
-      max_tokens: 50000
-      temperature: 0.0
-      top_p: 1.0
-      response_format:
-        type: json_object
-    extra_body:
-      top_k: 1
-      min_p: 0.0
-      repetition_penalty: 1.05
       skip_special_tokens: false
       chat_template_kwargs:
         enable_thinking: true

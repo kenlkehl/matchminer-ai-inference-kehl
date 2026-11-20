@@ -2,7 +2,7 @@ from matchminer_ai.config import load_default_preset
 
 MODEL = "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"
 LLM_SECTIONS = (
-    "trial", "patient", "trial_space_criteria_extraction", "protocol_cohort_extraction",
+    "trial", "patient", "protocol_cohort_extraction",
     "synthetic_protocol_generation", "llm_match_quality", "llm_exclusion_criteria",
     "llm_good_option", "document_extraction", "patient_extraction",
 )
@@ -49,28 +49,6 @@ def test_default_preset_uses_vendor_profiles_and_compatible_matching_models():
     assert config.patient["chunk_overlap"] == 500
     assert config.patient["local"]["generation"]["max_tokens"] == 50000
     assert config.patient["remote"]["request_params"]["max_tokens"] == 50000
-    assert config.trial_space_criteria_extraction["max_document_characters"] == 120000
-    assert config.trial_space_criteria_extraction["max_criteria_per_type"] == 256
-    assert config.trial_space_criteria_extraction["response_retry_limit"] == 2
-    assert (
-        config.trial_space_criteria_extraction["local"]["generation"]["max_tokens"]
-        == 50000
-    )
-    assert config.trial_space_criteria_extraction["local"]["engine"][
-        "max_model_len"
-    ] == 100000
-    assert config.trial_space_criteria_extraction["local"]["chat_template_kwargs"] == {
-        "enable_thinking": True
-    }
-    assert config.trial_space_criteria_extraction["remote"]["request_params"][
-        "max_tokens"
-    ] == 50000
-    assert config.trial_space_criteria_extraction["remote"]["request_params"][
-        "response_format"
-    ] == {"type": "json_object"}
-    assert config.trial_space_criteria_extraction["remote"]["extra_body"][
-        "chat_template_kwargs"
-    ] == {"enable_thinking": True}
 
     assert config.embedding.get("backend", "sequence") == "sequence"
     # The round-2 TrialSpace, local on purpose (2026-11-12): absent, embedding fails. Encoded as

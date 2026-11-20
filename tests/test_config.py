@@ -26,10 +26,6 @@ trial:
     request_params:
       max_tokens: 128
     extra_body: {}
-  prompt_files:
-    primer: trial.user.primer.txt
-    question: trial.user.question.txt
-  boilerplate_marker: Boilerplate exclusions
 patient:
   local:
     model_name: custom-patient-model
@@ -101,3 +97,30 @@ def test_configs_with_removed_sections_still_load(tmp_path):
 
     assert {name: config.raw[name] for name in removed} == removed
     assert config.good_option_catalog["ncit_resource"] == "Thesaurus_26.07d.FLAT.zip"
+
+
+def test_trial_space_method_configs_fail_and_saved_cohort_configs_load(tmp_path):
+    """The hierarchical and one_shot trial methods are gone: naming one fails instead of extracting cohorts, while
+    saved cohort configs, which still carry their keys and the criteria-extraction section, load with them only in raw."""
+    import pandas as pd
+    import yaml
+
+    from matchminer_ai.trials import extract_cohorts
+
+    data = load_preset("default").raw
+    legacy = {"extraction_method": "cohorts", "hierarchy": {"max_attempts": 4}, "boilerplate_marker": "Boilerplate exclusions",
+              "prompt_files": {"primer": "trial.user.primer.txt", "question": "trial.user.question.txt"}}
+    saved = {**data, "trial": {**data["trial"], **legacy}, "trial_space_criteria_extraction": {"local": {}}}
+    path = tmp_path / "saved.yaml"
+    path.write_text(yaml.safe_dump(saved), encoding="utf-8")
+    config = load_config(path)
+    assert config.trial == load_preset("default").trial and config.raw["trial"]["hierarchy"] == {"max_attempts": 4}
+    assert not hasattr(config, "trial_space_criteria_extraction")
+
+    path.write_text(yaml.safe_dump({**saved, "trial": {**saved["trial"], "extraction_method": "hierarchical"}}))
+    with pytest.raises(ValueError, match="hierarchical and one_shot trial-space methods were removed"):
+        load_config(path)
+    config.trial["extraction_method"] = "one_shot"
+    listing = pd.DataFrame([dict(trial_id="NCT1", trial_title="Fabricated", brief_summary="s", eligibility_criteria="Adults.")])
+    with pytest.raises(ValueError, match="'one_shot'"):
+        extract_cohorts(listing, config=config)

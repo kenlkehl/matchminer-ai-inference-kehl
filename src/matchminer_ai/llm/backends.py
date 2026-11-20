@@ -229,8 +229,6 @@ class LocalBackend:
                 "vllm_server_args",
                 "sampling_profile",
                 "reasoning_effort",
-                "extraction_method",
-                "hierarchy",
             }
         }
         sampling_params = dict(llm_config["sampling_params"])

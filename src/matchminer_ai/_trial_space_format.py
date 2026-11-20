@@ -1,7 +1,7 @@
-"""Label checks for current and saved legacy trial-space text.
+"""Field checks for saved trial-space text, which training's sample_trials accepts from older datasets.
 
-Mirrored as training's trial_space_format.py. These checks preserve the original
-text; they never infer polarity or convert split criteria to combined criteria.
+These checks preserve the original text; they never infer polarity or convert split
+criteria to combined criteria.
 """
 
 REQUIRED_TRIAL_SPACE_KEYWORDS = (

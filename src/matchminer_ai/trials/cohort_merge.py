@@ -21,7 +21,7 @@ from typing import Any
 import pandas as pd
 
 from matchminer_ai._storage import atomic_json
-from matchminer_ai.config import MMAIConfig, load_default_preset
+from matchminer_ai.config import MMAIConfig, load_default_preset, trial_settings
 from matchminer_ai.llm.backends import build_llm_runtime_config, get_llm_backend
 from matchminer_ai.llm.prompts import load_prompt_text
 from matchminer_ai.llm.request_queue import RequestQueue
@@ -71,10 +71,8 @@ def _section(config: MMAIConfig, section: str, response_name: str = "trial_cohor
     """(runtime, settings) of the trial or protocol_cohort_extraction section, as their extraction uses them."""
     from .cohorts import cohort_settings
     if section == "trial":
-        llm = deepcopy(config.trial)
+        llm = trial_settings(deepcopy(config.trial))
         settings = llm.pop("cohorts", {})
-        for key in ("extraction_method", "hierarchy"):
-            llm.pop(key, None)
     elif section == "protocol_cohort_extraction":
         settings = dict(config.protocol_cohort_extraction)
         llm = {key: deepcopy(value) for key, value in settings.items()
