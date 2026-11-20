@@ -19,19 +19,8 @@ def _require_cuda() -> None:
 def test_trial_summarization_gpu_smoke():
     """Run trial summarization end-to-end on GPU for a small sample."""
     _require_cuda()
-    data_path = (
-        Path(__file__).resolve().parents[2]
-        / "examples"
-        / "data"
-        / "scheduled__2025-09-04T230000+0000.trials_for_summarize.csv"
-    )
+    data_path = Path(__file__).resolve().parents[2] / "examples" / "data" / "trials_for_summarize.csv"
     trials = pd.read_csv(data_path, nrows=2)
-    trials = trials.rename(
-        columns={
-            "oncore_id": "trial_id",
-            "title": "trial_title",
-        }
-    )
     trials = trials[
         ["trial_id", "trial_title", "brief_summary", "eligibility_criteria"]
     ]

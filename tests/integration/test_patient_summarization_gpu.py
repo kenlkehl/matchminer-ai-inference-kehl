@@ -17,24 +17,11 @@ def _require_cuda() -> None:
 
 @pytest.mark.resource_heavy
 def test_patient_summarization_gpu_smoke():
-    """Run tagging + summarization end-to-end on GPU for a small sample."""
+    """Run serial summarization end-to-end on GPU for the first sample notes."""
     _require_cuda()
-    data_path = (
-        Path(__file__).resolve().parents[2]
-        / "examples"
-        / "data"
-        / "2026_01_16_dummy_notes.csv"
-    )
-    notes = pd.read_csv(data_path, nrows=3)
-    notes = notes.rename(
-        columns={
-            "DFCI_MRN": "patient_id",
-            "RPT_TEXT": "note_text",
-            "NOTE_SOURCE": "note_type",
-            "EVENT_DATE": "note_date",
-        }
-    )
-    notes = notes[["patient_id", "note_text", "note_type", "note_date"]]
+    data_path = Path(__file__).resolve().parents[2] / "examples" / "data" / "note_set_1.csv"
+    notes = pd.read_csv(data_path, nrows=3, dtype={"patient_id": str})
+    notes = notes[["patient_id", "note_text", "note_date"]]
 
     summaries, metadata = summarize_patients(notes, return_metadata=True)
 
