@@ -27,16 +27,15 @@ def _get_checker_pipeline(
     model_name: str,
     device: str,
     max_length: int,
-    model_metadata_cache_dir: str | None,
 ):
-    """Load and cache a Transformers text-classification checker pipeline."""
+    """Load and cache a Transformers text-classification checker pipeline.
+
+    The tokenizer comes from the Hugging Face cache like the model, not from the package's model-metadata
+    cache directory.
+    """
     from transformers import AutoTokenizer, pipeline
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        cache_dir=model_metadata_cache_dir,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     return pipeline(
         "text-classification",
         model_name,
@@ -72,12 +71,7 @@ def run_checker(
     model_name = checker_config["model_name"]
     device = checker_config["device"]
     max_length = int(checker_config.get("max_length", 4096))
-    checker_pipeline = _get_checker_pipeline(
-        model_name,
-        device,
-        max_length,
-        model_metadata_cache_dir,
-    )
+    checker_pipeline = _get_checker_pipeline(model_name, device, max_length)
     model_metadata = get_model_metadata(
         model_name,
         cache_dir=model_metadata_cache_dir,
