@@ -26,8 +26,14 @@ nav:
       - NCI PDQ catalogs: user-guide/pdq-catalogs.md
       - Note-search question answering: user-guide/note-search-qa.md
       - Population workup review: user-guide/population-workup.md
+  - Training:
+      - Overview: training/index.md
+      - Synthetic protocols: training/synthetic-protocols.md
+      - OncoReasoning: training/oncoreasoning.md
+  - Evaluation: evaluation/index.md
   - Reference:
       - Configuration: reference/configuration.md
+      - Site configuration: reference/site-config.md
       - QC Metrics: reference/qc-metrics.md
   - Development:
       - Contributing: development/contributing.md
