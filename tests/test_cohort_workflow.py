@@ -267,13 +267,6 @@ def test_process_trials_runs_every_trial_step_in_order(monkeypatch):
     assert set(metadata) == {"extraction", "merge", "boilerplate"}
 
 
-def test_summarize_trials_is_a_deprecated_alias_of_extract_cohorts(monkeypatch):
-    import matchminer_ai.trials as trials_api
-    monkeypatch.setattr(trials_api, "extract_cohorts", lambda *args, **kwargs: ("rows", kwargs))
-    with pytest.warns(DeprecationWarning, match="extract_cohorts"):
-        assert trials_api.summarize_trials("listings", return_metadata=True) == ("rows", {"return_metadata": True})
-
-
 def test_process_trials_routes_protocols_to_their_extractor_and_section(monkeypatch):
     import matchminer_ai.trials as trials_api
     seen = []

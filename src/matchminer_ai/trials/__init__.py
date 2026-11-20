@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
-import warnings
 
 from matchminer_ai._metadata import package_metadata
 from matchminer_ai.config import MMAIConfig, config_snapshot
@@ -55,7 +54,6 @@ def extract_cohorts(
     returned rows, as for full protocols (:func:`extract_protocol_cohorts`):
     :func:`merge_equivalent_cohorts` and :func:`remove_boilerplate_criteria`, both with the default
     ``section="trial"`` (training uses both, in that order; :func:`process_trials` runs all three).
-    ``summarize_trials`` is a deprecated alias.
 
     Parameters
     ----------
@@ -132,12 +130,6 @@ def extract_cohorts(
     if return_qc:
         return result, qc_report
     return result
-
-
-def summarize_trials(*args, **kwargs):
-    """Deprecated alias of :func:`extract_cohorts`."""
-    warnings.warn("summarize_trials is deprecated; use extract_cohorts", DeprecationWarning, stacklevel=2)
-    return extract_cohorts(*args, **kwargs)
 
 
 def process_trials(
@@ -238,7 +230,6 @@ __all__ = [
     "process_trials",
     "SyntheticProtocolProgress",
     "generate_synthetic_protocols",
-    "summarize_trials",
     "summarize_guidelines",
     "add_guideline_cohort_criteria",
     "review_guideline_citations",
