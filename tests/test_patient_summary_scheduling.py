@@ -314,3 +314,23 @@ def test_pooled_request_capacity_follows_the_registry(tmp_path):
             return first, edited, session.request_capacity()
 
     assert asyncio.run(capacities()) == (8, 4, 4)
+
+
+def test_serial_trace_reads_every_chunk_of_a_checkpointed_run_in_chain_order(monkeypatch, tmp_path):
+    """The per-chunk chain (prior summary, reasoning, answer) as resuming would adopt it; nothing is asked."""
+    from matchminer_ai.patients import serial_trace
+
+    chunks = {"P1": ["a", "b", "c"], "P2": ["x [error]", "y"]}
+    result, _, _ = _run(monkeypatch, tmp_path, chunks, backend=_Backend())
+    journal = ChunkJournal(tmp_path)
+    journal.append([{**load_chunk_journal(tmp_path)[0], "prior_summary": "another chain", "chunk_index": 1}])
+    journal.close()
+    trace = serial_trace(tmp_path)
+    assert list(zip(trace.patient_id, trace.chunk_index)) == [("P1", 0), ("P1", 1), ("P1", 2), ("P2", 0), ("P2", 1)]
+    p1 = trace[trace.patient_id == "P1"]
+    assert p1.prior_summary.iloc[1:].tolist() == p1.summary.iloc[:-1].tolist()
+    assert p1.reasoning.str.startswith("reasoning").all() and p1.first_date.tolist()[0] == "2024-01-01"
+    final = result.set_index("patient_id").loc["P1"]
+    assert p1.summary.iloc[-1].split("\n")[0] in final.cancer_history_summary
+    p2 = trace[trace.patient_id == "P2"]
+    assert p2.finish_reason.iloc[0] == "error" and p2.summary.isna().iloc[1]

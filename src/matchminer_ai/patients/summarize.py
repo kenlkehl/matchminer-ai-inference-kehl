@@ -225,6 +225,8 @@ class _SerialState:
     quality: dict[str, int] = field(
         default_factory=lambda: {"attempts": 0, "rejected_attempts": 0}
     )
+    # Every adopted chunk result, in chain order (``serial_trace`` only; None records nothing).
+    trace: list[dict[str, Any]] | None = None
 
     def remaining(self, patient_id: str) -> int:
         """Chunks this patient still needs; none once their summary failed."""
@@ -266,6 +268,8 @@ class _SerialState:
             return False
         if chunk_index and row["prior_summary"] != self.summaries.get(patient_id):
             return False
+        if self.trace is not None:
+            self.trace.append(dict(row, patient_id=patient_id, chunk_index=chunk_index))
         self._advance(
             patient_id,
             chunk_index,
@@ -348,6 +352,42 @@ def _restore_checkpoints(state: _SerialState, checkpoint_dir: str | Path) -> boo
             len(saved) - adopted,
         )
     return bool(saved)
+
+
+def serial_trace(checkpoint_dir: str | Path) -> pd.DataFrame:
+    """Every chunk of a checkpointed summarization run with its result, in each patient's chain order.
+
+    Reads ``checkpoint_dir`` (the directory passed to :func:`summarize_patient_notes`) the way resuming does: a
+    saved result counts only where it continues its patient's chain. One row per prepared chunk:
+    ``patient_id``, ``chunk_index``, ``first_date``, ``last_date``, and, where the chunk has a result,
+    ``prior_summary`` (the summary its prompt carried), ``reasoning`` (the model's reasoning), ``summary`` (its
+    answer, the next chunk's prior summary) and ``finish_reason`` (``error`` when every attempt failed; that
+    patient's later chunks have no result). Nothing is sent to a model.
+    """
+    prepared = load_prepared_chunks(checkpoint_dir)
+    if prepared is None:
+        raise FileNotFoundError(f"No prepared chunks in {checkpoint_dir}")
+    state = _SerialState(chunks=_patient_chunks(prepared), summaries={}, debug=False, trace=[])
+    _restore_checkpoints(state, checkpoint_dir)
+    results = pd.DataFrame(
+        [
+            {
+                "patient_id": str(row["patient_id"]),
+                "chunk_index": int(row["chunk_index"]),
+                "prior_summary": row.get("prior_summary"),
+                "reasoning": row.get("patient_reasoning_text"),
+                "summary": row.get("patient_answer_text"),
+                "finish_reason": row.get("finish_reason"),
+            }
+            for row in state.trace or []
+        ],
+        columns=["patient_id", "chunk_index", "prior_summary", "reasoning", "summary", "finish_reason"],
+    )
+    chunks = prepared[["patient_id", "chunk_index", "first_date", "last_date"]].copy()
+    chunks["patient_id"] = chunks["patient_id"].astype(str)
+    chunks["chunk_index"] = chunks["chunk_index"].astype(int)
+    merged = chunks.merge(results, on=["patient_id", "chunk_index"], how="left")
+    return merged.sort_values(["patient_id", "chunk_index"], kind="mergesort").reset_index(drop=True)
 
 
 def _build_prompt_list(
@@ -884,6 +924,7 @@ def summarize_patient_notes(
 __all__ = [
     "RECENT_SUMMARY_LOOKBACK_DAYS",
     "notes_after_existing_summaries",
+    "serial_trace",
     "summarize_patient_notes",
     "validate_existing_summaries",
 ]

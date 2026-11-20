@@ -34,7 +34,7 @@ from .pdf import (
     concatenate_patient_note_pdfs,
 )
 from .summary_quality import check_patient_summary
-from .summarize import summarize_patient_notes
+from .summarize import serial_trace, summarize_patient_notes
 from .workup import review_patient_workup
 from .workup_queries import (
     check_workup_with_extractions,
@@ -278,6 +278,7 @@ __all__ = [
     "extraction_items",
     "review_patient_workup",
     "review_patient_workup_with_note_search",
+    "serial_trace",
     "summarize_patient_notes",
     "summarize_patients",
     "validate_workup_query",

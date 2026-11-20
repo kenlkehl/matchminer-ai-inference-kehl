@@ -96,7 +96,7 @@ must match the teacher model or be an approved quantization of it, listed in
 `EQUIVALENT_TEACHER_ROOTS` in the inference package's `matchminer_ai.labeling.runner`: the
 Gemma 4 31B builds, and Nemotron 3.5 Super VL NVFP4 and FP8, whose tokenizers and chat
 templates are identical). Scripts that start their own vLLM servers for Nemotron (the
-teacher pool of `training.from_summaries` and `summaries.summarize` in local mode) add `--trust-remote-code` and its hybrid-Mamba flags
+teacher pool of `training.from_summaries`) add `--trust-remote-code` and its hybrid-Mamba flags
 (`vllm_reasoning.nemotron_serve_flags()`) with the `nemotron_v3` reasoning parser. The
 NVFP4 build needs native FP4 (Blackwell); on H100s, override with the FP8 build,
 `RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8`.
@@ -155,12 +155,12 @@ NVFP4 build needs native FP4 (Blackwell); on H100s, override with the FP8 build,
   fabricated calendar dates from event ages, ending at `--synthetic-date-anchor`
   (2025-01-01), and writes patient metadata. All synthetic splits are pooled for
   training (`synthetic.pool`); the original split is kept as `source_split`.
-- **Summarize** (`summaries.summarize`, with `summaries.pool` and
-  `summaries.workspace`). Serial, chronological summarization with the inference
-  package's prompts: each patient's dated notes are concatenated, split into
-  overlapping token chunks (the pipeline uses 50,000 tokens with 500 overlap), and
-  each chunk updates the running summary. Invalid chunks are rewound and redone.
-  There is no note tagging or retrieval step.
+- **Summarize** (`summaries.summarize`). The package's own serial summarizer
+  (`matchminer_ai.patients.summarize_patients`, the same code and prompts as at runtime): each patient's dated
+  notes are deduplicated and concatenated, split into overlapping token chunks (the pipeline uses 50,000 tokens
+  with 500 overlap), and each chunk updates the running summary; a chunk that fails the quality checks is asked
+  again. The stage writes every chunk's prior summary, reasoning and answer (`patients.serial_trace`, the table
+  OncoReasoning trains on) and each patient's final summary. There is no note tagging or retrieval step.
 - **Prepare training** (`synthetic.prepare` summaries`). Joins final
   summaries to patient and cohort IDs, class, source trial and split, and keeps
   each summary's two sections apart (2026-11-04): `patient_summary` is the key
