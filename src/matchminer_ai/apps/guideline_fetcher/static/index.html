@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#144fc9" />
+    <title>MatchMiner-AI guideline dashboard</title>
+    <link rel="icon" href="/static/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/style.css" />
+    <script type="module" src="/static/app.js"></script>
+    <script type="module" src="/static/population.js"></script>
+  </head>
+  <body class="population-mode">
+    <a class="skip" href="#workspace">Skip to workspace</a>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="MatchMiner-AI standard of care dashboard home"
+        ><img src="/static/mark.svg" alt="" width="42" height="42" /><span
+          >MatchMiner-AI<span class="brand-light"> standard of care dashboard</span></span
+        ></a
+      >
+      <nav aria-label="Main navigation">
+        <div class="view-tabs" role="tablist" aria-label="Management view">
+          <button id="population-tab" role="tab" aria-selected="true" aria-controls="population-view" data-view="population">Population management</button>
+          <button id="patient-tab" role="tab" aria-selected="false" aria-controls="patient-view" tabindex="-1" data-view="patient">Patient evaluation</button>
+        </div>
+        <button class="nav-link" id="library-nav">
+          Guideline library <span id="nav-count" class="count">—</span>
+        </button>
+        <button class="connection" id="connection-nav">
+          <span class="dot"></span>Model picker
+          <span aria-hidden="true">↗</span>
+        </button>
+        <!-- mode:phi -->
+        <form class="sign-out" method="post" action="/logout">
+          <button class="nav-link" type="submit">Sign out</button>
+        </form>
+        <!-- /mode:phi -->
+      </nav>
+    </header>
+    <main id="workspace">
+      <div id="error" class="error-banner" role="alert" hidden></div>
+      <div class="workspace-grid" id="patient-view" role="tabpanel" aria-labelledby="patient-tab" hidden>
+        <section class="patient-panel panel" aria-labelledby="patient-title">
+          <div class="panel-heading">
+            <div class="number">01</div>
+            <div>
+              <h2 id="patient-title">The patient</h2>
+              <p>Start with a summary or clinical notes.</p>
+            </div>
+            <button
+              class="icon-button"
+              id="clear"
+              title="Clear workspace"
+              aria-label="Clear workspace"
+            >
+              ↺
+            </button>
+          </div>
+          <div
+            class="input-tabs"
+            role="tablist"
+            aria-label="Patient input type"
+          >
+            <button
+              role="tab"
+              id="summary-tab"
+              aria-selected="true"
+              aria-controls="summary-pane"
+              data-input="summary"
+            >
+              Patient summary</button
+            ><button
+              role="tab"
+              id="notes-tab"
+              aria-selected="false"
+              aria-controls="notes-pane"
+              data-input="notes"
+              tabindex="-1"
+            >
+              Clinical notes
+            </button>
+          </div>
+          <div
+            class="input-pane"
+            id="summary-pane"
+            role="tabpanel"
+            aria-labelledby="summary-tab"
+          >
+            <label for="summary-synthetic-case">Synthetic case</label>
+            <select id="summary-synthetic-case" data-synthetic-case
+              aria-describedby="summary-synthetic-case-help" disabled>
+              <option value="">Loading available cases…</option>
+            </select>
+            <p id="summary-synthetic-case-help" class="helper synthetic-case-help">
+              Shares the selection with Clinical notes. Loads that case’s original notes
+              and uses your configured LLM to create its summary.
+            </p>
+            <button class="button secondary full synthetic-case-action" id="example" disabled>
+              Create synthetic summary
+            </button>
+            <label for="summary">Cancer history summary</label>
+            <textarea
+              id="summary"
+              placeholder="Include the diagnosis, disease extent, biomarkers, prior treatments, and current clinical situation."
+              spellcheck="false"
+              maxlength="100000"
+            ></textarea>
+            <div class="editor-meta">
+              <span id="summary-label">Your summary stays editable</span
+              ><span id="summary-count">0 words</span>
+            </div>
+            <p id="summary-compression-notice" class="helper" hidden></p>
+            <details id="exclusion-section" hidden>
+              <summary>Other clinical context from summarization</summary>
+              <p id="exclusion-evidence" class="preformatted"></p>
+            </details>
+          </div>
+          <div
+            class="input-pane"
+            id="notes-pane"
+            role="tabpanel"
+            aria-labelledby="notes-tab"
+            hidden
+          >
+            <label for="synthetic-case">Synthetic case</label>
+            <select id="synthetic-case" data-synthetic-case aria-describedby="synthetic-case-help" disabled>
+              <option value="">Loading available cases…</option>
+            </select>
+            <p id="synthetic-case-help" class="helper synthetic-case-help">
+              Shares the selection with Patient summary. Loads the case’s original notes and dates.
+            </p>
+            <button class="button secondary full synthetic-case-action" id="synthetic-notes" disabled>
+              Use synthetic notes
+            </button>
+            <label class="upload-zone" for="upload"
+              ><span class="upload-icon" aria-hidden="true">↑</span
+              ><strong>Upload patient records</strong
+              ><span>PDF, CSV, TXT or Markdown · up to 20 MB</span
+              ><input id="upload" type="file" accept=".pdf,.csv,.txt,.md"
+            /></label>
+            <label for="notes">Or paste clinical notes</label
+            ><textarea
+              id="notes"
+              placeholder="Paste the longitudinal record here. Include clinical dates when available."
+              spellcheck="false"
+              maxlength="2000000"
+            ></textarea>
+            <p id="upload-notice" class="helper">
+              CSV: note_text, optional note_date and patient_id. One patient per
+              file. PDF uploads require readable text.
+            </p>
+          </div>
+          <div class="input-pane note-preprocessing">
+            <button class="button secondary full" id="notes-table-button" disabled>
+              View clinical notes table
+            </button>
+            <button class="button secondary full" id="compress-notes" disabled>
+              Compress notes
+            </button>
+            <p id="compression-status" class="helper" role="status">
+              Optional standalone action. Compression may lose information; original notes stay intact.
+            </p>
+            <label for="patient-note-source">Notes to use</label>
+            <select id="patient-note-source" data-note-source>
+              <option value="original">Original notes</option>
+              <option value="compressed" disabled>Saved compressed notes · unavailable</option>
+            </select>
+            <p class="helper">Applies to the next summary or workup review.
+              These actions use the selected notes without running compression.</p>
+            <div id="summary-actions" hidden>
+              <button class="button primary full" id="summarize">
+                Create patient summary <span aria-hidden="true">→</span>
+              </button>
+              <p class="endpoint-note">
+                Notes are sent to your configured LLM. Review the generated
+                summary before searching.
+              </p>
+            </div>
+          </div>
+          <div class="search-controls">
+            <div class="section-divider"><span>SEARCH SCOPE</span></div>
+            <label for="catalog">Guideline collection</label
+            ><select id="catalog">
+              <option value="">Loading completed catalogs…</option>
+            </select>
+            <div class="search-row">
+              <div>
+                <label for="top-n">Spaces to return</label
+                ><select id="top-n">
+                  <option selected>1</option>
+                  <option>3</option>
+                  <option>5</option>
+                  <option>10</option>
+                  <option>20</option>
+                </select>
+              </div>
+              <div class="method-note">
+                <strong>Matched to the population</strong
+                ><span>Ranked by match quality</span>
+              </div>
+            </div>
+            <details class="advanced">
+              <summary>Search settings</summary>
+              <label for="candidate-k">Candidate spaces to rerank</label
+              ><input
+                id="candidate-k"
+                type="number"
+                min="1"
+                max="100"
+                value="5"
+              />
+              <p class="helper">
+                TrialSpace retrieves candidates; the decision model's match
+                questions rank their clinical fit. Candidate count must cover the
+                requested results.
+              </p>
+            </details>
+            <button class="button primary full" id="retrieve" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5"></circle>
+                <path d="m16 16 5 5"></path></svg
+              >Find guideline spaces <span aria-hidden="true">→</span>
+            </button>
+            <p class="search-footnote">
+              Search uses local TrialSpace and decision models.
+            </p>
+          </div>
+        </section>
+        <section class="results-panel" aria-labelledby="results-title">
+          <div class="results-heading">
+            <div>
+              <p class="eyebrow">02 / GUIDELINE CONTEXT</p>
+              <h2 id="results-title">Considerations for review</h2>
+            </div>
+            <button class="button secondary small" id="download" hidden>
+              ↓ Export report
+            </button>
+          </div>
+          <div
+            class="progress-card"
+            id="progress"
+            role="status"
+            aria-live="polite"
+            hidden
+          >
+            <div class="progress-top">
+              <span class="spinner"></span
+              ><strong id="progress-title">Finding relevant spaces</strong
+              ><span id="elapsed">0:00</span>
+            </div>
+            <p id="progress-message"></p>
+            <button class="button secondary small" id="stop-job" type="button" disabled>Stop</button>
+            <div class="progress-track"><span></span></div>
+            <p class="helper">
+              Stop ends local review and prevents further requests. A request already
+              accepted by the LLM server may still finish there. Refreshing keeps the job running.
+            </p>
+          </div>
+          <div class="empty-state" id="empty">
+            <div class="orbit" aria-hidden="true">
+              <div class="orbit-circle"></div>
+              <div class="orbit-paper">
+                <span></span><span></span><span></span><b>↗</b>
+              </div>
+              <i class="orbit-node n1"></i><i class="orbit-node n2"></i
+              ><i class="orbit-node n3"></i>
+            </div>
+            <h3>No guideline results yet</h3>
+            <p>
+              Add a patient summary to find relevant guideline populations and
+              explore their diagnostic and treatment considerations.
+            </p>
+            <ol class="workflow">
+              <li>
+                <span>1</span><strong>Describe</strong
+                ><small>Patient context</small>
+              </li>
+              <li>
+                <span>2</span><strong>Match</strong
+                ><small>Guideline spaces</small>
+              </li>
+              <li>
+                <span>3</span><strong>Review</strong
+                ><small>Source-backed options</small>
+              </li>
+            </ol>
+          </div>
+          <div id="results" hidden>
+            <div class="results-summary" id="results-summary"></div>
+            <div class="review-note">
+              <span aria-hidden="true">ⓘ</span>
+              <p>
+                Ranking reflects population fit. Individual options may require
+                additional tests, biomarkers, or prior treatments. Review each
+                condition and its source.
+              </p>
+            </div>
+            <div id="space-list"></div>
+            <details class="provenance">
+              <summary>Retrieval & model provenance</summary>
+              <div id="provenance"></div>
+            </details>
+          </div>
+          <aside class="source-note">
+            <div class="source-symbol" aria-hidden="true">≋</div>
+            <div>
+              <strong>Connected to guideline library.</strong>
+              <p>
+                Considerations retain the library's conditions, evidence, and
+                uncertainties.
+              </p>
+            </div>
+          </aside>
+        </section>
+      </div>
+
+      <section id="population-view" role="tabpanel" aria-labelledby="population-tab">
+        <div id="pop-error" class="error-banner" role="alert" hidden>
+          <span id="pop-error-message"></span>
+          <button id="pop-retry" class="button secondary small" hidden>Retry population connection</button>
+        </div>
+        <div class="population-layout">
+          <aside class="panel population-controls" aria-label="Population workflow" tabindex="0">
+            <div class="population-step"><span class="eyebrow">01 / SOURCE POPULATION</span>
+              <!-- mode:standard -->
+              <h3>Load patients</h3><p class="helper">Random sample of local synthetic summaries and their original notes.</p>
+              <div class="population-fields"><div><label for="pop-size">Sample size</label><input id="pop-size" type="number" min="1" max="100000" value="1000"></div>
+                <div><label for="pop-seed">Random seed</label><input id="pop-seed" type="number" min="0" max="4.294967295e9" value="23"></div></div>
+              <button id="pop-load" class="button secondary full">Load synthetic population</button>
+              <!-- /mode:standard -->
+              <!-- mode:phi -->
+              <h3>Load patients</h3><p class="helper">Load every real patient from a preprocessed population cache: current summaries with precomputed TrialSpace embeddings. Notes are read for matched patients. Build or refresh the cache with <code>python -m matchminer_ai.apps.guideline_fetcher.preprocess_population</code>.</p>
+              <label for="pop-cache">Preprocessed population cache</label>
+              <div class="population-database"><input id="pop-cache" type="text" spellcheck="false" autocomplete="off" aria-describedby="pop-cache-status">
+                <button id="pop-cache-browse" class="button secondary small" type="button">Browse…</button></div>
+              <p id="pop-cache-status" class="helper" role="status"></p>
+              <button id="pop-cache-load" class="button secondary full">Load cached population</button>
+              <!-- /mode:phi -->
+              <p id="pop-source-status" class="helper" role="status">No population loaded.</p>
+              <!-- mode:phi -->
+              <details class="advanced"><summary>Sample from a DuckDB database</summary>
+                <p class="helper">Random sample of patients with a current summary, with all of their source notes. The database is opened read-only, and summaries are embedded at each search.</p>
+                <label for="pop-database">DuckDB database</label>
+                <div class="population-database"><input id="pop-database" type="text" spellcheck="false" autocomplete="off" aria-describedby="pop-database-status">
+                  <button id="pop-browse" class="button secondary small" type="button">Browse…</button></div>
+                <p id="pop-database-status" class="helper" role="status"></p>
+                <div class="population-fields"><div><label for="pop-size">Sample size</label><input id="pop-size" type="number" min="1" max="100000" value="1000"></div>
+                  <div><label for="pop-seed">Random seed</label><input id="pop-seed" type="number" min="0" max="4.294967295e9" value="23"></div></div>
+                <button id="pop-load" class="button secondary full">Load sample from database</button>
+              </details>
+              <!-- /mode:phi -->
+              <details class="advanced"><summary>Use your own cohort</summary>
+                <p class="helper">CSV or Parquet. Summaries: patient_id, cancer_history_summary. Notes: patient_id, note_text, optional note_date and note_type. All patients need notes. Combined limit: 512 MB.</p>
+                <label for="pop-summary-file">Summary table</label><input id="pop-summary-file" type="file" accept=".csv,.parquet">
+                <label for="pop-notes-file">Notes table</label><input id="pop-notes-file" type="file" accept=".csv,.parquet">
+                <button id="pop-tables" class="button secondary full">Load cohort tables</button>
+                <label for="pop-archive">Restore an exported cohort</label><input id="pop-archive" type="file" accept=".zip">
+                <button id="pop-import" class="button secondary full">Import cohort archive</button>
+              </details>
+            </div>
+            <div class="population-step"><span class="eyebrow">02 / GUIDELINE POPULATION</span>
+              <h3>Find matching patients</h3>
+              <label for="pop-catalog">Finalized guideline catalog</label><select id="pop-catalog"><option value="">Choose a catalog</option></select>
+              <button id="pop-refresh" class="button secondary small">Refresh catalogs</button>
+              <label for="pop-filter">Filter trial spaces</label><input id="pop-filter" type="search" placeholder="Cancer, stage, biomarker…">
+              <label for="pop-space">Guideline trial space</label><select id="pop-space"><option value="">Choose a catalog first</option></select>
+              <details class="advanced"><summary>Selected population key criteria</summary><p id="pop-definition" class="population-text">No space selected.</p></details>
+              <label for="pop-candidates">Patient summaries to retrieve and score</label><input id="pop-candidates" type="number" min="1" max="100000" value="50">
+              <label for="pop-threshold">Minimum match-quality score</label><input id="pop-threshold" type="number" min="0" max="1" step="0.01" value="0.20">
+              <p class="helper">TrialSpace searches the full loaded population. The decision model's match questions score up to this candidate count. A threshold of 0 keeps all candidates; scores are not probabilities.</p>
+              <button id="pop-retrieve" class="button primary full" disabled>Fetch matching patients</button>
+            </div>
+            <div class="population-step"><span class="eyebrow">03 / PREPARE & REVIEW</span><h3>Active cohort notes</h3>
+              <button id="pop-compress" class="button secondary full" disabled>Compress cohort notes · optional</button>
+              <p id="pop-compression-status" class="helper">Original notes are retained. Compression may lose information.</p>
+              <label for="pop-method">Review method</label><select id="pop-method"><option value="full_notes">Full-note review · the LLM reads each patient's notes</option><option value="extraction_queries">Extraction queries · code checks precomputed extraction records</option><option value="extraction_sql">SQL agent · an LLM writes one SQL query per workup item over the extraction records</option></select>
+              <label for="pop-note-source">Notes to review</label><select id="pop-note-source"><option value="original">Original notes</option><option value="compressed" disabled>Saved compressed notes</option></select>
+              <div id="pop-concurrency-controls">
+              <label for="pop-concurrency">Patients reviewed at once</label><input id="pop-concurrency" type="number" min="1" max="32" value="4">
+              <p class="helper">Each patient's selected notes are reviewed in full, chunk by chunk, for every workup item. Each request contains only one patient's notes.</p>
+              </div>
+              <div id="pop-extraction-controls" hidden>
+              <label for="pop-extractions">Extraction records</label><input id="pop-extractions" type="text" spellcheck="false" autocomplete="off" aria-describedby="pop-extractions-status">
+              <p id="pop-extractions-status" class="helper" role="status"></p>
+              <p class="helper">Built offline with <code>python -m matchminer_ai.apps.guideline_fetcher.preprocess_extractions</code> from this population's original notes.</p>
+              <p id="pop-sql-help" class="helper" hidden>For each workup item, an LLM agent explores these records with read-only SQL (no files, network or other tools) and accepts one query, cached for this store; code then runs it once over the active cohort's extracted items. The agent's query results (extracted values from the whole store, without patient ids, note text or evidence quotes) go to the concordance connection: use only an endpoint authorized for these records. Results link each item to its quote in the source note; they are review aids, not determinations, and notes without records make a result unknown.</p>
+              <p id="pop-extraction-help" class="helper">Each workup item is compiled once into a query (cached; only guideline text goes to the concordance connection), then the query runs in code on every patient's extracted items. No patient text reaches an LLM in this step. Results link each item to its quote in the source note; they are review aids, not determinations, and notes without records make a result unknown.</p>
+              </div>
+              <button id="pop-review" class="button primary full" disabled>Check guideline concordance</button>
+              <p class="helper">Uses the saved guideline concordance connection and its enabled full-note backup. Compression uses its own saved connection.</p>
+              <button id="pop-connections" class="button secondary small">Models & connection ↗</button>
+            </div>
+          </aside>
+          <div class="population-dashboard">
+            <div class="population-pinned">
+            <div id="pop-progress" class="progress-card" role="status" aria-live="polite" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <p id="pop-progress-message"></p>
+              <button id="pop-stop" class="button secondary small">Stop</button>
+            </div>
+            <div class="population-summary">
+              <div class="population-metrics" id="pop-metrics"></div>
+              <button id="pop-clear" class="button secondary small">Clear population</button>
+            </div>
+            </div>
+            <div class="population-results-pane" role="region" aria-label="Population results" tabindex="0">
+            <section class="panel population-results">
+              <div class="population-heading"><h3 id="pop-active-title">Choose a guideline population</h3>
+                <button id="pop-export" class="button secondary small" disabled>↓ Export cohort</button></div>
+              <p id="pop-active-definition" class="population-text"></p>
+              <p id="pop-active-status" class="helper">Load a population, then select a finalized trial space to find matching patients.</p>
+              <details id="pop-matches" class="advanced" hidden><summary>Matched patients & scores</summary><div id="pop-match-table" class="population-table-wrap"></div></details>
+              <p class="helper">Export cohort saves the active patients, source notes, summaries, compressed notes, guideline sources and any completed results in one ZIP. Explicit downloads contain the patient record.</p>
+            </section>
+            <section class="panel population-results">
+              <div class="population-heading"><div><p class="eyebrow">WORKUP DOCUMENTATION</p><h3>Distribution by guideline</h3></div>
+                <div class="population-actions"><button id="pop-json" class="button secondary small" disabled>↓ Results JSON</button><button id="pop-csv" class="button secondary small" disabled>↓ Results CSV</button></div></div>
+              <p id="pop-report-status" class="helper">Run concordance checking to review every active patient against every workup item.</p>
+              <div id="pop-distribution" class="population-table-wrap"></div>
+              <p class="helper">Select a workup guideline to inspect individual patients. Completed / applicable assessed excludes uncertain applicability, not applicable findings and review errors. Counts always include every active patient.</p>
+            </section>
+            <aside class="review-note"><p><strong>Research documentation review.</strong> Missing documentation means not located in the reviewed notes, not that care was omitted. Applicability, timing and completeness need human review. This does not establish overall guideline concordance. Compressed-note findings require checking the original record. Notes reach the configured LLM; use authorized endpoints.</p></aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="footer-tools">
+          <span><span class="tiny-mark" aria-hidden="true">✦</span> Powered by MatchMiner-AI</span>
+        </div>
+        <p>
+          Research use only. Not clinical advice or an eligibility
+          determination. Clinician and source review required.
+        </p>
+      </footer>
+    </main>
+    <dialog id="library-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">YOUR LOCAL COLLECTION</p>
+          <h2>Guideline library</h2>
+        </div>
+        <button
+          class="icon-button"
+          data-close="library-dialog"
+          aria-label="Close library"
+        >
+          ×
+        </button>
+      </div>
+      <p class="dialog-intro">
+        Only completed catalogs with a passing stored audit appear here. Refresh
+        as more guidelines finish processing.
+      </p>
+      <div class="library-toolbar">
+        <label class="sr-only" for="library-search">Filter guidelines</label
+        ><input
+          id="library-search"
+          type="search"
+          placeholder="Find a guideline…"
+        /><button class="button secondary" id="refresh-library">
+          ↻ Refresh
+        </button>
+      </div>
+      <p id="library-total" class="helper"></p>
+      <div id="library-list"></div>
+    </dialog>
+    <dialog id="notes-dialog" class="notes-dialog" aria-labelledby="notes-view-title">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">PATIENT RECORD</p>
+          <h2 id="notes-view-title">Clinical notes</h2>
+        </div>
+        <button class="icon-button" data-close="notes-dialog" aria-label="Close clinical notes">×</button>
+      </div>
+      <div class="notes-view-toolbar">
+        <p class="helper" id="notes-view-status"></p>
+        <button class="button secondary" id="expand-all-notes">Show whole notes</button>
+      </div>
+      <p class="helper" id="notes-view-compression"></p>
+      <div class="notes-table-scroll">
+        <table id="clinical-notes-table" class="clinical-notes-table"></table>
+      </div>
+    </dialog>
+    <dialog id="connection-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">WORKSPACE SETTINGS</p>
+          <h2>Models & connection</h2>
+        </div>
+        <button
+          class="icon-button"
+          data-close="connection-dialog"
+          aria-label="Close settings"
+        >
+          ×
+        </button>
+      </div>
+      <p class="dialog-intro">
+        Choose a model connection for one task or apply it to all tasks in this browser session.
+      </p>
+      <form id="connection-form" class="connection-form">
+        <label for="llm-task">Task</label>
+        <select id="llm-task">
+          <option value="summarize">Patient summarization</option>
+          <option value="compress">Note compression</option>
+          <option value="workup">Guideline concordance checks</option>
+          <option value="workup_sql">Guideline concordance checks: SQL agent</option>
+          <option value="workup_full_backup">Guideline concordance checks: Full note backup</option>
+          <option value="workup_agent_backup">Guideline concordance checks: Agent backup</option>
+        </select>
+        <div id="backup-settings" hidden>
+          <label class="thinking-choice" for="llm-backup-enabled">
+            <input id="llm-backup-enabled" type="checkbox" />
+            <span>Enable this backup model</span>
+          </label>
+          <label for="llm-failure-threshold">Consecutive failures before switching</label>
+          <input id="llm-failure-threshold" type="number" min="1" max="10" value="3" required />
+          <p class="helper">Retries count toward this threshold. Agent search also switches after repeated Python errors in an item. Successful searches reset the error count. Notes are sent to this backup only when it is enabled and needed.</p>
+        </div>
+        <label for="llm-backend">LLM provider</label>
+        <select id="llm-backend">
+          <option value="local">Local / OpenAI-compatible server</option>
+          <option value="gemini4_vertex">Gemini 4 Hydrogen · Google Cloud</option>
+          <option value="gemini_vertex">Gemini 3.8 Flash · Google Cloud</option>
+          <option value="gemma_vertex">Gemma 4 26B MaaS · Google Cloud</option>
+          <option value="claude_databricks">Claude · Databricks AI Gateway (SQL agent only)</option>
+        </select>
+        <p class="helper" id="provider-help"></p>
+        <label for="llm-endpoint">LLM endpoint</label>
+        <input id="llm-endpoint" type="text" required maxlength="2048"
+          placeholder="http://localhost:8000/v1" autocomplete="off" spellcheck="false"
+          aria-describedby="endpoint-help" />
+        <p class="helper" id="endpoint-help">
+          Use an OpenAI-compatible server address. A bare address such as gpu-server:8000 also works.
+          Localhost refers to the machine running this dashboard.
+        </p>
+        <div class="connection-actions">
+          <button class="button secondary" id="check-endpoint" type="button">
+            Discover model
+          </button>
+          <span class="helper" id="connection-check-help">Reads the endpoint’s model list and fills in the model below.</span>
+        </div>
+        <label for="llm-model">Model</label>
+        <input id="llm-model" type="text" required maxlength="512" list="endpoint-models"
+          autocomplete="off" spellcheck="false" placeholder="Served model name" />
+        <datalist id="endpoint-models"></datalist>
+        <label class="thinking-choice" for="llm-reasoning">
+          <input id="llm-reasoning" type="checkbox" aria-describedby="thinking-help" />
+          <span>Enable thinking / reasoning</span>
+        </label>
+        <p class="helper" id="thinking-help">Off by default where the model supports a thinking switch.</p>
+        <details class="advanced" id="tokenizer-settings">
+          <summary>Tokenizer override</summary>
+          <label for="llm-tokenizer">Tokenizer model or local path</label>
+          <input id="llm-tokenizer" type="text" maxlength="512" autocomplete="off"
+            spellcheck="false" placeholder="Use the selected model" />
+          <p class="helper">
+            Leave blank to use the model above. If the server uses an alias, supply
+            its matching Hugging Face tokenizer ID or a path on the dashboard server.
+          </p>
+        </details>
+        <div class="connection-save-actions">
+          <button class="button primary" id="save-connection" type="submit">Save settings</button>
+          <button class="button secondary" id="set-all-tasks" type="button"
+            aria-describedby="all-tasks-help">Set all tasks to this model</button>
+        </div>
+        <p class="helper" id="all-tasks-help">
+          Copies this provider, endpoint, model, tokenizer and reasoning setting to every task.
+          Backup enablement and failure thresholds are saved per task. You can edit individual tasks afterward.
+        </p>
+      </form>
+      <p id="endpoint-status" role="status"></p>
+      <div id="connection-details"></div>
+      <div class="privacy-note">
+        <strong>Keep the data flow in view.</strong>
+        <p>
+          Summarization, note compression and concordance checks send notes to their selected LLM endpoints, including enabled backups when needed. The SQL agent sends its queries' results (extracted values, without patient ids, note text or quotes) to its own connection, which is the concordance checks' unless set. Guideline
+          <!-- mode:standard -->
+          retrieval uses local models. Use synthetic data unless these endpoints
+          and deployment are authorized for your patient records.
+          <!-- /mode:standard -->
+          <!-- mode:phi -->
+          retrieval uses local models. This deployment reads real patient records:
+          select only LLM endpoints authorized for PHI.
+          <!-- /mode:phi -->
+        </p>
+        <p>
+          <!-- mode:standard -->
+          There is no browser storage or saved patient database. Results are
+          <!-- /mode:standard -->
+          <!-- mode:phi -->
+          The population database is opened read-only and nothing is written to it.
+          There is no browser storage. Results are
+          <!-- /mode:phi -->
+          held in server memory for about one hour; Clear workspace removes
+          completed jobs. Refreshing restores the latest job in this browser
+          session. Unsubmitted edits are not saved.
+        </p>
+      </div>
+      <p class="helper">
+        Saved LLM settings apply to new jobs in this browser session and reset
+        after an hour of settings inactivity or a server restart. Running jobs keep
+        their original settings. Environment variables set the server defaults.
+        <!-- mode:standard -->
+        This app has no user authentication; keep access within your intended private network.
+        <!-- /mode:standard -->
+        <!-- mode:phi -->
+        The server listens only on this machine's loopback address and requires the
+        access token; Sign out ends this browser's sign-in.
+        <!-- /mode:phi -->
+      </p>
+    </dialog>
+    <dialog id="pop-item-dialog" class="population-dialog" aria-labelledby="pop-item-title">
+      <div class="population-heading"><h2 id="pop-item-title">Workup patients</h2><button class="button secondary small" data-pop-close="pop-item-dialog">Close</button></div>
+      <p id="pop-item-conditions" class="population-text"></p>
+      <label for="pop-status-filter">Filter documentation status</label><select id="pop-status-filter"><option value="">All patients</option></select>
+      <div id="pop-item-patients" class="population-table-wrap"></div>
+    </dialog>
+    <!-- mode:phi -->
+    <dialog id="pop-database-dialog" class="population-dialog" aria-labelledby="pop-database-title">
+      <div class="population-heading"><h2 id="pop-database-title">Choose a DuckDB database</h2><button class="button secondary small" data-pop-close="pop-database-dialog">Close</button></div>
+      <p id="pop-database-help" class="helper">Folders and .duckdb files on this server, within the configured database folders. Choosing a file checks its tables without reading patient rows.</p>
+      <p id="pop-database-folder" class="population-text"></p>
+      <div id="pop-database-entries" class="population-table-wrap"></div>
+    </dialog>
+    <!-- /mode:phi -->
+    <dialog id="pop-patient-dialog" class="population-dialog" aria-labelledby="pop-patient-title">
+      <div class="population-heading"><h2 id="pop-patient-title">Patient details</h2><button class="button secondary small" data-pop-close="pop-patient-dialog">Close</button></div>
+      <div id="pop-patient-detail"></div>
+    </dialog>
+    <dialog id="evidence-note-dialog" class="population-dialog" aria-labelledby="evidence-note-title">
+      <div class="population-heading"><h2 id="evidence-note-title">Note</h2><button class="button secondary small" data-close="evidence-note-dialog">Close</button></div>
+      <p class="helper">The quoted span is marked in the original note text. Extracted items are review aids; read the whole note.</p>
+      <pre id="evidence-note-text" class="population-text"></pre>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </body>
+</html>

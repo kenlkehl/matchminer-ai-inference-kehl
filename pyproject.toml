@@ -57,6 +57,8 @@ matchminer-ai-llm-trial-check = "matchminer_ai.cli.llm_trial_check:main"
 matchminer-ai-build-good-option-catalog = "matchminer_ai.cli.build_good_option_catalog:main"
 # The training pipeline (matchminer_ai.training.pipeline): stages from the ctgov export to the decision model.
 mmai-train = "matchminer_ai.training.pipeline:main"
+mmai-guideline-fetcher = "matchminer_ai.apps.guideline_fetcher.run:main"
+mmai-dashboard = "matchminer_ai.apps.dashboard.__main__:main"
 
 [project.optional-dependencies]
 guideline-conversion = ["pypdf>=6.10,<7"]
@@ -76,6 +78,13 @@ training = [
 evaluation = [
   "anthropic[vertex]>=2.4",
   "scipy>=1.14",
+]
+# The web apps (matchminer_ai.apps: guideline fetcher, dashboard).
+apps = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "python-multipart>=0.0.20",
+  "duckdb>=1.1",
 ]
 dev = [
   "pre-commit>=3.7",
@@ -115,6 +124,11 @@ matchminer_ai = [
   "data/*.zip",
   "data/*.md",
   "evaluation/dual_judge/static/*.html",
+  "apps/guideline_fetcher/static/*",
+  "apps/dashboard/grouping.yaml",
+  # The built dashboard frontend (frontend/dashboard: pnpm build), when present.
+  "apps/dashboard/static/*",
+  "apps/dashboard/static/assets/*",
 ]
 
 [tool.pytest.ini_options]

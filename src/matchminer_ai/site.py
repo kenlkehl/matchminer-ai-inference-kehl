@@ -54,7 +54,7 @@ class SiteConfig:
         return dict(value) if isinstance(value, dict) else {}
 
 
-_CACHE: dict[tuple[str, float], SiteConfig] = {}
+_CACHE: dict[tuple[str, int, int], SiteConfig] = {}
 
 
 def load_site_config(path: str | os.PathLike | None = None) -> SiteConfig:
@@ -63,7 +63,8 @@ def load_site_config(path: str | os.PathLike | None = None) -> SiteConfig:
     if not chosen:
         return SiteConfig()
     resolved = Path(chosen).expanduser().resolve()
-    key = (str(resolved), resolved.stat().st_mtime)
+    stat = resolved.stat()
+    key = (str(resolved), stat.st_mtime_ns, stat.st_size)  # an edit within the same second still shows in the size
     if key not in _CACHE:
         import yaml
 

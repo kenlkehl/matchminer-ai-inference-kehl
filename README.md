@@ -552,6 +552,7 @@ This repository holds the whole pipeline, so prompts, schemas and APIs are share
 | `matchminer_ai` (runtime stages, prompts, presets, LLM clients, labeling) | `pip install matchminer-ai` | this README, the user guide |
 | `matchminer_ai.training`: synthetic data, TrialSpace, the decision model, OncoReasoning (`mmai-train`) | `pip install 'matchminer-ai[training]'` | [Training](docs/training/index.md) |
 | `matchminer_ai.evaluation`: retrospective and dual-judge evaluations on real patients | `pip install 'matchminer-ai[training,evaluation]'` | [Evaluations](docs/evaluation/index.md) |
+| `matchminer_ai.apps`: the trial dashboard (`mmai-dashboard`) and the guideline fetcher (`mmai-guideline-fetcher`) | `pip install 'matchminer-ai[apps]'` | [Dashboard](docs/apps/dashboard.md), [Guideline fetcher](docs/apps/guideline-fetcher.md) |
 
 Installation-specific values (endpoints, cloud projects, local paths) come from a site config outside the
 repository, and data paths from a data root that has no default ([Site configuration](docs/reference/site-config.md)).
