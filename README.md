@@ -543,6 +543,19 @@ source .venv/bin/activate
 uv pip install matchminer-ai
 ```
 
+## Repository layout
+
+This repository holds the whole pipeline, so prompts, schemas and APIs are shared from training to the apps:
+
+| Part | Install | Docs |
+| --- | --- | --- |
+| `matchminer_ai` (runtime stages, prompts, presets, LLM clients, labeling) | `pip install matchminer-ai` | this README, the user guide |
+| `matchminer_ai.training`: synthetic data, TrialSpace, the decision model, OncoReasoning (`mmai-train`) | `pip install 'matchminer-ai[training]'` | [Training](docs/training/index.md) |
+| `matchminer_ai.evaluation`: retrospective and dual-judge evaluations on real patients | `pip install 'matchminer-ai[training,evaluation]'` | [Evaluations](docs/evaluation/index.md) |
+
+Installation-specific values (endpoints, cloud projects, local paths) come from a site config outside the
+repository, and data paths from a data root that has no default ([Site configuration](docs/reference/site-config.md)).
+
 ## Models
 
 MatchMiner-AI is **open source and uses open-weight models**. The [default configuration](https://github.com/dfci/matchminer-ai-inference/blob/main/src/matchminer_ai/presets/default.yaml) combines a large language model for summarization with models we train and release on Hugging Face. Our trained models are released in collections paired with compatible package releases. The current configuration uses [collection 0526](https://huggingface.co/collections/ksg-dfci/matchminer-ai-0526), supported since package version 0.2.0. See [Model Collections](https://dfci.github.io/matchminer-ai-inference/user-guide/patient-centric-matching/#model-collections) for more information.
