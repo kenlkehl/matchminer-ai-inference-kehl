@@ -1904,6 +1904,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality_pairs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        score_match_quality_pairs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#matchminer_ai.matching.rerank.interpret_match_quality" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2380,6 +2391,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#matchminer_ai.matching.rerank.score_match_quality_pairs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        score_match_quality_pairs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#matchminer_ai.matching.rerank.interpret_match_quality" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2619,6 +2641,12 @@ patient is potentially eligible, answer yes; if the patient is clearly ineligibl
 <p>By default (<code>filter_low_quality=True</code>) only passing pairs are returned; <code>filter_low_quality=False</code> returns every
 pair. With <code>return_metadata=True</code>, <code>model_metadata["score_match_quality"]</code> records the model, its revision or
 checkpoint fingerprint, a digest of the question texts, and request and token counts.</p>
+<p><code>score_match_quality_pairs(cancer_history_summaries=..., cohort_key_criteria=...)</code> is the service-layer form, for
+callers that keep their own identifiers and data types, such as a live matching service. It takes two equal-length
+lists of text, where pair <code>i</code> is the <code>i</code>-th summary with the <code>i</code>-th criteria; to check one patient against many
+cohorts, repeat its summary. It returns one dict per pair with the columns above (without the identifiers), in
+input order, and the model metadata. <code>score_match_quality</code> is built on it. A bare string, a non-string value or
+lists of different lengths raise, and an empty input returns no rows without loading the model.</p>
 <p><code>interpret_match_quality</code> explains one question's answer (<code>head</code>, default <code>"reasonableness"</code>) for specific pairs. It
 computes gradient times input embedding for the question's yes-minus-no logit at its answer slot, in the same packed
 sequence as the scores. It returns the score columns plus <code>attribution_method</code>, <code>attribution_target</code>
@@ -2996,17 +3024,7 @@ truncation, and are counted in the metadata's <code>over_max_length</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/matching/decision_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">327</span>
-<span class="normal">328</span>
-<span class="normal">329</span>
-<span class="normal">330</span>
-<span class="normal">331</span>
-<span class="normal">332</span>
-<span class="normal">333</span>
-<span class="normal">334</span>
-<span class="normal">335</span>
-<span class="normal">336</span>
-<span class="normal">337</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">337</span>
 <span class="normal">338</span>
 <span class="normal">339</span>
 <span class="normal">340</span>
@@ -3032,7 +3050,17 @@ truncation, and are counted in the metadata's <code>over_max_length</code>.</p>
 <span class="normal">360</span>
 <span class="normal">361</span>
 <span class="normal">362</span>
-<span class="normal">363</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_decisions</span><span class="p">(</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_decisions</span><span class="p">(</span>
     <span class="n">requests</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]],</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -3286,85 +3314,7 @@ match_quality_<label> : float
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/matching/rerank.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 61</span>
-<span class="normal"> 62</span>
-<span class="normal"> 63</span>
-<span class="normal"> 64</span>
-<span class="normal"> 65</span>
-<span class="normal"> 66</span>
-<span class="normal"> 67</span>
-<span class="normal"> 68</span>
-<span class="normal"> 69</span>
-<span class="normal"> 70</span>
-<span class="normal"> 71</span>
-<span class="normal"> 72</span>
-<span class="normal"> 73</span>
-<span class="normal"> 74</span>
-<span class="normal"> 75</span>
-<span class="normal"> 76</span>
-<span class="normal"> 77</span>
-<span class="normal"> 78</span>
-<span class="normal"> 79</span>
-<span class="normal"> 80</span>
-<span class="normal"> 81</span>
-<span class="normal"> 82</span>
-<span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
-<span class="normal"> 87</span>
-<span class="normal"> 88</span>
-<span class="normal"> 89</span>
-<span class="normal"> 90</span>
-<span class="normal"> 91</span>
-<span class="normal"> 92</span>
-<span class="normal"> 93</span>
-<span class="normal"> 94</span>
-<span class="normal"> 95</span>
-<span class="normal"> 96</span>
-<span class="normal"> 97</span>
-<span class="normal"> 98</span>
-<span class="normal"> 99</span>
-<span class="normal">100</span>
-<span class="normal">101</span>
-<span class="normal">102</span>
-<span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span>
-<span class="normal">106</span>
-<span class="normal">107</span>
-<span class="normal">108</span>
-<span class="normal">109</span>
-<span class="normal">110</span>
-<span class="normal">111</span>
-<span class="normal">112</span>
-<span class="normal">113</span>
-<span class="normal">114</span>
-<span class="normal">115</span>
-<span class="normal">116</span>
-<span class="normal">117</span>
-<span class="normal">118</span>
-<span class="normal">119</span>
-<span class="normal">120</span>
-<span class="normal">121</span>
-<span class="normal">122</span>
-<span class="normal">123</span>
-<span class="normal">124</span>
-<span class="normal">125</span>
-<span class="normal">126</span>
-<span class="normal">127</span>
-<span class="normal">128</span>
-<span class="normal">129</span>
-<span class="normal">130</span>
-<span class="normal">131</span>
-<span class="normal">132</span>
-<span class="normal">133</span>
-<span class="normal">134</span>
-<span class="normal">135</span>
-<span class="normal">136</span>
-<span class="normal">137</span>
-<span class="normal">138</span>
-<span class="normal">139</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">139</span>
 <span class="normal">140</span>
 <span class="normal">141</span>
 <span class="normal">142</span>
@@ -3383,7 +3333,83 @@ match_quality_<label> : float
 <span class="normal">155</span>
 <span class="normal">156</span>
 <span class="normal">157</span>
-<span class="normal">158</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_match_quality</span><span class="p">(</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_match_quality</span><span class="p">(</span>
     <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -3451,18 +3477,16 @@ match_quality_<label> : float
 <span class="sd">    tuple[pd.DataFrame, dict]</span>
 <span class="sd">        When return_metadata is True, returns the DataFrame plus a metadata dict.</span>
 <span class="sd">    """</span>
-    <span class="n">trial_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_pair_inputs</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.match_labels</span><span class="w"> </span><span class="kn">import</span> <span class="n">LABELS</span>
+    <span class="n">trial_id</span><span class="p">,</span> <span class="n">cohorts</span><span class="p">,</span> <span class="n">patients</span> <span class="o">=</span> <span class="n">_pair_inputs</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">)</span>
     <span class="n">resolved_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
-    <span class="n">cutoff</span> <span class="o">=</span> <span class="n">reasonableness_cutoff</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">)</span>
-    <span class="n">answers</span><span class="p">,</span> <span class="n">model_metadata</span> <span class="o">=</span> <span class="n">_decide</span><span class="p">(</span><span class="n">candidate_pairs</span><span class="p">,</span> <span class="n">resolved_config</span><span class="p">)</span>
+    <span class="n">rows</span><span class="p">,</span> <span class="n">model_metadata</span> <span class="o">=</span> <span class="n">score_match_quality_pairs</span><span class="p">(</span>
+        <span class="n">cancer_history_summaries</span><span class="o">=</span><span class="n">patients</span><span class="p">,</span> <span class="n">cohort_key_criteria</span><span class="o">=</span><span class="n">cohorts</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">)</span>
 
-    <span class="c1"># Convert the answers into a compact, derived result table.</span>
+    <span class="c1"># The pair results as a compact, derived result table, in input order.</span>
     <span class="n">output</span> <span class="o">=</span> <span class="n">candidate_pairs</span><span class="p">[[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">trial_id</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-    <span class="n">confidence_scores</span><span class="p">,</span> <span class="n">heads</span> <span class="o">=</span> <span class="n">_scores</span><span class="p">(</span><span class="n">answers</span><span class="p">)</span>
-    <span class="n">output</span><span class="p">[</span><span class="s2">"match_quality_score"</span><span class="p">]</span> <span class="o">=</span> <span class="n">confidence_scores</span>
-    <span class="n">output</span><span class="p">[</span><span class="s2">"match_quality_pass"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="o">&gt;=</span> <span class="n">cutoff</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">heads</span><span class="p">[</span><span class="s2">"reasonableness"</span><span class="p">]]</span>
-    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">heads</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="n">output</span><span class="p">[</span><span class="sa">f</span><span class="s2">"match_quality_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+    <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"match_quality_score"</span><span class="p">,</span> <span class="s2">"match_quality_pass"</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="sa">f</span><span class="s2">"match_quality_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">LABELS</span><span class="p">)):</span>
+        <span class="n">output</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
 
     <span class="c1"># Optionally keep only matches that pass the quality threshold.</span>
     <span class="k">if</span> <span class="n">filter_low_quality</span><span class="p">:</span>
@@ -3481,6 +3505,277 @@ match_quality_<label> : float
         <span class="p">}</span>
         <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="n">metadata_payload</span>
     <span class="k">return</span> <span class="n">output</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="matchminer_ai.matching.rerank.score_match_quality_pairs" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">score_match_quality_pairs</span>
+
+
+<a href="#matchminer_ai.matching.rerank.score_match_quality_pairs" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">score_match_quality_pairs</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">cancer_history_summaries</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">cohort_key_criteria</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Score patient-cohort text pairs with the decision model's five match questions, in input order.</p>
+<p>The service-layer form of :func:<code>score_match_quality</code>: plain text in, no identifiers or
+DataFrames, for callers that keep their own data types (such as a live matching service).
+<code>score_match_quality</code> is built on it. Pair <code>i</code> is <code>(cancer_history_summaries[i],
+cohort_key_criteria[i])</code>; to check one patient against many cohorts, repeat its summary.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>cancer_history_summaries</code>
+            </td>
+            <td>
+                  <code>sequence of str</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Each patient summary's key section (<code>cancer_history_summary</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cohort_key_criteria</code>
+            </td>
+            <td>
+                  <code>sequence of str</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Each cohort's key criteria (<code>cohort_key_criteria</code>), the same length.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="MMAIConfig
+
+
+  
+      dataclass
+   (matchminer_ai.config.MMAIConfig)" href="../config/#matchminer_ai.config.MMAIConfig">MMAIConfig</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>decision_model</code> (the model) and <code>match_quality.reasonableness_cutoff</code>. Uses the default
+preset when omitted.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="list">list</span>[<span title="dict">dict</span>], <span title="dict">dict</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One dict per pair with the columns of :func:<code>score_match_quality</code>:
+<code>match_quality_score</code>, <code>match_quality_pass</code> and <code>match_quality_&lt;label&gt;</code> for
+reasonableness, cancer_type, burden, treatment_history and biomarker; and the decision
+model's metadata. With no pairs the model is not loaded.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If either argument is a single str or holds a non-string value.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the two sequences differ in length.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/matchminer_ai/matching/rerank.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_match_quality_pairs</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">cancer_history_summaries</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">cohort_key_criteria</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Score patient-cohort text pairs with the decision model's five match questions, in input order.</span>
+
+<span class="sd">    The service-layer form of :func:`score_match_quality`: plain text in, no identifiers or</span>
+<span class="sd">    DataFrames, for callers that keep their own data types (such as a live matching service).</span>
+<span class="sd">    ``score_match_quality`` is built on it. Pair ``i`` is ``(cancer_history_summaries[i],</span>
+<span class="sd">    cohort_key_criteria[i])``; to check one patient against many cohorts, repeat its summary.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cancer_history_summaries : sequence of str</span>
+<span class="sd">        Each patient summary's key section (``cancer_history_summary``).</span>
+<span class="sd">    cohort_key_criteria : sequence of str</span>
+<span class="sd">        Each cohort's key criteria (``cohort_key_criteria``), the same length.</span>
+<span class="sd">    config : MMAIConfig, optional</span>
+<span class="sd">        ``decision_model`` (the model) and ``match_quality.reasonableness_cutoff``. Uses the default</span>
+<span class="sd">        preset when omitted.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    tuple[list[dict], dict]</span>
+<span class="sd">        One dict per pair with the columns of :func:`score_match_quality`:</span>
+<span class="sd">        ``match_quality_score``, ``match_quality_pass`` and ``match_quality_&lt;label&gt;`` for</span>
+<span class="sd">        reasonableness, cancer_type, burden, treatment_history and biomarker; and the decision</span>
+<span class="sd">        model's metadata. With no pairs the model is not loaded.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    TypeError</span>
+<span class="sd">        If either argument is a single str or holds a non-string value.</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        If the two sequences differ in length.</span>
+<span class="sd">    """</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.match_labels</span><span class="w"> </span><span class="kn">import</span> <span class="n">LABELS</span>
+    <span class="n">patients</span> <span class="o">=</span> <span class="n">_text_list</span><span class="p">(</span><span class="s2">"cancer_history_summaries"</span><span class="p">,</span> <span class="n">cancer_history_summaries</span><span class="p">)</span>
+    <span class="n">cohorts</span> <span class="o">=</span> <span class="n">_text_list</span><span class="p">(</span><span class="s2">"cohort_key_criteria"</span><span class="p">,</span> <span class="n">cohort_key_criteria</span><span class="p">)</span>
+    <span class="n">_same_length</span><span class="p">((</span><span class="s2">"cancer_history_summaries"</span><span class="p">,</span> <span class="n">patients</span><span class="p">),</span> <span class="p">(</span><span class="s2">"cohort_key_criteria"</span><span class="p">,</span> <span class="n">cohorts</span><span class="p">))</span>
+    <span class="n">resolved_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
+    <span class="n">cutoff</span> <span class="o">=</span> <span class="n">reasonableness_cutoff</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">patients</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[],</span> <span class="n">no_request_metadata</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">)</span>
+    <span class="n">questions</span> <span class="o">=</span> <span class="n">match_questions</span><span class="p">()</span>
+    <span class="n">answers</span><span class="p">,</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">run_decisions</span><span class="p">(</span>
+        <span class="p">[(</span><span class="n">match_state</span><span class="p">(</span><span class="n">patient</span><span class="p">,</span> <span class="n">cohort</span><span class="p">),</span> <span class="n">questions</span><span class="p">)</span> <span class="k">for</span> <span class="n">patient</span><span class="p">,</span> <span class="n">cohort</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">patients</span><span class="p">,</span> <span class="n">cohorts</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)],</span>
+        <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">)</span>
+    <span class="n">scores</span><span class="p">,</span> <span class="n">heads</span> <span class="o">=</span> <span class="n">_scores</span><span class="p">(</span><span class="n">answers</span><span class="p">)</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">score</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">scores</span><span class="p">):</span>
+        <span class="n">row</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"match_quality_score"</span><span class="p">:</span> <span class="n">score</span><span class="p">,</span>
+                               <span class="s2">"match_quality_pass"</span><span class="p">:</span> <span class="n">heads</span><span class="p">[</span><span class="s2">"reasonableness"</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">cutoff</span><span class="p">}</span>
+        <span class="n">row</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="sa">f</span><span class="s2">"match_quality_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span><span class="p">:</span> <span class="n">heads</span><span class="p">[</span><span class="n">label</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">LABELS</span><span class="p">})</span>
+        <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">rows</span><span class="p">,</span> <span class="n">metadata</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3648,84 +3943,84 @@ return every retained input token.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/matching/rerank.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">161</span>
-<span class="normal">162</span>
-<span class="normal">163</span>
-<span class="normal">164</span>
-<span class="normal">165</span>
-<span class="normal">166</span>
-<span class="normal">167</span>
-<span class="normal">168</span>
-<span class="normal">169</span>
-<span class="normal">170</span>
-<span class="normal">171</span>
-<span class="normal">172</span>
-<span class="normal">173</span>
-<span class="normal">174</span>
-<span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
-<span class="normal">178</span>
-<span class="normal">179</span>
-<span class="normal">180</span>
-<span class="normal">181</span>
-<span class="normal">182</span>
-<span class="normal">183</span>
-<span class="normal">184</span>
-<span class="normal">185</span>
-<span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
-<span class="normal">191</span>
-<span class="normal">192</span>
-<span class="normal">193</span>
-<span class="normal">194</span>
-<span class="normal">195</span>
-<span class="normal">196</span>
-<span class="normal">197</span>
-<span class="normal">198</span>
-<span class="normal">199</span>
-<span class="normal">200</span>
-<span class="normal">201</span>
-<span class="normal">202</span>
-<span class="normal">203</span>
-<span class="normal">204</span>
-<span class="normal">205</span>
-<span class="normal">206</span>
-<span class="normal">207</span>
-<span class="normal">208</span>
-<span class="normal">209</span>
-<span class="normal">210</span>
-<span class="normal">211</span>
-<span class="normal">212</span>
-<span class="normal">213</span>
-<span class="normal">214</span>
-<span class="normal">215</span>
-<span class="normal">216</span>
-<span class="normal">217</span>
-<span class="normal">218</span>
-<span class="normal">219</span>
-<span class="normal">220</span>
-<span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span>
-<span class="normal">229</span>
-<span class="normal">230</span>
-<span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span>
-<span class="normal">234</span>
-<span class="normal">235</span>
-<span class="normal">236</span>
-<span class="normal">237</span>
-<span class="normal">238</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">interpret_match_quality</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">interpret_match_quality</span><span class="p">(</span>
     <span class="n">candidate_pairs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
