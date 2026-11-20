@@ -11,7 +11,7 @@ population:
 
 1. **Cohort.** Wrap the population's summaries and source notes in a `PatientCohort`.
 2. **Retrieval.** Find the patients who match one guideline space (NCCN or PDQ catalog) with TrialSpace and the
-   decision model's match-quality score.
+   decision model's reasonableness answer.
 3. **Review.** Check every selected patient against every `diagnostic_workup` item of the space, by one of three
    methods:
     - **full-note review** (`review_population_workup`): an LLM reads each patient's notes;
@@ -45,7 +45,7 @@ catalog = "catalogs/nsclc"                                 # a completed guideli
 space_id = load_guideline_catalog(catalog).space_trial_id.iloc[0]
 selected, metadata = retrieve_guideline_patients(
     population.summaries, catalog, space_trial_id=space_id,
-    candidate_k=50, min_match_score=0.2, config=config, progress_callback=print,
+    candidate_k=50, min_reasonableness=0.75, config=config, progress_callback=print,
 )
 active = subset_patient_cohort(
     population, selected.patient_id.tolist(), space=metadata.pop("space"),
@@ -70,8 +70,11 @@ active = subset_patient_cohort(
 - The guideline space is the query and the patient summaries are the corpus. The space is embedded and scored by
   its `cohort_key_criteria`: the cohort-style key criteria stored with the space, or for a catalog without them
   its nine fields laid out as criteria (see the [guideline extraction guide](guideline-extraction.md#key-criteria)).
-- The `candidate_k` most similar patients (capped at the population size) get the decision model's
-  match-quality score. Patients scoring at least `min_match_score` are selected; `None` keeps every candidate.
+- The `candidate_k` most similar patients (capped at the population size) get the decision model's match
+  questions. A patient is selected when its reasonableness answer, the model's P(yes) that the patient is
+  potentially eligible (`match_quality_reasonableness`), is at least `min_reasonableness` (default 0.75); `None`
+  keeps every candidate. Selected patients are ranked by `match_quality_score`. The guideline fetcher's
+  **Minimum reasonableness** field sets the same threshold.
 - Embedding and scoring run in batches of 32, with progress and cancellation checks between batches. Both sides
   must use the same embedding model. Raw notes never enter retrieval.
 - `metadata` keeps the space record, catalog provenance, model metadata, every candidate's rank and scores, and

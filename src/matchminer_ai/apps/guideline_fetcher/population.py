@@ -381,7 +381,7 @@ class PopulationInference:
     def __init__(self, settings):
         self.settings = settings
 
-    def retrieve(self, source, paths, space_id, candidate_k, min_score, progress):
+    def retrieve(self, source, paths, space_id, candidate_k, min_reasonableness, progress):
         import torch
 
         torch.set_num_threads(8)
@@ -400,7 +400,7 @@ class PopulationInference:
             paths,
             space_trial_id=space_id,
             candidate_k=candidate_k,
-            min_match_score=min_score,
+            min_reasonableness=min_reasonableness,
             config=self.settings.inference_config(),
             progress_callback=progress,
             patient_embeddings=cache and cache.embeddings,

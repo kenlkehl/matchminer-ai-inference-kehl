@@ -76,9 +76,9 @@ function render() {
   $('#pop-metrics').innerHTML=metrics.map(([label,value])=>`<div class="panel population-metric"><span>${e(label)}</span><strong>${value.toLocaleString()}</strong></div>`).join('');
   $('#pop-active-title').textContent=a?.space?.name || 'Choose a guideline population';
   $('#pop-active-definition').textContent=a?.space?.cohort_key_criteria || a?.space?.clinical_space_summary || '';
-  $('#pop-active-status').textContent=a?`${a.patient_count} active patients / ${a.retrieval.scored_count ?? a.matches.length} match-quality scored / ${a.retrieval.population_count ?? p.source_count} in source population. Score threshold: ${a.retrieval.min_match_score ?? 'none'}. New selection settings apply when you fetch again.`:'Load a population, then select a finalized trial space to find matching patients.';
+  $('#pop-active-status').textContent=a?`${a.patient_count} active patients / ${a.retrieval.scored_count ?? a.matches.length} match-quality scored / ${a.retrieval.population_count ?? p.source_count} in source population. ${a.retrieval.min_match_score !== undefined ? `Score threshold: ${a.retrieval.min_match_score ?? 'none'}` : `Reasonableness threshold: ${a.retrieval.min_reasonableness ?? 'none'}`}. New selection settings apply when you fetch again.`:'Load a population, then select a finalized trial space to find matching patients.';
   $('#pop-matches').hidden=!a?.matches?.length;
-  $('#pop-match-table').innerHTML=a?.matches?.length?`<table class="population-table"><thead><tr><th>Patient</th><th>Match quality</th><th>TrialSpace similarity</th><th>Retrieval rank</th></tr></thead><tbody>${a.matches.map(r=>`<tr><th><button class="population-link" data-pop-patient="${e(r.patient_id)}">${e(r.patient_id)}</button></th><td>${Number(r.match_quality_score).toFixed(3)}</td><td>${Number(r.similarity_score).toFixed(3)}</td><td>${r.retrieval_rank}</td></tr>`).join('')}</tbody></table>`:'';
+  $('#pop-match-table').innerHTML=a?.matches?.length?`<table class="population-table"><thead><tr><th>Patient</th><th>Reasonableness</th><th>Match quality</th><th>TrialSpace similarity</th><th>Retrieval rank</th></tr></thead><tbody>${a.matches.map(r=>`<tr><th><button class="population-link" data-pop-patient="${e(r.patient_id)}">${e(r.patient_id)}</button></th><td>${r.match_quality_reasonableness == null ? '—' : Number(r.match_quality_reasonableness).toFixed(3)}</td><td>${Number(r.match_quality_score).toFixed(3)}</td><td>${Number(r.similarity_score).toFixed(3)}</td><td>${r.retrieval_rank}</td></tr>`).join('')}</tbody></table>`:'';
   $('#pop-compression-status').textContent=a?.compression?`${a.compression.note_count} notes compressed · ${a.compression.input_characters.toLocaleString()} → ${a.compression.output_characters.toLocaleString()} characters. Original notes retained; losslessness unverified.`:'Optional. Original notes are retained; compression may lose information.';
   const r=a?.report;
   $('#pop-report-status').textContent=!r?'Check every active patient against every workup guideline.'
@@ -194,7 +194,7 @@ $('#pop-import').addEventListener('click',async()=>{
   catch(err){error(err.message);}finally{busy(false);}
 });
 $('#pop-retrieve').addEventListener('click',()=>{
-  if(valid(['pop-candidates','pop-threshold']))run('/api/population/retrieve',{...version(),catalog_id:$('#pop-catalog').value,space_trial_id:$('#pop-space').value,candidate_k:Number($('#pop-candidates').value),min_match_score:Number($('#pop-threshold').value)});
+  if(valid(['pop-candidates','pop-threshold']))run('/api/population/retrieve',{...version(),catalog_id:$('#pop-catalog').value,space_trial_id:$('#pop-space').value,candidate_k:Number($('#pop-candidates').value),min_reasonableness:Number($('#pop-threshold').value)});
 });
 $('#pop-compress').addEventListener('click',()=>run('/api/population/compress',version()));
 $('#pop-review').addEventListener('click',()=>{

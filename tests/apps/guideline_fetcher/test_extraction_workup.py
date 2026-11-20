@@ -191,7 +191,7 @@ def population_app(tmp_path, monkeypatch, backend):
         frame["retrieval_rank"] = [1, 2]
         frame["rank"] = [1, 2]
         return frame, {"space": SPACE, "scored_count": 2, "population_count": 2,
-                       "min_match_score": kwargs["min_match_score"]}
+                       "min_reasonableness": kwargs["min_reasonableness"]}
 
     monkeypatch.setattr("matchminer_ai.matching.retrieve_guideline_patients", retrieve)
     monkeypatch.setattr("matchminer_ai.trials.load_guideline_catalog",
@@ -213,7 +213,7 @@ def active_cohort(client):
     catalog_id = client.get("/api/catalogs").json()["catalogs"][0]["id"]
     return job(client, "/api/population/retrieve", dict(
         version=loaded["version"], catalog_id=catalog_id, space_trial_id="s", candidate_k=7,
-        min_match_score=0.2))["result"]
+        min_reasonableness=0.75))["result"]
 
 
 @pytest.mark.parametrize("phi", [False, True], ids=["standard", "phi"])
@@ -680,7 +680,7 @@ def test_history_and_physical_items_are_left_out_of_workup_checks(population_app
             frame[column] = values
         frame["match_quality_pass"] = True
         return frame, {"space": space, "scored_count": 2, "population_count": 2,
-                       "min_match_score": kwargs["min_match_score"]}
+                       "min_reasonableness": kwargs["min_reasonableness"]}
 
     monkeypatch.setattr("matchminer_ai.matching.retrieve_guideline_patients", retrieve)
     api, _ = population_app(False)

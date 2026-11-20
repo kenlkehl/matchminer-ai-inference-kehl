@@ -169,7 +169,7 @@ def test_cached_population_routes_load_notes_only_for_matched_patients(
         frame["retrieval_rank"] = [1]
         frame["rank"] = [1]
         return frame, {"space": SPACE, "scored_count": 2, "population_count": 2,
-                       "min_match_score": kwargs["min_match_score"]}
+                       "min_reasonableness": kwargs["min_reasonableness"]}
 
     monkeypatch.setattr("matchminer_ai.matching.retrieve_guideline_patients", retrieve)
     catalog(tmp_path / "catalogs")

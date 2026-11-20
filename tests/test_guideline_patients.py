@@ -30,7 +30,11 @@ def stages(monkeypatch):
         result["match_quality_score"] = result.patient_id.map(
             {"first": 0.1, "second": 0.9, "third": 0.5}
         )
-        result["match_quality_pass"] = result.match_quality_score >= 0.2
+        # "first" has a low match score but a reasonable answer: selection follows reasonableness.
+        result["match_quality_reasonableness"] = result.patient_id.map(
+            {"first": 0.8, "second": 0.95, "third": 0.6}
+        )
+        result["match_quality_pass"] = result.match_quality_reasonableness >= 0.5
         return result.iloc[::-1], {
             "model_metadata": {"score_match_quality": {"model": "test"}}
         }
@@ -57,8 +61,9 @@ def test_trial_is_query_patient_is_corpus_candidate_limit_and_threshold(
         patients(), catalog_frame, space_trial_id="a", candidate_k=2
     )
     assert len(stages[0]) == 2 and set(stages[0].patient_id) == {"first", "second"}
-    assert selected.patient_id.tolist() == ["second"]
-    assert selected.retrieval_rank.tolist() == [2]
+    assert selected.patient_id.tolist() == ["second", "first"]
+    assert selected.retrieval_rank.tolist() == [2, 1]
+    assert meta["min_reasonableness"] == 0.75
     assert meta["scored_count"] == 2 and meta["population_count"] == 3
     assert meta["space"]["diagnostic_workup"] == catalog_frame.iloc[0].diagnostic_workup
     # The space is scored by its key criteria, laid out as a cohort's.
@@ -72,7 +77,7 @@ def test_zero_matches_and_candidate_cap(catalog_frame, stages):
         catalog_frame,
         space_trial_id="a",
         candidate_k=100,
-        min_match_score=1,
+        min_reasonableness=1,
     )
     assert selected.empty and meta["scored_count"] == 3
     selected, meta = retrieve_guideline_patients(
@@ -80,7 +85,7 @@ def test_zero_matches_and_candidate_cap(catalog_frame, stages):
         catalog_frame,
         space_trial_id="a",
         candidate_k=100,
-        min_match_score=None,
+        min_reasonableness=None,
     )
     assert selected.patient_id.tolist() == ["second", "third", "first"]
 
@@ -90,8 +95,8 @@ def test_zero_matches_and_candidate_cap(catalog_frame, stages):
     [
         {"candidate_k": 0},
         {"candidate_k": True},
-        {"min_match_score": np.nan},
-        {"min_match_score": 2},
+        {"min_reasonableness": np.nan},
+        {"min_reasonableness": 2},
     ],
 )
 def test_bad_controls(catalog_frame, options):
@@ -161,7 +166,8 @@ def test_multiple_embedding_and_checker_batches_cover_requested_candidates(
         calls.append(("checker", len(frame)))
         result = frame[["patient_id", "space_trial_id"]].copy()
         result["match_quality_score"] = result.patient_id.astype(int) / 70
-        result["match_quality_pass"] = result.match_quality_score >= 0.2
+        result["match_quality_reasonableness"] = result.match_quality_score
+        result["match_quality_pass"] = result.match_quality_score >= 0.5
         return result, {"model_metadata": {"score_match_quality": {"model": "fixed"}}}
 
     monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed)
@@ -171,7 +177,7 @@ def test_multiple_embedding_and_checker_batches_cover_requested_candidates(
         catalog_frame,
         space_trial_id="a",
         candidate_k=40,
-        min_match_score=None,
+        min_reasonableness=None,
         progress_callback=updates.append,
     )
     assert calls == [
@@ -240,7 +246,7 @@ def test_precomputed_embeddings_match_computed_retrieval_without_re_embedding(
     # A subset of a cached population reuses its rows.
     subset, _ = retrieve_guideline_patients(
         patients().iloc[1:], catalog_frame, space_trial_id="a",
-        candidate_k=2, min_match_score=None, patient_embeddings=cached,
+        candidate_k=2, min_reasonableness=None, patient_embeddings=cached,
     )
     assert set(subset.patient_id) == {"second", "third"}
 
@@ -281,6 +287,7 @@ def test_checker_batches_may_differ_in_counters_but_not_in_model(catalog_frame, 
         result = frame[["patient_id", "space_trial_id"]].copy()
         result["match_quality_score"] = 0.5
         result["match_quality_pass"] = True
+        result["match_quality_reasonableness"] = 0.9
         counters = {"requests": len(frame), "questions": 5 * len(frame),
                     "input_tokens": 1000 * len(frame), "over_max_length": 0}
         return result, {"model_metadata": {"score_match_quality": {**model, **counters}}}
@@ -288,7 +295,7 @@ def test_checker_batches_may_differ_in_counters_but_not_in_model(catalog_frame, 
     monkeypatch.setattr("matchminer_ai.embedding.embed_for_matching", embed)
     monkeypatch.setattr("matchminer_ai.matching.score_match_quality", score)
     selected, metadata = retrieve_guideline_patients(
-        cohort, catalog_frame, space_trial_id="a", candidate_k=50, min_match_score=None)
+        cohort, catalog_frame, space_trial_id="a", candidate_k=50, min_reasonableness=None)
     assert len(selected) == 50
     scoring = metadata["model_metadata"]["score_match_quality"]
     assert scoring["requests"] == 50 and scoring["questions"] == 250
@@ -305,4 +312,4 @@ def test_checker_batches_may_differ_in_counters_but_not_in_model(catalog_frame, 
     monkeypatch.setattr("matchminer_ai.matching.score_match_quality", changing)
     with pytest.raises(ValueError, match="Match-quality model changed between batches"):
         retrieve_guideline_patients(cohort, catalog_frame, space_trial_id="a", candidate_k=50,
-                                    min_match_score=None)
+                                    min_reasonableness=None)

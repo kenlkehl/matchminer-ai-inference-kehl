@@ -63,7 +63,7 @@ def harness(tmp_path, monkeypatch):
             "space": SPACE,
             "scored_count": 2,
             "population_count": 2,
-            "min_match_score": kwargs["min_match_score"],
+            "min_reasonableness": kwargs["min_reasonableness"],
         }
 
     def compress(frame, **kwargs):
@@ -115,7 +115,7 @@ def selected(client):
             catalog_id=catalog_id,
             space_trial_id="s",
             candidate_k=7,
-            min_match_score=0.2,
+            min_reasonableness=0.75,
         ),
     )["result"]
 

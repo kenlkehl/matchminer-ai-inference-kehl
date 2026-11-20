@@ -12,7 +12,8 @@ generative LLM is called.
   highest `match_quality_score` among the `candidate_k` nearest, with their complete catalog records, including the
   diagnostic and treatment menus. `write_guideline_considerations_report` writes them to a Markdown review report.
 - **Trial-centric:** `retrieve_guideline_patients` scores the `candidate_k` patients of a population nearest to one
-  space and keeps those whose `match_quality_score` is at least `min_match_score` (default 0.2; `None` keeps all).
+  space and keeps those whose reasonableness answer (`match_quality_reasonableness`, P(yes)) is at least
+  `min_reasonableness` (default 0.75; `None` keeps all), ranked by `match_quality_score`.
   `embed_guideline_patients` embeds a population once for repeated searches. See
   [population workup review](../user-guide/population-workup.md).
 

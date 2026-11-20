@@ -366,8 +366,8 @@
               <label for="pop-space">Guideline trial space</label><select id="pop-space"><option value="">Choose a catalog first</option></select>
               <details class="advanced"><summary>Selected population key criteria</summary><p id="pop-definition" class="population-text">No space selected.</p></details>
               <label for="pop-candidates">Patient summaries to retrieve and score</label><input id="pop-candidates" type="number" min="1" max="100000" value="50">
-              <label for="pop-threshold">Minimum match-quality score</label><input id="pop-threshold" type="number" min="0" max="1" step="0.01" value="0.20">
-              <p class="helper">TrialSpace searches the full loaded population. The decision model's match questions score up to this candidate count. A threshold of 0 keeps all candidates; scores are not probabilities.</p>
+              <label for="pop-threshold">Minimum reasonableness</label><input id="pop-threshold" type="number" min="0" max="1" step="0.01" value="0.75">
+              <p class="helper">TrialSpace searches the full loaded population. The decision model's match questions score up to this candidate count. A patient is kept when the decision model's reasonableness answer (its probability that the patient is potentially eligible) is at least this value; 0 keeps all candidates. Kept patients are ranked by match quality.</p>
               <button id="pop-retrieve" class="button primary full" disabled>Fetch matching patients</button>
             </div>
             <div class="population-step"><span class="eyebrow">03 / PREPARE & REVIEW</span><h3>Active cohort notes</h3>

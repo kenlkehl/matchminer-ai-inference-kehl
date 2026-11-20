@@ -53,7 +53,7 @@ class PopulationSearch(PopulationRequest):
     catalog_id: str = Field(min_length=1, max_length=100)
     space_trial_id: str = Field(min_length=1, max_length=1000)
     candidate_k: int = Field(default=50, ge=1, le=100_000, strict=True)
-    min_match_score: float | None = Field(default=0.2, ge=0, le=1)
+    min_reasonableness: float | None = Field(default=0.75, ge=0, le=1)
 
 
 class PopulationReview(PopulationRequest):
@@ -261,7 +261,7 @@ def register_population_routes(api, *, settings, catalogs, jobs, sessions, curre
                 paths,
                 body.space_trial_id,
                 body.candidate_k,
-                body.min_match_score,
+                body.min_reasonableness,
                 progress,
             )
             return sessions.save(owner, entry["source"], active, expected=entry)

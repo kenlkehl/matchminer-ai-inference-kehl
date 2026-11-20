@@ -60,7 +60,8 @@ def parse(argv):
     parser.add_argument("--items", help="comma-separated workup item indexes (default: all)")
     parser.add_argument("--patients", type=int, default=30,
                         help="matched patients per space (candidate_k; default %(default)s)")
-    parser.add_argument("--min-match-score", type=float, default=0.2)
+    parser.add_argument("--min-reasonableness", type=float, default=0.75,
+                        help="decision-model P(reasonable) a matched patient needs (default %(default)s)")
     parser.add_argument("--store", help="extraction record store (default: the app's default)")
     parser.add_argument("--out", help="output folder (default: a dated folder under "
                         "data/no_phi/guideline_fetcher_extractions/spot_checks)")
@@ -314,7 +315,7 @@ def main(argv=None):
         for space_id in args.space:
             started = time.monotonic()
             cohort = PopulationInference(settings).retrieve(
-                source, paths, space_id, args.patients, args.min_match_score, progress)
+                source, paths, space_id, args.patients, args.min_reasonableness, progress)
             space = copy.deepcopy(cohort.space)
             if args.items:
                 keep = [int(i) for i in args.items.split(",")]

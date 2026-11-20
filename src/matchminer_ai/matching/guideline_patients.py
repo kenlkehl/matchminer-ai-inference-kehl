@@ -194,13 +194,17 @@ def _sum_scoring_counters(metadata, batch_metadata):
     return total
 
 
+#: The decision model's P(reasonable) at or above which retrieve_guideline_patients selects a patient.
+DEFAULT_MIN_REASONABLENESS = 0.75
+
+
 def retrieve_guideline_patients(
     patient_summaries,
     catalog,
     *,
     space_trial_id,
     candidate_k=50,
-    min_match_score=0.2,
+    min_reasonableness=DEFAULT_MIN_REASONABLENESS,
     config=None,
     progress_callback=None,
     patient_embeddings=None,
@@ -209,8 +213,10 @@ def retrieve_guideline_patients(
 
     Returns (selected patients, provenance). candidate_k controls the number of
     highest-cosine patient summaries scored, capped at the population size.
-    min_match_score=None retains every scored candidate. Scores are prioritization
-    signals, not eligibility decisions. No raw notes or remote LLM are used.
+    A patient is selected when the decision model's reasonableness answer, P(yes) that the patient is
+    potentially eligible (``match_quality_reasonableness``), is at least ``min_reasonableness``
+    (default 0.75); None retains every scored candidate. Selected patients are ranked by
+    ``match_quality_score``. Scores are prioritization signals, not eligibility decisions. No raw notes or remote LLM are used.
     The space is embedded and scored by its ``cohort_key_criteria`` (see
     ``trials.load_guideline_catalog``).
     Patient vectors are made in this call unless ``patient_embeddings`` from
@@ -224,12 +230,12 @@ def retrieve_guideline_patients(
 
     if type(candidate_k) is not int or candidate_k < 1:
         raise ValueError("candidate_k must be a positive integer.")
-    if min_match_score is not None and (
-        isinstance(min_match_score, bool)
-        or not np.isfinite(min_match_score)
-        or not 0 <= min_match_score <= 1
+    if min_reasonableness is not None and (
+        isinstance(min_reasonableness, bool)
+        or not np.isfinite(min_reasonableness)
+        or not 0 <= min_reasonableness <= 1
     ):
-        raise ValueError("min_match_score must be between zero and one, or None.")
+        raise ValueError("min_reasonableness must be between zero and one, or None.")
     config = config or load_default_preset()
     patients = _patient_frame(patient_summaries)
     progress = progress_callback or (lambda _: None)
@@ -307,7 +313,7 @@ def retrieve_guideline_patients(
     if len(scores) != len(pairs) or scores.duplicated(keys).any():
         raise ValueError("The match-quality check must return one score per candidate.")
     ranked = candidates.merge(
-        scores[keys + ["match_quality_score", "match_quality_pass"]],
+        scores[keys + ["match_quality_score", "match_quality_pass", "match_quality_reasonableness"]],
         on=keys,
         how="left",
         validate="one_to_one",
@@ -324,8 +330,8 @@ def retrieve_guideline_patients(
     ranked["rank"] = np.arange(1, len(ranked) + 1)
     selected = (
         ranked
-        if min_match_score is None
-        else ranked.loc[ranked.match_quality_score >= min_match_score]
+        if min_reasonableness is None
+        else ranked.loc[ranked.match_quality_reasonableness >= min_reasonableness]
     )
     selected = selected.merge(patients, on="patient_id", validate="one_to_one")
     check_cancelled()
@@ -339,6 +345,6 @@ def retrieve_guideline_patients(
         "scored_count": len(ranked),
         "population_count": len(patients),
         "selected_count": len(selected),
-        "min_match_score": min_match_score,
+        "min_reasonableness": min_reasonableness,
         "candidates": ranked.to_dict("records"),
     }
