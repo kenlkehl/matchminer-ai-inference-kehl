@@ -306,7 +306,8 @@ Messages route.
 - **Credentials:** the token goes only to an `https` gateway URL on a Databricks workspace host, which must be the
   profile's workspace. A missing or expired login fails the requirement's run at once with a login hint. Other
   failures keep only their HTTP status.
-- **Scope:** only structured requests support this provider; other stages reject it.
+- **Scope:** the provider also serves the remote path of other stages, such as patient summarization; see the
+  [configuration reference](../reference/configuration.md#remote).
 
 The [guideline fetcher](../apps/guideline-fetcher.md) offers this provider for its SQL-agent task, with the
 gateway taken from the site config's `databricks` keys ([Site configuration](../reference/site-config.md)).

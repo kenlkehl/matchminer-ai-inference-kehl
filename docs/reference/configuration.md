@@ -181,10 +181,23 @@ must be authorized for the sensitivity of any clinical text sent to it.
 
 ### Claude through Databricks
 
-`provider: databricks_anthropic` sends structured requests to Claude through a Databricks AI Gateway's Anthropic
-Messages route, authenticated with a Databricks CLI profile (`databricks_profile`). Only structured requests support
-it; the [SQL workup agent](../api/workup-sql.md#claude-through-a-databricks-ai-gateway) is the main user, and it
-sets the provider in its own section.
+`provider: databricks_anthropic` sends requests to Claude through a Databricks AI Gateway's Anthropic Messages route,
+authenticated with a Databricks CLI profile (`databricks_profile`, else the site config's `databricks.profile`).
+`server_urls` is the gateway URL, `https://<workspace>/ai-gateway/anthropic`, and a section's `model_name` is the
+gateway's three-part endpoint name.
+
+- **Where it works:** structured requests, such as the
+  [SQL workup agent](../api/workup-sql.md#claude-through-a-databricks-ai-gateway), and the remote path that patient
+  summarization, the cohort steps and the LLM checks use.
+- **Requests:** each request streams through the Anthropic SDK, keeping only the token budget, the effort (the
+  section's `reasoning_effort`) and a response format. Claude manages its own sampling and thinking, so sampling and
+  `extra_body` fields are dropped.
+- **Endpoint pool:** requests use the direct transport (`max_concurrent_requests` per gateway URL); the adaptive
+  endpoint pool serves OpenAI-compatible servers only.
+- **Tokenizer:** patient summarization still needs a Hugging Face tokenizer for chunking (`tokenizer_name`, for
+  example the preset's Nemotron); Claude counts tokens somewhat differently.
+- **Monitoring:** with `MMAI_GATEWAY_REQUEST_LOG` set to a file, every request appends one line of metadata (times,
+  HTTP status, stop reason, served model, token counts; never content), for watching rate limits.
 
 ## LLM sections
 

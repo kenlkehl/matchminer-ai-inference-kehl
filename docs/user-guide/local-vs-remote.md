@@ -90,7 +90,8 @@ manages the GPUs and the server, which does not have to be vLLM.
     - `openai` (default): any OpenAI-compatible endpoint, with the key from `OPENAI_API_KEY`.
     - `google_agent_platform`: Google Agent Platform endpoints, with refreshable Google Application Default Credentials
       for the project in `remote.google_project_id`. vLLM-only `extra_body` fields are left out.
-    - `databricks_anthropic` serves only structured requests, such as the SQL workup agent, not the matching steps.
+    - `databricks_anthropic`: Claude through a Databricks AI Gateway, with Databricks CLI login tokens; see the
+      [configuration reference](../reference/configuration.md#remote).
 
 !!! warning
     Before sending clinical text to an endpoint outside your local environment, confirm that the endpoint is
