@@ -16,11 +16,14 @@ import time
 
 
 def file_stamp(path: Path) -> str | None:
+    """The package's file stamp (``matchminer_ai.labeling.files.file_stamp``: byte size and whole-second mtime),
+    or None for a missing file."""
+    from matchminer_ai.labeling.files import file_stamp as stamp
+
     try:
-        stat = Path(path).stat()
+        return stamp(path)
     except OSError:
         return None
-    return f"{stat.st_size}:{int(stat.st_mtime)}"
 
 
 def text_key(*parts) -> str:
