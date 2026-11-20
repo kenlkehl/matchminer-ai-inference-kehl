@@ -7,6 +7,7 @@ import pytest
 
 from matchminer_ai.config import MMAIConfig
 from matchminer_ai.matching import (
+    rank_similarity,
     exclusion_criteria_check,
     exclusion_criteria_check_with_llm,
     generate_candidate_matches,
@@ -636,3 +637,17 @@ def test_exclusion_criteria_check_with_llm_includes_debug_columns(monkeypatch):
     assert result["llm_exclusion_criteria_answer_text"].tolist() == ["No!"]
     assert result["llm_exclusion_criteria_reasoning_text"].tolist() == ["reasoning 0"]
     assert result["llm_exclusion_criteria_parse_status"].tolist() == ["parsed"]
+
+
+def test_rank_similarity_returns_top_k_index_score_pairs_sorted_descending():
+    """corpus_index must point back to the right corpus row by position (ported from upstream #10)."""
+    result = rank_similarity([[1.0, 0.0]], [[0.0, 1.0], [1.0, 0.0], [0.5, 0.5]], k=2)
+    assert result == [[(1, pytest.approx(1.0)), (2, pytest.approx(0.70710678))]]
+
+
+def test_rank_similarity_breaks_ties_by_corpus_order_deterministically():
+    """Exact ties at the k cutoff break by corpus order on every run (ported from upstream #10)."""
+    corpus = [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 0.0]]
+    expected = [[(0, pytest.approx(1.0)), (2, pytest.approx(1.0)), (3, pytest.approx(1.0))]]
+    assert all(rank_similarity([[1.0, 0.0]], corpus, k=3) == expected for _ in range(20))
+

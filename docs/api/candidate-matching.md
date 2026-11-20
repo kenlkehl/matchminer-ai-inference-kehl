@@ -9,8 +9,12 @@
   patients of each cohort (trial-centric).
 - **`k`:** a positive integer, or `None` for the full ranking.
 - **Output:** one row per query and retrieved item, with both identifiers (as strings), `similarity_score` and
-  one-based `rank`.
+  one-based `rank`. Exact ties keep corpus order, so the ranking is the same on every run and device.
 - **`config`:** accepted for call compatibility and unused.
+
+`rank_similarity(query_embeddings, corpus_embeddings, k=20)` is the same ranking for callers that keep their own
+identifiers and data types, such as a live matching service: lists of vectors in, and per query a list of
+`(corpus_index, similarity_score)` pairs out. `generate_candidate_matches` is built on it.
 
 Vectors from different TrialSpace models cannot be mixed; changing models requires embedding both sides again. For
 exact search over large matrices on several devices, see `matching.retrieval.score_batches` on the
@@ -20,6 +24,7 @@ exact search over large matrices on several devices, see `matching.retrieval.sco
     options:
       members:
         - generate_candidate_matches
+        - rank_similarity
 
 ## Adaptive trial-centric cutoff
 

@@ -17,7 +17,7 @@ from .exclusion_check import exclusion_criteria_check, interpret_exclusion_crite
 from .llm_checks import check_eligibility_criteria_with_llm
 from .llm_checks import exclusion_criteria_check_with_llm
 from .llm_checks import score_match_quality_with_llm
-from .match import generate_candidate_matches
+from .match import generate_candidate_matches, rank_similarity
 from .rerank import interpret_match_quality, score_match_quality
 from .guidelines import retrieve_guideline_considerations
 from .guideline_patients import (
@@ -41,6 +41,7 @@ __all__ = [
     "exclusion_criteria_check",
     "exclusion_criteria_check_with_llm",
     "generate_candidate_matches",
+    "rank_similarity",
     "find_trial_centric_cutoff",
     "interpret_exclusion_criteria",
     "interpret_match_quality",

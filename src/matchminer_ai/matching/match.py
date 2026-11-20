@@ -48,6 +48,49 @@ def _resolve_id_column(df: pd.DataFrame, label: str) -> str:
     return id_col
 
 
+def rank_similarity(
+    query_embeddings,
+    corpus_embeddings,
+    *,
+    k: int | None = 20,
+) -> list[list[tuple[int, float]]]:
+    """Rank corpus embeddings by cosine similarity for each query embedding.
+
+    The service-layer form of :func:`generate_candidate_matches`: plain embedding vectors in,
+    positions out, for callers that keep their own identifiers and data types (such as a live
+    matching service). ``generate_candidate_matches`` is built on it.
+
+    Parameters
+    ----------
+    query_embeddings, corpus_embeddings : Sequence[array-like]
+        Query-side and corpus-side vectors (lists or 1-D arrays) of one TrialSpace model.
+    k : int | None, default 20
+        Matches to return per query; None returns every corpus vector.
+
+    Returns
+    -------
+    list[list[tuple[int, float]]]
+        Per query, ``(corpus_index, similarity_score)`` pairs into ``corpus_embeddings``, by
+        similarity descending. Ties keep corpus order, so the ranking is the same on every run
+        and device.
+    """
+    if k is not None and (type(k) is not int or k <= 0):
+        raise ValueError("k must be a positive integer or None")
+    # Parse embeddings and ensure consistent vector dimensionality.
+    query_matrix = _stack_embeddings(query_embeddings)
+    corpus_matrix = _stack_embeddings(corpus_embeddings)
+    if query_matrix.numel() == 0 or corpus_matrix.numel() == 0:
+        return [[] for _ in range(len(query_embeddings))]
+    similarity = _normalize_rows(query_matrix) @ _normalize_rows(corpus_matrix).T
+    top_k = similarity.shape[1] if k is None else min(k, similarity.shape[1])
+    results: list[list[tuple[int, float]]] = []
+    for scores in similarity:
+        # A stable sort breaks ties by corpus order; torch.topk guarantees no order at all.
+        ranked = torch.argsort(scores, descending=True, stable=True)[:top_k]
+        results.append([(int(index), float(scores[int(index)])) for index in ranked])
+    return results
+
+
 def generate_candidate_matches(
     query_df: pd.DataFrame,
     corpus_df: pd.DataFrame,
@@ -73,47 +116,19 @@ def generate_candidate_matches(
     if k is not None and (type(k) is not int or k <= 0):
         raise ValueError("k must be a positive integer or None")
 
-    # Parse embeddings and ensure consistent vector dimensionality.
-    query_embeddings = _stack_embeddings(query_df["embedding"])
-    corpus_embeddings = _stack_embeddings(corpus_df["embedding"])
-    if query_embeddings.numel() == 0 or corpus_embeddings.numel() == 0:
-        return pd.DataFrame(
-            columns=[query_id_col, corpus_id_col, "similarity_score", "rank"]
-        )
-
-    # Normalize embeddings and compute cosine similarity matrix.
-    query_norm = _normalize_rows(query_embeddings)
-    corpus_norm = _normalize_rows(corpus_embeddings)
-    similarity = query_norm @ corpus_norm.T
-
-    # Extract top-k corpus matches per query.
     query_ids = query_df[query_id_col].astype(str).tolist()
     corpus_ids = corpus_df[corpus_id_col].astype(str).tolist()
-
-    records: list[dict[str, object]] = []
-    num_corpus = similarity.shape[1]
-    top_k = num_corpus if k is None else min(k, num_corpus)
-    for row_idx, query_id in enumerate(query_ids):
-        scores = similarity[row_idx]
-        if top_k == 0:
-            continue
-        if top_k == num_corpus:
-            ranked_idx = torch.argsort(scores, descending=True)
-        else:
-            ranked_idx = torch.topk(scores, k=top_k, largest=True).indices
-        for rank, corpus_idx in enumerate(ranked_idx, start=1):
-            corpus_idx_int = int(corpus_idx)
-            records.append(
-                {
-                    query_id_col: query_id,
-                    corpus_id_col: corpus_ids[corpus_idx_int],
-                    "similarity_score": float(scores[corpus_idx_int]),
-                    "rank": int(rank),
-                }
-            )
-
-    result = pd.DataFrame.from_records(records)
-    if result.empty:
-        return result
-
-    return result
+    ranked = rank_similarity(query_df["embedding"], corpus_df["embedding"], k=k)
+    records: list[dict[str, object]] = [
+        {
+            query_id_col: query_id,
+            corpus_id_col: corpus_ids[corpus_index],
+            "similarity_score": score,
+            "rank": rank,
+        }
+        for query_id, matches in zip(query_ids, ranked)
+        for rank, (corpus_index, score) in enumerate(matches, start=1)
+    ]
+    if not records:
+        return pd.DataFrame(columns=[query_id_col, corpus_id_col, "similarity_score", "rank"])
+    return pd.DataFrame.from_records(records)
