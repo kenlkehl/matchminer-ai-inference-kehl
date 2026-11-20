@@ -4,9 +4,9 @@ import os
 import sys
 import threading
 
-from .settings import parse_settings
+from matchminer_ai.apps.common.security import is_loopback
 
-LOOPBACK = ("127.0.0.1", "localhost", "::1")
+from .settings import parse_settings
 
 
 def main(argv=None):
@@ -19,7 +19,7 @@ def main(argv=None):
         write_store(store, settings.store_path)
         print(f"{store['counts']} -> {settings.store_path} ({store['build_seconds']} s)")
         return
-    if settings.host not in LOOPBACK:
+    if not is_loopback(settings.host):
         sys.exit(f"Refusing to serve on {settings.host}: the dashboard shows confidential protocol content and serves "
                  "on 127.0.0.1 only (forward the port with ssh -L to reach it from another machine).")
     if not settings.allow_downloads:  # before transformers or huggingface_hub is imported

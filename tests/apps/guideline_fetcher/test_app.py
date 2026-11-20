@@ -160,7 +160,9 @@ def test_run_binds_only_to_loopback(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         run.main(["--phi"])
     assert len(calls) == 1
-    assert run.loopback("localhost") and run.loopback("::1") and run.loopback("127.0.0.2")
+    from matchminer_ai.apps.common.security import is_loopback
+
+    assert is_loopback("localhost") and is_loopback("::1") and is_loopback("127.0.0.2")
 
 
 def test_default_search_reranks_five_candidates_and_returns_one_space(setup):

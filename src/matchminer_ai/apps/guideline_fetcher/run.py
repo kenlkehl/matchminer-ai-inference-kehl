@@ -7,22 +7,12 @@ populations and population caches, and the data root's phi/ cache. --site-config
 """
 
 import argparse
-import ipaddress
 import os
 import sys
 import multiprocessing
 
+from matchminer_ai.apps.common import security
 from matchminer_ai.site import DATA_ROOT_ENV, SITE_CONFIG_ENV
-
-
-def loopback(host):
-    """Only this machine may connect to the PHI app: real patient records are served."""
-    if host == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
 
 
 def main(argv=None):
@@ -47,7 +37,7 @@ def main(argv=None):
 
     host = args.host or ("127.0.0.1" if args.phi else "0.0.0.0")
     port = args.port if args.port is not None else PHI_PORT if args.phi else DEFAULT_PORT
-    if args.phi and not loopback(host):
+    if args.phi and not security.is_loopback(host):
         parser.error("The PHI app binds only to a loopback address such as 127.0.0.1.")
     # The mode comes only from this command line, never from the environment.
     try:

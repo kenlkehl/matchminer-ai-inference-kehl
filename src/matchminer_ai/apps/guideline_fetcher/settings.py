@@ -13,10 +13,10 @@ site-config reference in the docs.
 
 import os
 import re
-import secrets
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from matchminer_ai.apps.common import security
 from matchminer_ai.llm import connections
 from matchminer_ai.site import data_root, load_site_config
 
@@ -70,7 +70,7 @@ def default_extraction_records(phi):
 
 
 DEFAULT_ACCESS_TOKEN_FILE = "~/.config/guideline-fetcher-phi/access_token"
-MIN_ACCESS_TOKEN_LENGTH = 32
+MIN_ACCESS_TOKEN_LENGTH = security.MIN_ACCESS_TOKEN_LENGTH
 # The connection profiles (matchminer_ai.llm.connections), read once at import: the Vertex project is the site
 # config's vertex.project. Gemini 4 Hydrogen (GA 2026-11-12) is the default since 2026-11-14 (user: the Gemma 4 26B
 # MaaS endpoint "is very janky").
@@ -137,30 +137,9 @@ def access_token_file():
 
 
 def load_access_token():
-    """PHI mode: GUIDELINE_ACCESS_TOKEN, else a private token file created on first use.
-
-    The loopback bind keeps other machines out; the token keeps out other
-    accounts on this machine. Never pass the token on a command line (ps shows it).
-    """
-    token = os.getenv("GUIDELINE_ACCESS_TOKEN", "").strip()
-    if not token:
-        path = access_token_file()
-        if not path.exists():
-            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            try:
-                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                with os.fdopen(fd, "w") as file:
-                    file.write(secrets.token_urlsafe(32) + "\n")
-            except FileExistsError:
-                pass
-        if path.stat().st_mode & 0o077:
-            raise PermissionError(f"Restrict the access token file to your account: chmod 600 {path}")
-        token = path.read_text().strip()
-    if len(token) < MIN_ACCESS_TOKEN_LENGTH or any(ch.isspace() for ch in token):
-        raise ValueError(
-            f"The access token needs at least {MIN_ACCESS_TOKEN_LENGTH} characters and no spaces."
-        )
-    return token
+    """PHI mode: GUIDELINE_ACCESS_TOKEN, else a private token file created on first use
+    (``matchminer_ai.apps.common.security.load_access_token``)."""
+    return security.load_access_token("GUIDELINE_ACCESS_TOKEN", access_token_file())
 
 
 def default_device():
@@ -250,7 +229,7 @@ class Settings:
     def __post_init__(self):
         if self.allowed_hosts is None:
             # PHI mode accepts loopback names only, rejecting DNS-rebinding Host headers.
-            default = "127.0.0.1,localhost" if self.phi else "*"
+            default = ",".join(security.LOOPBACK_HOSTS) if self.phi else "*"
             self.allowed_hosts = [
                 host.strip()
                 for host in os.getenv("GUIDELINE_ALLOWED_HOSTS", default).split(",")

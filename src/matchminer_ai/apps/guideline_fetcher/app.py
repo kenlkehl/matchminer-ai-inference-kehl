@@ -4,7 +4,6 @@ Settings(phi=True) is the PHI deployment: every page and API route except /login
 static assets requires the access token, and PHI population routes are added.
 """
 
-import hmac
 import json
 import os
 import re
@@ -14,7 +13,6 @@ import time
 from contextlib import asynccontextmanager, suppress
 from dataclasses import replace
 from typing import Literal
-from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -23,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from matchminer_ai.apps.common import security
 from matchminer_ai.llm import connections
 
 from .extraction_workup import SessionExtractions
@@ -42,14 +41,7 @@ from .settings import (
 # PHI mode's cookies are named apart from the non-PHI app's.
 SESSION_COOKIES = {"standard": "gf_session", "phi": "gf_phi_session"}
 AUTH_COOKIE = "gf_phi_auth"
-SECURITY_HEADERS = {
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
-    "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-    ),
-}
+SECURITY_HEADERS = {"Cache-Control": "no-store", **security.security_headers(security.content_security_policy())}
 # index.html puts mode-specific markup between <!-- mode:phi --> and <!-- /mode:phi -->
 # (or mode:standard) lines; each marker line is removed whole.
 MODE_BLOCK = re.compile(
@@ -207,20 +199,8 @@ def create_app(settings=None, inference=None, access_token=None):
     session_cookie = SESSION_COOKIES[settings.mode]
     if settings.phi:
         access_token = access_token or load_access_token()
-        # A cookie derived from the token: a new token signs every browser out.
-        auth_cookie = hmac.new(
-            access_token.encode(), b"guideline-fetcher-phi browser sign-in v1", "sha256"
-        ).hexdigest()
-
-        def valid_token(value):
-            return hmac.compare_digest(value.strip().encode(), access_token.encode())
-
-        def authorized(request):
-            cookie = request.cookies.get(AUTH_COOKIE, "")
-            scheme, _, bearer = request.headers.get("authorization", "").partition(" ")
-            return hmac.compare_digest(cookie.encode(), auth_cookie.encode()) or (
-                scheme.lower() == "bearer" and valid_token(bearer)
-            )
+        sign_in = security.SignIn(access_token, b"guideline-fetcher-phi browser sign-in v1", AUTH_COOKIE)
+        valid_token, authorized = sign_in.valid_token, sign_in.authorized
 
     catalogs = Catalogs(settings.catalog_root)
     jobs = Jobs(settings.ttl)
@@ -298,12 +278,9 @@ def create_app(settings=None, inference=None, access_token=None):
     @api.middleware("http")
     async def session(request, call_next):
         # Reject cross-origin writes, including requests from unrelated local pages.
-        if request.method not in {"GET", "HEAD", "OPTIONS"}:
-            origin = request.headers.get("origin")
-            if origin and urlsplit(origin).netloc != request.headers.get("host"):
-                return secured(JSONResponse({"detail": "Cross-origin request rejected"}, status_code=403))
-            if request.headers.get("sec-fetch-site") == "cross-site":
-                return secured(JSONResponse({"detail": "Cross-site request rejected"}, status_code=403))
+        refused = security.cross_origin_write(request.method, request.headers)
+        if refused:
+            return secured(JSONResponse({"detail": refused}, status_code=403))
         if settings.phi:
             # Only the sign-in page and patient-free static assets are public.
             public = request.url.path == "/login" or request.url.path.startswith("/static/")
@@ -327,15 +304,7 @@ def create_app(settings=None, inference=None, access_token=None):
 
     if settings.phi:
         def signed_in(request):
-            response = RedirectResponse("/", status_code=303)
-            response.set_cookie(
-                AUTH_COOKIE,
-                auth_cookie,
-                httponly=True,
-                samesite="strict",
-                secure=request.url.scheme == "https",
-            )
-            return response
+            return sign_in.set_cookie(request, RedirectResponse("/", status_code=303))
 
         def login_page(failed=False):
             error = ('<p class="error-banner" role="alert">That access token was not accepted.</p>'

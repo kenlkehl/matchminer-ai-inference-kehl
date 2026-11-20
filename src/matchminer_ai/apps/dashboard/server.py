@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from matchminer_ai.apps.common import security
+
 from . import pipeline
 from .core import cancer_types
 from .core.encoder import EncoderUnavailable
@@ -20,8 +22,8 @@ from .state import DashState, NotFound
 
 STATIC = Path(__file__).with_name("static")
 DIRECTIONS = ("patients_for_cohort", "trials_for_patient")
-CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-       "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'")
+CSP = security.content_security_policy(inline_styles=True, form_action="'none'")
+HEADERS = security.security_headers(CSP)
 
 
 class PatientsForCohort(BaseModel):
@@ -115,9 +117,7 @@ def create_app(state: DashState) -> FastAPI:
     @app.middleware("http")
     async def headers(request: Request, call_next):
         response = await call_next(request)
-        response.headers["Content-Security-Policy"] = CSP
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers.update(HEADERS)
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         elif request.url.path.startswith("/assets/"):
