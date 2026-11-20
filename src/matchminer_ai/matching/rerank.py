@@ -41,10 +41,9 @@ def _scores(answers: list[dict[str, float]]) -> tuple[list[float], dict[str, lis
 def reasonableness_cutoff(config: MMAIConfig) -> float:
     """``match_quality.reasonableness_cutoff``: P(reasonable) at or above which a pair passes (default 0.5).
 
-    Since 2026-11-17 (user) a pair passes on the decision model's own potentially-eligible answer, not on
-    ``match_quality_score``: the former 0.2 score cutoff only approximated that answer, and it rejected pairs
-    the model judged reasonable but whose cohort was not specific on any dimension (a certain P(reasonable) with
-    no specificity scores 1/6). An old ``score_cutoff`` key is ignored.
+    A pair passes on the decision model's own potentially-eligible answer, not on ``match_quality_score``: a
+    score cutoff would reject pairs the model judges reasonable but whose cohort is not specific on any dimension
+    (a certain P(reasonable) with no specificity scores 1/6). An old ``score_cutoff`` key is ignored.
     """
     value = float((config.raw.get("match_quality") or {}).get("reasonableness_cutoff", 0.5))
     if not 0.0 <= value <= 1.0:

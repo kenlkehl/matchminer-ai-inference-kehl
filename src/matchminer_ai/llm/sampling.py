@@ -12,7 +12,7 @@ https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/main/generation_config
 
 A section's own sampling keys normally win over these defaults. A section that names no
 ``sampling_profile`` fixes its own sampling (for example greedy extraction); for a model whose
-profile is marked ``replaces_task_sampling`` (Nemotron 3.5 Super, user instruction 2026-11-05)
+profile is marked ``replaces_task_sampling`` (Nemotron 3.5 Super)
 the profile's sampling replaces that fixed sampling, so every workflow served by Nemotron sends
 NVIDIA's settings. A section that names a profile keeps the usual rule (its explicit keys win), and
 ``sampling_profile: none`` sends only its own (:func:`replacing_profile`,

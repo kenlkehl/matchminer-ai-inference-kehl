@@ -1,8 +1,8 @@
-"""The teacher's label contracts (moved from the training repository's trialspace/contracts.py, 2026-11-06).
+"""The teacher's label contracts.
 
 - ``match``: the five match labels of a patient–cohort pair (reasonableness and the cancer type,
   burden, treatment history and biomarker specificity answers), asked in ONE prompt per pair
-  (``matchminer_ai.matching.match_labels``; user instruction 2026-11-04). The patient text is the
+  (``matchminer_ai.matching.match_labels``). The patient text is the
   summary's key section and the cohort text its key criteria. TrialSpace and the decision model's
   five match questions train on these labels.
 - ``boilerplate``: whether the patient clearly fails any of the cohort's boilerplate criteria, from
@@ -15,8 +15,8 @@
   numbered criteria and the line restated with its inclusion/exclusion type. The answer is the
   decision model's target: **yes = the patient does not clearly fail the line; no = an inclusion
   line clearly not met or an exclusion line clearly met**, with the ``criterion_status`` of the line as it binds
-  the patient (since 2026-11-13 a line judged in its role: an alternative, a requirement for only some patients
-  or a branch that does not bind this patient is ``not_applicable``).
+  the patient (a line is judged in its role: an alternative, a requirement for only some patients or a branch
+  that does not bind this patient is ``not_applicable``).
 """
 import hashlib
 import json
@@ -85,8 +85,8 @@ def parse_boilerplate(answer):
 def answer_schema(task):
     """The JSON schema a task's answer is decoded under (vLLM structured outputs, after the reasoning),
     or None for free text. The JSON tasks (``match``, ``criteria``) are constrained: unconstrained,
-    Nemotron 3.5 Super dropped the opening quote of a ``reason`` string in about one answer in six
-    (2026-11-05 test on an FP8 server). ``boilerplate`` ends in a free-text Yes!/No!."""
+    Nemotron 3.5 Super dropped the opening quote of a ``reason`` string in about one answer in six.
+    ``boilerplate`` ends in a free-text Yes!/No!."""
     return {'match': MATCH_LABELS_JSON_SCHEMA, 'criteria': CRITERION_LABEL_JSON_SCHEMA}.get(task)
 
 

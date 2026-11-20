@@ -1,8 +1,7 @@
 """Resumable teacher labels of patient-cohort pairs, for training TrialSpace and the decision model.
 
-Moved from the training repository (``trialspace/labeling.py`` and its journal, response-store,
-publication, reuse and export modules, ``label_workspace.py``) on 2026-11-06, unchanged in behaviour:
-label directories written before the move keep resuming. Three tasks (:mod:`.tasks`):
+The training pipeline's labeling stages (:mod:`matchminer_ai.training.trialspace.label`) run it. Three tasks
+(:mod:`.tasks`):
 
 - ``match``: the five match labels of a pair in one request (``match_quality.labels.system.txt``),
   scored 0-6 into a resumable score journal (:mod:`.journal`, :mod:`.scoring`);

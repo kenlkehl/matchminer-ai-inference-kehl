@@ -60,7 +60,7 @@ def extract_cohorts(
     returned rows, as for full protocols (:func:`extract_protocol_cohorts`):
     :func:`merge_equivalent_cohorts` and :func:`remove_boilerplate_criteria`, both with the default
     ``section="trial"`` (training uses both, in that order; :func:`process_trials` runs all three).
-    Named ``summarize_trials`` before November 2026; that name remains as a deprecated alias.
+    ``summarize_trials`` is a deprecated alias.
 
     Parameters
     ----------
@@ -83,7 +83,7 @@ def extract_cohorts(
         With the default ``cohorts`` method, one row per accepted population:
         ``cohort_trial_id`` (``<trial_id>-cohort-<number>``), ``trial_id``,
         zero-based ``cohort_number``, ``cohort_name``, ``cohort_eligibility_criteria``,
-        ``cohort_criteria_source`` (``"ctgov"``; ``"registry"`` before November 2026), ``cancer_treatment_trial``, and
+        ``cohort_criteria_source`` (``"ctgov"``; older runs say ``"registry"``), ``cancer_treatment_trial``, and
         ``multiple_cohorts``. Each listing's title, brief summary and eligibility
         criteria form one document that goes through the same three steps and
         prompts as :func:`extract_protocol_cohorts`
@@ -193,7 +193,7 @@ def extract_cohorts(
 
 
 def summarize_trials(*args, **kwargs):
-    """Deprecated name of :func:`extract_cohorts` (renamed November 2026)."""
+    """Deprecated alias of :func:`extract_cohorts`."""
     warnings.warn("summarize_trials is deprecated; use extract_cohorts", DeprecationWarning, stacklevel=2)
     return extract_cohorts(*args, **kwargs)
 

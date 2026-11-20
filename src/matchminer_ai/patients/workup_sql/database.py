@@ -2,7 +2,7 @@
 
 One table per extracted item type (``imaging_studies``, ``procedures``,
 ``diagnoses``, ``biomarkers``, ``treatments``, ``disease_assessments``,
-``performance_status``, ``events`` and any extension's), one row per item at
+``performance_status``, ``lab_tests``, ``counseling``, ``events`` and any extension's), one row per item at
 either level, plus ``patients``, ``documents``, an ``items`` view of the columns
 every item table shares, ``vocabulary`` (every code and its meaning) and
 ``database_info``. Columns come from the item type declarations

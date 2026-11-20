@@ -69,9 +69,10 @@ def retrieve_guideline_considerations(
         TrialSpace nearest neighbors to rerank per patient. Must be >= top_n,
         or None to score every catalog space. A smaller catalog returns fewer rows.
     config : MMAIConfig, optional
-        Uses existing ``embedding`` and ``raw['match_quality']`` settings and
-        their bundled prompts. Both models run locally through the public stage
-        APIs; no generative LLM or public-source retrieval is used.
+        Uses the ``embedding`` settings (TrialSpace), ``raw['decision_model']`` (the
+        decision model's model and device) and ``match_quality.reasonableness_cutoff``.
+        Both models run locally through the
+        public stage APIs; no generative LLM or public-source retrieval is used.
     return_metadata : bool, optional
         Also return config, catalog identity, both model metadata records, and
         retrieval/reranking parameters and counts.
@@ -96,7 +97,8 @@ def retrieve_guideline_considerations(
     The two public model stages are ``embed_for_matching`` and
     ``score_match_quality``, with ``generate_candidate_matches`` between them.
     Both read each space's ``cohort_key_criteria`` from ``load_guideline_catalog``:
-    its nine fields in the layout of a trial cohort's key criteria.
+    its stored cohort-style key criteria, or for older catalogs its nine fields
+    laid out as a trial cohort's key criteria.
     Catalog embeddings are computed once per call for all supplied patients,
     or reused from the optional verified cache. Only missing/changed text is
     embedded. Patient embeddings always use the same model configuration.

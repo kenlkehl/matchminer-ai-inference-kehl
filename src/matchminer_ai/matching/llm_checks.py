@@ -328,8 +328,8 @@ def check_eligibility_criteria_with_llm(
     Check every eligibility-criterion line of each candidate pair with an LLM, one request per line.
 
     The LLM alternative to :func:`~matchminer_ai.matching.check_eligibility_criteria`, with the same
-    inputs and the same polarity. Each request is the per-criterion teacher prompt that the decision
-    model's question 7 is trained on: ``criterion_check.labels.user.txt`` around the decision model's
+    inputs and the same polarity. Each request is the per-criterion teacher prompt whose labels the
+    decision model's per-criterion question is trained on: ``criterion_check.labels.user.txt`` around the decision model's
     own criterion state and question
     (:func:`~matchminer_ai.matching.decision_model.criterion_teacher_messages`; label contract
     ``matchminer_ai.labeling.contract_hash("criteria")``), that is the complete patient summary, the

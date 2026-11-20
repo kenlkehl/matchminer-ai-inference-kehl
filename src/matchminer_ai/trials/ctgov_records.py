@@ -1,4 +1,4 @@
-"""ClinicalTrials.gov record lookup: GoodOption catalog studies, trial-space extraction documents and
+"""ClinicalTrials.gov record lookup: GoodOption catalog studies, trial documents and
 complete eligibility criteria. Requests carry only an NCT ID, never patient context."""
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class TrialEligibilityCriteria:
 
 @dataclass(frozen=True)
 class TrialCtgovDocument:
-    """ClinicalTrials.gov fields used by trial-space extraction."""
+    """ClinicalTrials.gov fields used by eligibility-criteria extraction."""
 
     nct_id: str
     trial_title: str

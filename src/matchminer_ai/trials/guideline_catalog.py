@@ -35,8 +35,8 @@ _CATALOG_CACHE_MAX_FILES = 128
 # evicts early files during each sequential scan and gets no hits next time.
 _CATALOG_CACHE_MAX_BYTES = 512 * 1024 * 1024
 # The same column a cohort's key criteria use (cohort_boilerplate.KEY_COLUMN). Set on every load: from
-# the record's stored cohort-style criteria (STORED_KEY_CRITERIA_FIELD, written by the endpoint since
-# 2026-11-14) when it has them, else derived from its nine-field space (format_key_criteria).
+# the record's stored cohort-style criteria (STORED_KEY_CRITERIA_FIELD, written by the endpoint) when it
+# has them, else derived from its nine-field space (format_key_criteria).
 KEY_CRITERIA_COLUMN = "cohort_key_criteria"
 STORED_KEY_CRITERIA_FIELD = "key_criteria"
 
@@ -286,7 +286,7 @@ def load_guideline_catalog(
         Each record also gets ``cohort_key_criteria``, which TrialSpace retrieval
         and the decision model's match questions read: the record's stored
         cohort-style ``key_criteria`` (protocol-style sentences the endpoint wrote
-        for the space, since 2026-11-14) when present, else its nine-field space
+        for the space) when present, else its nine-field space
         laid out as a trial cohort's key criteria (one "Label: value." line per
         field under "Inclusion criteria:" and "Exclusion criteria:", NA fields
         left out). The column itself is set on every load and excluded from

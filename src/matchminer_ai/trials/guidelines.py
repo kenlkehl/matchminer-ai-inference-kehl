@@ -97,7 +97,7 @@ def summarize_guidelines(
         endpoint is supported; this function never starts a model server.
         Defaults reserve 100,000 output tokens, discover the full context window,
         enable reasoning, and resolve vendor sampling from the served model
-        (Gemma 4 or Qwen 3.8; xhigh effort for Qwen).
+        (Nemotron by default; xhigh effort for Qwen 3.8).
     return_metadata : bool, optional
         Also return package/config/model provenance, resolved run settings, source
         fingerprint, and the mechanical audit result.
@@ -323,7 +323,7 @@ def add_guideline_cohort_criteria(
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """Add cohort-style key criteria to a completed guideline catalog, as a new edition.
 
-    New catalogs from :func:`summarize_guidelines` already carry them (since 2026-11-14). For a catalog extracted
+    New catalogs from :func:`summarize_guidelines` already carry them. For a catalog extracted
     before that, this sends one request per space to the configured guideline endpoint, the pipeline's own
     cohort-criteria step, and writes the base catalog's records, unchanged, plus ``key_criteria`` (protocol-style
     inclusion and exclusion sentences) and ``key_criteria_items`` to ``output_dir``. The base directory is only

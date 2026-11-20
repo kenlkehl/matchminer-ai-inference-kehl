@@ -2,8 +2,8 @@
 
 A decision model reads a *state* and named questions and returns, for each ``noul`` (yes/no)
 question, P(yes) from one forward pass, without generating text. The pinned base model is
-``LiquidAI/d1-2B``; the training repository fine-tunes it on the teacher's labels of the same
-seven families (``train_decision_model.py``), and ``decision_model.model_name`` in the
+``LiquidAI/d1-2B``; the training pipeline fine-tunes it on the teacher's labels of the same
+seven families (:mod:`matchminer_ai.training.decision_model`), and ``decision_model.model_name`` in the
 configuration selects either.
 
 The seven families, and what **yes** means for each:
@@ -24,13 +24,13 @@ The seven families, and what **yes** means for each:
      or its information is missing, or the patient could meet it by waiting, or it does not bind
      this patient). **No: the patient clearly fails it: an inclusion line clearly not met, or an
      exclusion line clearly met.** A line is judged in its role in the criteria (the state states
-     the rules, 2026-11-13): an alternative fails only when the patient clearly fails every
+     the rules): an alternative fails only when the patient clearly fails every
      alternative of its group, and then all of them fail; an introducing line fails as its lines
      fail together; a requirement for only some of the patients the criteria admit fails only when
      it clearly applies; branches that together define who may enroll fail a patient who fits none;
      and a standalone requirement fails a patient who lacks what it requires.
 
-These builders are the only definition of the states and questions: the training repository
+These builders are the only definition of the states and questions: the training pipeline
 renders its training examples with them, so inference reads exactly what the model learned.
 Patient text reaches only the configured decision model, which runs locally by default.
 """
@@ -223,9 +223,9 @@ def parse_criterion_label(text: str, criterion_type: str, finish_reason: str = "
     """The teacher's answer for one line: ``answer`` ("yes" = does not clearly fail the line, the
     question-7 target), ``criterion_status`` and ``reason``. An answer of "no" must name the failing
     status (``not_met`` for an inclusion line, ``met`` for an exclusion line); anything else raises.
-    ``not_applicable`` (since 2026-11-13 also a line that does not bind this patient: a requirement
-    whose condition does not apply, or an alternative another alternative of its group satisfies)
-    therefore always goes with "yes"; labels written before that keep validating unchanged."""
+    ``not_applicable`` (also a line that does not bind this patient: a requirement whose condition does
+    not apply, or an alternative another alternative of its group satisfies) therefore always goes with
+    "yes"."""
     from matchminer_ai.trials.cohort_schema import _unique_keys, unwrap_json_fence
     if finish_reason != "stop":
         raise ValueError(f"Incomplete response: {finish_reason}")

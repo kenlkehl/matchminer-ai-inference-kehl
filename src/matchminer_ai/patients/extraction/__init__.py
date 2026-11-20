@@ -6,7 +6,8 @@ document type, the imaging study or specimen procedure behind a report, and the
 diagnoses, biomarkers, treatments, disease assessments and performance status
 it states); :func:`extract_patient_records` returns one record per patient from
 all of their notes (diagnoses, biomarkers, treatment lines, procedures, imaging
-history and key dated events). Both use the item types and vocabularies of
+history and key dated events). Schema v2 records also carry lab tests and
+counseling. Both use the item types and vocabularies of
 :mod:`.schema` and :mod:`.vocabulary`, carry exact-quote evidence located in the
 notes in code, and flatten to one table with :func:`extraction_items`.
 """
