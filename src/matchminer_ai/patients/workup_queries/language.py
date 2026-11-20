@@ -722,9 +722,25 @@ EXAMPLES: list[tuple[str, dict]] = [
     (
         "History and physical examination; CBC and chemistry profile",
         {
+            "summary": "A performed CBC and a performed chemistry profile.",
+            "expressible": True, "not_expressible_reason": "",
+            "approximations": ["The history and physical examination is always done and is "
+                               "not checked."],
+            "criteria": [
+                _criterion("cbc", "CBC", "lab_test", [("lab_test", "in", ["cbc"], "no_match")]),
+                _criterion("chemistry", "Chemistry profile", "lab_test",
+                           [("lab_test", "in", ["cmp"], "no_match")]),
+            ],
+            "applies_when": _NONE, "not_applicable_when": _NONE,
+            "requirement": _all([("cbc", False)], [("chemistry", False)]),
+        },
+    ),
+    (
+        "Pulmonary function tests",
+        {
             "summary": "Not checkable from extracted items.",
             "expressible": False,
-            "not_expressible_reason": "Examinations and laboratory panels are not extracted "
+            "not_expressible_reason": "Organ function tests such as PFTs are not extracted "
             "item types.",
             "approximations": [], "criteria": [],
             "applies_when": _NONE, "not_applicable_when": _NONE, "requirement": _NONE,

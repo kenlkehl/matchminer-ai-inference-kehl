@@ -443,8 +443,7 @@ def test_incomplete_or_missing_extraction_is_unknown_and_unexpressible_requireme
     assert result["status"] == "unknown" and result["reason"] == "incomplete_extraction"
     report = check_workup_with_extractions(
         pd.DataFrame([document("n1", "2024-03-02", [])]),
-        compiled(ct_query(), EXAMPLES["History and physical examination; CBC and chemistry "
-                                      "profile"]),
+        compiled(ct_query(), EXAMPLES["Pulmonary function tests"]),
         patient_ids=["p1", "p2"], coverage={"p1": {"notes_without_records": 2}},
     )
     first, second = report["patients"]
