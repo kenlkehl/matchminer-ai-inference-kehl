@@ -31,6 +31,19 @@ def main(argv=None):
     from .server import create_app
     from .state import DashState
 
+    token = None
+    if settings.require_token:
+        from matchminer_ai.apps.common.security import load_access_token
+
+        from .settings import ACCESS_TOKEN_ENV, ACCESS_TOKEN_FILE
+
+        token = load_access_token(ACCESS_TOKEN_ENV, ACCESS_TOKEN_FILE)
+        url = f"http://{settings.host}:{settings.port}/login"
+        if sys.stdout.isatty():
+            print(f"Sign in: {url}?token={token}", flush=True)
+        else:  # redirected output may be readable by others: no token here
+            source = ACCESS_TOKEN_ENV if os.getenv(ACCESS_TOKEN_ENV) else ACCESS_TOKEN_FILE
+            print(f"Sign in at {url} with the access token from {source}.", flush=True)
     state = DashState(settings, log=lambda message: print(message, flush=True))
     decisions = state.decisions
     if settings.device_notice:
@@ -56,7 +69,7 @@ def main(argv=None):
     print(f"Ready in {state.startup_seconds} s. Serving on http://{settings.host}:{settings.port}/ "
           f"(research use; protocol content is confidential). Ctrl-C to stop.", flush=True)
     try:
-        uvicorn.run(create_app(state), host=settings.host, port=settings.port, log_level="warning")
+        uvicorn.run(create_app(state, access_token=token), host=settings.host, port=settings.port, log_level="warning")
     finally:
         stop.set()
         state.encoder.close()

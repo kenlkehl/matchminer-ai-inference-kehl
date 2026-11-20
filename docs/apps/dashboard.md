@@ -26,8 +26,11 @@ mmai-dashboard --site-config site.yaml --device cuda:0
 
 `python -m matchminer_ai.apps.dashboard` is the same command; `mmai-dashboard build` builds the store once and
 exits. The server binds `127.0.0.1:8781` only (it shows confidential protocol content); forward the port with
-`ssh -L` to reach it from another machine. `pnpm dev` serves the frontend on :5173 and proxies `/api` to a
-running server.
+`ssh -L` to reach it from another machine. It accepts only loopback Host headers (`--allowed-hosts` adds names)
+and refuses cross-origin writes. `--require-token` also requires an access token (`MMAI_DASH_ACCESS_TOKEN`, else
+a private `~/.config/mmai-dashboard/access_token` created on first use), which keeps out other accounts on the
+same machine; the server prints a one-click sign-in link to its terminal. `pnpm dev` serves the frontend on :5173
+and proxies `/api` to a running server.
 
 ## Inputs
 

@@ -20,6 +20,7 @@ import json
 import os
 from pathlib import Path
 
+from matchminer_ai.apps.common.security import LOOPBACK_HOSTS
 from matchminer_ai.site import DATA_ROOT_ENV, SITE_CONFIG_ENV, data_root, load_site_config
 
 from .core.settings import RUN_DECISION_MODEL, Settings, complete_decision_model
@@ -39,6 +40,8 @@ def default_grouping() -> Path:
     value = load_site_config().get("dashboard.grouping")
     return Path(value).expanduser() if value else DEFAULT_GROUPING
 ENV_PREFIX = "MMAI_DASH_"
+ACCESS_TOKEN_ENV = "MMAI_DASH_ACCESS_TOKEN"
+ACCESS_TOKEN_FILE = "~/.config/mmai-dashboard/access_token"
 # Interim exports of the run's decision model while it trains (relative to the data root): step-<N>/, each with
 # interim.json written last, listing every file's size. The run's final model replaces them once its stage receipt is
 # complete (core.settings.complete_decision_model). Since 2026-11-15 (user) these are the relabeled retrain's
@@ -73,6 +76,11 @@ class DashSettings(Settings):
     auto_score_n: int = 10  # pairs the result pages score with the decision model as they open
     default_k: int = 50
     device: str = AUTO_DEVICE  # the decision model: cuda:0 when CUDA is available, else cpu (device_notice says so)
+    # Host headers accepted (loopback names; a forwarded port's Host is localhost or 127.0.0.1).
+    allowed_hosts: tuple[str, ...] = tuple(LOOPBACK_HOSTS)
+    # Require an access token (MMAI_DASH_ACCESS_TOKEN, else a private token file) to keep out other accounts on
+    # this machine, which can reach a loopback port.
+    require_token: bool = False
     device_notice: str | None = None
 
     def __post_init__(self):
@@ -194,6 +202,10 @@ def parse_settings(argv: list[str] | None = None) -> DashSettings:
                         "default: dashboard.synthetic_run, else no_phi/synthetic_run under the data root)")
     parser.add_argument("--cache-dir", type=Path)
     parser.add_argument("--host")
+    parser.add_argument("--allowed-hosts", help="comma-separated Host header names to accept (default: "
+                        f"{','.join(LOOPBACK_HOSTS)})")
+    parser.add_argument("--require-token", action="store_true", help="require an access token "
+                        f"(MMAI_DASH_ACCESS_TOKEN, else {ACCESS_TOKEN_FILE}, created on first use)")
     parser.add_argument("--port", type=int)
     parser.add_argument("--decision-model", help="checkpoint directory or Hub id (default: the run's trained decision "
                         "model once complete, else its newest interim export, else fit 2, else base d1-2B)")
@@ -230,6 +242,10 @@ def parse_settings(argv: list[str] | None = None) -> DashSettings:
     if args.embedding_cache:
         values["embedding_caches"] = tuple(args.embedding_cache)
     values["allow_downloads"] = bool(args.allow_downloads or (_env("allow_downloads") or "").lower() in ("1", "true"))
+    values["require_token"] = bool(args.require_token or (_env("require_token") or "").lower() in ("1", "true"))
+    hosts = args.allowed_hosts or _env("allowed_hosts")
+    if hosts:
+        values["allowed_hosts"] = tuple(h.strip() for h in hosts.split(",") if h.strip())
     settings = DashSettings(**values)
     settings.command = args.command
     return settings

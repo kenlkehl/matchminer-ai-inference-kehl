@@ -215,8 +215,28 @@ def dash_client(dash):
 
     from matchminer_ai.apps.dashboard.server import create_app
 
-    with TestClient(create_app(dash)) as test_client:
+    with TestClient(create_app(dash), base_url="http://127.0.0.1") as test_client:  # a loopback Host
         yield test_client
+
+
+def test_loopback_host_cross_origin_writes_and_the_access_token(dash):
+    from fastapi.testclient import TestClient
+
+    from matchminer_ai.apps.dashboard.server import create_app
+
+    with TestClient(create_app(dash), base_url="http://dashboard.example") as client:
+        assert client.get("/api/meta").status_code == 400  # a DNS-rebinding Host is refused
+    token = "fabricated-dashboard-access-token-abcdef0123456789"
+    with TestClient(create_app(dash, access_token=token), base_url="http://127.0.0.1") as client:
+        assert client.get("/api/meta").status_code == 401
+        assert client.get("/", follow_redirects=False).headers["location"] == "/login"
+        assert client.get("/login?token=wrong-token", follow_redirects=False).status_code == 401
+        assert client.get(f"/login?token={token}", follow_redirects=False).status_code == 303
+        assert client.get("/api/meta").status_code == 200  # the sign-in cookie
+        refused = client.post("/api/llm", json={}, headers={"origin": "http://other.example"})
+        assert refused.status_code == 403
+    with TestClient(create_app(dash, access_token=token), base_url="http://127.0.0.1") as client:
+        assert client.get("/api/meta", headers={"Authorization": f"Bearer {token}"}).status_code == 200
 
 
 def test_store_versions_centers_and_groups(dash_client, dash):

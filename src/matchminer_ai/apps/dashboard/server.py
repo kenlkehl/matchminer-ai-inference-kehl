@@ -110,19 +110,69 @@ def type_labels(keys: list[str]) -> list[str]:
     return [cancer_types.TYPE_LABELS[k] for k in keys if k in cancer_types.TYPE_LABELS]
 
 
-def create_app(state: DashState) -> FastAPI:
+AUTH_COOKIE = "mmai_dash_auth"
+LOGIN_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Sign in · MatchMiner-AI dashboard</title></head>
+<body><main><h1>MatchMiner-AI dashboard</h1>{error}
+<form method="post" action="/login"><label for="token">Access token</label>
+<input id="token" name="token" type="password" autocomplete="current-password" required>
+<button type="submit">Sign in</button></form>
+<p>The token is printed by <code>mmai-dashboard --require-token</code> or kept in its access token file.</p>
+</main></body></html>
+"""
+
+
+def create_app(state: DashState, access_token: str | None = None) -> FastAPI:
+    """The dashboard's app: loopback Host names only, no cross-origin writes and, with ``access_token``, sign-in."""
+    from fastapi.responses import HTMLResponse, RedirectResponse
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+
     app = FastAPI(title="MatchMiner-AI dashboard (research use)", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.mmai = state
+    sign_in = security.SignIn(access_token, b"mmai-dashboard browser sign-in v1", AUTH_COOKIE) if access_token else None
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
-        response = await call_next(request)
+        refused = security.cross_origin_write(request.method, request.headers)
+        if refused:
+            response = JSONResponse({"error": refused}, status_code=403)
+        elif (sign_in and request.url.path != "/login" and not request.url.path.startswith("/assets/")
+              and not sign_in.authorized(request)):
+            response = (JSONResponse({"error": "Sign in with the access token."}, status_code=401)
+                        if request.url.path.startswith("/api/") else RedirectResponse("/login", status_code=303))
+        else:
+            response = await call_next(request)
         response.headers.update(HEADERS)
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         elif request.url.path.startswith("/assets/"):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"  # hashed file names
         return response
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(state.settings.allowed_hosts))
+
+    if sign_in:
+        def login_page(failed: bool = False):
+            error = "<p role='alert'>That access token was not accepted.</p>" if failed else ""
+            return HTMLResponse(LOGIN_PAGE.replace("{error}", error), status_code=401 if failed else 200,
+                                headers={"Cache-Control": "no-store"})
+
+        def signed_in(request: Request, token: str):
+            if not sign_in.valid_token(token):
+                return login_page(failed=True)
+            return sign_in.set_cookie(request, RedirectResponse("/", status_code=303))
+
+        @app.get("/login")
+        def login_form(request: Request, token: str | None = None):
+            # mmai-dashboard --require-token prints /login?token=... to its own terminal for one-click sign-in.
+            return signed_in(request, token) if token is not None else login_page()
+
+        @app.post("/login")
+        async def login(request: Request):
+            from urllib.parse import parse_qs
+
+            body = (await request.body())[:2000].decode("utf-8", "replace")
+            return signed_in(request, (parse_qs(body).get("token") or [""])[0])
 
     @app.exception_handler(NotFound)
     async def not_found(_, exc):
