@@ -36,6 +36,7 @@ import sys
 from pathlib import Path
 
 from .settings import Settings, mode_side_error
+from matchminer_ai.schema import note_columns
 
 
 def read_notes(settings, args):
@@ -53,8 +54,7 @@ def read_notes(settings, args):
         path = resolve_cache(settings, args.cache)
         manifest = _manifest(path)
         dataset = ds.dataset(path / "notes.parquet", format="parquet")
-        key, columns = "patient_id", {c: c for c in
-                                      ("patient_id", "note_text", "note_date", "note_type")}
+        key, columns = note_columns(("patient_id",))
         source = {"kind": "population_cache", "name": path.name,
                   "created_utc": manifest["created_utc"], "notes": manifest["counts"]["notes"]}
     else:
@@ -63,13 +63,7 @@ def read_notes(settings, args):
         if error:
             raise InputError(error)
         dataset = ds.dataset(path, format="parquet")
-        if "pseudo_mrn" in dataset.schema.names:
-            key, columns = "pseudo_mrn", {"pseudo_mrn": "patient_id",
-                                          "synthetic_note": "note_text", "date": "note_date",
-                                          "event_type": "note_type"}
-        else:
-            key, columns = "patient_id", {c: c for c in
-                                          ("patient_id", "note_text", "note_date", "note_type")}
+        key, columns = note_columns(dataset.schema.names)
         source = {"kind": "synthetic_notes", "name": path.name,
                   "size": path.stat().st_size, "mtime_ns": path.stat().st_mtime_ns}
     typed = dataset.to_table(columns=[key]).column(key).unique().to_pylist()

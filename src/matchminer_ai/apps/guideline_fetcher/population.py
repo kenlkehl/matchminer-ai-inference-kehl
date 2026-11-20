@@ -13,6 +13,7 @@ import pandas as pd
 
 from .services import InputError, without_history_and_physical
 from matchminer_ai.cancellation import check_cancelled
+from matchminer_ai.schema import SYNTHETIC_NOTES_TO_RUNTIME, TRAINING_TO_RUNTIME, note_columns
 
 
 def records(frame):
@@ -22,22 +23,10 @@ def records(frame):
 def adapt_tables(summaries, notes):
     """Explicit training-to-runtime boundary, never join on the synthetic prompt ID."""
     if "pseudo_mrn" in summaries:
-        summaries = summaries.rename(
-            columns={
-                "pseudo_mrn": "patient_id",
-                "patient_summary": "cancer_history_summary",
-                "patient_boilerplate_text": "general_exclusion_criteria_evidence",
-            }
-        )
+        summary_columns = ("pseudo_mrn", "patient_summary", "patient_boilerplate_text")
+        summaries = summaries.rename(columns={k: TRAINING_TO_RUNTIME[k] for k in summary_columns})
     if "pseudo_mrn" in notes:
-        notes = notes.drop(columns=["patient_id"], errors="ignore").rename(
-            columns={
-                "pseudo_mrn": "patient_id",
-                "synthetic_note": "note_text",
-                "date": "note_date",
-                "event_type": "note_type",
-            }
-        )
+        notes = notes.drop(columns=["patient_id"], errors="ignore").rename(columns=SYNTHETIC_NOTES_TO_RUNTIME)
     if not summaries.columns.is_unique or not notes.columns.is_unique:
         raise InputError("Ambiguous cohort columns. Supply the documented runtime schema.")
     return summaries, notes
@@ -51,7 +40,7 @@ def load_synthetic_sample(settings, size, seed, progress):
     progress("Reading synthetic summaries and matching note identifiers")
     summaries = pd.read_parquet(settings.population_summaries)
     dataset = ds.dataset(settings.population_notes, format="parquet")
-    note_key = "pseudo_mrn" if "pseudo_mrn" in dataset.schema.names else "patient_id"
+    note_key, note_map = note_columns(dataset.schema.names)
     summary_key = "pseudo_mrn" if "pseudo_mrn" in summaries else "patient_id"
     summary_text = "patient_summary" if "patient_summary" in summaries else "cancer_history_summary"
     note_ids = dataset.to_table(columns=[note_key]).column(note_key).unique().to_pylist()
@@ -66,12 +55,7 @@ def load_synthetic_sample(settings, size, seed, progress):
     sample = eligible.sample(n=size, random_state=seed).reset_index(drop=True)
     keys = set(sample[summary_key].astype(str))
     typed_ids = [key for key in note_ids if str(key) in keys]
-    columns = (
-        ["pseudo_mrn", "synthetic_note", "date", "event_type"]
-        if note_key == "pseudo_mrn"
-        else ["patient_id", "note_text", "note_date", "note_type"]
-    )
-    columns = [c for c in columns if c in dataset.schema.names]
+    columns = [c for c in note_map if c in dataset.schema.names]
     check_cancelled()
     progress(f"Loading original notes for {size} sampled patients")
     import pyarrow as pa

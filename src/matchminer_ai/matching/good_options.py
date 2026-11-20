@@ -30,6 +30,7 @@ from matchminer_ai.llm.remote_auth import (
     remote_provider_name,
 )
 from matchminer_ai.llm.remote_inference import normalize_remote_server_urls
+from matchminer_ai.schema import with_runtime_columns
 from matchminer_ai.llm.prompt_rendering import build_prompt_list
 from matchminer_ai.llm.prompts import load_prompt_text
 from matchminer_ai.matching.inference import run_checker
@@ -578,16 +579,7 @@ def _checker_text(patient_summary: str, drug_summary: DrugSummary) -> str:
 
 
 def _candidate_records(candidate_pairs: pd.DataFrame) -> pd.DataFrame:
-    frame = candidate_pairs.copy()
-    if "trial_id" not in frame.columns and "nct_id" in frame.columns:
-        frame["trial_id"] = frame["nct_id"]
-    if "patient_id" not in frame.columns and "pseudo_mrn" in frame.columns:
-        frame["patient_id"] = frame["pseudo_mrn"]
-    if (
-        "cancer_history_summary" not in frame.columns
-        and "patient_summary" in frame.columns
-    ):
-        frame["cancer_history_summary"] = frame["patient_summary"]
+    frame = with_runtime_columns(candidate_pairs, ("nct_id", "pseudo_mrn", "patient_summary"))
     required = {"patient_id", "trial_id", "cancer_history_summary"}
     missing = sorted(required - set(frame.columns))
     if missing:
