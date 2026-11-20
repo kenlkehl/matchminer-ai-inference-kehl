@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -3501,7 +3501,10 @@ files and tokens are never stored in package configuration.</p>
 <h3 id="remoteprovider"><code>remote.provider</code><a class="headerlink" href="#remoteprovider" title="Permanent link">&para;</a></h3>
 <p>Authentication and message-compatibility profile. <code>openai</code> is the default and
 reads <code>OPENAI_API_KEY</code>. <code>google_agent_platform</code> uses ADC and ignores
-<code>OPENAI_API_KEY</code>.</p>
+<code>OPENAI_API_KEY</code>. <code>databricks_anthropic</code> sends structured requests to Claude through a
+Databricks AI Gateway's Anthropic Messages route, authenticated with a Databricks
+profile (<code>databricks_profile</code>). Only structured requests support it, such as the SQL
+workup agent; see <a href="../../api/workup-sql/">SQL-agent workup checks</a>.</p>
 <p>For example, Gemma 4 26B A4B IT MaaS in a project named <code>profile-notes</code> uses:</p>
 <div class="highlight"><pre><span></span><code><span class="n">config</span><span class="o">.</span><span class="n">remote</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
     <span class="p">{</span>
@@ -3899,12 +3902,17 @@ quotes) and reach that endpoint.</p>
   other LLM sections.
 - <code>local</code> / <code>remote</code>: the model, with 32,000 completion tokens per turn by default.</p>
 <p><strong><code>limits</code> keys:</strong>
-- <code>max_actions</code> (20) and <code>max_submits</code> (4).
-- <code>submit_by</code> (8): the action by which the agent is asked to submit a first
+- <code>max_actions</code> (12) and <code>max_submits</code> (3).
+- <code>submit_by</code> (6): the action by which the agent is asked to submit a first
   candidate.
+- <code>max_review_queries</code> (3): checking queries allowed after a valid submission.
+  Then code removes the query action, and the agent accepts the submission or
+  submits a revision.
 - <code>max_rows</code> (30), <code>max_cell_chars</code> (160) and <code>max_result_chars</code> (6,000): what the
   agent sees of a result.
-- <code>max_memory_chars</code> (4,000), <code>max_recent_steps</code> (8), <code>max_sql_chars</code> (8,000).
+- <code>max_memory_chars</code> (4,000), <code>max_recent_steps</code> (8), <code>max_sql_chars</code> (16,000).
+- <code>max_search_terms</code> (8) and <code>max_search_rows</code> (50): words per search, and
+  matching text values a search shows.
 - <code>max_detail_chars</code> (300) and <code>max_evidence_items</code> (8): per-patient output.
 - <code>sample_rows_per_status</code> (3): example rows shown after a submission.
 - <code>max_concurrent_items</code> (8): requirements explored at once, sharing one worker.
