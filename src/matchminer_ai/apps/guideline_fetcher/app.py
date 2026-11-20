@@ -23,6 +23,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from matchminer_ai.llm import connections
+
 from .extraction_workup import SessionExtractions
 from .jobs import BusyError, Jobs
 from .note_compressions import NoteCompressions
@@ -493,17 +495,7 @@ def create_app(settings=None, inference=None, access_token=None):
                     "model": model if result["available"] else None, "error": result["error"]}
         if backend in VERTEX_PROFILES:
             profile = VERTEX_PROFILES[backend]
-            from matchminer_ai.llm.vllm_server import check_openai_endpoint
-
-            try:
-                checks = await asyncio.to_thread(
-                    check_openai_endpoint, profile["endpoint"],
-                    provider="google_agent_platform", google_project_id=GEMINI_PROJECT,
-                    model_name=profile["model"], timeout=30,
-                )
-                available = bool(checks and checks[0][1] == 200)
-            except Exception:
-                available = False
+            available = await connections.vertex_available(backend, timeout=30)
             return {"available": available, "endpoint": profile["endpoint"],
                     "models": [profile["model"]] if available else [],
                     "model": profile["model"] if available else None,
@@ -512,21 +504,9 @@ def create_app(settings=None, inference=None, access_token=None):
                     f"Default Credentials and model access in project {GEMINI_PROJECT}."}
         endpoint = body.endpoint or selected.endpoint
         model = body.model if body.model is not None else selected.model
-        headers = {}
-        if os.environ.get("OPENAI_API_KEY"):
-            headers["Authorization"] = f"Bearer {os.environ['OPENAI_API_KEY']}"
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get(endpoint + "/models", headers=headers)
-                response.raise_for_status()
-                data = response.json()["data"]
-                if not isinstance(data, list):
-                    raise ValueError("Expected a model list")
-                names = list(dict.fromkeys(
-                    m["id"].strip() for m in data
-                    if isinstance(m, dict) and isinstance(m.get("id"), str)
-                    and m["id"].strip() and len(m["id"]) <= 512
-                ))
+            names = [m["id"] for m in await connections.served_models(
+                endpoint, timeout=10, api_key=os.environ.get("OPENAI_API_KEY"))]
             return {"available": model in names, "models": names, "endpoint": endpoint,
                     "model": model if model in names else next(iter(names), None),
                     "error": None if names else "The endpoint returned no served models."}

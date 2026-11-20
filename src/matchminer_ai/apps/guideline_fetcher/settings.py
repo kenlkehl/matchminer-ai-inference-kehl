@@ -16,8 +16,8 @@ import re
 import secrets
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
+from matchminer_ai.llm import connections
 from matchminer_ai.site import data_root, load_site_config
 
 ROOT = Path(__file__).resolve().parent
@@ -71,55 +71,37 @@ def default_extraction_records(phi):
 
 DEFAULT_ACCESS_TOKEN_FILE = "~/.config/guideline-fetcher-phi/access_token"
 MIN_ACCESS_TOKEN_LENGTH = 32
-# The Google Cloud project of the Vertex (Agent Platform) profiles: site config ``vertex.project``.
-GEMINI_PROJECT = SITE.get("vertex.project") or ""
-GEMINI_PROFILE = {
-    "endpoint": f"https://aiplatform.googleapis.com/v1/projects/{GEMINI_PROJECT}/locations/global/endpoints/openapi",
-    "model": "google/gemini-3.8-flash",
-    # Local chunk boundaries only; this is not Gemini's tokenizer or weights.
-    "tokenizer": "Qwen/Qwen3-0.6B",
-}
-GEMMA_PROFILE = {
-    "endpoint": GEMINI_PROFILE["endpoint"],
-    "model": "google/gemma-4-26b-a4b-it-maas",
-    # Chunk boundaries only; hosted prompt budgets use conservative UTF-8 bytes.
-    "tokenizer": GEMINI_PROFILE["tokenizer"],
-}
-# Gemini 4 Hydrogen (GA 2026-11-12) is the default since 2026-11-14 (user: the Gemma 4 26B MaaS endpoint "is very
-# janky"). Same fixed endpoint and project; 1,048,576-token window shared by input and output, up to 65,536 output
-# tokens per request.
-GEMINI4_PROFILE = {
-    "endpoint": GEMINI_PROFILE["endpoint"],
-    "model": "google/gemini-4-hydrogen",
-    "tokenizer": GEMINI_PROFILE["tokenizer"],
-}
-VERTEX_PROFILES = {"gemini4_vertex": GEMINI4_PROFILE, "gemini_vertex": GEMINI_PROFILE, "gemma_vertex": GEMMA_PROFILE}
-VERTEX_LABELS = {"gemini4_vertex": "Gemini 4 Hydrogen", "gemini_vertex": "Gemini 3.8 Flash",
-                 "gemma_vertex": "Gemma 4 26B MaaS"}
-# Hosted Gemini models manage their own sampling and thinking (reasoning_effort, no chat-template switches).
-GEMINI_BACKENDS = frozenset({"gemini4_vertex", "gemini_vertex"})
+# The connection profiles (matchminer_ai.llm.connections), read once at import: the Vertex project is the site
+# config's vertex.project. Gemini 4 Hydrogen (GA 2026-11-12) is the default since 2026-11-14 (user: the Gemma 4 26B
+# MaaS endpoint "is very janky").
+GEMINI_PROJECT = connections.vertex_project()
+VERTEX_PROFILES = connections.vertex_profiles()
+GEMINI4_PROFILE = VERTEX_PROFILES["gemini4_vertex"]
+GEMINI_PROFILE = VERTEX_PROFILES["gemini_vertex"]
+GEMMA_PROFILE = VERTEX_PROFILES["gemma_vertex"]
+VERTEX_LABELS = connections.VERTEX_LABELS
+GEMINI_BACKENDS = connections.GEMINI_BACKENDS
 # Claude through the Databricks Unity AI Gateway's Anthropic Messages route, for the SQL agent only (2026-11-19, user
-# instruction; Gemini stays available). The server fixes the gateway URL. The model is the full three-part endpoint
-# name from the gateway onboarding email (GUIDELINE_DATABRICKS_SONNET_ENDPOINT fills it in). Access tokens come
-# from the Databricks CLI login profile (`databricks auth login --host <host> --profile unity-gateway`).
-DATABRICKS_HOST = (os.getenv("GUIDELINE_DATABRICKS_HOST") or SITE.get("databricks.host") or "").rstrip("/")
-DATABRICKS_PROFILE = (os.getenv("GUIDELINE_DATABRICKS_PROFILE") or SITE.get("databricks.profile")
-                      or "unity-gateway")
+# instruction; Gemini stays available). The server fixes the gateway URL (GUIDELINE_DATABRICKS_HOST, else the site
+# config's databricks.host). The model is the full three-part endpoint name from the gateway onboarding email
+# (GUIDELINE_DATABRICKS_SONNET_ENDPOINT fills it in). Access tokens come from the Databricks CLI login profile
+# (`databricks auth login --host <host> --profile unity-gateway`).
+DATABRICKS_HOST = (os.getenv("GUIDELINE_DATABRICKS_HOST") or connections.databricks_host()).rstrip("/")
+DATABRICKS_PROFILE = os.getenv("GUIDELINE_DATABRICKS_PROFILE") or connections.databricks_profile()
 CLAUDE_PROFILE = {
-    "endpoint": DATABRICKS_HOST + "/ai-gateway/anthropic",
+    "endpoint": connections.claude_gateway_endpoint(DATABRICKS_HOST),
     "model": (os.getenv("GUIDELINE_DATABRICKS_SONNET_ENDPOINT") or SITE.get("databricks.sonnet_endpoint")
               or "").strip(),
     # Unused: hosted prompt budgets use conservative UTF-8 bytes.
-    "tokenizer": GEMINI_PROFILE["tokenizer"],
+    "tokenizer": connections.VERTEX_TOKENIZER,
 }
 CLAUDE_BACKENDS = {"claude_databricks": CLAUDE_PROFILE}
 CLAUDE_LABELS = {"claude_databricks": "Claude · Databricks AI Gateway"}
 # Sonnet 5.5's default. On two colon items (2026-11-19) medium took the same time (~25 s per item) but skipped
 # reference-date bounds and planned-only reasons that high effort checked.
 CLAUDE_EFFORT = "high"
-CLAUDE_CONTEXT = 1_000_000
-# Gateway endpoint names have three dot-separated parts, the last ending in the Claude model ID.
-CLAUDE_ENDPOINT_NAME = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*claude-[a-z0-9-]+")
+CLAUDE_CONTEXT = connections.CLAUDE_CONTEXT_TOKENS
+CLAUDE_ENDPOINT_NAME = connections.CLAUDE_ENDPOINT_NAME
 # Backends that serve only this task.
 SQL_ONLY_BACKENDS = frozenset(CLAUDE_BACKENDS)
 SQL_TASK = "workup_sql"
@@ -133,26 +115,7 @@ LLM_TASKS = {
 }
 
 
-def normalize_endpoint(value):
-    """Accept a server address or an OpenAI-compatible API base URL."""
-    value = value.strip()
-    if not value or any(ch.isspace() or ord(ch) < 32 for ch in value):
-        raise ValueError("Enter an HTTP or HTTPS LLM server address.")
-    if "://" not in value:
-        value = "http://" + value
-    try:
-        parsed = urlsplit(value)
-        valid = (
-            parsed.scheme in {"http", "https"} and parsed.hostname
-            and not (parsed.username or parsed.password or parsed.query or parsed.fragment)
-        )
-        parsed.port  # Validate malformed/out-of-range ports before making a request.
-    except ValueError:
-        valid = False
-    if not valid:
-        raise ValueError("Use an HTTP(S) server URL without credentials, query, or fragment.")
-    path = parsed.path.rstrip("/") or "/v1"
-    return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+normalize_endpoint = connections.normalize_endpoint
 
 
 def mode_side_error(phi, path):
@@ -340,7 +303,6 @@ class Settings:
         """
         remote = dict(section["remote"])
         local = dict(section.get("local", {}))
-        gemini = self.llm_backend in GEMINI_BACKENDS
         if self.llm_backend in CLAUDE_BACKENDS:
             if name != "workup_sql_agent":
                 raise ValueError("Claude through Databricks serves only the SQL agent.")
@@ -358,24 +320,23 @@ class Settings:
             section.update(structured_outputs=True, reasoning_effort=CLAUDE_EFFORT,
                            sampling_profile="none")
         elif self.llm_backend in VERTEX_PROFILES:
-            profile = VERTEX_PROFILES[self.llm_backend]
-            template = {} if gemini else {"enable_thinking": self.reasoning}
+            backend = self.llm_backend
+            profile = VERTEX_PROFILES[backend]
             remote.update(
                 model_name=profile["model"], tokenizer_name=profile["tokenizer"],
-                request_params={"max_tokens": min(
-                    65536, remote.get("request_params", {}).get("max_tokens", 32768)),
-                    **({"reasoning_effort": "high"} if gemini else {})},
-                extra_body={} if gemini else {"chat_template_kwargs": template.copy()},
+                request_params=connections.vertex_request_params(
+                    backend, remote.get("request_params", {}).get("max_tokens", 32768)),
+                extra_body=connections.vertex_extra_body(backend, self.reasoning),
             )
             if own_connection:
-                remote.update(provider="google_agent_platform", google_project_id=GEMINI_PROJECT,
-                              server_urls=[profile["endpoint"]])
-            local["chat_template_kwargs"] = template.copy()
+                remote.update({k: v for k, v in connections.vertex_remote(backend).items()
+                               if k in ("provider", "google_project_id", "server_urls")})
+            local["chat_template_kwargs"] = connections.vertex_chat_template(backend, self.reasoning)
             local["engine"] = {**local.get("engine", {}),
-                               "max_model_len": 1048576 if gemini else 262144}
+                               "max_model_len": connections.vertex_context_tokens(backend)}
             section.update(structured_outputs=name == "workup_sql_agent",
                            reasoning_effort="high",
-                           sampling_profile="none" if gemini else "auto")
+                           sampling_profile=connections.vertex_sampling_profile(backend))
         else:
             remote.update(model_name=self.model, tokenizer_name=self.tokenizer)
             if own_connection:
@@ -437,33 +398,23 @@ class Settings:
             {"chat_template_kwargs": template.copy()} if template else {}
         )
         if self.llm_backend in VERTEX_PROFILES:
-            profile = VERTEX_PROFILES[self.llm_backend]
-            gemini = self.llm_backend in GEMINI_BACKENDS
-            context_window = 1048576 if gemini else 262144
-            template = {} if gemini else {"enable_thinking": self.reasoning}
-            c.remote.update(
-                provider="google_agent_platform",
-                google_project_id=GEMINI_PROJECT,
-                server_urls=[profile["endpoint"]],
-            )
+            backend = self.llm_backend
+            profile = VERTEX_PROFILES[backend]
+            context_window = connections.vertex_context_tokens(backend)
+            # Provider, project, endpoint and, for Gemma MaaS, its request pacing.
+            c.remote.update(connections.vertex_remote(backend))
             c.patient.update(
-                sampling_profile="none" if gemini else "auto", reasoning_effort="high",
+                sampling_profile=connections.vertex_sampling_profile(backend), reasoning_effort="high",
                 context_window=context_window, tokenizer_mode="bytes",
             )
             c.patient["local"]["engine"]["max_model_len"] = context_window
-            c.patient["local"]["chat_template_kwargs"] = template.copy()
+            c.patient["local"]["chat_template_kwargs"] = connections.vertex_chat_template(backend, self.reasoning)
             c.patient["remote"].update(
                 model_name=profile["model"],
                 tokenizer_name=profile["tokenizer"],
-                request_params={"max_tokens": 65536, **({"reasoning_effort": "high"} if gemini else {})},
-                extra_body={} if gemini else {"chat_template_kwargs": template.copy()},
+                request_params=connections.vertex_request_params(backend, connections.VERTEX_MAX_OUTPUT_TOKENS),
+                extra_body=connections.vertex_extra_body(backend, self.reasoning),
             )
-            if not gemini:
-                c.remote.update(
-                    request_start_interval_seconds=2.0,
-                    capacity_retry_initial_seconds=15.0,
-                    capacity_retry_max_seconds=60.0,
-                )
         elif self.llm_backend in CLAUDE_BACKENDS:
             raise ValueError("Claude through Databricks serves only the SQL agent; choose another "
                              "connection for this task.")
