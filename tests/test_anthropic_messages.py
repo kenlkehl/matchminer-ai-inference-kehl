@@ -158,8 +158,10 @@ def test_gateway_urls_and_fields_are_checked_before_any_request():
         StructuredClient(claude_config(tokenizer_mode="endpoint"), None)
     with pytest.raises(ValueError, match="seed"):
         StructuredClient(claude_config(request_params={"seed": 1}), None)
-    with pytest.raises(ValueError, match="structured requests only"):
-        remote_auth.remote_api_key({"provider": "databricks"})
+    # The remote path signs each request itself; only OpenAI bearer-token diagnostics refuse Claude.
+    assert remote_auth.remote_api_key({"provider": "databricks"}) == "not-needed"
+    with pytest.raises(ValueError, match="Databricks tokens"):
+        remote_auth.remote_bearer_token({"provider": "databricks"})
 
 
 def test_structured_requests_go_through_claude(claude):
@@ -275,3 +277,77 @@ def test_the_sql_agent_runs_on_claude(claude):
                "cache_control" not in r["system"][1] for r in fake.requests)
     assert all(r["output_config"]["format"]["type"] == "json_schema" for r in fake.requests)
     assert all(PID not in json.dumps(r) for r in fake.requests)
+
+
+class AsyncFakeClaude:
+    """Stands in for anthropic.AsyncAnthropic: records streamed requests, answers from a script."""
+
+    def __init__(self, answers):
+        self.answers, self.requests, self.closed = list(answers), [], False
+        self.messages = self.beta = self
+        self.beta.messages = self
+
+    def stream(self, **request):
+        self.requests.append(request)
+        answer = self.answers.pop(0)
+
+        class Stream:
+            async def __aenter__(self):
+                if isinstance(answer, Exception):
+                    raise answer
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def get_final_message(self):
+                return answer
+
+        return Stream()
+
+    async def close(self):
+        self.closed = True
+
+
+def test_the_remote_path_sends_chat_requests_to_claude(monkeypatch, tmp_path):
+    """Patient summarization's remote path (generate_remote_llm_outputs) on provider databricks_anthropic: vLLM and
+    sampling fields are dropped, failures keep only their status and are retried by the remote path, and the request
+    log holds metadata, never content."""
+    from matchminer_ai.llm import remote_inference
+    from matchminer_ai.llm.backends import build_llm_runtime_config
+    from matchminer_ai.llm.prompt_rendering import Prompt
+
+    limited = SimpleNamespace(status_code=429, headers={"retry-after": "1"}, request=None)
+    fake = AsyncFakeClaude([anthropic.RateLimitError("provider text with patient words", response=limited, body=None),
+                            message("Cancer history: fabricated.", model="claude-haiku-5-5")])
+    monkeypatch.setattr(am.GatewayChatClient, "_api", lambda self: setattr(self, "_client", fake) or fake)
+    async def no_wait(_seconds):
+        return None
+    monkeypatch.setattr(remote_inference.asyncio, "sleep", no_wait)
+    log = tmp_path / "gateway.jsonl"
+    monkeypatch.setenv("MMAI_GATEWAY_REQUEST_LOG", str(log))
+    config = load_default_preset()
+    config.remote.update(enabled=True, provider="databricks_anthropic", server_urls=[GATEWAY],
+                         databricks_profile="gateway", max_retries=3)
+    config.patient["remote"]["model_name"] = HAIKU
+    runtime = build_llm_runtime_config("patient", config.patient, config=config)
+    assert runtime["remote"]["model_name"] == HAIKU
+    texts, _, finishes = remote_inference.generate_remote_llm_outputs(
+        prompts=[Prompt(row_idx=0, prompt_text="Summarize these fabricated notes.", max_tokens=2000)],
+        llm_config=runtime, server_urls=[GATEWAY], api_key=remote_auth.remote_api_key(runtime))
+    assert texts == ["Cancer history: fabricated."] and finishes == ["stop"]
+    sent = fake.requests[-1]
+    assert sent["model"] == HAIKU and sent["max_tokens"] == 2000
+    assert not {"temperature", "top_p", "top_k", "extra_body"} & set(sent)
+    assert sent["messages"] == [{"role": "user", "content": "Summarize these fabricated notes."}]
+    # The summarizer's empty system prompt is not sent: Claude rejects cache_control on an empty block.
+    assert "system" not in sent or all(block["text"].strip() for block in sent["system"])
+    assert "system" not in am.messages_request({"model": HAIKU, "max_tokens": 10, "messages": [
+        {"role": "system", "content": ""}, {"role": "user", "content": "Hi."}]})
+    assert fake.closed
+    entries = [json.loads(line) for line in log.read_text().splitlines()]
+    assert [e["status"] for e in entries] == [429, 200]
+    assert entries[1]["served_model"] == "claude-haiku-5-5" and entries[1]["output_tokens"] == 40
+    assert "patient" not in log.read_text() and "fabricated" not in log.read_text()
+    with pytest.raises(ValueError, match="gateway URL"):
+        am.GatewayChatClient("https://example.com/v1")

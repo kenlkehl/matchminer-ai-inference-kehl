@@ -15,6 +15,7 @@ from matchminer_ai.llm.prompt_rendering import Prompt
 from matchminer_ai.llm.async_processing import BackgroundWork
 from matchminer_ai.llm.remote_auth import (
     AsyncAPIKey,
+    DATABRICKS_ANTHROPIC_PROVIDER,
     GOOGLE_AGENT_PLATFORM_PROVIDER,
     prepare_messages_for_provider,
     remote_provider_name,
@@ -81,6 +82,13 @@ def build_remote_request_config(
     from .sampling import remote_sampling
 
     request_params, extra_body = remote_sampling(llm_config)
+    if remote_provider_name(llm_config) == DATABRICKS_ANTHROPIC_PROVIDER:
+        # Claude manages its own sampling and thinking: keep the token budget and effort only.
+        kept = {key: request_params[key] for key in ("max_tokens", "max_completion_tokens", "reasoning_effort")
+                if key in request_params}
+        if "reasoning_effort" not in kept and llm_config.get("reasoning_effort"):
+            kept["reasoning_effort"] = llm_config["reasoning_effort"]
+        return kept, {}
     if remote_provider_name(llm_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
         model = str(llm_config.get("model_name", "")).removeprefix("google/")
         if model == "gemma-4-26b-a4b-it-maas":
@@ -143,6 +151,7 @@ def connect_to_remote_servers(
     request_timeout: float = 600.0,
     api_key: AsyncAPIKey = "not-needed",
     max_connections: int = 100,
+    remote_config: Dict[str, Any] | None = None,
 ) -> list[tuple[Any, int]]:
     """
     Create AsyncOpenAI clients for externally managed vLLM servers.
@@ -159,15 +168,27 @@ def connect_to_remote_servers(
     max_connections
         Per-server HTTP pool capacity; callers pass their request concurrency
         so httpx's default 100-connection limit does not cap larger queues.
+    remote_config
+        The section's remote settings. With provider ``databricks_anthropic`` each URL is a
+        Databricks gateway and gets a :class:`~matchminer_ai.llm.anthropic_messages.GatewayChatClient`
+        signed with ``databricks_profile`` (else the site config's ``databricks.profile``).
 
     Returns
     -------
     list[tuple[Any, int]]
         ``(client, port)`` tuples. The port is used only for logging.
     """
+    server_urls = [u.strip() for u in server_urls if u.strip()]
+    if remote_config is not None and remote_provider_name(remote_config) == DATABRICKS_ANTHROPIC_PROVIDER:
+        from matchminer_ai.site import load_site_config
+
+        from .anthropic_messages import GatewayChatClient
+
+        profile = str(remote_config.get("databricks_profile") or load_site_config().get("databricks.profile") or "")
+        logger.info("Using %d Databricks gateway endpoint(s) for Claude.", len(server_urls))
+        return [(GatewayChatClient(url, profile=profile, timeout=request_timeout + 60), 443) for url in server_urls]
     from openai import AsyncOpenAI
 
-    server_urls = [u.strip() for u in server_urls if u.strip()]
     logger.info("Using %d external server(s): %s", len(server_urls), server_urls)
     server_clients: list[tuple[Any, int]] = []
     for url in server_urls:
@@ -396,7 +417,9 @@ class RemoteRequestSession:
     async def __aenter__(self):
         self.preparation = BackgroundWork(workers=4, pending=8, name='mmai-request-preparation')
         self.pool = None
-        if isinstance(self.api_key, str) and (
+        claude = remote_provider_name(self.config) == DATABRICKS_ANTHROPIC_PROVIDER
+        # The endpoint pool speaks OpenAI to vLLM servers; Claude goes through GatewayChatClient.
+        if isinstance(self.api_key, str) and not claude and (
                 self.config.get('adaptive_concurrency', {}).get('enabled')
                 or self.config.get('server_urls_file') or self.config.get('use_endpoint_pool')):
             from .endpoint_pool import shared_pool, MAX_POOL_WORKERS
@@ -409,6 +432,7 @@ class RemoteRequestSession:
             request_timeout=float(self.config["request_timeout"]),
             api_key=self.api_key,
             max_connections=self.per_server,
+            remote_config=self.config,
         )
         self.slots = asyncio.Queue()
         for _ in range(self.per_server):
@@ -524,6 +548,7 @@ async def generate_remote_llm_outputs_async(
         request_timeout=request_timeout,
         api_key=api_key,
         max_connections=max_concurrent_requests,
+        remote_config=llm_config,
     )
 
     try:
@@ -585,7 +610,8 @@ def generate_remote_llm_outputs(
 ) -> tuple[list[str], list[str], list[str]]:
     """Synchronous wrapper around ``generate_remote_llm_outputs_async``."""
     if (llm_config.get("use_endpoint_pool") or llm_config.get("server_urls_file")
-            or llm_config.get("adaptive_concurrency", {}).get("enabled")) and isinstance(api_key, str):
+            or llm_config.get("adaptive_concurrency", {}).get("enabled")) and isinstance(api_key, str) \
+            and remote_provider_name(llm_config) != DATABRICKS_ANTHROPIC_PROVIDER:
         from .endpoint_pool import generate_pooled_outputs
         return generate_pooled_outputs(prompts, llm_config, server_urls, api_key,
                                        response_metadata=response_metadata)

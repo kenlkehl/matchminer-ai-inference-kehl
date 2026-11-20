@@ -1,10 +1,12 @@
-"""Claude through a Databricks AI Gateway, behind the structured client's chat contract.
+"""Claude through a Databricks AI Gateway, behind the package's chat-completions contract.
 
-``StructuredClient`` speaks OpenAI chat completions. For provider
-``databricks_anthropic`` it hands each request to :func:`send_messages`, which sends
-it with the official Anthropic SDK to the gateway's Messages route
-(``https://<workspace>/ai-gateway/anthropic``) with a Databricks access token, and
-returns the answer in the chat-completions shape the rest of the package reads.
+The package's LLM clients speak OpenAI chat completions. For provider
+``databricks_anthropic`` each request goes with the official Anthropic SDK to the
+gateway's Messages route (``https://<workspace>/ai-gateway/anthropic``) with a
+Databricks access token, and the answer comes back in the chat-completions shape the
+rest of the package reads: :func:`send_messages` for ``StructuredClient``, and
+:class:`GatewayChatClient` (an ``AsyncOpenAI`` stand-in) for the remote path that
+patient summarization, cohort steps and the LLM checks use.
 
 - **Request:** leading system messages become system blocks, the first one cached
   (send stable instructions first, varying ones after); ``reasoning_effort``
@@ -16,12 +18,21 @@ returns the answer in the chat-completions shape the rest of the package reads.
   (``fallbacks="default"``); the response's ``model`` and ``transport.fallback_used``
   say which model answered.
 - **Errors:** only the HTTP status is kept, never provider text.
+- **Request log:** with ``MMAI_GATEWAY_REQUEST_LOG`` set, every remote-path request
+  appends one JSON line of metadata (times, HTTP status, stop reason, served model,
+  token counts; never content) to that file, for watching rate limits and latency.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import threading
+import time
+from datetime import datetime, timezone
 from functools import lru_cache
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -84,7 +95,8 @@ def messages_request(body: dict) -> dict:
     for message in body["messages"]:
         role, content = message["role"], message["content"]
         if role == "system" and not messages:
-            system.append(content)
+            if str(content or "").strip():  # Claude rejects empty (and so uncacheable) system blocks
+                system.append(content)
         elif role in ("user", "assistant"):
             messages.append({"role": role, "content": content})
         else:
@@ -213,6 +225,130 @@ def send_messages(config, body: dict, *, guards=()) -> dict:
         raise EndpointError(f"Endpoint request failed: {type(exc).__name__}") from None
 
 
+class GatewayError(RuntimeError):
+    """A failed gateway request: the HTTP status (or the failure's type), never provider text."""
+
+    def __init__(self, message: str, *, http_status: int | None = None, retry_after: float | None = None):
+        super().__init__(message)
+        self.http_status, self.retry_after = http_status, retry_after
+
+
+_LOG_LOCK = threading.Lock()
+
+
+def _log_request(entry: dict) -> None:
+    path = os.environ.get("MMAI_GATEWAY_REQUEST_LOG")
+    if not path:
+        return
+    with _LOG_LOCK, open(path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def remote_body(kwargs: dict) -> dict:
+    """The chat-completions body of one remote-path request: the fields Claude takes, others dropped.
+
+    The remote path sends OpenAI and vLLM fields (sampling, ``extra_body`` template settings);
+    Claude manages its own sampling and thinking, so only the model, messages, token budget,
+    effort and response format are kept.
+    """
+    extra = kwargs.get("extra_body") or {}
+    body = {key: value for key, value in kwargs.items() if key in _TAKEN}
+    if "max_tokens" not in body and "max_completion_tokens" in kwargs:
+        body["max_tokens"] = kwargs["max_completion_tokens"]
+    for key in ("reasoning_effort", "response_format"):
+        if key not in body and key in extra:
+            body[key] = extra[key]
+    body.pop("stream", None)
+    body.pop("stream_options", None)
+    return body
+
+
+class GatewayChatClient:
+    """An ``AsyncOpenAI`` stand-in that sends each chat request to Claude through a Databricks gateway.
+
+    The remote path calls ``chat.completions.create(**request)`` and ``close()``. Each request
+    becomes a Messages request (:func:`messages_request`), streamed so long outputs never hit the
+    SDK's limit for non-streaming requests, and the answer comes back with
+    ``choices[0].message.content``, ``finish_reason`` and ``usage`` as chat completions have them.
+    The SDK does not retry: the remote path's own retries see, and log, every failure.
+    """
+
+    def __init__(self, base_url: str, *, profile: str = "", timeout: float = 600.0):
+        error = gateway_url_error(base_url)
+        if error:
+            raise ValueError(error)
+        self.base_url, self.profile, self.timeout = base_url, profile, timeout
+        self._client = None
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _api(self):
+        if self._client is None:
+            import anthropic
+            from anthropic.lib.credentials import AccessToken
+
+            tokens = databricks_token_provider(self.profile)
+            if (urlsplit(tokens.host).hostname or "").lower() != (urlsplit(self.base_url).hostname or ""):
+                raise DatabricksCredentialsError(
+                    "The Databricks profile signs in to a different workspace than the gateway URL.")
+
+            def credentials(*, force_refresh: bool = False) -> AccessToken:
+                # expires_at=0: the Databricks SDK caches and refreshes the token itself.
+                return AccessToken(token=tokens.token(), expires_at=0)
+
+            # One client per session: an async HTTP client belongs to one event loop.
+            self._client = anthropic.AsyncAnthropic(base_url=self.base_url, credentials=credentials,
+                                                    max_retries=0, timeout=self.timeout)
+        return self._client
+
+    async def _create(self, **kwargs):
+        import anthropic
+
+        request = messages_request(remote_body(kwargs))
+        started = time.monotonic()
+        entry: dict[str, Any] = {"started_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                                 "model": request["model"]}
+        try:
+            client = self._api()
+            api = client.beta.messages if "betas" in request else client.messages
+            async with api.stream(**request) as stream:
+                message = await stream.get_final_message()
+        except DatabricksCredentialsError as exc:
+            entry.update(status="credentials", seconds=round(time.monotonic() - started, 3))
+            _log_request(entry)
+            raise GatewayError(str(exc)) from None
+        except anthropic.APIStatusError as exc:
+            # Deliberately drop provider bodies: they may echo request content.
+            retry_after = _retry_after(exc.response)
+            entry.update(status=exc.status_code, retry_after=retry_after,
+                         seconds=round(time.monotonic() - started, 3))
+            _log_request(entry)
+            raise GatewayError(f"Gateway HTTP {exc.status_code}", http_status=exc.status_code,
+                               retry_after=retry_after) from None
+        except anthropic.APIConnectionError as exc:
+            entry.update(status=type(exc).__name__, seconds=round(time.monotonic() - started, 3))
+            _log_request(entry)
+            raise GatewayError(f"Gateway request failed: {type(exc).__name__}") from None
+        result = chat_completion(message, streamed=True)
+        usage = result["usage"]
+        entry.update(status=200, seconds=round(time.monotonic() - started, 3), served_model=result["model"],
+                     stop_reason=result["transport"]["stop_reason"],
+                     input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"],
+                     cache_read_input_tokens=usage["cache_read_input_tokens"])
+        _log_request(entry)
+        choice = result["choices"][0]
+        return SimpleNamespace(
+            id=result["id"], model=result["model"],
+            choices=[SimpleNamespace(index=0, finish_reason=choice["finish_reason"],
+                                     message=SimpleNamespace(role="assistant", content=choice["message"]["content"],
+                                                             reasoning=""))],
+            usage=SimpleNamespace(**usage), transport=result["transport"])
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
+
+
 def check_gateway(base_url: str, model: str, *, profile: str = "", timeout: float = 60) -> dict:
     """Send a short request with no patient data; report whether Claude answered.
 
@@ -249,11 +385,14 @@ def check_gateway(base_url: str, model: str, *, profile: str = "", timeout: floa
 __all__ = [
     "EFFORTS",
     "GATEWAY_PATH",
+    "GatewayChatClient",
+    "GatewayError",
     "chat_completion",
     "check_gateway",
     "fallbacks_supported",
     "gateway_url_error",
     "messages_request",
+    "remote_body",
     "request_field_error",
     "send_messages",
 ]

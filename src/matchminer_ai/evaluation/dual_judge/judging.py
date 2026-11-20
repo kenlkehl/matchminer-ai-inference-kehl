@@ -102,7 +102,8 @@ def sha256(value):
 # Prices per million tokens (Claude Opus 5.5 list price; GPT-6.1 Sol is a placeholder until set with --usd-in and
 # --usd-out). Anthropic reports cache writes and reads apart from input_tokens and bills them at 1.25x and 0.1x the
 # input price; OpenAI counts cached tokens inside input_tokens, so they are billed here at the full price.
-PRICES = dict(vertex=dict(usd_in=4.0, usd_out=20.0), azure=dict(usd_in=5.0, usd_out=30.0))
+PRICES = dict(vertex=dict(usd_in=4.0, usd_out=20.0), databricks=dict(usd_in=4.0, usd_out=20.0),
+              azure=dict(usd_in=5.0, usd_out=30.0))
 
 
 def usage_cost(usage, prices):

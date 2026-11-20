@@ -13,7 +13,8 @@ OPENAI_COMPATIBLE_PROVIDER = "openai"
 GOOGLE_AGENT_PLATFORM_PROVIDER = "google_agent_platform"
 #: Claude through a Databricks AI Gateway's Anthropic Messages route
 #: (``https://<workspace>/ai-gateway/anthropic``), authenticated with a Databricks
-#: profile. Only structured requests (``StructuredClient``) support it.
+#: profile: structured requests (``StructuredClient``) and the remote path
+#: (:class:`~matchminer_ai.llm.anthropic_messages.GatewayChatClient`).
 DATABRICKS_ANTHROPIC_PROVIDER = "databricks_anthropic"
 GOOGLE_CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 
@@ -158,16 +159,19 @@ def databricks_token_provider(profile: str = "") -> DatabricksTokenProvider:
 def _openai_only(remote_config: Mapping[str, Any]) -> None:
     if remote_provider_name(remote_config) == DATABRICKS_ANTHROPIC_PROVIDER:
         raise ValueError(
-            "Claude through Databricks serves structured requests only (such as the SQL "
-            "workup agent); choose an OpenAI-compatible or Google provider here."
+            "Claude through Databricks signs requests with Databricks tokens, not an OpenAI "
+            "bearer token; use matchminer_ai.llm.anthropic_messages.check_gateway to test it."
         )
 
 
 def remote_api_key(remote_config: Mapping[str, Any]) -> AsyncAPIKey:
     """Return the API key value or refresh callback for an OpenAI client."""
 
-    _openai_only(remote_config)
-    if remote_provider_name(remote_config) == GOOGLE_AGENT_PLATFORM_PROVIDER:
+    provider = remote_provider_name(remote_config)
+    if provider == DATABRICKS_ANTHROPIC_PROVIDER:
+        # Unused: GatewayChatClient signs each request with a Databricks token itself.
+        return "not-needed"
+    if provider == GOOGLE_AGENT_PLATFORM_PROVIDER:
         project_id = str(remote_config.get("google_project_id") or "").strip()
         return _google_adc_token_provider(project_id).async_token
     return str(os.environ.get("OPENAI_API_KEY", "not-needed")).strip() or "not-needed"
