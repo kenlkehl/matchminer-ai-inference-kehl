@@ -1,15 +1,7 @@
-"""Trial versions in mining (one version per trial), top-k selection, and candidate merging."""
+"""Trial versions in mining (one version per trial) and candidate merging. (Top-k selection is the package's
+``matching.retrieval.stable_top_k``.)"""
 from collections import defaultdict
 import random
-
-import numpy as np
-
-
-def top_indices(scores, count):
-    # Stable sorting retains the original index-order tie rule. The lexical
-    # corpus can contain tens of thousands of entries per query; keep this loop
-    # in NumPy rather than repeatedly constructing Python float/tuple keys.
-    return np.argsort(-np.asarray(scores, dtype=np.float64), kind='stable')[:count].tolist()
 
 
 # A trial can be represented twice: by the cohorts extracted from its full

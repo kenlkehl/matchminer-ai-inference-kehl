@@ -194,8 +194,9 @@ def prepare(args):
 
 
 def d1_module(model, name):
-    import importlib
-    return importlib.import_module(type(model).__module__.rsplit('.', 1)[0] + '.' + name)
+    """The checkpoint's own code module (the package's ``matching.decision_model.d1_module``, imported on use)."""
+    from matchminer_ai.matching.decision_model import d1_module as load
+    return load(model, name)
 
 
 ANSWERS = ('yes', 'no')  # option order of d1's noul readout
