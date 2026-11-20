@@ -37,6 +37,7 @@ nav:
   - Reference:
       - Configuration: reference/configuration.md
       - Site configuration: reference/site-config.md
+      - LLM runtime: reference/llm-runtime.md
       - QC Metrics: reference/qc-metrics.md
   - Development:
       - Contributing: development/contributing.md

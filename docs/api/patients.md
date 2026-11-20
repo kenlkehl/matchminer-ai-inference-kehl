@@ -238,6 +238,33 @@ concordance determination**. Not documented does not mean not done. Conditional
 indications, compound items, alternatives, historical tests, timing and conflicting
 evidence need clinical review. Treatment-concordance assessment is not included.
 
+## Summary quality checks
+
+`patients.check_patient_summary(text)` runs read-only checks on one summary. It looks for:
+- self-editing language ("I should", "Wait,");
+- prompt or formatting commentary;
+- raw reasoning delimiters;
+- repeated cancer-field values;
+- repeated long prose.
+
+It returns versioned findings with character offsets, line numbers and a `high` or `review` confidence. The
+diagnostics contain no patient text. These are review signals, not clinical validation, and the checker never
+rewrites a summary.
+- Multiple primary cancers and repeated headings are allowed.
+- Matching age, cancer type, histology and biomarkers alone asks for review.
+- Matching extent and treatment history as well identifies a repeated cancer section.
+
+`summarize_patients(..., return_qc=True)` adds aggregate flags to its QC report.
+
+Serial summarization checks each chunk's answer before it becomes the next chunk's prior summary.
+- **Regenerated:** drafting text, repeated full sections, empty output and incomplete completions. The chunk is
+  regenerated from the original notes and the last accepted prior summary, up to
+  `patient.summary_quality_max_attempts` (3) attempts.
+- **Not regenerated:** matching only the core cancer fields, which stays a review signal.
+- **Trace:** `patient.summary_quality_trace_dir` keeps every prompt, answer and reasoning trace in a local directory,
+  rejected attempts included. Debug output includes `patient_summary_attempts`, and the metadata reports attempt and
+  rejection counts.
+
 ## Updating existing summaries
 
 Pass earlier summaries as `existing_summaries`, together with the patients' notes,
