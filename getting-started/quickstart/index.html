@@ -410,6 +410,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -426,6 +444,91 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-trials-to-cohorts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Trials to cohorts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-notes-to-patient-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Notes to patient summaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-embed-and-retrieve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Embed and retrieve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-score-the-candidates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Score the candidates
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1035,6 +1138,8 @@
       
         
       
+        
+      
     
     
     
@@ -1123,6 +1228,34 @@
     
   
     Site configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/llm-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM runtime
   
 
     
@@ -1823,6 +1956,80 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-trials-to-cohorts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Trials to cohorts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-notes-to-patient-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Notes to patient summaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-embed-and-retrieve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Embed and retrieve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-score-the-candidates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Score the candidates
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1842,60 +2049,176 @@
 
 
 <h1 id="quickstart">Quickstart<a class="headerlink" href="#quickstart" title="Permanent link">&para;</a></h1>
-<p>The example notebook provides a runnable walkthrough using sample input data:</p>
-<p><a href="https://github.com/dfci/matchminer-ai-inference/blob/main/examples/run_examples.ipynb">Open <code>examples/run_examples.ipynb</code> on GitHub</a></p>
-<p>Most external workflows should start with these import paths:</p>
+<p>This page runs the matching workflow end to end, from a table of trials and a table of clinical notes to scored
+patient-cohort pairs. The <a href="../example-notebook/">example notebook</a> runs the same steps on the sample data in
+<code>examples/data/</code>.</p>
+<h2 id="inputs">Inputs<a class="headerlink" href="#inputs" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Table</th>
+<th>One row per</th>
+<th>Columns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Trials</td>
+<td>trial</td>
+<td><code>trial_id</code>, <code>trial_title</code>, <code>brief_summary</code>, <code>eligibility_criteria</code> (ClinicalTrials.gov fields; see <a href="../requirements/#data">requirements</a>)</td>
+</tr>
+<tr>
+<td>Notes</td>
+<td>clinical note</td>
+<td><code>patient_id</code>, <code>note_text</code>, <code>note_date</code></td>
+</tr>
+</tbody>
+</table>
+<p>To start from full protocols instead of listings, give each trial a <code>protocol_path</code> (PDF, <code>.txt</code> or <code>.md</code>) and
+pass <code>source="protocol"</code> to <code>process_trials</code>.</p>
+<h2 id="configure">Configure<a class="headerlink" href="#configure" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_preset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_cohorts</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.patients</span><span class="w"> </span><span class="kn">import</span> <span class="n">summarize_patients</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.embedding</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_for_matching</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">exclusion_criteria_check</span><span class="p">,</span>
-    <span class="n">exclusion_criteria_check_with_llm</span><span class="p">,</span>
-    <span class="n">generate_candidate_matches</span><span class="p">,</span>
-    <span class="n">score_match_quality</span><span class="p">,</span>
-    <span class="n">score_match_quality_with_llm</span><span class="p">,</span>
-<span class="p">)</span>
+
+<span class="n">config</span> <span class="o">=</span> <span class="n">load_preset</span><span class="p">(</span><span class="s2">"default"</span><span class="p">)</span>
+<span class="n">config</span><span class="o">.</span><span class="n">embedding</span><span class="p">[</span><span class="s2">"model_path"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"/path/to/trialspace"</span>    <span class="c1"># your TrialSpace checkpoint</span>
 </code></pre></div>
-<p>Before starting, review the <a href="../requirements/#data">data requirements</a> for the
-trial and patient input tables expected by the workflow.</p>
-<p>By default, <code>extract_cohorts</code> now screens for cancer treatment and returns full
-eligibility criteria per distinct cohort. Rejected trials are recorded in
-metadata:</p>
-<div class="highlight"><pre><span></span><code><span class="n">cohorts</span><span class="p">,</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">extract_cohorts</span><span class="p">(</span><span class="n">trials</span><span class="p">,</span> <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">cohorts</span><span class="p">[[</span><span class="s2">"cohort_trial_id"</span><span class="p">,</span> <span class="s2">"cohort_eligibility_criteria"</span><span class="p">]])</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">metadata</span><span class="p">[</span><span class="s2">"trial_rejections"</span><span class="p">])</span>
+<ul>
+<li><strong>LLM.</strong> By default the LLM steps run <code>nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4</code> in-process with vLLM.
+  To use a running OpenAI-compatible server instead, set <code>config.remote["enabled"] = True</code> and
+  <code>config.remote["server_urls"] = ["http://localhost:8000/v1"]</code>. The server must serve the preset's model, or you
+  change <code>model_name</code>. <a href="../../user-guide/local-vs-remote/">Choosing an inference setup</a> compares the two.</li>
+<li><strong>TrialSpace.</strong> The preset's default <code>embedding.model_path</code> is a local checkpoint that is not published, so point
+  it at your own. Embedding fails rather than fall back to a different model.</li>
+<li><strong>Decision model.</strong> It runs in-process on a GPU (<code>decision_model.device</code>). It is the pinned base <code>LiquidAI/d1-2B</code>
+  unless <code>decision_model.model_name</code> names a fine-tuned checkpoint.</li>
+</ul>
+<p>Only send clinical text to an endpoint approved for it.</p>
+<h2 id="1-trials-to-cohorts">1. Trials to cohorts<a class="headerlink" href="#1-trials-to-cohorts" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">process_trials</span>
+
+<span class="n">trials</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s2">"trials.csv"</span><span class="p">)</span>
+<span class="n">cohorts</span><span class="p">,</span> <span class="n">trial_metadata</span> <span class="o">=</span> <span class="n">process_trials</span><span class="p">(</span><span class="n">trials</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s2">"runs/trials"</span><span class="p">,</span> <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
-<p>Cohort criteria include boilerplate. The optional
-<code>trials.remove_boilerplate_criteria</code> step adds each cohort's key criteria
-(<code>cohort_key_criteria</code>, read by TrialSpace retrieval and the decision model's match questions) and
-boilerplate criteria (<code>cohort_boilerplate_criteria</code>, read by its boilerplate
-question) and every line with its inclusion/exclusion and boilerplate tags
-(<code>cohort_criteria_items</code>, read by <code>check_eligibility_criteria</code>); patient summaries carry the matching key and boilerplate
-sections. See the <a href="../../api/trials/#key-and-boilerplate-criteria">trial API</a>
-and the <a href="../../api/embedding/">embedding API</a>.</p>
-<p>The default <code>0526</code> TrialSpace and checker models were trained on clinical-space
-summaries and separate general exclusions, which the example notebook also
-uses. They accept cohort key and boilerplate criteria but have not been
-evaluated on them. To run the established workflow, select its legacy
-extraction mode explicitly:</p>
-<div class="highlight"><pre><span></span><code><span class="n">config</span> <span class="o">=</span> <span class="n">load_preset</span><span class="p">(</span><span class="s2">"default"</span><span class="p">)</span>
-<span class="n">config</span><span class="o">.</span><span class="n">trial</span><span class="p">[</span><span class="s2">"extraction_method"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"hierarchical"</span>
-<span class="n">trial_spaces</span> <span class="o">=</span> <span class="n">extract_cohorts</span><span class="p">(</span><span class="n">trials</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+<p><code>process_trials</code> runs four steps:
+1. It screens each trial for cancer treatment.
+2. It lists the trial's cohorts and extracts each cohort's complete criteria.
+3. It merges cohorts whose criteria are equivalent.
+4. It tags every criteria line as inclusion or exclusion and as key or boilerplate.</p>
+<p>It returns one row per cohort:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cohort_trial_id</code>, <code>trial_id</code>, <code>cohort_number</code>, <code>cohort_name</code></td>
+<td>Identifiers; <code>cohort_trial_id</code> is <code>&lt;trial_id&gt;-cohort-&lt;n&gt;</code></td>
+</tr>
+<tr>
+<td><code>cohort_eligibility_criteria</code></td>
+<td>The cohort's complete criteria</td>
+</tr>
+<tr>
+<td><code>cohort_key_criteria</code></td>
+<td>The criteria that define the population, read by TrialSpace and the match questions</td>
+</tr>
+<tr>
+<td><code>cohort_boilerplate_criteria</code></td>
+<td>The general criteria most trials share, read by the boilerplate question</td>
+</tr>
+<tr>
+<td><code>cohort_criteria_items</code></td>
+<td>Every line with its tags, read by the line-by-line check</td>
+</tr>
+</tbody>
+</table>
+<p>Trials that are not cancer treatment trials have no rows. Their decisions are in
+<code>trial_metadata["extraction"]["trial_rejections"]</code>.</p>
+<p>With <code>output_dir</code>, each trial's results are saved and reused while the inputs and prompts are unchanged. The steps
+are also public functions on their own: <code>extract_cohorts</code>, <code>merge_equivalent_cohorts</code> and
+<code>remove_boilerplate_criteria</code>. See <a href="../../api/trials/">trials</a>.</p>
+<h2 id="2-notes-to-patient-summaries">2. Notes to patient summaries<a class="headerlink" href="#2-notes-to-patient-summaries" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.patients</span><span class="w"> </span><span class="kn">import</span> <span class="n">summarize_patients</span>
+
+<span class="n">notes</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s2">"notes.csv"</span><span class="p">)</span>
+<span class="n">patients</span> <span class="o">=</span> <span class="n">summarize_patients</span><span class="p">(</span><span class="n">notes</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">checkpoint_dir</span><span class="o">=</span><span class="s2">"runs/patients"</span><span class="p">)</span>
 </code></pre></div>
-<p>The patient-centric workflow with those legacy trial spaces has these main steps:</p>
-<ol>
-<li>Turn trial descriptions and eligibility criteria into structured trial
-   summaries with <code>extract_cohorts</code>.</li>
-<li>Turn patient notes into cancer history summaries with <code>summarize_patients</code>.</li>
-<li>Convert the trial and patient summaries into embeddings with
-   <code>embed_for_matching</code> so they can be compared.</li>
-<li>Find likely patient-trial pairs with <code>generate_candidate_matches</code>.</li>
-<li>Score how reasonable each patient-trial match looks with either
-   <code>score_match_quality</code> or <code>score_match_quality_with_llm</code>.</li>
-<li>Screen matched patient-trial pairs for possible exclusion criteria with
-   either <code>exclusion_criteria_check</code> or <code>exclusion_criteria_check_with_llm</code>.</li>
-</ol>
+<p>Each patient's notes are summarized serially.
+- <strong>Preparation:</strong> the notes are sorted by date, repeated sentences are removed, and the record is split into
+  overlapping chunks.
+- <strong>Updates:</strong> each chunk updates the running summary.
+- <strong>Result:</strong> one row per patient with <code>patient_summary</code> and its two sections. <code>cancer_history_summary</code> is the key
+  section; <code>general_exclusion_criteria_evidence</code> is the evidence for boilerplate criteria.
+- <strong>Failures:</strong> a patient whose summary keeps failing the quality checks is left out and counted in the QC report
+  (<code>return_qc=True</code>).
+- <strong>Resuming:</strong> <code>checkpoint_dir</code> saves each chunk as it finishes, so an interrupted run resumes.</p>
+<p><code>summarize_patients</code> also accepts one patient's PDF files. See <a href="../../api/patients/">patients</a>.</p>
+<h2 id="3-embed-and-retrieve">3. Embed and retrieve<a class="headerlink" href="#3-embed-and-retrieve" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.embedding</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_for_matching</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">generate_candidate_matches</span>
+
+<span class="n">patient_vectors</span> <span class="o">=</span> <span class="n">embed_for_matching</span><span class="p">(</span><span class="n">patients</span><span class="p">,</span> <span class="n">entity_type</span><span class="o">=</span><span class="s2">"patient"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+<span class="n">cohort_vectors</span> <span class="o">=</span> <span class="n">embed_for_matching</span><span class="p">(</span><span class="n">cohorts</span><span class="p">,</span> <span class="n">entity_type</span><span class="o">=</span><span class="s2">"trial"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+
+<span class="n">candidates</span> <span class="o">=</span> <span class="n">generate_candidate_matches</span><span class="p">(</span><span class="n">patient_vectors</span><span class="p">,</span> <span class="n">cohort_vectors</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>    <span class="c1"># cohorts for each patient</span>
+<span class="c1"># generate_candidate_matches(cohort_vectors, patient_vectors, k=50)              # patients for each cohort</span>
+</code></pre></div>
+<p>TrialSpace encodes patients' cancer histories and cohorts' key criteria into one vector space. Retrieval ranks by
+cosine similarity and returns both identifiers, <code>similarity_score</code> and <code>rank</code>. Vectors from different TrialSpace
+models must never be compared. See <a href="../../api/embedding/">embedding</a> and
+<a href="../../api/candidate-matching/">candidate matching</a>.</p>
+<h2 id="4-score-the-candidates">4. Score the candidates<a class="headerlink" href="#4-score-the-candidates" title="Permanent link">&para;</a></h2>
+<p>The checks read the pair's texts, so join the summaries and cohorts onto the candidates first:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">check_eligibility_criteria</span><span class="p">,</span> <span class="n">exclusion_criteria_check</span><span class="p">,</span> <span class="n">score_match_quality</span>
+
+<span class="n">pairs</span> <span class="o">=</span> <span class="n">candidates</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">patients</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"patient_id"</span><span class="p">)</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">cohorts</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"cohort_trial_id"</span><span class="p">)</span>
+<span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="s2">"cohort_trial_id"</span><span class="p">]</span>
+
+<span class="n">quality</span> <span class="o">=</span> <span class="n">score_match_quality</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+<span class="n">pairs</span> <span class="o">=</span> <span class="n">pairs</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">quality</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="n">keys</span><span class="p">)</span>
+
+<span class="n">boilerplate</span> <span class="o">=</span> <span class="n">exclusion_criteria_check</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+<span class="n">failing_lines</span> <span class="o">=</span> <span class="n">check_eligibility_criteria</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">filter_failing</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Question</th>
+<th>Main outputs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>score_match_quality</code></td>
+<td>Five yes/no match questions: reasonableness, cancer type, disease burden, treatment history, biomarkers</td>
+<td><code>match_quality_score</code> for ranking; <code>match_quality_pass</code>, true when the reasonableness answer is at least 0.5; <code>match_quality_&lt;question&gt;</code></td>
+</tr>
+<tr>
+<td><code>exclusion_criteria_check</code></td>
+<td>Does the patient clearly fail a boilerplate criterion?</td>
+<td><code>exclusion_criteria_pass_probability</code>, <code>exclusion_criteria_pass</code></td>
+</tr>
+<tr>
+<td><code>check_eligibility_criteria</code></td>
+<td>For each tagged line: does the patient clearly fail it?</td>
+<td>One row per line with <code>criterion_pass_probability</code> and <code>criterion_clearly_fails</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Filtering:</strong> by default <code>score_match_quality</code> returns only the pairs that pass (<code>filter_low_quality=False</code>
+  keeps them all).</li>
+<li><strong>LLM versions:</strong> <code>score_match_quality_with_llm</code>, <code>exclusion_criteria_check_with_llm</code> and
+  <code>check_eligibility_criteria_with_llm</code> ask an LLM instead and return a reason with each answer.</li>
+<li><strong>Interpretation:</strong> these scores rank and screen pairs for human review; they are not eligibility decisions. See
+  <a href="../../api/match-quality/">match quality</a>, <a href="../../api/exclusion-criteria/">exclusion criteria</a> and
+  <a href="../../api/criteria-check/">criteria check</a>.</li>
+</ul>
 
 
 

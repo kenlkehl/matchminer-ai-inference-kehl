@@ -1023,6 +1023,8 @@
       
         
       
+        
+      
     
     
     
@@ -1111,6 +1113,34 @@
     
   
     Site configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/llm-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM runtime
   
 
     
@@ -1742,6 +1772,17 @@
     <span class="md-ellipsis">
       
         Workup documentation review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-quality-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary quality checks
       
     </span>
   </a>
@@ -2430,6 +2471,17 @@
     <span class="md-ellipsis">
       
         Workup documentation review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-quality-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary quality checks
       
     </span>
   </a>
@@ -5991,6 +6043,28 @@ cancellation, output/context reserves or exact-evidence validation.</p>
 concordance determination</strong>. Not documented does not mean not done. Conditional
 indications, compound items, alternatives, historical tests, timing and conflicting
 evidence need clinical review. Treatment-concordance assessment is not included.</p>
+<h2 id="summary-quality-checks">Summary quality checks<a class="headerlink" href="#summary-quality-checks" title="Permanent link">&para;</a></h2>
+<p><code>patients.check_patient_summary(text)</code> runs read-only checks on one summary. It looks for:
+- self-editing language ("I should", "Wait,");
+- prompt or formatting commentary;
+- raw reasoning delimiters;
+- repeated cancer-field values;
+- repeated long prose.</p>
+<p>It returns versioned findings with character offsets, line numbers and a <code>high</code> or <code>review</code> confidence. The
+diagnostics contain no patient text. These are review signals, not clinical validation, and the checker never
+rewrites a summary.
+- Multiple primary cancers and repeated headings are allowed.
+- Matching age, cancer type, histology and biomarkers alone asks for review.
+- Matching extent and treatment history as well identifies a repeated cancer section.</p>
+<p><code>summarize_patients(..., return_qc=True)</code> adds aggregate flags to its QC report.</p>
+<p>Serial summarization checks each chunk's answer before it becomes the next chunk's prior summary.
+- <strong>Regenerated:</strong> drafting text, repeated full sections, empty output and incomplete completions. The chunk is
+  regenerated from the original notes and the last accepted prior summary, up to
+  <code>patient.summary_quality_max_attempts</code> (3) attempts.
+- <strong>Not regenerated:</strong> matching only the core cancer fields, which stays a review signal.
+- <strong>Trace:</strong> <code>patient.summary_quality_trace_dir</code> keeps every prompt, answer and reasoning trace in a local directory,
+  rejected attempts included. Debug output includes <code>patient_summary_attempts</code>, and the metadata reports attempt and
+  rejection counts.</p>
 <h2 id="updating-existing-summaries">Updating existing summaries<a class="headerlink" href="#updating-existing-summaries" title="Permanent link">&para;</a></h2>
 <p>Pass earlier summaries as <code>existing_summaries</code>, together with the patients' notes,
 to continue each summary instead of starting over. Each patient's first new chunk

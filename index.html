@@ -282,10 +282,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#what-the-package-contains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the package contains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#where-to-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where To Start
+        Where to start
       
     </span>
   </a>
@@ -1090,6 +1101,8 @@
       
         
       
+        
+      
     
     
     
@@ -1178,6 +1191,34 @@
     
   
     Site configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/llm-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM runtime
   
 
     
@@ -1885,10 +1926,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#what-the-package-contains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the package contains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#where-to-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where To Start
+        Where to start
       
     </span>
   </a>
@@ -1927,36 +1979,61 @@
 
 
 <h1 id="matchminer-ai">MatchMiner-AI<a class="headerlink" href="#matchminer-ai" title="Permanent link">&para;</a></h1>
-<p>Welcome to the <code>matchminer-ai</code> package documentation.</p>
-<p><code>matchminer-ai</code> is a Python package for running clinical trial matching
-inference workflows. The package provides modular functions for summarizing
-trials and patient histories, generating embeddings of each, retrieving
-candidate matches, scoring match quality, and assessing exclusion criteria.</p>
-<p>This package is based on
-<a href="https://doi.org/10.48550/arXiv.2412.17228">Altreuter et al., MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching</a>.
-If you use <code>matchminer-ai</code>, please cite the study below.</p>
-<p>Contributions to the package and documentation are welcome through GitHub. See our
-<a href="development/contributing/">contribution instructions</a> for more information.</p>
+<p>MatchMiner-AI is an open-source pipeline for matching patients with cancer to clinical trials. It reads trial
+documents and longitudinal patient notes and writes comparable summaries of each. From those summaries it retrieves
+candidate patient-trial pairs and scores whether each pair deserves a closer look. It works in both directions:
+trials for a patient, and patients for a trial. The method is described in
+<a href="https://doi.org/10.48550/arXiv.2412.17228">Altreuter et al., <em>MatchMiner-AI: An Open-Source Solution for Cancer Clinical Trial Matching</em></a>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Research use</p>
+<p>MatchMiner-AI is a research tool for prioritizing human review. It is not an eligibility engine, a medical
+device or a source of treatment recommendations. Its scores rank and screen candidates. Every suggested match
+needs review by a clinician and the trial team against the complete, current protocol.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">Pre-v1 package</p>
-<p>This package is currently pre-v1 and under active development. APIs,
-configuration options, and outputs may change.</p>
+<p>The package is under active development. APIs, configuration options and outputs may change.</p>
 </div>
-<h2 id="where-to-start">Where To Start<a class="headerlink" href="#where-to-start" title="Permanent link">&para;</a></h2>
+<h2 id="what-the-package-contains">What the package contains<a class="headerlink" href="#what-the-package-contains" title="Permanent link">&para;</a></h2>
+<p>The <code>matchminer_ai</code> package holds the whole pipeline. Training renders its examples with the same prompts, text
+formats and schemas the runtime uses.</p>
 <ul>
-<li>Read <a href="getting-started/requirements/">requirements</a> to understand compute
-  and data expectations before installing.</li>
-<li>Follow <a href="getting-started/installation/">installation</a> once you have the
-  required environment.</li>
-<li>Use the <a href="getting-started/quickstart/">quickstart</a> for the public function
-  sequence and runnable example notebook.</li>
-<li>Read the <a href="user-guide/patient-centric-matching/">patient-centric matching workflow</a>
-  for background and workflow concepts.</li>
-<li>Review the <a href="reference/configuration/">configuration reference</a> when editing
-  preset YAML files.</li>
+<li><strong>Matching.</strong> Seven steps: trials to cohorts, notes to patient summaries, TrialSpace embedding, retrieval, and
+  three checks of each candidate pair by the decision model (match quality, boilerplate criteria, criteria line by
+  line). The <a href="getting-started/quickstart/">quickstart</a> runs them end to end, and the
+  <a href="user-guide/patient-centric-matching/">matching workflow</a> explains the concepts behind them.</li>
+<li><strong>Related review tools.</strong><ul>
+<li><a href="user-guide/good-options-pipeline/">GoodOption drug evidence</a>;</li>
+<li>guideline catalogs from <a href="user-guide/guideline-extraction/">NCCN</a> and <a href="user-guide/pdq-catalogs/">PDQ</a>;</li>
+<li><a href="api/extraction/">structured clinical extraction</a>;</li>
+<li>workup checks (<a href="api/workup-queries/">extraction-based</a>, <a href="api/workup-sql/">SQL agent</a>);</li>
+<li><a href="user-guide/population-workup/">population workup review</a>;</li>
+<li><a href="user-guide/note-search-qa/">note-search question answering</a>.</li>
 </ul>
+</li>
+<li><strong><a href="training/">Training</a>.</strong> <code>mmai-train</code> produces TrialSpace and the decision model from synthetic and
+  public data, and optionally distills <a href="training/oncoreasoning/">OncoReasoning</a>.</li>
+<li><strong><a href="evaluation/">Evaluation</a>.</strong> Evaluations on real patients, run only where that data is authorized.</li>
+<li><strong>Apps.</strong> The <a href="apps/dashboard/">dashboard</a> (<code>mmai-dashboard</code>) and the
+  <a href="apps/guideline-fetcher/">guideline fetcher</a> (<code>mmai-guideline-fetcher</code>).</li>
+</ul>
+<h2 id="where-to-start">Where to start<a class="headerlink" href="#where-to-start" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="getting-started/requirements/">Requirements</a> and <a href="getting-started/gpu-recommendations/">GPU recommendations</a>:
+   compute and input data.</li>
+<li><a href="getting-started/installation/">Installation</a>.</li>
+<li><a href="user-guide/local-vs-remote/">Choosing an inference setup</a>: in-process models or an OpenAI-compatible server.</li>
+<li><a href="getting-started/quickstart/">Quickstart</a> and the <a href="getting-started/example-notebook/">example notebook</a>.</li>
+<li>References:<ul>
+<li><a href="reference/configuration/">Configuration</a>: the preset's sections;</li>
+<li><a href="reference/site-config/">Site configuration</a>: installation-specific values and the data root;</li>
+<li><a href="reference/llm-runtime/">LLM runtime</a>: model profiles, the endpoint pool and tracing.</li>
+</ul>
+</li>
+</ol>
+<p>Contributions are welcome; see <a href="development/contributing/">contributing</a>.</p>
 <h2 id="citation">Citation<a class="headerlink" href="#citation" title="Permanent link">&para;</a></h2>
-<p>If you use <code>matchminer-ai</code>, please cite:</p>
+<p>If you use MatchMiner-AI, please cite:</p>
 <blockquote>
 <p>Altreuter J, Trukhanov P, Paul MA, Hassett MJ, Riaz IB, Afzal MU, Mohammed AA,
 Sammons S, Lindsay J, Mallaber E, Klein HR, Gungor G, Galvin M, Deletto M,

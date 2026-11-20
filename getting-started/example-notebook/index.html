@@ -1035,6 +1035,8 @@
       
         
       
+        
+      
     
     
     
@@ -1123,6 +1125,34 @@
     
   
     Site configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/llm-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM runtime
   
 
     
@@ -1842,14 +1872,24 @@
 
 
 <h1 id="example-notebook">Example Notebook<a class="headerlink" href="#example-notebook" title="Permanent link">&para;</a></h1>
-<p>The example notebook provides a full walkthrough using sample input data:</p>
-<p><a href="https://github.com/dfci/matchminer-ai-inference/blob/main/examples/run_examples.ipynb">Open <code>examples/run_examples.ipynb</code> on GitHub</a></p>
-<p>To run the notebook locally from a repository checkout:</p>
-<div class="highlight"><pre><span></span><code>jupyter<span class="w"> </span>lab<span class="w"> </span>examples/run_examples.ipynb
+<p><a href="https://github.com/kenlkehl/matchminer-ai-kehl/blob/main/examples/run_examples.ipynb"><code>examples/run_examples.ipynb</code></a>
+runs the matching workflow on the sample data in <code>examples/data/</code>: ClinicalTrials.gov listings and the notes of
+twelve synthetic patients. It runs:
+1. <code>process_trials</code>, from trials to cohorts;
+2. <code>summarize_patients</code>, including an update with newer notes;
+3. TrialSpace embedding and retrieval in both directions;
+4. the decision model's three checks;
+5. the optional LLM checks;
+6. a review table with one row per patient-cohort pair.</p>
+<p>Run it from the <code>examples/</code> directory of a checkout:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>examples
+jupyter<span class="w"> </span>lab<span class="w"> </span>run_examples.ipynb
 </code></pre></div>
-<p>The notebook demonstrates local and remote server modes for trial and patient
-summarization, then runs the downstream embedding, candidate matching, match
-quality, and exclusion criteria steps.</p>
+<p>Before running, set the TrialSpace checkpoint (<code>embedding.model_path</code>) and choose where the LLM steps run:
+- in-process vLLM, the default;
+- an OpenAI-compatible server (<code>USE_SERVER = True</code>).</p>
+<p>The notebook writes its results to <code>examples/output/</code>. Its trial and patient checkpoints there are not tracked by
+git. The <a href="../quickstart/">quickstart</a> explains the same steps.</p>
 
 
 
