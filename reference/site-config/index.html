@@ -2108,6 +2108,11 @@ its command line.</p>
 <td>Hugging Face cache for the teacher tokenizer (<code>--cache-dir</code> overrides it)</td>
 </tr>
 <tr>
+<td><code>paths.trialspace_model</code></td>
+<td><code>embed_for_matching</code> and everything that embeds with TrialSpace, including the guideline fetcher</td>
+<td>The TrialSpace checkpoint, when the configuration's <code>embedding.model_path</code> is unset</td>
+</tr>
+<tr>
 <td><code>paths.embeddinggemma2_cache</code></td>
 <td><code>evaluation.retro_fidelity</code></td>
 <td>A cache holding the pinned EmbeddingGemma 2 snapshot (default: the Hugging Face cache)</td>
@@ -2303,6 +2308,7 @@ population paths.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">paths</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">data_root</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/srv/mmai/data</span><span class="w">            </span><span class="c1"># holds phi/ and no_phi/</span>
 <span class="w">  </span><span class="nt">models_root</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/srv/mmai/models</span>
+<span class="w">  </span><span class="nt">trialspace_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/srv/mmai/models/trialspace</span><span class="w">   </span><span class="c1"># when embedding.model_path is unset</span>
 <span class="w">  </span><span class="nt">hf_cache</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/srv/models/hf</span>
 <span class="w">  </span><span class="nt">retro_source_root</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/srv/ehr/extract_2026</span>
 

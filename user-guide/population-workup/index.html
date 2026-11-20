@@ -2117,7 +2117,7 @@ population:</p>
 <ol>
 <li><strong>Cohort.</strong> Wrap the population's summaries and source notes in a <code>PatientCohort</code>.</li>
 <li><strong>Retrieval.</strong> Find the patients who match one guideline space (NCCN or PDQ catalog) with TrialSpace and the
-   decision model's match-quality score.</li>
+   decision model's reasonableness answer.</li>
 <li><strong>Review.</strong> Check every selected patient against every <code>diagnostic_workup</code> item of the space, by one of three
    methods:<ul>
 <li><strong>full-note review</strong> (<code>review_population_workup</code>): an LLM reads each patient's notes;</li>
@@ -2150,7 +2150,7 @@ that ask only for a history and physical out of every check.</p>
 <span class="n">space_id</span> <span class="o">=</span> <span class="n">load_guideline_catalog</span><span class="p">(</span><span class="n">catalog</span><span class="p">)</span><span class="o">.</span><span class="n">space_trial_id</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 <span class="n">selected</span><span class="p">,</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">retrieve_guideline_patients</span><span class="p">(</span>
     <span class="n">population</span><span class="o">.</span><span class="n">summaries</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">space_trial_id</span><span class="o">=</span><span class="n">space_id</span><span class="p">,</span>
-    <span class="n">candidate_k</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">min_match_score</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="nb">print</span><span class="p">,</span>
+    <span class="n">candidate_k</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">min_reasonableness</span><span class="o">=</span><span class="mf">0.75</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="nb">print</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="n">active</span> <span class="o">=</span> <span class="n">subset_patient_cohort</span><span class="p">(</span>
     <span class="n">population</span><span class="p">,</span> <span class="n">selected</span><span class="o">.</span><span class="n">patient_id</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">space</span><span class="o">=</span><span class="n">metadata</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"space"</span><span class="p">),</span>
@@ -2174,8 +2174,11 @@ that ask only for a history and physical out of every check.</p>
 <li>The guideline space is the query and the patient summaries are the corpus. The space is embedded and scored by
   its <code>cohort_key_criteria</code>: the cohort-style key criteria stored with the space, or for a catalog without them
   its nine fields laid out as criteria (see the <a href="../guideline-extraction/#key-criteria">guideline extraction guide</a>).</li>
-<li>The <code>candidate_k</code> most similar patients (capped at the population size) get the decision model's
-  match-quality score. Patients scoring at least <code>min_match_score</code> are selected; <code>None</code> keeps every candidate.</li>
+<li>The <code>candidate_k</code> most similar patients (capped at the population size) get the decision model's match
+  questions. A patient is selected when its reasonableness answer, the model's P(yes) that the patient is
+  potentially eligible (<code>match_quality_reasonableness</code>), is at least <code>min_reasonableness</code> (default 0.75); <code>None</code>
+  keeps every candidate. Selected patients are ranked by <code>match_quality_score</code>. The guideline fetcher's
+  <strong>Minimum reasonableness</strong> field sets the same threshold.</li>
 <li>Embedding and scoring run in batches of 32, with progress and cancellation checks between batches. Both sides
   must use the same embedding model. Raw notes never enter retrieval.</li>
 <li><code>metadata</code> keeps the space record, catalog provenance, model metadata, every candidate's rank and scores, and

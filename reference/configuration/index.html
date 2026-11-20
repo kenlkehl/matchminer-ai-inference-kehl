@@ -1322,17 +1322,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#trial_space_criteria_extraction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        trial_space_criteria_extraction
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#protocol_cohort_extraction" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2417,17 +2406,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#trial_space_criteria_extraction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        trial_space_criteria_extraction
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#protocol_cohort_extraction" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2882,13 +2860,12 @@ it; the <a href="../../api/workup-sql/#claude-through-a-databricks-ai-gateway">S
 sets the provider in its own section.</p>
 <h2 id="llm-sections">LLM sections<a class="headerlink" href="#llm-sections" title="Permanent link">&para;</a></h2>
 <p>These sections each configure one LLM task: <code>trial</code>, <code>patient</code>, <code>document_extraction</code>, <code>patient_extraction</code>,
-<code>workup_query_compile</code>, <code>workup_sql_agent</code>, <code>trial_space_criteria_extraction</code>, <code>protocol_cohort_extraction</code>,
-<code>synthetic_protocol_generation</code>, <code>llm_criteria_check</code>, <code>llm_match_quality</code>, <code>llm_exclusion_criteria</code>,
-<code>llm_good_option</code> and <code>guideline</code>. Every one except <code>guideline</code> (remote only, <a href="#guideline">below</a>) defaults to
-<code>nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4</code>, locally and remotely, with thinking on. In-process, the NVFP4
-build needs a GPU with native FP4 (Blackwell); see <a href="../llm-runtime/#nvidia-nemotron-35-super-vl-default">LLM runtime</a>.
-In the section tables, <code>max_tokens</code> stands for both <code>local.generation.max_tokens</code> and
-<code>remote.request_params.max_tokens</code>.</p>
+<code>workup_query_compile</code>, <code>workup_sql_agent</code>, <code>protocol_cohort_extraction</code>, <code>synthetic_protocol_generation</code>,
+<code>llm_criteria_check</code>, <code>llm_match_quality</code>, <code>llm_exclusion_criteria</code>, <code>llm_good_option</code> and <code>guideline</code>. Every one
+except <code>guideline</code> (remote only, <a href="#guideline">below</a>) defaults to <code>nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4</code>,
+locally and remotely, with thinking on. In-process, the NVFP4 build needs a GPU with native FP4 (Blackwell); see
+<a href="../llm-runtime/#nvidia-nemotron-35-super-vl-default">LLM runtime</a>. In the section tables, <code>max_tokens</code> stands for
+both <code>local.generation.max_tokens</code> and <code>remote.request_params.max_tokens</code>.</p>
 <table>
 <thead>
 <tr>
@@ -2979,8 +2956,8 @@ In the section tables, <code>max_tokens</code> stands for both <code>local.gener
   The profiles and their values are listed in <a href="../llm-runtime/#model-profiles">LLM runtime</a>.</li>
 <li><strong>Sections without <code>sampling_profile</code></strong> send their own fixed sampling. The one exception is Nemotron 3.5 Super,
   whose profile replaces a section's fixed sampling (keeping an explicit thinking switch). In the preset this applies
-  to <code>trial_space_criteria_extraction</code> and <code>llm_good_option</code>: their greedy settings are not used while the model is
-  Nemotron. Set <code>sampling_profile: none</code> to keep a section's own values.</li>
+  to <code>llm_good_option</code>: its greedy settings are not used while the model is Nemotron. Set <code>sampling_profile: none</code>
+  to keep a section's own values.</li>
 <li><strong>Thinking:</strong> turn it off with <code>chat_template_kwargs.enable_thinking: false</code> (local and <code>remote.extra_body</code>).
   Qwen's profile then switches to its non-thinking sampling.</li>
 <li><strong><code>reasoning_effort</code>:</strong> used by Qwen 3.8 (<code>xhigh</code>, <code>medium</code> or <code>low</code>, sent as an API field and a chat-template
@@ -3009,11 +2986,6 @@ with <code>section="trial"</code> (the default). See <a href="../../api/trials/"
 </thead>
 <tbody>
 <tr>
-<td><code>extraction_method</code></td>
-<td><code>cohorts</code></td>
-<td><code>cohorts</code>: the three-step cohort workflow. <code>hierarchical</code> and <code>one_shot</code> are earlier trial-space methods that write <code>space_trial_id</code> / <code>clinical_space_summary</code> rows (<a href="../../api/trials/#legacy-space-extraction">Legacy space extraction</a>); <code>process_trials</code> requires <code>cohorts</code></td>
-</tr>
-<tr>
 <td><code>cohorts.max_attempts</code></td>
 <td><code>3</code></td>
 <td>Attempts per request for an answer that fails validation (1-10)</td>
@@ -3037,21 +3009,6 @@ with <code>section="trial"</code> (the default). See <a href="../../api/trials/"
 <td><code>cohorts.prompt_files</code></td>
 <td>unset</td>
 <td>Maps <code>screen</code>, <code>list</code> and <code>criteria</code> to other packaged prompt files</td>
-</tr>
-<tr>
-<td><code>hierarchy</code></td>
-<td><code>max_attempts: 4</code>, <code>max_nodes: 4096</code>, <code>max_calls: 20000</code>, <code>batch_size: 256</code>, <code>active_trials: 32</code></td>
-<td>Limits of the <code>hierarchical</code> method only</td>
-</tr>
-<tr>
-<td><code>prompt_files</code></td>
-<td><code>trial.user.primer.txt</code>, <code>trial.user.question.txt</code></td>
-<td>Prompts of the <code>one_shot</code> method only</td>
-</tr>
-<tr>
-<td><code>boilerplate_marker</code></td>
-<td><code>Boilerplate exclusions</code></td>
-<td>Heading that starts the boilerplate section in the earlier methods' output</td>
 </tr>
 <tr>
 <td><code>local.engine.max_model_len</code></td>
@@ -3461,55 +3418,6 @@ reach that endpoint, so use only an endpoint authorized for the records.</p>
 </tr>
 </tbody>
 </table>
-<h2 id="trial_space_criteria_extraction"><code>trial_space_criteria_extraction</code><a class="headerlink" href="#trial_space_criteria_extraction" title="Permanent link">&para;</a></h2>
-<p><code>trials.extract_trial_space_eligibility_criteria</code>: the complete inclusion and exclusion criteria relevant to one trial
-space, taken from a UTF-8 OCR text file
-(<a href="../../api/trials/#criteria-for-one-population-from-an-ocr-text-file">Criteria for one population</a>). The section reads
-only <code>local</code>, <code>remote</code> and <code>reasoning_parser</code> of the LLM keys.</p>
-<table>
-<thead>
-<tr>
-<th>Key</th>
-<th>Default</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>max_document_characters</code></td>
-<td><code>120000</code></td>
-<td>Longer documents fail rather than being truncated</td>
-</tr>
-<tr>
-<td><code>max_criteria_per_type</code></td>
-<td><code>256</code></td>
-<td>Inclusion criteria, and exclusion criteria, accepted from the model</td>
-</tr>
-<tr>
-<td><code>response_retry_limit</code></td>
-<td><code>2</code></td>
-<td>Retries for malformed JSON, invalid schemas, duplicate criteria and criteria not found in the text</td>
-</tr>
-<tr>
-<td><code>remote.request_params.response_format</code></td>
-<td><code>{type: json_object}</code></td>
-<td>JSON-object responses</td>
-</tr>
-<tr>
-<td><code>local.engine.max_model_len</code></td>
-<td><code>100000</code></td>
-<td>Context</td>
-</tr>
-<tr>
-<td><code>max_tokens</code></td>
-<td><code>50000</code></td>
-<td>Output budget</td>
-</tr>
-</tbody>
-</table>
-<p>The whole document and trial space reach the configured backend; no web search is used. Every accepted criterion must
-match the source after conservative normalization (whitespace, ordinal suffixes, repeated page edges, referenced
-trailing footnotes).</p>
 <h2 id="protocol_cohort_extraction"><code>protocol_cohort_extraction</code><a class="headerlink" href="#protocol_cohort_extraction" title="Permanent link">&para;</a></h2>
 <p><code>trials.extract_protocol_cohorts</code>: cohort extraction from full protocol documents (PDF, OCR text or Markdown), and the
 merge and boilerplate steps when they run with <code>section="protocol_cohort_extraction"</code>.</p>
@@ -3614,9 +3522,9 @@ merge and boilerplate steps when they run with <code>section="protocol_cohort_ex
 <tbody>
 <tr>
 <td><code>model_path</code></td>
-<td>a local checkpoint</td>
+<td><code>null</code></td>
 <td>required</td>
-<td>TrialSpace directory or Hugging Face model ID</td>
+<td>TrialSpace directory or Hugging Face model ID; <code>null</code> uses the site config's <code>paths.trialspace_model</code></td>
 </tr>
 <tr>
 <td><code>device</code></td>
@@ -3681,9 +3589,10 @@ merge and boilerplate steps when they run with <code>section="protocol_cohort_ex
 </tbody>
 </table>
 <ul>
-<li><strong><code>model_path</code>:</strong> the preset points at a local TrialSpace checkpoint that is not published (<code>google/embeddinggemma-2</code>
-  fine-tuned by <code>mmai-train</code>), so set it to your own. A path that starts with <code>/</code> or <code>.</code>, or that exists, must be a
-  readable directory, or embedding raises <code>FileNotFoundError</code>. Nothing falls back to another model. The checkpoint
+<li><strong><code>model_path</code>:</strong> your TrialSpace checkpoint (<code>google/embeddinggemma-2</code> fine-tuned by <code>mmai-train</code>). The preset
+  leaves it unset; then the <a href="../site-config/">site config</a>'s <code>paths.trialspace_model</code> is used, and with neither,
+  embedding raises <code>ValueError</code>. A path that starts with <code>/</code> or <code>.</code>, or that exists, must be a readable directory, or
+  embedding raises <code>FileNotFoundError</code>. Nothing falls back to another model. The checkpoint
   was saved by sentence-transformers 6.1 and needs 6.1 or later. The newest public model, <code>ksg-dfci/TrialSpace-0526</code>,
   is a different model family with a different text format.</li>
 <li><strong>Model-specific keys:</strong> <code>dtype</code>, <code>autocast</code>, <code>prompt_profile</code>, <code>default_prompt_name</code>, <code>include_prompt_in_pooling</code>,

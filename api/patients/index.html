@@ -2811,9 +2811,8 @@ overall and per finding).</p>
   attempts.</li>
 <li><strong>Not regenerated:</strong> matching only the core cancer fields, which stays a review signal.</li>
 <li><strong>Trace:</strong> <code>patient.summary_quality_trace_dir</code> keeps every prompt, answer and reasoning trace in a local directory,
-  rejected attempts included. Debug output includes <code>patient_summary_attempts</code>, and the metadata of
-  <code>summarize_patient_notes</code>, which <code>summarize_patients</code> wraps, reports attempt and rejection counts
-  (<code>summary_quality</code>).</li>
+  rejected attempts included. Debug output includes <code>patient_summary_attempts</code>, and the metadata
+  (<code>return_metadata=True</code>) reports attempt and rejection counts (<code>summary_quality</code>).</li>
 </ul>
 <h2 id="updating-existing-summaries">Updating existing summaries<a class="headerlink" href="#updating-existing-summaries" title="Permanent link">&para;</a></h2>
 <p>Pass earlier summaries as <code>existing_summaries</code>, together with the patients' notes,
@@ -3697,7 +3696,9 @@ patient_reasoning_text : str
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When return_metadata is True, returns the DataFrame plus a metadata dict.</p>
+                <p>When return_metadata is True, returns the DataFrame plus a metadata dict:
+<code>package</code>, <code>config_snapshot</code>, <code>model_metadata</code> and <code>summary_quality</code>
+(attempt and rejection counts of the summary quality checks).</p>
               </div>
             </td>
           </tr>
@@ -3926,7 +3927,12 @@ metadata dict, and QC report DataFrame.</p>
 <span class="normal">250</span>
 <span class="normal">251</span>
 <span class="normal">252</span>
-<span class="normal">253</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">summarize_patients</span><span class="p">(</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">summarize_patients</span><span class="p">(</span>
     <span class="n">notes</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="n">PatientPDFInput</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -4045,7 +4051,9 @@ metadata dict, and QC report DataFrame.</p>
 <span class="sd">            final chunk for each patient; see</span>
 <span class="sd">            patient_answer_text above.</span>
 <span class="sd">    tuple[pd.DataFrame, dict]</span>
-<span class="sd">        When return_metadata is True, returns the DataFrame plus a metadata dict.</span>
+<span class="sd">        When return_metadata is True, returns the DataFrame plus a metadata dict:</span>
+<span class="sd">        ``package``, ``config_snapshot``, ``model_metadata`` and ``summary_quality``</span>
+<span class="sd">        (attempt and rejection counts of the summary quality checks).</span>
 <span class="sd">    tuple[pd.DataFrame, pd.DataFrame]</span>
 <span class="sd">        When return_qc is True, returns the DataFrame plus a QC report DataFrame.</span>
 <span class="sd">    tuple[pd.DataFrame, dict, pd.DataFrame]</span>
@@ -4119,6 +4127,9 @@ metadata dict, and QC report DataFrame.</p>
                 <span class="s2">"summarize_patients"</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"model_metadata"</span><span class="p">],</span>
             <span class="p">},</span>
         <span class="p">}</span>
+        <span class="k">if</span> <span class="s2">"summary_quality"</span> <span class="ow">in</span> <span class="n">metadata</span><span class="p">:</span>
+            <span class="c1"># Attempt and rejection counts of the summary quality checks.</span>
+            <span class="n">metadata_payload</span><span class="p">[</span><span class="s2">"summary_quality"</span><span class="p">]</span> <span class="o">=</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"summary_quality"</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">return_qc</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">summaries</span><span class="p">,</span> <span class="n">metadata_payload</span><span class="p">,</span> <span class="n">qc_report</span>
         <span class="k">return</span> <span class="n">summaries</span><span class="p">,</span> <span class="n">metadata_payload</span>

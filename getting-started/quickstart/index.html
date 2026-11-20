@@ -2087,8 +2087,8 @@ pass <code>source="protocol"</code> to <code>process_trials</code>.</p>
   To use a running OpenAI-compatible server instead, set <code>config.remote["enabled"] = True</code> and
   <code>config.remote["server_urls"] = ["http://localhost:8000/v1"]</code>. The server must serve the preset's model, or you
   change <code>model_name</code>. <a href="../../user-guide/local-vs-remote/">Choosing an inference setup</a> compares the two.</li>
-<li><strong>TrialSpace.</strong> The preset's default <code>embedding.model_path</code> is a local checkpoint that is not published, so point
-  it at your own. Embedding fails rather than fall back to a different model.</li>
+<li><strong>TrialSpace.</strong> The preset leaves <code>embedding.model_path</code> unset, so point it at your own checkpoint. Embedding fails
+  rather than fall back to a different model.</li>
 <li><strong>Decision model.</strong> It runs in-process on a GPU (<code>decision_model.device</code>). It is the pinned base <code>LiquidAI/d1-2B</code>
   unless <code>decision_model.model_name</code> names a fine-tuned checkpoint.</li>
 </ul>

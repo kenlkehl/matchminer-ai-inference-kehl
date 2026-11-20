@@ -1607,32 +1607,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#criteria-for-one-population-from-an-ocr-text-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Criteria for one population from an OCR text file
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#synthetic-protocols" class="md-nav__link">
     <span class="md-ellipsis">
       
         Synthetic protocols
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#legacy-space-extraction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Legacy space extraction
       
     </span>
   </a>
@@ -1733,17 +1711,6 @@
     <span class="md-ellipsis">
       
         screen_trials
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#matchminer_ai.trials.extract_trial_space_eligibility_criteria" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        extract_trial_space_eligibility_criteria
       
     </span>
   </a>
@@ -2488,32 +2455,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#criteria-for-one-population-from-an-ocr-text-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Criteria for one population from an OCR text file
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#synthetic-protocols" class="md-nav__link">
     <span class="md-ellipsis">
       
         Synthetic protocols
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#legacy-space-extraction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Legacy space extraction
       
     </span>
   </a>
@@ -2614,17 +2559,6 @@
     <span class="md-ellipsis">
       
         screen_trials
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#matchminer_ai.trials.extract_trial_space_eligibility_criteria" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        extract_trial_space_eligibility_criteria
       
     </span>
   </a>
@@ -2923,9 +2857,8 @@ are research abstractions for human review, not eligibility determinations.</p>
 </code></pre></div>
 <ul>
 <li><strong><code>source</code>:</strong> <code>"ctgov"</code> (the default) reads ClinicalTrials.gov listings with <code>extract_cohorts</code> and uses the <code>trial</code>
-  settings for every step; it needs <code>trial.extraction_method: cohorts</code>, the preset's value. <code>"protocol"</code> reads full
-  protocols with <code>extract_protocol_cohorts</code> and uses the <code>protocol_cohort_extraction</code> settings for every step;
-  <code>text_output_dir</code> and <code>progress_callback</code> apply only here.</li>
+  settings for every step. <code>"protocol"</code> reads full protocols with <code>extract_protocol_cohorts</code> and uses the
+  <code>protocol_cohort_extraction</code> settings for every step; <code>text_output_dir</code> and <code>progress_callback</code> apply only here.</li>
 <li><strong>Result:</strong> one row per merged cohort of each accepted trial, with all the columns below. The extractor's
   decisions stay in <code>cohorts.attrs</code>.</li>
 <li><strong>Metadata:</strong> with <code>return_metadata=True</code>, each step's metadata under <code>extraction</code>, <code>merge</code> and <code>boilerplate</code>.
@@ -3076,9 +3009,10 @@ keys set the LLM. See <a href="../../reference/configuration/#trial">configurati
 <span class="p">}</span>
 </code></pre></div>
 <ul>
-<li><strong><code>attrs</code>:</strong> the result's <code>attrs</code> always hold <code>extraction_method</code>, <code>schema_version</code>, <code>representation_version</code>
-  (<code>trial-treatment-cohorts-v5</code>), <code>prompt_sha256</code>, <code>structured_outputs</code>, <code>trial_decisions</code>, <code>trial_rejections</code>
-  (rejected trial ID to decision) and <code>trial_errors</code> (failed trial ID to its last validation error).</li>
+<li><strong><code>attrs</code>:</strong> the result's <code>attrs</code> always hold <code>extraction_method</code> (<code>cohorts</code>, or <code>protocol_cohorts</code> from
+  <code>extract_protocol_cohorts</code>), <code>schema_version</code>, <code>representation_version</code> (<code>trial-treatment-cohorts-v5</code>),
+  <code>prompt_sha256</code>, <code>structured_outputs</code>, <code>trial_decisions</code>, <code>trial_rejections</code> (rejected trial ID to decision) and
+  <code>trial_errors</code> (failed trial ID to its last validation error).</li>
 <li><strong><code>return_metadata=True</code>:</strong> the same keys plus <code>prompt_sha256_by_step</code>, <code>trial_cohort_names</code>,
   <code>trial_merged_cohorts</code> (cohorts combined for identical criteria), <code>trial_attempts</code> (per step, and per cohort for
   criteria: finish reason, validation error and serving endpoint), <code>model_metadata</code> and <code>config_snapshot</code>.
@@ -3234,26 +3168,6 @@ only the NCT ID, never patient context.</p>
                           <span class="s2">"brief_summary"</span><span class="p">:</span> <span class="n">document</span><span class="o">.</span><span class="n">brief_summary</span><span class="p">,</span>
                           <span class="s2">"eligibility_criteria"</span><span class="p">:</span> <span class="n">document</span><span class="o">.</span><span class="n">eligibility_criteria</span><span class="p">}])</span>
 </code></pre></div>
-<h2 id="criteria-for-one-population-from-an-ocr-text-file">Criteria for one population from an OCR text file<a class="headerlink" href="#criteria-for-one-population-from-an-ocr-text-file" title="Permanent link">&para;</a></h2>
-<p><code>extract_trial_space_eligibility_criteria(trial_space, eligibility_checklist_path, config=config)</code> takes a
-description of one trial population (a "trial space", such as a cohort's name and key criteria) and a UTF-8 text
-file produced by OCR, such as an eligibility checklist. It sends both to the LLM configured under <code>trial_space_criteria_extraction</code> and returns the
-criteria that apply to that population:</p>
-<div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">"trial_space"</span><span class="p">:</span><span class="w"> </span><span class="s2">"the population description, as given"</span><span class="p">,</span>
-<span class="w">  </span><span class="nt">"inclusion_criteria"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"complete relevant criterion"</span><span class="p">],</span>
-<span class="w">  </span><span class="nt">"exclusion_criteria"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"complete relevant criterion"</span><span class="p">]</span>
-<span class="p">}</span>
-</code></pre></div>
-<ul>
-<li><strong>Grounding:</strong> every criterion must occur verbatim in the OCR text after conservative normalization (whitespace
-  collapsed, a split ordinal such as <code>9 th</code> joined, repeated page-edge text and referenced page-end footnotes
-  removed). Invalid, ungrounded, duplicated or overlapping lists are retried and then rejected.</li>
-<li><strong>Scope:</strong> universal criteria and criteria of ambiguous scope are kept; criteria explicitly limited to an
-  incompatible population are left out.</li>
-<li><strong>Privacy:</strong> no web search is used; the whole document reaches the configured endpoint. Compare the output with
-  the complete, current protocol.</li>
-</ul>
 <h2 id="synthetic-protocols">Synthetic protocols<a class="headerlink" href="#synthetic-protocols" title="Permanent link">&para;</a></h2>
 <p><code>generate_synthetic_protocols</code> writes one fabricated full protocol per ctgov seed (<code>trial_id</code> and optional <code>title</code>,
 <code>brief_summary</code>, <code>detailed_description</code> and <code>eligibility_criteria</code>), for training corpora with realistic, often
@@ -3261,12 +3175,6 @@ messily specified eligibility text. Each trial gets one of the weighted eligibil
 <code>synthetic_protocol_layouts.json</code>. With <code>output_dir</code>, each trial's <code>protocol.md</code>, <code>reasoning.txt</code> and <code>meta.json</code>
 are written as it returns and completed trials are skipped on rerun. Outputs are fabricated and must be labeled
 synthetic wherever they are used. See <a href="../../training/synthetic-protocols/">synthetic protocols</a>.</p>
-<h2 id="legacy-space-extraction">Legacy space extraction<a class="headerlink" href="#legacy-space-extraction" title="Permanent link">&para;</a></h2>
-<p><code>trial.extraction_method: hierarchical</code> or <code>one_shot</code> makes <code>extract_cohorts</code> produce the older trial-space table
-instead of cohorts: <code>space_trial_id</code>, <code>trial_id</code>, <code>clinical_space_number</code>, <code>clinical_space_summary</code> and
-<code>general_exclusion_criteria</code> (settings <code>trial.hierarchy</code> and <code>trial.prompt_files</code>). Space text is not
-interchangeable with cohort criteria, and their embeddings must not be compared. <code>process_trials</code> and the merge and
-boilerplate steps need cohorts.</p>
 <h2 id="guideline-and-pdq-catalogs">Guideline and PDQ catalogs<a class="headerlink" href="#guideline-and-pdq-catalogs" title="Permanent link">&para;</a></h2>
 <p>The guideline functions below build and read NCCN and NCI PDQ catalogs, whose spaces are matched like cohorts. They
 are described in <a href="../../user-guide/guideline-extraction/">guideline extraction</a> and
@@ -3404,8 +3312,7 @@ for :func:<code>extract_protocol_cohorts</code>: unique <code>trial_id</code> an
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Defaults to the package preset. For <code>"ctgov"</code> its <code>trial</code> section must use the
-<code>cohorts</code> method.</p>
+                <p>Defaults to the package preset.</p>
               </div>
             </td>
             <td>
@@ -3515,7 +3422,73 @@ as for the extractors. <code>(rows, metadata)</code> with <code>return_metadata<
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/trials/__init__.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">201</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
 <span class="normal">202</span>
 <span class="normal">203</span>
 <span class="normal">204</span>
@@ -3534,76 +3507,7 @@ as for the extractors. <code>(rows, metadata)</code> with <code>return_metadata<
 <span class="normal">217</span>
 <span class="normal">218</span>
 <span class="normal">219</span>
-<span class="normal">220</span>
-<span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span>
-<span class="normal">229</span>
-<span class="normal">230</span>
-<span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span>
-<span class="normal">234</span>
-<span class="normal">235</span>
-<span class="normal">236</span>
-<span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
-<span class="normal">242</span>
-<span class="normal">243</span>
-<span class="normal">244</span>
-<span class="normal">245</span>
-<span class="normal">246</span>
-<span class="normal">247</span>
-<span class="normal">248</span>
-<span class="normal">249</span>
-<span class="normal">250</span>
-<span class="normal">251</span>
-<span class="normal">252</span>
-<span class="normal">253</span>
-<span class="normal">254</span>
-<span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span>
-<span class="normal">258</span>
-<span class="normal">259</span>
-<span class="normal">260</span>
-<span class="normal">261</span>
-<span class="normal">262</span>
-<span class="normal">263</span>
-<span class="normal">264</span>
-<span class="normal">265</span>
-<span class="normal">266</span>
-<span class="normal">267</span>
-<span class="normal">268</span>
-<span class="normal">269</span>
-<span class="normal">270</span>
-<span class="normal">271</span>
-<span class="normal">272</span>
-<span class="normal">273</span>
-<span class="normal">274</span>
-<span class="normal">275</span>
-<span class="normal">276</span>
-<span class="normal">277</span>
-<span class="normal">278</span>
-<span class="normal">279</span>
-<span class="normal">280</span>
-<span class="normal">281</span>
-<span class="normal">282</span>
-<span class="normal">283</span>
-<span class="normal">284</span>
-<span class="normal">285</span>
-<span class="normal">286</span>
-<span class="normal">287</span>
-<span class="normal">288</span>
-<span class="normal">289</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">process_trials</span><span class="p">(</span>
+<span class="normal">220</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">process_trials</span><span class="p">(</span>
     <span class="n">trials</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"ctgov"</span><span class="p">,</span>
@@ -3640,8 +3544,7 @@ as for the extractors. <code>(rows, metadata)</code> with <code>return_metadata<
 <span class="sd">    source : {"ctgov", "protocol"}, optional</span>
 <span class="sd">        What each row is; see above.</span>
 <span class="sd">    config : MMAIConfig, optional</span>
-<span class="sd">        Defaults to the package preset. For ``"ctgov"`` its ``trial`` section must use the</span>
-<span class="sd">        ``cohorts`` method.</span>
+<span class="sd">        Defaults to the package preset.</span>
 <span class="sd">    output_dir : str or Path, optional</span>
 <span class="sd">        Saves each trial's results under ``&lt;output_dir&gt;/&lt;trial_id&gt;/`` (for protocols also the</span>
 <span class="sd">        extraction) and reuses them while the inputs and prompts are unchanged.</span>
@@ -3671,8 +3574,6 @@ as for the extractors. <code>(rows, metadata)</code> with <code>return_metadata<
     <span class="k">if</span> <span class="n">source</span> <span class="o">==</span> <span class="s2">"ctgov"</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">text_output_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">progress_callback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"text_output_dir and progress_callback apply only to source='protocol'"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">resolved_config</span><span class="o">.</span><span class="n">trial</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"extraction_method"</span><span class="p">,</span> <span class="s2">"cohorts"</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">"cohorts"</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"process_trials requires trial.extraction_method=cohorts"</span><span class="p">)</span>
         <span class="n">section</span> <span class="o">=</span> <span class="s2">"trial"</span>
         <span class="n">cohorts</span><span class="p">,</span> <span class="n">extraction</span> <span class="o">=</span> <span class="n">extract_cohorts</span><span class="p">(</span><span class="n">trials</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">,</span> <span class="n">return_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">source</span> <span class="o">==</span> <span class="s2">"protocol"</span><span class="p">:</span>
@@ -3715,8 +3616,7 @@ as for the extractors. <code>(rows, metadata)</code> with <code>return_metadata<
 <p>Each cohort's criteria are copied verbatim, boilerplate included. Two optional steps take the
 returned rows, as for full protocols (:func:<code>extract_protocol_cohorts</code>):
 :func:<code>merge_equivalent_cohorts</code> and :func:<code>remove_boilerplate_criteria</code>, both with the default
-<code>section="trial"</code> (training uses both, in that order; :func:<code>process_trials</code> runs all three).
-<code>summarize_trials</code> is a deprecated alias.</p>
+<code>section="trial"</code> (training uses both, in that order; :func:<code>process_trials</code> runs all three).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3761,7 +3661,7 @@ returned rows, as for full protocols (:func:<code>extract_protocol_cohorts</code
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Defaults to the package preset, with <code>trial.extraction_method=cohorts</code>.</p>
+                <p>Defaults to the package preset.</p>
               </div>
             </td>
             <td>
@@ -3822,7 +3722,7 @@ and truncated responses.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>With the default <code>cohorts</code> method, one row per accepted population:
+                <p>One row per accepted population:
 <code>cohort_trial_id</code> (<code>&lt;trial_id&gt;-cohort-&lt;number&gt;</code>), <code>trial_id</code>,
 zero-based <code>cohort_number</code>, <code>cohort_name</code>, <code>cohort_eligibility_criteria</code>,
 <code>cohort_criteria_source</code> (<code>"ctgov"</code>; older runs say <code>"registry"</code>), <code>cancer_treatment_trial</code>, and
@@ -3839,11 +3739,6 @@ mode adds <code>trial_input_text</code> and retains every step's responses in
 metadata.</p>
 <p>Optional results are <code>(rows, metadata)</code>, <code>(rows, qc)</code> or
 <code>(rows, metadata, qc)</code> according to the flags.</p>
-<p>The explicitly selected legacy <code>hierarchical</code> and <code>one_shot</code> methods
-retain <code>space_trial_id</code>, <code>trial_id</code>, <code>clinical_space_number</code>,
-<code>clinical_space_summary</code>, and <code>general_exclusion_criteria</code>. Full
-cohort criteria are not interchangeable with those model inputs or
-their saved embeddings.</p>
               </div>
             </td>
           </tr>
@@ -3853,7 +3748,13 @@ their saved embeddings.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/trials/__init__.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 44</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
 <span class="normal"> 45</span>
 <span class="normal"> 46</span>
 <span class="normal"> 47</span>
@@ -3941,67 +3842,7 @@ their saved embeddings.</p>
 <span class="normal">129</span>
 <span class="normal">130</span>
 <span class="normal">131</span>
-<span class="normal">132</span>
-<span class="normal">133</span>
-<span class="normal">134</span>
-<span class="normal">135</span>
-<span class="normal">136</span>
-<span class="normal">137</span>
-<span class="normal">138</span>
-<span class="normal">139</span>
-<span class="normal">140</span>
-<span class="normal">141</span>
-<span class="normal">142</span>
-<span class="normal">143</span>
-<span class="normal">144</span>
-<span class="normal">145</span>
-<span class="normal">146</span>
-<span class="normal">147</span>
-<span class="normal">148</span>
-<span class="normal">149</span>
-<span class="normal">150</span>
-<span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span>
-<span class="normal">155</span>
-<span class="normal">156</span>
-<span class="normal">157</span>
-<span class="normal">158</span>
-<span class="normal">159</span>
-<span class="normal">160</span>
-<span class="normal">161</span>
-<span class="normal">162</span>
-<span class="normal">163</span>
-<span class="normal">164</span>
-<span class="normal">165</span>
-<span class="normal">166</span>
-<span class="normal">167</span>
-<span class="normal">168</span>
-<span class="normal">169</span>
-<span class="normal">170</span>
-<span class="normal">171</span>
-<span class="normal">172</span>
-<span class="normal">173</span>
-<span class="normal">174</span>
-<span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
-<span class="normal">178</span>
-<span class="normal">179</span>
-<span class="normal">180</span>
-<span class="normal">181</span>
-<span class="normal">182</span>
-<span class="normal">183</span>
-<span class="normal">184</span>
-<span class="normal">185</span>
-<span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
-<span class="normal">191</span>
-<span class="normal">192</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extract_cohorts</span><span class="p">(</span>
+<span class="normal">132</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extract_cohorts</span><span class="p">(</span>
     <span class="n">trials</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -4020,7 +3861,6 @@ their saved embeddings.</p>
 <span class="sd">    returned rows, as for full protocols (:func:`extract_protocol_cohorts`):</span>
 <span class="sd">    :func:`merge_equivalent_cohorts` and :func:`remove_boilerplate_criteria`, both with the default</span>
 <span class="sd">    ``section="trial"`` (training uses both, in that order; :func:`process_trials` runs all three).</span>
-<span class="sd">    ``summarize_trials`` is a deprecated alias.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -4028,7 +3868,7 @@ their saved embeddings.</p>
 <span class="sd">        One row per trial with unique, nonempty ``trial_id`` and the text columns</span>
 <span class="sd">        ``trial_title``, ``brief_summary``, and ``eligibility_criteria``.</span>
 <span class="sd">    config : MMAIConfig, optional</span>
-<span class="sd">        Defaults to the package preset, with ``trial.extraction_method=cohorts``.</span>
+<span class="sd">        Defaults to the package preset.</span>
 <span class="sd">    return_metadata : bool, optional</span>
 <span class="sd">        Also return package/config/model provenance, the prompt hashes, validated</span>
 <span class="sd">        ``trial_decisions``, ``trial_cohort_names``, ``trial_rejections``,</span>
@@ -4040,7 +3880,7 @@ their saved embeddings.</p>
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    pd.DataFrame or tuple</span>
-<span class="sd">        With the default ``cohorts`` method, one row per accepted population:</span>
+<span class="sd">        One row per accepted population:</span>
 <span class="sd">        ``cohort_trial_id`` (``&lt;trial_id&gt;-cohort-&lt;number&gt;``), ``trial_id``,</span>
 <span class="sd">        zero-based ``cohort_number``, ``cohort_name``, ``cohort_eligibility_criteria``,</span>
 <span class="sd">        ``cohort_criteria_source`` (``"ctgov"``; older runs say ``"registry"``), ``cancer_treatment_trial``, and</span>
@@ -4058,17 +3898,10 @@ their saved embeddings.</p>
 
 <span class="sd">        Optional results are ``(rows, metadata)``, ``(rows, qc)`` or</span>
 <span class="sd">        ``(rows, metadata, qc)`` according to the flags.</span>
-
-<span class="sd">        The explicitly selected legacy ``hierarchical`` and ``one_shot`` methods</span>
-<span class="sd">        retain ``space_trial_id``, ``trial_id``, ``clinical_space_number``,</span>
-<span class="sd">        ``clinical_space_summary``, and ``general_exclusion_criteria``. Full</span>
-<span class="sd">        cohort criteria are not interchangeable with those model inputs or</span>
-<span class="sd">        their saved embeddings.</span>
 <span class="sd">    """</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">MMAIConfig</span><span class="p">,</span> <span class="n">load_default_preset</span>
 
-    <span class="kn">from</span><span class="w"> </span><span class="nn">.postprocess</span><span class="w"> </span><span class="kn">import</span> <span class="n">postprocess_trial_summaries</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">.summarize</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_llm_summarization</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.cohorts</span><span class="w"> </span><span class="kn">import</span> <span class="n">summarize_trial_cohorts</span>
 
     <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
     <span class="n">resolved_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
@@ -4090,62 +3923,16 @@ their saved embeddings.</p>
         <span class="p">)</span>
 
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Starting trial summarization for </span><span class="si">%d</span><span class="s2"> trials."</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">trials</span><span class="p">))</span>
-    <span class="k">if</span> <span class="n">resolved_config</span><span class="o">.</span><span class="n">trial</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"extraction_method"</span><span class="p">,</span> <span class="s2">"cohorts"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"cohorts"</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">.cohorts</span><span class="w"> </span><span class="kn">import</span> <span class="n">summarize_trial_cohorts</span>
-
-        <span class="n">result</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">qc_report</span> <span class="o">=</span> <span class="n">summarize_trial_cohorts</span><span class="p">(</span><span class="n">trials</span><span class="p">,</span> <span class="n">resolved_config</span><span class="p">)</span>
-        <span class="n">metadata_payload</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">"package"</span><span class="p">:</span> <span class="n">package_metadata</span><span class="p">(),</span>
-            <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">),</span>
-            <span class="o">**</span><span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">value</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">metadata</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="s2">"model_metadata"</span><span class="p">},</span>
-            <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"extract_cohorts"</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"model_metadata"</span><span class="p">]},</span>
-        <span class="p">}</span>
-        <span class="k">if</span> <span class="n">return_metadata</span> <span class="ow">and</span> <span class="n">return_qc</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">metadata_payload</span><span class="p">,</span> <span class="n">qc_report</span>
-        <span class="k">if</span> <span class="n">return_metadata</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">metadata_payload</span>
-        <span class="k">if</span> <span class="n">return_qc</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">qc_report</span>
-        <span class="k">return</span> <span class="n">result</span>
-
-    <span class="p">(</span>
-        <span class="n">trials_with_summaries</span><span class="p">,</span>
-        <span class="n">metadata</span><span class="p">,</span>
-        <span class="n">truncated_llm_qc_artifact</span><span class="p">,</span>
-        <span class="n">failed_llm_qc_artifact</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">=</span> <span class="n">run_llm_summarization</span><span class="p">(</span><span class="n">trials</span><span class="p">,</span> <span class="n">resolved_config</span><span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Completed LLM summarization. Beginning postprocessing."</span><span class="p">)</span>
-    <span class="c1"># Capture unfiltered spaces for QC before keyword filtering.</span>
-    <span class="n">result</span><span class="p">,</span> <span class="n">unfiltered_spaces</span> <span class="o">=</span> <span class="n">postprocess_trial_summaries</span><span class="p">(</span>
-        <span class="n">trials_with_summaries</span><span class="p">,</span>
-        <span class="n">resolved_config</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Postprocessing complete. Produced </span><span class="si">%d</span><span class="s2"> rows."</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">))</span>
-
-    <span class="c1"># Build QC report</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">matchminer_ai._qc.trials</span><span class="w"> </span><span class="kn">import</span> <span class="n">trial_qc_report</span>
-
-    <span class="n">qc_report</span> <span class="o">=</span> <span class="n">trial_qc_report</span><span class="p">(</span>
-        <span class="n">result</span><span class="p">,</span>
-        <span class="n">trial_source</span><span class="o">=</span><span class="n">trials</span><span class="p">,</span>
-        <span class="n">unfiltered_spaces</span><span class="o">=</span><span class="n">unfiltered_spaces</span><span class="p">,</span>
-        <span class="n">truncated_llm_qc_artifact</span><span class="o">=</span><span class="n">truncated_llm_qc_artifact</span><span class="p">,</span>
-        <span class="n">failed_llm_qc_artifact</span><span class="o">=</span><span class="n">failed_llm_qc_artifact</span><span class="p">,</span>
-        <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">,</span>
-    <span class="p">)</span>
-
-    <span class="c1"># Depending on flags, decide what to return</span>
+    <span class="n">result</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">qc_report</span> <span class="o">=</span> <span class="n">summarize_trial_cohorts</span><span class="p">(</span><span class="n">trials</span><span class="p">,</span> <span class="n">resolved_config</span><span class="p">)</span>
+    <span class="n">metadata_payload</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"package"</span><span class="p">:</span> <span class="n">package_metadata</span><span class="p">(),</span>
+        <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">),</span>
+        <span class="o">**</span><span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">value</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">metadata</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="s2">"model_metadata"</span><span class="p">},</span>
+        <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"extract_cohorts"</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"model_metadata"</span><span class="p">]},</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">return_metadata</span> <span class="ow">and</span> <span class="n">return_qc</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">metadata_payload</span><span class="p">,</span> <span class="n">qc_report</span>
     <span class="k">if</span> <span class="n">return_metadata</span><span class="p">:</span>
-        <span class="n">metadata_payload</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">"package"</span><span class="p">:</span> <span class="n">package_metadata</span><span class="p">(),</span>
-            <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">),</span>
-            <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">"extract_cohorts"</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"model_metadata"</span><span class="p">],</span>
-            <span class="p">},</span>
-            <span class="s2">"trial_rejections"</span><span class="p">:</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"trial_rejections"</span><span class="p">,</span> <span class="p">{}),</span>
-        <span class="p">}</span>
-        <span class="k">if</span> <span class="n">return_qc</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">metadata_payload</span><span class="p">,</span> <span class="n">qc_report</span>
         <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">metadata_payload</span>
     <span class="k">if</span> <span class="n">return_qc</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">qc_report</span>
@@ -4537,7 +4324,9 @@ unchanged.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/trials/cohort_merge.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 93</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
 <span class="normal"> 94</span>
 <span class="normal"> 95</span>
 <span class="normal"> 96</span>
@@ -4651,9 +4440,7 @@ unchanged.</p>
 <span class="normal">204</span>
 <span class="normal">205</span>
 <span class="normal">206</span>
-<span class="normal">207</span>
-<span class="normal">208</span>
-<span class="normal">209</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">merge_equivalent_cohorts</span><span class="p">(</span>
+<span class="normal">207</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">merge_equivalent_cohorts</span><span class="p">(</span>
     <span class="n">cohorts</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5420,323 +5207,6 @@ version, prompt hash, counts, errors and every trial's attempts.</p>
                     <span class="n">screen_errors</span><span class="o">=</span><span class="p">{</span><span class="n">ids</span><span class="p">[</span><span class="n">r</span><span class="p">]:</span> <span class="n">e</span> <span class="k">for</span> <span class="n">r</span><span class="p">,</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">errors</span><span class="o">.</span><span class="n">items</span><span class="p">()},</span>
                     <span class="n">trial_attempts</span><span class="o">=</span><span class="p">{</span><span class="n">ids</span><span class="p">[</span><span class="n">r</span><span class="p">]:</span> <span class="n">attempts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="p">[])</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">))})</span>
     <span class="k">return</span> <span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span> <span class="k">if</span> <span class="n">return_metadata</span> <span class="k">else</span> <span class="n">result</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="matchminer_ai.trials.extract_trial_space_eligibility_criteria" class="doc doc-heading">
-            <span class="doc doc-object-name doc-function-name">extract_trial_space_eligibility_criteria</span>
-
-
-<a href="#matchminer_ai.trials.extract_trial_space_eligibility_criteria" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">extract_trial_space_eligibility_criteria</span><span class="p">(</span><span class="n">trial_space</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">eligibility_checklist_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">progress_callback</span><span class="p">:</span> <span class="n">TrialSpaceCriteriaProgress</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
-</code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Extract complete, source-grounded criteria for one clinical trial space.</p>
-<p>The function reads one local UTF-8 OCR text file and sends its full text,
-together with the supplied trial-space summary, to the configured local or
-remote LLM backend. It returns the original trial space plus separate lists
-of applicable inclusion and exclusion criteria. Every returned criterion is
-required to occur verbatim in the OCR text after conservative OCR
-normalization.</p>
-<p>The OCR document is treated as untrusted prompt data. No web search is used.
-If a remote backend is configured, the entire document reaches that endpoint;
-use only protocol documents without patient data unless the endpoint is
-authorized for the document's sensitivity. The result is a research
-abstraction, not an eligibility determination, and requires review against
-the complete, current protocol.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/matchminer_ai/trials/eligibility.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">352</span>
-<span class="normal">353</span>
-<span class="normal">354</span>
-<span class="normal">355</span>
-<span class="normal">356</span>
-<span class="normal">357</span>
-<span class="normal">358</span>
-<span class="normal">359</span>
-<span class="normal">360</span>
-<span class="normal">361</span>
-<span class="normal">362</span>
-<span class="normal">363</span>
-<span class="normal">364</span>
-<span class="normal">365</span>
-<span class="normal">366</span>
-<span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
-<span class="normal">374</span>
-<span class="normal">375</span>
-<span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
-<span class="normal">379</span>
-<span class="normal">380</span>
-<span class="normal">381</span>
-<span class="normal">382</span>
-<span class="normal">383</span>
-<span class="normal">384</span>
-<span class="normal">385</span>
-<span class="normal">386</span>
-<span class="normal">387</span>
-<span class="normal">388</span>
-<span class="normal">389</span>
-<span class="normal">390</span>
-<span class="normal">391</span>
-<span class="normal">392</span>
-<span class="normal">393</span>
-<span class="normal">394</span>
-<span class="normal">395</span>
-<span class="normal">396</span>
-<span class="normal">397</span>
-<span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span>
-<span class="normal">401</span>
-<span class="normal">402</span>
-<span class="normal">403</span>
-<span class="normal">404</span>
-<span class="normal">405</span>
-<span class="normal">406</span>
-<span class="normal">407</span>
-<span class="normal">408</span>
-<span class="normal">409</span>
-<span class="normal">410</span>
-<span class="normal">411</span>
-<span class="normal">412</span>
-<span class="normal">413</span>
-<span class="normal">414</span>
-<span class="normal">415</span>
-<span class="normal">416</span>
-<span class="normal">417</span>
-<span class="normal">418</span>
-<span class="normal">419</span>
-<span class="normal">420</span>
-<span class="normal">421</span>
-<span class="normal">422</span>
-<span class="normal">423</span>
-<span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
-<span class="normal">427</span>
-<span class="normal">428</span>
-<span class="normal">429</span>
-<span class="normal">430</span>
-<span class="normal">431</span>
-<span class="normal">432</span>
-<span class="normal">433</span>
-<span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
-<span class="normal">444</span>
-<span class="normal">445</span>
-<span class="normal">446</span>
-<span class="normal">447</span>
-<span class="normal">448</span>
-<span class="normal">449</span>
-<span class="normal">450</span>
-<span class="normal">451</span>
-<span class="normal">452</span>
-<span class="normal">453</span>
-<span class="normal">454</span>
-<span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span>
-<span class="normal">460</span>
-<span class="normal">461</span>
-<span class="normal">462</span>
-<span class="normal">463</span>
-<span class="normal">464</span>
-<span class="normal">465</span>
-<span class="normal">466</span>
-<span class="normal">467</span>
-<span class="normal">468</span>
-<span class="normal">469</span>
-<span class="normal">470</span>
-<span class="normal">471</span>
-<span class="normal">472</span>
-<span class="normal">473</span>
-<span class="normal">474</span>
-<span class="normal">475</span>
-<span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
-<span class="normal">482</span>
-<span class="normal">483</span>
-<span class="normal">484</span>
-<span class="normal">485</span>
-<span class="normal">486</span>
-<span class="normal">487</span>
-<span class="normal">488</span>
-<span class="normal">489</span>
-<span class="normal">490</span>
-<span class="normal">491</span>
-<span class="normal">492</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extract_trial_space_eligibility_criteria</span><span class="p">(</span>
-    <span class="n">trial_space</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">eligibility_checklist_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
-    <span class="o">*</span><span class="p">,</span>
-    <span class="n">config</span><span class="p">:</span> <span class="n">MMAIConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">return_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">TrialSpaceCriteriaProgress</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">"""Extract complete, source-grounded criteria for one clinical trial space.</span>
-
-<span class="sd">    The function reads one local UTF-8 OCR text file and sends its full text,</span>
-<span class="sd">    together with the supplied trial-space summary, to the configured local or</span>
-<span class="sd">    remote LLM backend. It returns the original trial space plus separate lists</span>
-<span class="sd">    of applicable inclusion and exclusion criteria. Every returned criterion is</span>
-<span class="sd">    required to occur verbatim in the OCR text after conservative OCR</span>
-<span class="sd">    normalization.</span>
-
-<span class="sd">    The OCR document is treated as untrusted prompt data. No web search is used.</span>
-<span class="sd">    If a remote backend is configured, the entire document reaches that endpoint;</span>
-<span class="sd">    use only protocol documents without patient data unless the endpoint is</span>
-<span class="sd">    authorized for the document's sensitivity. The result is a research</span>
-<span class="sd">    abstraction, not an eligibility determination, and requires review against</span>
-<span class="sd">    the complete, current protocol.</span>
-<span class="sd">    """</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trial_space</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">trial_space</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"trial_space must be a non-empty string."</span><span class="p">)</span>
-    <span class="n">trial_space</span> <span class="o">=</span> <span class="n">trial_space</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-    <span class="n">resolved_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">,</span> <span class="n">MMAIConfig</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"config must be an MMAIConfig instance or None."</span><span class="p">)</span>
-    <span class="n">extraction_config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">resolved_config</span><span class="o">.</span><span class="n">trial_space_criteria_extraction</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">extraction_config</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Config is missing trial_space_criteria_extraction settings."</span><span class="p">)</span>
-
-    <span class="n">max_characters</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">extraction_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"max_document_characters"</span><span class="p">,</span> <span class="mi">120000</span><span class="p">))</span>
-    <span class="n">max_criteria</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">extraction_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"max_criteria_per_type"</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
-    <span class="n">retry_limit</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">extraction_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"response_retry_limit"</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-    <span class="k">if</span> <span class="n">max_characters</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"max_document_characters must be positive."</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">max_criteria</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"max_criteria_per_type must be positive."</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">retry_limit</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"response_retry_limit cannot be negative."</span><span class="p">)</span>
-
-    <span class="n">_emit_progress</span><span class="p">(</span>
-        <span class="n">progress_callback</span><span class="p">,</span>
-        <span class="s2">"read"</span><span class="p">,</span>
-        <span class="mi">0</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="s2">"Reading OCR eligibility checklist"</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">document_text</span><span class="p">,</span> <span class="n">document_bytes</span> <span class="o">=</span> <span class="n">_read_ocr_document</span><span class="p">(</span>
-        <span class="n">eligibility_checklist_path</span><span class="p">,</span>
-        <span class="n">max_characters</span><span class="o">=</span><span class="n">max_characters</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">grounding_document_text</span> <span class="o">=</span> <span class="n">_remove_referenced_page_end_footnotes</span><span class="p">(</span>
-        <span class="n">_remove_repeated_page_edge_boilerplate</span><span class="p">(</span><span class="n">document_text</span><span class="p">)</span>
-    <span class="p">)</span>
-    <span class="n">_emit_progress</span><span class="p">(</span>
-        <span class="n">progress_callback</span><span class="p">,</span>
-        <span class="s2">"read"</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="s2">"OCR eligibility checklist loaded"</span><span class="p">,</span>
-    <span class="p">)</span>
-
-    <span class="n">runtime_config</span> <span class="o">=</span> <span class="n">_task_runtime_config</span><span class="p">(</span>
-        <span class="n">extraction_config</span><span class="p">,</span>
-        <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">runner</span> <span class="o">=</span> <span class="n">_CriteriaExtractionRunner</span><span class="p">(</span>
-        <span class="n">config</span><span class="o">=</span><span class="n">resolved_config</span><span class="p">,</span>
-        <span class="n">runtime_config</span><span class="o">=</span><span class="n">runtime_config</span><span class="p">,</span>
-        <span class="n">retry_limit</span><span class="o">=</span><span class="n">retry_limit</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="p">{</span>
-            <span class="s2">"role"</span><span class="p">:</span> <span class="s2">"system"</span><span class="p">,</span>
-            <span class="s2">"content"</span><span class="p">:</span> <span class="n">_load_prompt_text</span><span class="p">(</span><span class="s2">"trial_space_criteria.extract.system.txt"</span><span class="p">),</span>
-        <span class="p">},</span>
-        <span class="p">{</span>
-            <span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span>
-            <span class="s2">"content"</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
-                <span class="p">{</span>
-                    <span class="s2">"trial_space"</span><span class="p">:</span> <span class="n">trial_space</span><span class="p">,</span>
-                    <span class="s2">"ocr_eligibility_checklist"</span><span class="p">:</span> <span class="n">document_text</span><span class="p">,</span>
-                <span class="p">},</span>
-                <span class="n">ensure_ascii</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-            <span class="p">),</span>
-        <span class="p">},</span>
-    <span class="p">]</span>
-    <span class="n">_emit_progress</span><span class="p">(</span>
-        <span class="n">progress_callback</span><span class="p">,</span>
-        <span class="s2">"extract"</span><span class="p">,</span>
-        <span class="mi">0</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="s2">"Extracting trial-space inclusion and exclusion criteria"</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">extracted</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
-        <span class="n">messages</span><span class="p">,</span>
-        <span class="n">document_text</span><span class="o">=</span><span class="n">grounding_document_text</span><span class="p">,</span>
-        <span class="n">max_criteria</span><span class="o">=</span><span class="n">max_criteria</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="s2">"trial_space"</span><span class="p">:</span> <span class="n">trial_space</span><span class="p">,</span>
-        <span class="s2">"inclusion_criteria"</span><span class="p">:</span> <span class="n">extracted</span><span class="p">[</span><span class="s2">"inclusion_criteria"</span><span class="p">],</span>
-        <span class="s2">"exclusion_criteria"</span><span class="p">:</span> <span class="n">extracted</span><span class="p">[</span><span class="s2">"exclusion_criteria"</span><span class="p">],</span>
-    <span class="p">}</span>
-    <span class="n">_emit_progress</span><span class="p">(</span>
-        <span class="n">progress_callback</span><span class="p">,</span>
-        <span class="s2">"extract"</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="s2">"Trial-space criteria extracted"</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">_emit_progress</span><span class="p">(</span>
-        <span class="n">progress_callback</span><span class="p">,</span>
-        <span class="s2">"complete"</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="mi">1</span><span class="p">,</span>
-        <span class="s2">"Trial-space eligibility criteria ready for human review"</span><span class="p">,</span>
-    <span class="p">)</span>
-
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">return_metadata</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">result</span>
-    <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="p">{</span>
-        <span class="s2">"config_snapshot"</span><span class="p">:</span> <span class="n">config_snapshot</span><span class="p">(</span><span class="n">resolved_config</span><span class="p">),</span>
-        <span class="s2">"model_metadata"</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">"trial_space_criteria_extractor"</span><span class="p">:</span> <span class="n">runner</span><span class="o">.</span><span class="n">model_metadata</span><span class="p">,</span>
-        <span class="p">},</span>
-        <span class="s2">"source_document"</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">"sha256"</span><span class="p">:</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">document_bytes</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">(),</span>
-            <span class="s2">"character_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">document_text</span><span class="p">),</span>
-            <span class="s2">"page_count"</span><span class="p">:</span> <span class="n">document_text</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">"</span><span class="se">\f</span><span class="s2">"</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
-        <span class="p">},</span>
-        <span class="s2">"execution"</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">"llm_generation_calls"</span><span class="p">:</span> <span class="n">runner</span><span class="o">.</span><span class="n">generation_calls</span><span class="p">,</span>
-            <span class="s2">"inclusion_criteria_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"inclusion_criteria"</span><span class="p">]),</span>
-            <span class="s2">"exclusion_criteria_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"exclusion_criteria"</span><span class="p">]),</span>
-        <span class="p">},</span>
-    <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

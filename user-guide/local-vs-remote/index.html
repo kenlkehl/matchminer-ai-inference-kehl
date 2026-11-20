@@ -2054,11 +2054,12 @@ affects only the LLM. TrialSpace and the decision model always run in-process; s
 <li><strong>Configuration:</strong> each LLM section's <code>local</code> block sets <code>model_name</code>, <code>engine</code> (keyword arguments for <code>vllm.LLM</code>,
   such as <code>max_model_len</code>, <code>tensor_parallel_size</code> and <code>gpu_memory_utilization</code>), <code>generation</code> (sampling parameters)
   and <code>chat_template_kwargs</code>. See the <a href="../../reference/configuration/">configuration reference</a>.</li>
-<li><strong>Engines:</strong> an engine loads on first use and stays loaded until the process ends. Sections with different engine
-  settings get separate engines (the preset gives trials a 100,000-token context and patients 200,000), and up to two
-  stay loaded. Each reserves <code>gpu_memory_utilization</code> (0.9) of its GPUs' memory, so release the first with
-  <code>matchminer_ai.llm.backends.clear_local_llm_cache()</code> before the next step, and before TrialSpace or the decision
-  model needs the same GPU.</li>
+<li><strong>Engines:</strong> an engine loads on first use and stays loaded. One engine is loaded at a time: a section with
+  different engine settings (the preset gives trials a 100,000-token context and patients 200,000) shuts the loaded
+  engine down and loads its own, so moving between the trial and patient steps reloads the model. The engine
+  reserves <code>gpu_memory_utilization</code> (0.9) of its GPUs' memory: call
+  <code>matchminer_ai.llm.backends.clear_local_llm_cache()</code> before TrialSpace or the decision model loads on the same
+  GPU.</li>
 <li><strong>Requests:</strong> prompts go to the engine in batches. Answers are validated and retried, but not constrained to a JSON
   schema; structured outputs need a server.</li>
 </ul>

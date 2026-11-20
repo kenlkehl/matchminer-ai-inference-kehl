@@ -2352,9 +2352,10 @@ in input order. With <code>return_metadata=True</code> it also returns a metadat
 <p><code>embed_texts(texts, config=config, entity_type="patient" | "trial")</code> embeds plain strings and returns the vectors
 and the model metadata. Without <code>entity_type</code> it uses the model's shared <code>query</code> prompt.</p>
 <h2 id="model-and-settings">Model and settings<a class="headerlink" href="#model-and-settings" title="Permanent link">&para;</a></h2>
-<p>The <code>embedding</code> configuration section selects the model and how it encodes. The preset's <code>model_path</code> is a local
-TrialSpace checkpoint that is not published (<code>google/embeddinggemma-2</code> fine-tuned by the training pipeline), so set
-it to your own. A local path that is missing or unreadable raises <code>FileNotFoundError</code>; embedding never falls back to
+<p>The <code>embedding</code> configuration section selects the model and how it encodes. The preset leaves <code>model_path</code> unset:
+set it to your TrialSpace checkpoint (<code>google/embeddinggemma-2</code> fine-tuned by the training pipeline), or name it as
+<code>paths.trialspace_model</code> in the <a href="../../reference/site-config/">site config</a>. With neither, embedding raises
+<code>ValueError</code>; a local path that is missing or unreadable raises <code>FileNotFoundError</code>. Embedding never falls back to
 another model.</p>
 <table>
 <thead>
@@ -2367,7 +2368,7 @@ another model.</p>
 <tbody>
 <tr>
 <td><code>model_path</code></td>
-<td>a local checkpoint</td>
+<td><code>null</code> (the site config's <code>paths.trialspace_model</code>)</td>
 <td>TrialSpace directory or Hugging Face model ID</td>
 </tr>
 <tr>

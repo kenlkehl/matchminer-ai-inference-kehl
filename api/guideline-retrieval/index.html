@@ -2163,7 +2163,8 @@ generative LLM is called.</p>
   highest <code>match_quality_score</code> among the <code>candidate_k</code> nearest, with their complete catalog records, including the
   diagnostic and treatment menus. <code>write_guideline_considerations_report</code> writes them to a Markdown review report.</li>
 <li><strong>Trial-centric:</strong> <code>retrieve_guideline_patients</code> scores the <code>candidate_k</code> patients of a population nearest to one
-  space and keeps those whose <code>match_quality_score</code> is at least <code>min_match_score</code> (default 0.2; <code>None</code> keeps all).
+  space and keeps those whose reasonableness answer (<code>match_quality_reasonableness</code>, P(yes)) is at least
+  <code>min_reasonableness</code> (default 0.75; <code>None</code> keeps all), ranked by <code>match_quality_score</code>.
   <code>embed_guideline_patients</code> embeds a population once for repeated searches. See
   <a href="../../user-guide/population-workup/">population workup review</a>.</li>
 </ul>
@@ -3646,7 +3647,7 @@ to disk here.</p>
 
 
 <a href="#matchminer_ai.matching.guideline_patients.retrieve_guideline_patients" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">retrieve_guideline_patients</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">space_trial_id</span><span class="p">,</span> <span class="n">candidate_k</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">min_match_score</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">patient_embeddings</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">retrieve_guideline_patients</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">space_trial_id</span><span class="p">,</span> <span class="n">candidate_k</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">min_reasonableness</span><span class="o">=</span><span class="n">DEFAULT_MIN_REASONABLENESS</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">patient_embeddings</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -3654,8 +3655,10 @@ to disk here.</p>
         <p>Retrieve then match-quality-score patients for one finalized guideline space.</p>
 <p>Returns (selected patients, provenance). candidate_k controls the number of
 highest-cosine patient summaries scored, capped at the population size.
-min_match_score=None retains every scored candidate. Scores are prioritization
-signals, not eligibility decisions. No raw notes or remote LLM are used.
+A patient is selected when the decision model's reasonableness answer, P(yes) that the patient is
+potentially eligible (<code>match_quality_reasonableness</code>), is at least <code>min_reasonableness</code>
+(default 0.75); None retains every scored candidate. Selected patients are ranked by
+<code>match_quality_score</code>. Scores are prioritization signals, not eligibility decisions. No raw notes or remote LLM are used.
 The space is embedded and scored by its <code>cohort_key_criteria</code> (see
 <code>trials.load_guideline_catalog</code>).
 Patient vectors are made in this call unless <code>patient_embeddings</code> from
@@ -3665,11 +3668,7 @@ and the same verified encoder used for the guideline space. None are saved.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/matchminer_ai/matching/guideline_patients.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">197</span>
-<span class="normal">198</span>
-<span class="normal">199</span>
-<span class="normal">200</span>
-<span class="normal">201</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">201</span>
 <span class="normal">202</span>
 <span class="normal">203</span>
 <span class="normal">204</span>
@@ -3812,13 +3811,19 @@ and the same verified encoder used for the guideline space. None are saved.</p>
 <span class="normal">341</span>
 <span class="normal">342</span>
 <span class="normal">343</span>
-<span class="normal">344</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">retrieve_guideline_patients</span><span class="p">(</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">retrieve_guideline_patients</span><span class="p">(</span>
     <span class="n">patient_summaries</span><span class="p">,</span>
     <span class="n">catalog</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">space_trial_id</span><span class="p">,</span>
     <span class="n">candidate_k</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
-    <span class="n">min_match_score</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+    <span class="n">min_reasonableness</span><span class="o">=</span><span class="n">DEFAULT_MIN_REASONABLENESS</span><span class="p">,</span>
     <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">progress_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">patient_embeddings</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -3827,8 +3832,10 @@ and the same verified encoder used for the guideline space. None are saved.</p>
 
 <span class="sd">    Returns (selected patients, provenance). candidate_k controls the number of</span>
 <span class="sd">    highest-cosine patient summaries scored, capped at the population size.</span>
-<span class="sd">    min_match_score=None retains every scored candidate. Scores are prioritization</span>
-<span class="sd">    signals, not eligibility decisions. No raw notes or remote LLM are used.</span>
+<span class="sd">    A patient is selected when the decision model's reasonableness answer, P(yes) that the patient is</span>
+<span class="sd">    potentially eligible (``match_quality_reasonableness``), is at least ``min_reasonableness``</span>
+<span class="sd">    (default 0.75); None retains every scored candidate. Selected patients are ranked by</span>
+<span class="sd">    ``match_quality_score``. Scores are prioritization signals, not eligibility decisions. No raw notes or remote LLM are used.</span>
 <span class="sd">    The space is embedded and scored by its ``cohort_key_criteria`` (see</span>
 <span class="sd">    ``trials.load_guideline_catalog``).</span>
 <span class="sd">    Patient vectors are made in this call unless ``patient_embeddings`` from</span>
@@ -3842,12 +3849,12 @@ and the same verified encoder used for the guideline space. None are saved.</p>
 
     <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">candidate_k</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">candidate_k</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"candidate_k must be a positive integer."</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">min_match_score</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span>
-        <span class="nb">isinstance</span><span class="p">(</span><span class="n">min_match_score</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
-        <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">min_match_score</span><span class="p">)</span>
-        <span class="ow">or</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">min_match_score</span> <span class="o">&lt;=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">min_reasonableness</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span>
+        <span class="nb">isinstance</span><span class="p">(</span><span class="n">min_reasonableness</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">min_reasonableness</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">min_reasonableness</span> <span class="o">&lt;=</span> <span class="mi">1</span>
     <span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"min_match_score must be between zero and one, or None."</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"min_reasonableness must be between zero and one, or None."</span><span class="p">)</span>
     <span class="n">config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">load_default_preset</span><span class="p">()</span>
     <span class="n">patients</span> <span class="o">=</span> <span class="n">_patient_frame</span><span class="p">(</span><span class="n">patient_summaries</span><span class="p">)</span>
     <span class="n">progress</span> <span class="o">=</span> <span class="n">progress_callback</span> <span class="ow">or</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">_</span><span class="p">:</span> <span class="kc">None</span><span class="p">)</span>
@@ -3925,7 +3932,7 @@ and the same verified encoder used for the guideline space. None are saved.</p>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="ow">or</span> <span class="n">scores</span><span class="o">.</span><span class="n">duplicated</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The match-quality check must return one score per candidate."</span><span class="p">)</span>
     <span class="n">ranked</span> <span class="o">=</span> <span class="n">candidates</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
-        <span class="n">scores</span><span class="p">[</span><span class="n">keys</span> <span class="o">+</span> <span class="p">[</span><span class="s2">"match_quality_score"</span><span class="p">,</span> <span class="s2">"match_quality_pass"</span><span class="p">]],</span>
+        <span class="n">scores</span><span class="p">[</span><span class="n">keys</span> <span class="o">+</span> <span class="p">[</span><span class="s2">"match_quality_score"</span><span class="p">,</span> <span class="s2">"match_quality_pass"</span><span class="p">,</span> <span class="s2">"match_quality_reasonableness"</span><span class="p">]],</span>
         <span class="n">on</span><span class="o">=</span><span class="n">keys</span><span class="p">,</span>
         <span class="n">how</span><span class="o">=</span><span class="s2">"left"</span><span class="p">,</span>
         <span class="n">validate</span><span class="o">=</span><span class="s2">"one_to_one"</span><span class="p">,</span>
@@ -3942,8 +3949,8 @@ and the same verified encoder used for the guideline space. None are saved.</p>
     <span class="n">ranked</span><span class="p">[</span><span class="s2">"rank"</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ranked</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
     <span class="n">selected</span> <span class="o">=</span> <span class="p">(</span>
         <span class="n">ranked</span>
-        <span class="k">if</span> <span class="n">min_match_score</span> <span class="ow">is</span> <span class="kc">None</span>
-        <span class="k">else</span> <span class="n">ranked</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ranked</span><span class="o">.</span><span class="n">match_quality_score</span> <span class="o">&gt;=</span> <span class="n">min_match_score</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">min_reasonableness</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="k">else</span> <span class="n">ranked</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ranked</span><span class="o">.</span><span class="n">match_quality_reasonableness</span> <span class="o">&gt;=</span> <span class="n">min_reasonableness</span><span class="p">]</span>
     <span class="p">)</span>
     <span class="n">selected</span> <span class="o">=</span> <span class="n">selected</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">patients</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="s2">"one_to_one"</span><span class="p">)</span>
     <span class="n">check_cancelled</span><span class="p">()</span>
@@ -3957,7 +3964,7 @@ and the same verified encoder used for the guideline space. None are saved.</p>
         <span class="s2">"scored_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ranked</span><span class="p">),</span>
         <span class="s2">"population_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">patients</span><span class="p">),</span>
         <span class="s2">"selected_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">selected</span><span class="p">),</span>
-        <span class="s2">"min_match_score"</span><span class="p">:</span> <span class="n">min_match_score</span><span class="p">,</span>
+        <span class="s2">"min_reasonableness"</span><span class="p">:</span> <span class="n">min_reasonableness</span><span class="p">,</span>
         <span class="s2">"candidates"</span><span class="p">:</span> <span class="n">ranked</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="s2">"records"</span><span class="p">),</span>
     <span class="p">}</span>
 </code></pre></div></td></tr></table></div>

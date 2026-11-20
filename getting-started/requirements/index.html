@@ -2114,9 +2114,9 @@ approved for your data and institution.</p>
 </div>
 <h2 id="models">Models<a class="headerlink" href="#models" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>TrialSpace checkpoint:</strong> you supply it. The default preset's <code>embedding.model_path</code> names a local checkpoint that
-  is not published, and embedding fails rather than fall back to another model. Set it to your own TrialSpace model
-  directory, and embed patients and cohorts with the same model.</li>
+<li><strong>TrialSpace checkpoint:</strong> you supply it. The default preset leaves <code>embedding.model_path</code> unset, and embedding fails
+  rather than fall back to another model. Set it to your own TrialSpace model directory (or <code>paths.trialspace_model</code>
+  in a <a href="../../reference/site-config/">site config</a>), and embed patients and cohorts with the same model.</li>
 <li><strong>Decision model:</strong> <code>LiquidAI/d1-2B</code> at a pinned revision is downloaded from Hugging Face on first use. It runs its
   own model code (<code>trust_remote_code</code>). Set <code>decision_model.model_name</code> to a fine-tuned checkpoint to use one.</li>
 <li><strong>LLM:</strong> downloaded from Hugging Face when it runs in-process. In either setup, <code>summarize_patients</code> loads the LLM's

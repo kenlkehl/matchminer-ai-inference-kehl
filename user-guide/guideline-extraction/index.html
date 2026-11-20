@@ -2987,7 +2987,7 @@ and <code>patient_summary.json</code> to an external <code>--output-dir</code>:<
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>examples/retrieve_guideline_considerations.py<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--catalog<span class="w"> </span>/path/to/private/catalogs/breast<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--patient-summaries<span class="w"> </span>/path/to/private/summaries.parquet<span class="w"> </span>--patient-id<span class="w"> </span>P001<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--output-dir<span class="w"> </span>/path/to/private/review/P001
+<span class="w">  </span>--trialspace<span class="w"> </span>/path/to/trialspace<span class="w"> </span>--output-dir<span class="w"> </span>/path/to/private/review/P001
 </code></pre></div>
 <table>
 <thead>
@@ -3000,6 +3000,10 @@ and <code>patient_summary.json</code> to an external <code>--output-dir</code>:<
 <tr>
 <td><code>--patient-id-column</code>, <code>--summary-column</code></td>
 <td>Input columns (default <code>patient_id</code>, <code>cancer_history_summary</code>); for example <code>pseudo_mrn</code> and <code>patient_summary</code> for training tables</td>
+</tr>
+<tr>
+<td><code>--trialspace</code></td>
+<td>The TrialSpace checkpoint (default: <code>embedding.model_path</code>, else the site config's <code>paths.trialspace_model</code>)</td>
 </tr>
 <tr>
 <td><code>--top-n</code>, <code>--candidate-k</code></td>
@@ -3023,8 +3027,6 @@ and <code>patient_summary.json</code> to an external <code>--output-dir</code>:<
 </tr>
 </tbody>
 </table>
-<p>The script has no option for the TrialSpace checkpoint: it uses the default preset's <code>embedding.model_path</code>, which
-must exist on the machine.</p>
 <p>To find the patients of a population for one space, see <a href="../population-workup/">Population workup review</a>
 (<code>retrieve_guideline_patients</code>).</p>
 

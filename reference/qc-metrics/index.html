@@ -1242,23 +1242,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Cohort extraction">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#legacy-trial-space-extraction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Legacy trial-space extraction
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1966,23 +1949,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Cohort extraction">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#legacy-trial-space-extraction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Legacy trial-space extraction
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2158,8 +2124,7 @@ last attempt still has one is counted in <code>patients_failed_inference</code> 
 mainly for supplied summaries (<code>existing_summaries</code>) passed through unchanged.</p>
 <p>The token-limit check loads the TrialSpace tokenizer from <code>embedding.model_path</code>.</p>
 <h2 id="cohort-extraction">Cohort extraction<a class="headerlink" href="#cohort-extraction" title="Permanent link">&para;</a></h2>
-<p>Returned by <code>extract_cohorts</code> with the default <code>cohorts</code> method. IDs are <code>trial_id</code>s, and each denominator is the
-number of input trials.</p>
+<p>Returned by <code>extract_cohorts</code>. IDs are <code>trial_id</code>s, and each denominator is the number of input trials.</p>
 <table>
 <thead>
 <tr>
@@ -2179,51 +2144,6 @@ number of input trials.</p>
 <tr>
 <td><code>trials_truncated_llm_response</code></td>
 <td>Trials with at least one response, in any step, that stopped at its token limit. Such a response is invalid and retried, so the trial may still succeed.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="legacy-trial-space-extraction">Legacy trial-space extraction<a class="headerlink" href="#legacy-trial-space-extraction" title="Permanent link">&para;</a></h3>
-<p>The legacy <code>hierarchical</code> and <code>one_shot</code> methods (<code>trial.extraction_method</code>), which write trial spaces instead of
-cohorts, report a different set. IDs are <code>trial_id</code>s, or <code>space_trial_id</code>s for the space metrics.</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th>Flags</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>trials_missing_in_output</code></td>
-<td>Input trials with no space in the output, or a blank space summary</td>
-</tr>
-<tr>
-<td><code>trials_truncated_llm_response</code></td>
-<td>Trials whose response stopped at its token limit</td>
-</tr>
-<tr>
-<td><code>trials_failed_inference</code></td>
-<td>Trials whose LLM request still failed after retries; removed before postprocessing</td>
-</tr>
-<tr>
-<td><code>spaces_exceed_embedding_token_limit</code></td>
-<td>Space summaries longer than <code>embedding.max_seq_length</code> TrialSpace tokens, prompt included</td>
-</tr>
-<tr>
-<td><code>spaces_per_trial_min</code>, <code>spaces_per_trial_median</code>, <code>spaces_per_trial_max</code></td>
-<td>The statistic itself (no denominator or IDs)</td>
-</tr>
-<tr>
-<td><code>trials_with_non_distinct_spaces</code></td>
-<td>Trials with duplicate space numbers or duplicate space text</td>
-</tr>
-<tr>
-<td><code>spaces_dropped_missing_keyword:&lt;keyword&gt;</code></td>
-<td>Spaces dropped for missing a required field: <code>Age</code>, <code>Sex</code>, <code>Cancer primary site</code>, <code>Histology</code>, <code>Disease state</code>, <code>Prior treatment requirements</code>, <code>Biomarker requirements</code> (older field names are accepted)</td>
-</tr>
-<tr>
-<td><code>trials_exclusion_criteria_not_extracted</code></td>
-<td>Trials with a space whose <code>general_exclusion_criteria</code> is empty or <code>None</code></td>
 </tr>
 </tbody>
 </table>
