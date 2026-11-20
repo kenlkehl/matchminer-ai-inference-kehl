@@ -27,7 +27,7 @@ In local mode (--gpu_ids, --gpus_per_server) it starts its own vLLM servers and 
 --additional_vllm_args passes extra quoted flags through to them.
 """
 
-from matchminer_ai.training.vllm_reasoning import NEMOTRON_SERVE_FLAGS, resolve_chat_template_kwargs
+from matchminer_ai.training.vllm_reasoning import nemotron_serve_flags, resolve_chat_template_kwargs
 
 import argparse
 import asyncio
@@ -481,7 +481,7 @@ def start_vllm_server(
         "--reasoning-parser", reasoning_parser,
     ]
     if "nemotron" in model.lower():  # remote-code config and hybrid Mamba cache, as production serves it
-        cmd += ["--language-model-only", *NEMOTRON_SERVE_FLAGS]
+        cmd += nemotron_serve_flags()
     if enforce_eager:
         cmd.append("--enforce-eager")
     if additional_vllm_args:

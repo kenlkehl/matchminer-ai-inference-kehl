@@ -28,7 +28,7 @@ import time
 import urllib.request
 
 from matchminer_ai.training.trialspace.data import write_json as atomic_json
-from matchminer_ai.training.vllm_reasoning import NEMOTRON_SERVE_FLAGS, resolve_parser_name, resolve_tool_call_parser
+from matchminer_ai.training.vllm_reasoning import nemotron_serve_flags, resolve_parser_name, resolve_tool_call_parser
 from matchminer_ai.labeling.concurrency import DEFAULT_CEILING, DEFAULT_INITIAL, DEFAULT_AUTO_WORKERS_MAX
 from matchminer_ai.training.paths import child_env, models_root, module_command, no_phi
 DEFAULT_TEACHER = 'nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4'
@@ -303,7 +303,7 @@ def teacher_command(args, index):
         "--reasoning-parser", resolve_parser_name(args.teacher_model),
         "--language-model-only", "--max-model-len", str(args.teacher_max_context),
         "--max-num-seqs", str(args.teacher_max_num_seqs), "--gpu-memory-utilization", "0.90",
-        "--no-enable-log-requests", *(NEMOTRON_SERVE_FLAGS if nemotron else [])]
+        "--no-enable-log-requests", *(nemotron_serve_flags() if nemotron else [])]
     tool_parser = resolve_tool_call_parser(args.teacher_model)
     if tool_parser:
         command += ["--enable-auto-tool-choice", "--tool-call-parser", tool_parser]

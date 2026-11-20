@@ -7,7 +7,7 @@ import os
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 from urllib import error, request
 from urllib.parse import urlparse
 
@@ -39,6 +39,26 @@ _SERVER_ENGINE_FLAGS = (
     "mamba_cache_philox_rounds",
     "mamba_cache_mode",
 )
+
+
+def _engine_flags(local_config: Mapping[str, Any]) -> list[str]:
+    """``_SERVER_ENGINE_FLAGS`` present in a local engine config, as ``vllm serve`` flags."""
+    flags: list[str] = []
+    for key in _SERVER_ENGINE_FLAGS:
+        if key in local_config:
+            value, flag = local_config[key], key.replace("_", "-")
+            if isinstance(value, bool):
+                flags.append(f"--{flag}" if value else f"--no-{flag}")
+            else:
+                flags.extend([f"--{flag}", str(value)])
+    return flags
+
+
+def engine_serve_flags(config: MMAIConfig | None = None, task: str = "patient") -> list[str]:
+    """The task's local engine settings (remote code, text only, prefix caching, Nemotron's Mamba cache) as
+    ``vllm serve`` flags, for callers that assemble their own command (training's teacher servers)."""
+    _, local_config = _resolve_task_config(config or load_default_preset(), task)
+    return _engine_flags(local_config)
 
 
 @dataclass(frozen=True)
@@ -165,13 +185,7 @@ def build_vllm_server_command(
         "--gpu-memory-utilization",
         str(local_config["gpu_memory_utilization"]),
     ]
-    for key in _SERVER_ENGINE_FLAGS:
-        if key in local_config:
-            value, flag = local_config[key], key.replace("_", "-")
-            if isinstance(value, bool):
-                command.append(f"--{flag}" if value else f"--no-{flag}")
-            else:
-                command.extend([f"--{flag}", str(value)])
+    command += _engine_flags(local_config)
     reasoning_parser = resolve_reasoning_parser(
         model_name,
         str(llm_config.get("reasoning_parser", "auto")),
@@ -473,6 +487,7 @@ __all__ = [
     "build_embedding_server_command",
     "build_vllm_server_command",
     "build_vllm_server_commands",
+    "engine_serve_flags",
     "check_openai_endpoint",
     "normalize_openai_base_url",
     "start_vllm_server",

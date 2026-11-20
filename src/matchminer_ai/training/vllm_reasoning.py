@@ -18,11 +18,12 @@ from matchminer_ai.llm.teacher_runtime import (  # noqa: F401  (re-exported)
 )
 
 
-# Hybrid Mamba serving flags of Nemotron 3.5 Super (the default model), shared by the labeling fleet,
-# the on-prem servers and the scripts that start their own vLLM servers for it.
-NEMOTRON_SERVE_FLAGS = ["--trust-remote-code", "--async-scheduling", "--mamba-backend", "flashinfer",
-    "--mamba-ssm-cache-dtype", "float16", "--enable-mamba-cache-stochastic-rounding",
-    "--mamba-cache-philox-rounds", "5", "--chat-template-content-format", "string", "--mamba-cache-mode", "align"]
+def nemotron_serve_flags() -> list[str]:
+    """``vllm serve`` flags for Nemotron 3.5 Super (the default model) when a training stage starts its own servers:
+    the default preset's engine settings (remote code, text only, prefix caching, hybrid Mamba cache;
+    ``llm.vllm_server.engine_serve_flags``) plus the server-only flags the production servers use."""
+    from matchminer_ai.llm.vllm_server import engine_serve_flags
+    return [*engine_serve_flags(), "--async-scheduling", "--chat-template-content-format", "string"]
 
 
 def resolve_tool_call_parser(model: str, explicit: Optional[str] = None) -> Optional[str]:
