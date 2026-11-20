@@ -1,0 +1,2491 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the matchminer-ai Python package">
+      
+      
+      
+      
+        <link rel="prev" href="../user-guide/population-workup/">
+      
+      
+        <link rel="next" href="synthetic-protocols/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Overview - MatchMiner-AI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#training" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="MatchMiner-AI" class="md-header__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MatchMiner-AI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Overview
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="MatchMiner-AI" class="md-nav__button md-logo" aria-label="MatchMiner-AI" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MatchMiner-AI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dfci/matchminer-ai-inference" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dfci/matchminer-ai-inference
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/gpu-recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Recommendations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/example-notebook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Notebook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/patient-centric-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient-centric matching workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/good-options-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How the Good Options pipeline works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/local-vs-remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an Inference Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/guideline-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/pdq-catalogs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NCI PDQ catalogs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/note-search-qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Note-search question answering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/population-workup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population workup review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="./" class="md-nav__link md-nav__link--active">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link md-nav__link--active" for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Training
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="synthetic-protocols/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synthetic protocols
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="oncoreasoning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OncoReasoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apps
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Apps
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../apps/dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../apps/guideline-fetcher/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline fetcher
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/site-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Site configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/qc-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Package API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Loading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/documents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDF Document OCR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/patients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patient Summarization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Clinical Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/workup-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction-Based Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/workup-sql/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL-Agent Workup Checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/candidate-matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Candidate Matching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/labeling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Teacher Labeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/match-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Match Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/guideline-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guideline Consideration Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exclusion-criteria/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclusion Criteria
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/criteria-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/good-options/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Good Option Research and Scoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM Server Helper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-stages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data stages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training-trainingfrom_summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training (training.from_summaries)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Training (training.from_summaries)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#labeling-and-retrieval-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labeling and retrieval storage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#synthetic-trial-protocols" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synthetic trial protocols
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-and-clinical-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data and clinical safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h1>
+<p><code>matchminer_ai.training</code> produces the models the package uses at runtime. It turns ClinicalTrials.gov records into
+trial cohorts, generates synthetic patients (event histories and clinical notes) for those cohorts, summarizes the
+patients, labels patient-cohort pairs with an LLM teacher, and trains the TrialSpace retriever (dense EmbeddingGemma 2)
+and the decision model (LiquidAI d1-2B fine-tuned on seven yes/no question families). OncoReasoning
+(<a href="oncoreasoning/">its page</a>) distills the teacher's outputs, reasoning included, into a small generative model.</p>
+<p>Training data is synthetic or public. Only the <a href="../evaluation/">evaluations</a> touch real patient data.</p>
+<p>Runtime behavior is the package's, not a copy: the cohort extraction prompts and parser, the merge and boilerplate
+steps, the patient summarization prompts and the split of a summary into its key and boilerplate sections, the
+TrialSpace prompts (<code>matchminer_ai.embedding.trialspace_contract</code>), the match-label prompt and 0-6 score
+(<code>matchminer_ai.matching.match_labels</code>), the boilerplate and per-criterion teacher prompts, the decision model's
+states and questions (<code>matchminer_ai.matching.decision_model</code>), sampling profiles, the endpoint pool and the teacher
+labeler (<code>matchminer_ai.labeling</code>).</p>
+<p><strong>Key criteria</strong> are a cohort's criteria that are not boilerplate. Retrieval, match labels and the decision model's
+five match questions read the cohort's key criteria and the patient summary's key section (its cancer history); its
+boilerplate question reads the cohort's boilerplate criteria and the summary's boilerplate section
+(<code>Other relevant history:</code>); its per-criterion question reads the complete summary and every criteria line, each
+tagged inclusion or exclusion and boilerplate or not (<code>cohort_criteria_items</code>).</p>
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
+<p>Install the package with the training extra, and point it at a data root (where <code>phi/</code> and <code>no_phi/</code> live; never
+inside the repository) and, for site-specific endpoints and paths, a <a href="../reference/site-config/">site config</a>:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s1">'.[training]'</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">MMAI_DATA_ROOT</span><span class="o">=</span>/path/to/data<span class="w">        </span><span class="c1"># or --data-root / the site config's paths.data_root</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">MMAI_SITE_CONFIG</span><span class="o">=</span>/path/to/site.yaml<span class="w"> </span><span class="c1"># optional</span>
+</code></pre></div>
+<p>Every stage is a module (<code>python -m matchminer_ai.training.&lt;stage&gt;</code>); <code>mmai-train</code> runs the pipeline. Stage names
+below are relative to <code>matchminer_ai.training</code>. LLM stages never start or stop a shared vLLM fleet: they use an
+existing server registry (<code>--server-urls-file</code> / <code>--teacher-servers-file</code>, a JSON file re-read while running) or fixed
+URLs; <code>training.from_summaries</code> can also start one vLLM teacher per local GPU.</p>
+<h2 id="pipeline">Pipeline<a class="headerlink" href="#pipeline" title="Permanent link">&para;</a></h2>
+<p><code>mmai-train</code> (<code>python -m matchminer_ai.training.pipeline</code>) runs
+a contiguous range of stages (<code>--start-at</code> to <code>--stop-after</code>, inclusive). The
+default range is <code>train</code> only.</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Command</th>
+<th>Main outputs (defaults under <code>&lt;data root&gt;/no_phi</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>parse-trials</code></td>
+<td><code>trials.parse_ctgov</code> (requires <code>--ctgov-json</code>, a CT.gov API v2 export)</td>
+<td><code>ctgov_trials.csv</code></td>
+</tr>
+<tr>
+<td><code>screen-trials</code></td>
+<td><code>trials.screen_trials</code></td>
+<td><code>screened_trials.csv</code> + <code>.screening.json</code>: every trial meeting the ctgov rule, with its DFCI holdout flag and screen decision; the counts and removed IDs of each step. Every screen answer and its reasoning goes to <code>upstream/screen/screen.jsonl</code>.</td>
+</tr>
+<tr>
+<td><code>sample-trials</code></td>
+<td><code>trials.sample_trials</code> --screened-trials<code>|</code>ctgov_sample_trials.csv<code>+</code>.sampling.json<code>: the seeded draw of</code>--sample-trials` (5,000) accepted trials, which seed the protocols and give the source splits</td>
+<td></td>
+</tr>
+<tr>
+<td><code>synthetic-protocols</code></td>
+<td><code>trials.synthetic_protocols.generate_batch</code></td>
+<td><code>synthetic_protocols/</code> (<code>seeds.jsonl</code>, <code>protocols/&lt;NCT&gt;/protocol.md</code>, <code>protocols.csv</code>)</td>
+</tr>
+<tr>
+<td><code>protocol-cohorts</code></td>
+<td><code>trials.synthetic_protocols.extract_cohorts</code></td>
+<td><code>synthetic_protocols/cohort_extraction/</code> or <code>--protocol-cohort-dir</code> (<code>cohorts.parquet</code> merged, <code>cohorts_unmerged.parquet</code>, <code>cohorts_deboilerplated.parquet</code> merged with key and boilerplate criteria, <code>trials.parquet</code>)</td>
+</tr>
+<tr>
+<td><code>ctgov-cohorts</code></td>
+<td><code>trials.extract_ctgov_cohorts</code> --trials-jsonl<code>(the protocol seeds) |</code>ctgov_cohorts/<code>(</code>trial_cohort_lineitems.csv<code>merged,</code>trial_cohort_lineitems_unmerged.csv<code>,</code>trial_cohort_lineitems_deboilerplated.csv<code>merged with key and boilerplate criteria,</code>trials_with_cohorts.csv<code>,</code>trial_cohorts.json`)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>generation-cohorts</code></td>
+<td><code>trials.synthetic_protocols.patient_cohorts</code></td>
+<td><code>synthetic_generation/sample_trial_cohort_lineitems.csv</code> (merged protocol cohorts with all their criteria, for patient generation) and <code>sample_trial_cohort_lineitems_deboilerplated.csv</code> (the same rows, for retrieval: <code>cohort_eligibility_criteria</code> keeps all the criteria, <code>cohort_key_criteria</code> holds the key criteria and <code>cohort_boilerplate_criteria</code> the boilerplate), each + <code>.provenance.json</code></td>
+</tr>
+<tr>
+<td><code>retrieval-cohorts</code></td>
+<td><code>trials.synthetic_protocols.retrieval_cohorts</code></td>
+<td><code>retrieval_cohorts.csv</code> (both versions of every trial) + <code>.provenance.json</code></td>
+</tr>
+<tr>
+<td><code>generate-synthetic</code></td>
+<td><code>synthetic.generate</code></td>
+<td><code>synthetic_generation/all_synthetic_events.parquet</code>, <code>all_synthetic_notes.parquet</code>, <code>manifest.json</code></td>
+</tr>
+<tr>
+<td><code>prepare-notes</code></td>
+<td><code>synthetic.prepare</code> notes<code>|</code>all_synthetic_notes.parquet<code>,</code>synthetic_patient_metadata.parquet`</td>
+<td></td>
+</tr>
+<tr>
+<td><code>summarize-patients</code></td>
+<td><code>summaries.summarize</code></td>
+<td><code>patient_summaries.parquet</code>, <code>patient_serial_summaries.parquet</code></td>
+</tr>
+<tr>
+<td><code>prepare-training</code></td>
+<td><code>synthetic.prepare</code> summaries<code>|</code>patient_summaries_with_spaces.parquet<code>(key section in</code>patient_summary<code>, boilerplate section in</code>patient_boilerplate_text`)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>train</code></td>
+<td><code>training.from_summaries</code> (corpus from <code>retrieval_cohorts.csv</code>)</td>
+<td>TrialSpace rounds and the decision model under <code>&lt;models root&gt;/embeddinggemma2_pipeline_v1</code></td>
+</tr>
+</tbody>
+</table>
+<p>Patients are generated only from the protocol cohorts (<code>generation-cohorts</code>),
+with all their criteria; retrieval, labeling and training use
+<code>retrieval_cohorts.csv</code>, which holds each trial's protocol and ctgov versions
+(see Mining below) with their key and boilerplate criteria. The three LLM
+extraction/generation stages after sampling share <code>--server-urls-file</code>; a trial
+that fails every attempt in one of them keeps whichever version it has.</p>
+<p>Inspect a plan, then remove <code>--dry-run</code> to execute:</p>
+<div class="highlight"><pre><span></span><code>mmai-train<span class="w"> </span>--start-at<span class="w"> </span>parse-trials<span class="w"> </span>--stop-after<span class="w"> </span>prepare-training<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ctgov-json<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/no_phi/ctgov_export.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--data-dir<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/no_phi/new_dataset<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--run-dir<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/no_phi/new_training_run<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--models-dir<span class="w"> </span>&lt;models<span class="w"> </span>root&gt;/new_training_run<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--server-urls-file<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/no_phi/live_pool/servers.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dry-run
+</code></pre></div>
+<p><strong>Resume and safety.</strong> All data-production paths must be under <code>&lt;data root&gt;/no_phi</code>.
+Each stage's fingerprint covers its command, input size/mtime stamps and source
+hashes. A stage with a matching <code>completed/&lt;stage&gt;.json</code> is skipped; a changed
+fingerprint is an error (use a fresh <code>--pipeline-dir</code>). A lock in the pipeline
+directory prevents concurrent runs, and logs go to <code>&lt;pipeline-dir&gt;/logs/</code>.
+<code>--wait-for-generation</code> attaches to a generation job that is already running
+(it polls <code>status.json</code> and never starts or stops it), and is implied when
+<code>generation.lock</code> is held.</p>
+<p>The default LLM for data production and labeling is
+<code>nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4</code> (<code>train_from_summaries.DEFAULT_TEACHER</code>; also
+<code>trials.ctgov_llm</code>'s <code>--model</code> for 0b and 0d, and the real-data evaluations' <code>GOLD_LLM</code>), overridden
+with <code>--generation-model</code> / <code>--generation-tokenizer</code> (upstream) and
+<code>--teacher-model</code> / <code>--teacher-served-model</code> (training; an endpoint's model root
+must match the teacher model or be an approved quantization of it, listed in
+<code>EQUIVALENT_TEACHER_ROOTS</code> in the inference package's <code>matchminer_ai.labeling.runner</code>: the
+Gemma 4 31B builds, and Nemotron 3.5 Super VL NVFP4 and FP8, whose tokenizers and chat
+templates are identical). Scripts that start their own vLLM servers for Nemotron (the
+teacher pool of <code>training.from_summaries</code>) add <code>--trust-remote-code</code> and its hybrid-Mamba flags
+(<code>vllm_reasoning.nemotron_serve_flags()</code>) with the <code>nemotron_v3</code> reasoning parser. The
+NVFP4 build needs native FP4 (Blackwell); on H100s, override with the FP8 build,
+<code>RedHatAI/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8</code>.</p>
+<h2 id="data-stages">Data stages<a class="headerlink" href="#data-stages" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>0a — parse.</strong> Flattens the CT.gov JSON to one row per trial: NCT ID, study
+  type, phases, ctgov status and dates (with original precision and
+  ACTUAL/ESTIMATED types, <code>trials.ctgov_metadata</code>), title, brief summary,
+  eligibility criteria and <code>trial_text</code>. No filtering and no LLM.</li>
+<li><strong>0b — screen</strong> (<code>trials.screen_trials</code>). The ctgov rule (interventional
+  trials first posted in <code>--start-year</code> (2020) or later with early phase 1
+  through phase 4; 80/10/10 splits with seed 42), the DFCI holdout, then the
+  cohort workflow's cancer-treatment screen on every remaining listing, with
+  every answer and its reasoning saved (see Sampling above). Its LLM settings and
+  endpoint options are shared with 0d (<code>trials.ctgov_llm</code>).</li>
+<li><strong>0c — sample.</strong> Production (<code>--screened-trials</code>) draws 5,000 whole trials
+  (seed 42) from those <code>trials.screen_trials</code> accepted, before any cohort
+  extraction. The older modes keep cancer-treatment trials from an extracted
+  cohort table, drop trials with invalid or incomplete cohorts, exclude DFCI
+  trials open during 2025–2026 (<code>dfci_trials_summary_10-18-26.csv</code>), and sample
+  5,000 whole trials with all their cohorts (seed 42); <code>--extraction-dir</code>
+  samples a completed extraction export without new LLM calls, and
+  <code>repair_single_cohort_criteria.py</code> fixes exports made before the single-cohort
+  correction.</li>
+<li><strong>Synthetic protocols and their cohorts</strong> (<code>trials.synthetic_protocols.generate_batch</code>,
+  <code>trials.synthetic_protocols.extract_cohorts</code>): one synthetic protocol per sampled
+  trial, then its cohorts; see <code>synthetic_protocols/README.md</code>.</li>
+<li><strong>0d — ctgov cohorts</strong> (<code>trials.extract_ctgov_cohorts</code> --trials-jsonl<code>,
+  formerly</code>0b_extract_trial_cohorts.py<code>). Extracts every sampled ctgov record
+  (the protocol batch's</code>seeds.jsonl<code>) with</code>matchminer_ai.trials.extract_cohorts<code>and the package's three-step workflow (screen, cohort names, one request per
+  cohort for its criteria, copied verbatim). For training, equivalent cohorts are
+  then merged and each merged cohort's boilerplate separated
+  (</code>--output-deboilerplated-cohorts<code>: key criteria in</code>cohort_key_criteria<code>,
+  boilerplate in</code>cohort_boilerplate_criteria<code>,</code>cohort_eligibility_criteria<code>unchanged). Remote only; per-trial gzip checkpoints and a run fingerprint make
+  it resumable, and failed trials leave</code>.partial` outputs and an error.</li>
+<li><strong>Synthetic patients</strong> (<code>synthetic.generate</code>, prompts in
+  <code>synthetic.event_prompts</code>, note prompt and masking in
+  <code>synthetic.note_prompts</code>). For every cohort: five positive seeds
+  (meet all criteria) and five near-miss negative seeds; each seed becomes a
+  validated event chronology (demographics, diagnoses, treatments, adverse
+  events, notes, imaging, pathology and NGS reports); each report event becomes a
+  note written with the full history and the target event marked. Validation
+  failures are fed back and retried (up to 16 attempts). A patient whose history
+  fails validation on every attempt gets a new seed, drawn with the unchanged
+  seed prompt and distinct from the cohort's other seeds, and is expanded again
+  (<code>--max-seed-replacements</code>, default 3); replacements are recorded in
+  <code>patient_seed_replacements/</code> and as <code>seed_replacement</code> in patient provenance,
+  and seed batches are never rewritten. Transport failures keep their seed. Runs
+  against a remote pool with adaptive concurrency; <code>--stop-after-events</code> stops
+  before notes.</li>
+<li><strong>Prepare notes</strong> (<code>synthetic.prepare</code> notes<code>). Assigns explicitly
+  fabricated calendar dates from event ages, ending at</code>--synthetic-date-anchor<code>(2025-01-01), and writes patient metadata. All synthetic splits are pooled for
+  training (</code>synthetic.pool<code>); the original split is kept as</code>source_split`.</li>
+<li><strong>Summarize</strong> (<code>summaries.summarize</code>). The package's own serial summarizer
+  (<code>matchminer_ai.patients.summarize_patients</code>, the same code and prompts as at runtime): each patient's dated
+  notes are deduplicated and concatenated, split into overlapping token chunks (the pipeline uses 50,000 tokens
+  with 500 overlap), and each chunk updates the running summary; a chunk that fails the quality checks is asked
+  again. The stage writes every chunk's prior summary, reasoning and answer (<code>patients.serial_trace</code>, the table
+  OncoReasoning trains on) and each patient's final summary. There is no note tagging or retrieval step.</li>
+<li><strong>Prepare training</strong> (<code>synthetic.prepare</code> summaries<code>). Joins final
+  summaries to patient and cohort IDs, class, source trial and split, and keeps
+  each summary's two sections apart (2026-11-04):</code>patient_summary<code>is the key
+  section (the cancer history, before</code>Other relevant history:<code>) and</code>patient_boilerplate_text` the boilerplate section.</li>
+</ul>
+<p>CSV inputs share <code>cohort_format.read_clinical_csv</code>, which keeps literal text
+such as <code>None</code> or <code>NA</code>; only empty cells are missing.</p>
+<h2 id="training-trainingfrom_summaries">Training (<code>training.from_summaries</code>)<a class="headerlink" href="#training-trainingfrom_summaries" title="Permanent link">&para;</a></h2>
+<p>The integrated runner trains the TrialSpace retriever (EmbeddingGemma 2) and the
+decision model. Since 2026-11-06 (user instruction) every stage is its own script,
+and the runner only orders them: it asks each stage script whether its output is
+complete (<code>--check</code>), skips it if so, and otherwise runs it and checks again;
+<code>--start-at</code> and <code>--stop-after</code> choose a range of stages. Each script writes
+<code>stage_receipt.json</code> into its output directory last (<code>trialspace/stage.py</code>): an
+identity with no paths, hosts or devices (its settings and the receipts of the
+directories it read), its outputs by name and byte size, and provenance. A stage
+run on another machine (for example <code>trialspace.mine</code> on a cloud VM's GPUs) is
+adopted once its directory is copied back. <code>--check</code> exits 0 when complete, 10 when
+not yet, and 20 when the settings or outputs differ (use a fresh directory). The
+teacher labeler, the encoder and the exact search are the inference package's
+(<code>matchminer_ai.labeling</code>, <code>matchminer_ai.embedding.encoder</code>,
+<code>matchminer_ai.matching.retrieval</code>). The stages, in order:</p>
+<ol>
+<li><code>prepare-trialspace</code> (<code>trialspace.prepare</code>): the corpus every
+   round shares (below).</li>
+<li>Round 1: mine with the base model (<code>mine-1</code>), label (<code>label-trialspace-1</code>,
+   <code>--task match</code>; <code>label-boilerplate-1</code>; <code>label-criteria-1</code>), project the
+   match labels into a pair table (<code>project-trialspace-1</code>), fit
+   (<code>train-trialspace-1</code>).</li>
+<li>Round 2: the same with the round-1 model; labeling imports round-1
+   judgments of pairs mined again (<code>--reuse-labels</code>); the boilerplate and
+   criteria labels skip what round 1 labeled (<code>--skip-labeled</code>).</li>
+<li>Round 3: mine with the round-2 model and label (<code>mine-3</code>,
+   <code>label-trialspace-3</code>, importing round-2 judgments; <code>label-boilerplate-3</code>,
+   <code>label-criteria-3</code>). There is no third fit.</li>
+<li><code>prepare-decision-data</code>, <code>train-decision-model</code> (<code>training.decision_model</code>
+   prepare<code>/</code>train`): the decision model on every round's labels of all seven
+   question families.</li>
+</ol>
+<p>The other stage scripts: <code>trialspace.mine</code> (<code>mine-N</code>), <code>trialspace.label</code>
+(<code>label-{trialspace,boilerplate,criteria}-N</code>), <code>trialspace.project</code>
+(<code>project-trialspace-N</code>) and <code>trialspace.finetune</code> (<code>train-trialspace-N</code>);
+<code>trialspace.evaluate</code> gives the in-sample diagnostics outside the plan.</p>
+<p><strong>Corpus.</strong> <code>trialspace.prepare</code> (<code>trialspace/corpus.py</code>, <code>trialspace/data.py</code>) gives each
+patient <code>text</code> = the summary's key section and <code>boilerplate</code> = its boilerplate
+section (a complete summary is split at <code>Other relevant history:</code>), and each
+cohort <code>text</code> = <code>cohort_key_criteria</code> and <code>boilerplate</code> =
+<code>cohort_boilerplate_criteria</code>. A cohort table without <code>cohort_key_criteria</code>
+falls back to <code>cohort_eligibility_criteria</code> (all criteria), so pass the
+de-boilerplated <code>retrieval_cohorts.csv</code>, not the patient-generation table.</p>
+<p><strong>Retriever.</strong> TrialSpace is the only retriever. Base <code>google/embeddinggemma-2</code>
+at revision <code>914f7f89</code>, mined by exhaustive cosine similarity over the key texts
+only, with 8,192-token inputs (<code>trialspace.mine</code>; one GPU or several with
+<code>--devices cuda:0,cuda:1,...</code>, whose vectors equal a one-GPU run's, or vLLM &gt;= 0.32
+embedding servers with <code>--embedding-backend openai</code>), and fit with
+<code>trialspace.finetune</code> --prompt-profile trialspace<code>(the patient and cohort
+prompts are saved under the inference names</code>patient_summary<code>and</code>this_space<code>): CoSENT over every labeled pair plus MNRL over positives with
+known positives masked, 96 pairs per GPU (gradient-cache chunks of 8 texts,</code>--trialspace-loss-mini-batch-size<code>; 32 fits on larger-memory GPUs), BF16,
+learning rate 2e-5 with 1% linear warmup and decay over 1 epoch
+(</code>--trialspace-epochs<code>), 4,096-token training cap (key texts only). Round 2
+starts from the round-1 model. The fit runs one rank per GPU in</code>--gpus<code>(</code>torch.distributed.run<code>). Each rank's ranking losses see only its own 96
+pairs, and gradients are averaged, so an optimizer step covers 96 times the
+GPU count. Rank zero stages inputs to local SSD and publishes the model.
+Models are saved to</code>trialspace_round{1,2}/<code>under</code>--models-dir<code>. Dense stages run with</code>--embedding-python` (an environment
+with EmbeddingGemma 2 support).</p>
+<p><strong>Match labels</strong> (<code>trialspace.label</code> --task match<code>; 2026-11-04, user
+instruction). One teacher request per pair answers all five match labels,</code>reasonableness<code>,</code>cancer_type<code>,</code>burden<code>,</code>treatment_history<code>and</code>biomarker<code>,
+each yes/no with an</code>evidence_status<code>and a</code>reason<code>, using the inference
+package's</code>match_quality.labels.system.txt<code>(</code>matchminer_ai.matching.match_labels<code>)
+on the patient's key section and the cohort's key criteria. The score is 0–6:
+0 unless reasonable, else 1 plus one each for cancer type, burden and treatment
+history and two for biomarker (</code>trialspace/regression.py<code>,</code>contracts.py<code>).</code>scores.jsonl<code>rows keep all five answers (never null) and</code>question_keys<code _match_: key></code><code>. Since 2026-11-05 (user instruction) the answer is decoded under
+the inference package's</code>MATCH_LABELS_JSON_SCHEMA<code>(vLLM</code>structured_outputs<code>,
+applied after the reasoning), part of the label contract: label directories made
+before then do not match it. The earlier gated design (</code>potentially_eligible<code>first,
+specificity questions only after a yes, one question per request, prompts in</code>colbert_experiments/prompts/`) is gone; its label directories do not match the
+current contract.</p>
+<p><strong>Boilerplate labels</strong> (<code>label-boilerplate-N</code>: <code>trialspace.label</code>
+--task boilerplate --skip-labeled &lt;earlier rounds' boilerplate_teacher&gt;<code>; user,
+2026-11-04, per round since 2026-11-05). Every unique combination of patient
+boilerplate section and cohort boilerplate criteria among the round's candidate
+pairs not labeled in an earlier round (pairs whose cohort
+has boilerplate criteria; one representative pair each, counts in</code>combinations.json<code>) is asked the inference
+package's</code>llm_exclusion_criteria.user.txt<code>(Yes!/No!: does the patient clearly
+fail any boilerplate criterion) on the patient's boilerplate section and the
+cohort's boilerplate criteria. Pairs whose cohort has no boilerplate are
+skipped. Answers go to</code>labels.jsonl<code>as</code>excluded`, with their reasoning.</p>
+<p><strong>Per-criterion labels</strong> (<code>label-criteria-N</code>: <code>trialspace.label</code>
+--task criteria --criteria-pair-fraction 0.01 --skip-labeled &lt;earlier rounds'
+criteria_teacher&gt;<code>; user, 2026-11-05). A seeded hash of each candidate pair
+selects</code>--criteria-pair-fraction<code>of the round's pairs (the same pairs in every
+round), and every criteria line of a selected pair that has an inclusion or
+exclusion tag gets one teacher request: the inference package's</code>criterion_check.labels.user.txt<code _answer_ _criterion_status_ _reason_>around the decision model's own state (the
+complete patient summary and the cohort's complete numbered criteria) and
+question (the line restated with its number and type). Lines already labeled
+for the patient (an identical sibling cohort, or an earlier round) are skipped.
+The answer is</code><code>: **</code>answer<code>yes means
+the patient does not clearly fail the line, no means the patient clearly fails
+it (an inclusion line clearly not met, or an exclusion line clearly met)**;</code>criterion_status<code>(</code>met<code>,</code>not_met<code>,</code>insufficient_information<code>,</code>not_applicable<code>) records the line as written, and a no must name the failing
+status. The answer is decoded under its JSON schema (vLLM</code>structured_outputs<code>,
+applied after the reasoning): unconstrained, Nemotron 3.5 Super dropped the
+opening quote of</code>reason` in about one answer in six (2026-11-05 test). At 0.01, about 29,000 pairs × about 30 lines is roughly 0.9 million
+requests per round (match labels: about 2.9 million).</p>
+<p><strong>Decision model</strong> (<code>training.decision_model</code>; 2026-11-05, user instruction).
+Base <a href="https://huggingface.co/LiquidAI/d1-2B"><code>LiquidAI/d1-2B</code></a> at revision
+<code>652f920e</code> (<code>--decision-model</code>, <code>--decision-revision</code>; LFM Open License v1.0),
+a System One model that answers yes/no (<code>noul</code>) questions about a state in one
+forward pass. Seven question families, every one asked as yes/no:</p>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>State</th>
+<th>Questions (yes means)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>match</code> (1-5)</td>
+<td>the patient's key section and the cohort's key criteria</td>
+<td><code>reasonableness</code> (potentially eligible; no = clearly ineligible), <code>cancer_type</code>, <code>burden</code>, <code>treatment_history</code>, <code>biomarker</code> (the cohort specifically requires that dimension and the patient documentedly satisfies it), from each pair's match labels</td>
+</tr>
+<tr>
+<td><code>boilerplate</code> (6)</td>
+<td>the patient's boilerplate section and the cohort's boilerplate criteria</td>
+<td>potentially eligible: the boilerplate teacher's <code>excluded</code>, inverted</td>
+</tr>
+<tr>
+<td><code>criterion</code> (7)</td>
+<td>the complete summary and the cohort's complete numbered criteria</td>
+<td>one per labeled line: <strong>yes = does not clearly fail the line, no = clearly fails it</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>prepare</code> writes one row per state (<code>examples.jsonl</code>: family, ids, each
+question's answer; a later round wins a conflict), <code>prepared.json</code> (counts,
+answer balance, question digest) and <code>preview.jsonl</code> (rendered prompts with
+their answers, for inspection). States and questions are rendered from the
+corpus by the inference package, so training reads exactly what inference
+reads. <code>train</code> fully fine-tunes the model with transformers' <code>Trainer</code> (no
+LoRA): each state's questions are shuffled (reseeded per epoch) and packed after
+the state by the checkpoint's own serving code, at most 16 per sequence and
+10,000 tokens (<code>--decision-max-length</code>). d1-2B reads its prompt with <code>set</code>
+attention (the state both ways with its questions on full-attention layers), so
+the answer is never appended to the input: <strong>the loss is the cross-entropy of the
+answer at each question's answer slot only</strong>, never on prompt tokens, read as
+inference reads it: the best <code>yes</code> form against the best <code>no</code> form. Attention
+runs in the autocast dtype on d1's flash kernels, as at inference.
+Defaults: 1 epoch, 8 states per GPU × 4 accumulation steps, learning rate 1e-5
+with cosine decay and 3% warmup, BF16, gradient checkpointing, the vision tower
+frozen, every synthetic pair (no holdout). The output (<code>decision_model/</code> under
+<code>--models-dir</code>) holds the weights, the d1 code, tokenizer, LICENSE, a
+modification notice, <code>calibration.json</code> (temperature 1.0) and
+<code>decision_contract.json</code>; point the inference package's
+<code>decision_model.model_name</code> at it. vLLM 0.33 cannot serve it (no LFM3
+architecture, causal d1-3B reader only); the inference package serves it with
+Transformers.</p>
+<p><strong>Mining.</strong> EmbeddingGemma 2 (<code>trialspace.mine</code>, <code>trialspace/mining.py</code>) produces
+this candidate set by default, with no flags needed:</p>
+<ul>
+<li>Each patient searches only the cohorts of 500 randomly sampled trials
+  (<code>--patient-trial-sample</code>; 0 searches all trials). Each patient gets its own
+  sample, drawn reproducibly from <code>--seed</code> (42), the patient ID and the
+  mining round: every round draws a fresh sample (<code>--trial-sample-round</code>,
+  which the runner sets to 2 and 3; round 1 keeps the original draws).</li>
+<li>A trial with both a synthetic-protocol version and a ctgov
+  (ClinicalTrials.gov) version of its cohorts (<code>trials.synthetic_protocols.retrieval_cohorts</code>)
+  is represented by one of them: in each patient's search, a version chosen at
+  random per patient and trial; as a cohort query, a version chosen at random
+  per trial (<code>trialspace/retrieval.py</code>). Trials with one version use it.
+  Each cohort's version is <code>source</code> in the prepared corpus and <code>cohort_source</code>
+  in the exported pair tables.</li>
+<li>Per patient: the top 20 cohorts by the retriever, plus 5 TF-IDF and 5 random
+  cohorts, all from that patient's sampled trials.</li>
+<li>Per cohort: the top 40 patients over the whole corpus, plus 5 TF-IDF and 5
+  random patients.</li>
+<li>Every patient's pairs with the cohorts of its source trial, in both versions.</li>
+</ul>
+<p>The TF-IDF and random extras (<code>--lexical-k</code>, <code>--random-k</code>, default 5 each)
+supply teacher-labeled pairs the retriever would not rank highly. Keep them
+unless an experiment says otherwise. Each round's <code>mining/</code> also holds
+per-direction tables (<code>patient_to_cohort.parquet</code>, <code>cohort_to_patient.parquet</code>)
+with the key texts as <code>patient_summary</code> / <code>this_space</code> (also
+<code>cohort_key_criteria</code>) and the boilerplate texts as <code>patient_boilerplate_text</code> /
+<code>trial_boilerplate_text</code>.</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.training.from_summaries<span class="w"> </span>--dry-run
+python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.training.from_summaries<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--patient-summaries<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/no_phi/patient_summaries_with_spaces.parquet<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--trial-cohorts<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/no_phi/retrieval_cohorts.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--teacher-servers-file<span class="w"> </span>&lt;data<span class="w"> </span>root&gt;/no_phi/live_pool/servers.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--teacher-served-model<span class="w"> </span>nemotron-3.5-super-vl-120b<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--embedding-python<span class="w"> </span>/path/to/embeddinggemma2-env/bin/python<span class="w"> </span>--gpus<span class="w"> </span><span class="m">2</span>,3
+</code></pre></div>
+<p>Defaults: <code>--run-dir &lt;data root&gt;/no_phi/embeddinggemma2_pipeline_v1</code>,
+<code>--models-dir &lt;models root&gt;/embeddinggemma2_pipeline_v1</code> (the models root is the site config's
+<code>paths.models_root</code>, else <code>&lt;data root&gt;/../models</code>). Teachers come from <code>--teacher-servers-file</code>,
+repeated <code>--teacher-url</code>, or one vLLM server started per GPU in <code>--gpus</code>
+(default 0–7). Each stage owns its completion: its output directory's path-free <code>stage_receipt.json</code>, which the
+stage's <code>--check</code> compares with the identity it would compute (0 complete, 10 not yet, 20 begun under other
+settings). A stage done on another machine and copied back is complete here when its receipt matches. Decision-model settings:
+<code>--decision-model</code>, <code>--decision-revision</code>, <code>--decision-max-length</code>,
+<code>--decision-epochs</code>, <code>--decision-batch-size</code>,
+<code>--decision-gradient-accumulation-steps</code>, <code>--decision-learning-rate</code>,
+<code>--criteria-pair-fraction</code>, <code>--criteria-seed</code>.</p>
+<h3 id="labeling-and-retrieval-storage">Labeling and retrieval storage<a class="headerlink" href="#labeling-and-retrieval-storage" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Labeling</strong> (<code>trialspace.label</code> --task match|boilerplate|criteria<code>; the
+  labeler and its local workspace are</code>matchminer_ai.labeling<code>) runs on local SSD by default
+  (</code>/tmp/mmai-labels/<hash><code>, or</code>MMAI_LABEL_SCRATCH_DIR<code>; 16 GiB reserve;</code>MMAI_LOCAL_LABEL_STORAGE=0<code>disables). Concurrency per server starts at 96 and
+  can reach 768. Status is mirrored to the output directory every 10 seconds. On
+  completion,</code>scores.jsonl<code>(match labels only),</code>labels.jsonl<code>, the response
+  database (prompts, answers and reasoning) and manifests are published with</code>storage_complete.json`; failed runs keep their scratch for resume.</li>
+<li><strong>Retrieval</strong> (<code>trialspace.mine</code>, <code>trialspace.retrieval_workspace</code>)
+  stages work in <code>/tmp/mmai-retrieval</code> (<code>--retrieval-scratch-dir</code>; network
+  filesystems are rejected), publishes candidates, rankings, encodings and
+  <code>complete.json</code> to <code>--output</code>, then removes the scratch. Unchanged dense
+  encodings can be reused across merged corpora (<code>retrieval_cache_import.py</code>);
+  rankings never are.</li>
+</ul>
+<p>Models and data are published only by size-checked copies to shared <code>no_phi</code>
+storage. There is no Hugging Face upload code in this repository.</p>
+<h2 id="synthetic-trial-protocols">Synthetic trial protocols<a class="headerlink" href="#synthetic-trial-protocols" title="Permanent link">&para;</a></h2>
+<p><code>synthetic_protocols/</code> builds a corpus of synthetic full protocol documents
+seeded by ctgov records, with realistic, often messily specified eligibility
+covering one or more cohorts. Generation runs through
+<code>matchminer_ai.trials.generate_synthetic_protocols</code>; see
+<a href="synthetic-protocols/">Synthetic protocols</a>. Training uses
+these synthetic protocols, not real ones. Real protocol PDFs posted
+on ClinicalTrials.gov (check licensing before redistributing) are for comparison and evaluation only.
+<code>trials.synthetic_protocols.extract_cohorts</code> extracts each synthetic protocol's
+cohorts and eligibility criteria with
+<code>matchminer_ai.trials.extract_protocol_cohorts</code>, keeping every cohort's
+provenance: the synthetic protocol and its generation, and the original
+ClinicalTrials.gov record and eligibility criteria it was seeded from. In the
+pipeline above, these cohorts seed the synthetic patients (<code>generation-cohorts</code>)
+and, beside the ctgov versions, form the retrieval cohort table
+(<code>retrieval-cohorts</code>).</p>
+<h2 id="module-map">Module map<a class="headerlink" href="#module-map" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>training.pipeline</code>, <code>training.from_summaries</code></td>
+<td>Orchestration (<code>mmai-train</code>): stage ranges, fingerprints, resume</td>
+</tr>
+<tr>
+<td><code>training.trials</code></td>
+<td>ctgov parsing, screening, sampling, ctgov cohort extraction, synthetic protocols and their cohorts</td>
+</tr>
+<tr>
+<td><code>training.synthetic</code></td>
+<td>Synthetic patients: seeds, event histories, notes, note preparation, the pooled corpus</td>
+</tr>
+<tr>
+<td><code>training.summaries</code></td>
+<td>Serial summarization of the synthetic notes</td>
+</tr>
+<tr>
+<td><code>training.trialspace</code></td>
+<td>TrialSpace corpus, mining, labeling, projection, fits, stage receipts</td>
+</tr>
+<tr>
+<td><code>training.decision_model</code></td>
+<td>Decision-model data and fine-tuning</td>
+</tr>
+<tr>
+<td><code>training.oncoreasoning</code></td>
+<td>OncoReasoning data, training and evaluation</td>
+</tr>
+<tr>
+<td><code>training.cohort_format</code>, <code>training.paths</code>, <code>training.vllm_reasoning</code></td>
+<td>Shared cohort table rules, data paths and run identities, vLLM helpers</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
+<p><code>tests/training</code> covers synthetic generation and validation, cohort extraction with a fake LLM, pipeline planning,
+resume and wiring, note preparation, CSV literals, trial versions, decision data, label contracts, packing and the
+embedding losses; <code>finetune_embedder</code> tests train a tiny random model.</p>
+<h2 id="data-and-clinical-safety">Data and clinical safety<a class="headerlink" href="#data-and-clinical-safety" title="Permanent link">&para;</a></h2>
+<p>Training stages read and write only under the data root's <code>no_phi</code> tree and refuse other directories. Do not point
+them at real clinical data.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.indexes", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
