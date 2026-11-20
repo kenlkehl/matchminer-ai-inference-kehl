@@ -2,10 +2,8 @@
 from numbers import Real
 import math
 import hashlib
-import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 # v5: named cohorts whose complete criteria come from one extraction request each
@@ -48,17 +46,6 @@ def read_clinical_csv(path, **kwargs):
 
 def is_cohort_table(frame):
     return 'cohort_eligibility_criteria' in frame.columns
-
-
-def cohort_components(value):
-    """Read named objects and historical strings without inventing old names."""
-    if isinstance(value, str) and value.strip():
-        return None, value
-    fields = {'cohort_name', 'cohort_specific_eligibility_criteria'}
-    if (not isinstance(value, dict) or set(value) != fields
-            or not all(isinstance(value[k], str) and value[k].strip() for k in fields)):
-        raise ValueError('Invalid saved cohort name/criteria object')
-    return value['cohort_name'], value['cohort_specific_eligibility_criteria']
 
 
 def representation_for(frame):
@@ -137,76 +124,6 @@ def file_sha256(path):
         for block in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(block)
     return digest.hexdigest()
-
-
-def load_production_cohorts(directory, *, seed=42):
-    """Read the completed public-API production export, without new LLM calls.
-
-    Decisions supply authoritative expected cohort counts, so a missing JSONL
-    row cannot be mistaken for a smaller but complete trial. Source rows supply
-    original eligibility and ctgov metadata. Splits are assigned before filtering.
-    """
-    directory = Path(directory)
-    status = json.loads((directory / 'status.json').read_text())
-    if status.get('state') != 'complete' or status.get('errors') != 0:
-        raise ValueError('Production extraction must be complete with no unresolved errors')
-    decisions = json.loads((directory / 'combined_outputs.json').read_text())
-    source = pd.read_parquet(directory / 'inputs.parquet').sort_values('nct_id').reset_index(drop=True)
-    if (source.nct_id.isna().any() or not source.nct_id.is_unique
-            or set(source.nct_id) != set(decisions) or len(source) != status['total']):
-        raise ValueError('Source trials, extraction status and decisions disagree')
-    if 'split' not in source:
-        source['split'] = np.random.default_rng(seed).choice(['train', 'val', 'test'], len(source), p=[.8, .1, .1])
-    if not source.split.isin(['train', 'val', 'validation', 'test']).all():
-        raise ValueError('Missing or invalid source splits')
-    counts, rejected = {}, []
-    for trial, result in decisions.items():
-        if result.get('cancer_treatment_trial') == 'no':
-            rejected.append(trial)
-        elif result.get('cancer_treatment_trial') == 'yes':
-            if result.get('multiple_cohorts') == 'no':
-                counts[trial] = 1
-            elif result.get('multiple_cohorts') == 'yes' and isinstance(result.get('cohorts'), list) and len(result['cohorts']) >= 2:
-                counts[trial] = len(result['cohorts'])
-            else:
-                raise ValueError(f'Invalid cohort decision for {trial}')
-        else:
-            raise ValueError(f'Missing cancer-treatment decision for {trial}')
-    cohorts = pd.read_json(directory / 'cohorts.jsonl', lines=True)
-    if set(cohorts.trial_id) != set(counts):
-        raise ValueError('Cohort JSONL must cover exactly the accepted cancer-treatment trials')
-    cohorts['cohort_count'] = cohorts.trial_id.map(counts)
-    validate_cohort_rows(cohorts)
-    if len(cohorts) != status['cohort_rows'] or len(rejected) != status['rejected']:
-        raise ValueError('Cohort/rejection counts disagree with extraction status')
-    for row in cohorts.itertuples():
-        decision = decisions[row.trial_id]
-        if row.multiple_cohorts != decision['multiple_cohorts']:
-            raise ValueError(f'Cohort decision mismatch for {row.trial_id}')
-        if row.multiple_cohorts == 'yes':
-            name, specific = cohort_components(decision['cohorts'][row.cohort_number])
-            if (row.cohort_specific_eligibility_criteria != specific
-                    or row.common_eligibility_criteria != decision['common_eligibility_criteria']
-                    or (name is not None and getattr(row, 'cohort_name', None) != name)):
-                raise ValueError(f'Criteria or name disagree with saved combined JSON for {row.trial_id}')
-    frame = cohorts.merge(source, left_on='trial_id', right_on='nct_id', validate='many_to_one')
-    frame = frame.sort_values(['trial_id', 'cohort_number']).reset_index(drop=True)
-    complete = complete_cohort_criteria(frame)
-    if not complete.cohort_eligibility_criteria.eq(frame.cohort_eligibility_criteria).all():
-        raise ValueError('Saved full criteria disagree with specific/common criteria or original eligibility_criteria; repair the export first')
-    if not frame.loc[frame.multiple_cohorts.eq('no'), 'cohort_criteria_source'].eq('eligibility_criteria').all():
-        raise ValueError('Single cohort provenance must identify eligibility_criteria')
-    complete['trial_representation'] = representation_for(complete)
-    provenance = dict(source_trials=len(source), cancer_treatment_trials=len(counts),
-        excluded_non_cancer_trials=sorted(rejected), extraction_directory=str(directory.resolve()),
-        extraction_run_identity=json.loads((directory / 'manifest.json').read_text())['run_identity'],
-        source_stamp={name: file_stamp(directory / name) for name in
-            ('inputs.parquet', 'combined_outputs.json', 'cohorts.jsonl', 'manifest.json')})
-    repair = directory / 'cohort_rows_repair.json'
-    if repair.exists():
-        provenance['cohort_rows_repair'] = str(repair.resolve())
-        provenance['source_stamp'][repair.name] = file_stamp(repair)
-    return complete, provenance
 
 
 def validate_cohort_rows(frame):

@@ -1,10 +1,6 @@
 """Clinical CSV text must survive ordinary production and standalone readers."""
 import asyncio
-import importlib
-from pathlib import Path
 import subprocess
-import sys
-from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -13,7 +9,8 @@ from matchminer_ai.training.trialspace.data import load_corpus, read_table
 from matchminer_ai.training.synthetic.generate import Generator
 from matchminer_ai.training.synthetic.prepare import load_spaces
 from test_training_synthetic_generation import Tokenizer, args_for
-from matchminer_ai.training.cohort_format import NAMED_SPLIT_REPRESENTATION, read_clinical_csv
+from matchminer_ai.training.cohort_format import (NAMED_SPLIT_REPRESENTATION, complete_cohort_criteria,
+                                                 read_clinical_csv, representation_for)
 from matchminer_ai.training.trialspace.corpus import prepare_corpus
 from matchminer_ai.training.paths import child_env, module_command
 
@@ -45,20 +42,18 @@ def inputs(tmp_path, literal):
 
 
 @pytest.mark.parametrize('literal', ['None', 'NA', 'N/A', 'null', 'NaN'])
-def test_csv_text_survives_sampling_generation_and_both_retrieval_paths(tmp_path, monkeypatch, literal):
+def test_csv_text_survives_generation_and_both_retrieval_paths(tmp_path, monkeypatch, literal):
     cohorts, patients, expected = inputs(tmp_path, literal)
     raw = read_table(cohorts)
     assert raw.cohort_specific_eligibility_criteria.iloc[0] == literal
     assert raw.common_eligibility_criteria.iloc[1] == literal
     assert pd.isna(raw.cohort_name.iloc[2])
     assert raw.cohort_count.tolist() == [2, 2, 1]
-    dfci = tmp_path / 'dfci.csv'
-    pd.DataFrame(columns=['nct_id', 'open_date', 'close_date', 'status']).to_csv(dfci, index=False)
-    sampled_path = tmp_path / 'sample.csv'
-    sampled = importlib.import_module('matchminer_ai.training.trials.sample_trials').sample_trial_spaces(
-        cohorts, sampled_path, dfci, n_trials=2, chunksize=1)
-    expected_by_id = dict(zip(raw.cohort_trial_id, expected))
-    expected = [expected_by_id[cid] for cid in sampled.cohort_trial_id]
+    # The cohort table later stages read: complete criteria and the trial representation.
+    sampled = complete_cohort_criteria(raw)
+    sampled['trial_representation'] = representation_for(sampled)
+    sampled_path = tmp_path / 'sample.csv'   # the generation input args_for names
+    sampled.to_csv(sampled_path, index=False)
     assert sampled.cohort_eligibility_criteria.tolist() == expected
     named_id = 'NCT00000001-cohort-0'
     assert read_clinical_csv(sampled_path).set_index('cohort_trial_id').loc[named_id, 'cohort_name'] == literal

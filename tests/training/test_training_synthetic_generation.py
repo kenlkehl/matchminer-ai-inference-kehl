@@ -793,20 +793,3 @@ def test_full_generation_and_resume_preserve_all_patients_and_reasoning(tmp_path
     assert len(calls) == 64
     assert before == {p: p.read_bytes() for p in before}
     assert json.loads((tmp_path / 'status.json').read_text())['stage'] == 'completed'
-
-
-def test_sampling_retains_every_space_and_user_dfci_holdout(tmp_path):
-    module = importlib.import_module('matchminer_ai.training.trials.sample_trials')
-    input_csv, dfci_csv, output_csv = [tmp_path / name for name in ('input.csv', 'dfci.csv', 'sample.csv')]
-    frame = pd.DataFrame([dict(nct_id=f'NCT{i}', this_space=SPACE, space_number=j)
-                          for i in range(5) for j in range(i + 1)])
-    frame.to_csv(input_csv, index=False)
-    pd.DataFrame([dict(nct_id='NCT0', status='OPEN TO ACCRUAL', open_date='2020-01', close_date='2030-01')]
-                 ).to_csv(dfci_csv, index=False)
-    sample = module.sample_trial_spaces(input_csv, output_csv, dfci_csv, n_trials=3, chunksize=2)
-    assert sample.nct_id.nunique() == 3 and 'NCT0' not in set(sample.nct_id)
-    for trial, rows in sample.groupby('nct_id'):
-        assert len(rows) == len(frame.loc[frame.nct_id.eq(trial)])
-    assert sample.space_index.tolist() == list(range(len(sample)))
-    same = module.sample_trial_spaces(input_csv, output_csv, dfci_csv, n_trials=3, chunksize=4)
-    pd.testing.assert_frame_equal(sample, same)

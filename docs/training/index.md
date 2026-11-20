@@ -111,8 +111,7 @@ reasoning parser. The NVFP4 build needs native FP4 (Blackwell); on H100s, use th
 
     Its LLM settings and endpoint options are shared with ctgov cohort extraction (`trials.ctgov_llm`).
 - **Sample** (`trials.sample_trials --screened-trials`). Draws 5,000 whole trials (seed 42) from those the screen
-  accepted, before any cohort extraction. Its other modes (`--input-csv`, `--extraction-dir`) sample an existing cohort
-  table instead.
+  accepted, before any cohort extraction.
 - **Synthetic protocols and their cohorts** (`trials.synthetic_protocols.generate_batch`,
   `trials.synthetic_protocols.extract_cohorts`): one synthetic protocol per sampled trial, then its cohorts; see
   [Synthetic protocols](synthetic-protocols.md).

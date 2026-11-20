@@ -2,14 +2,13 @@ import gzip
 import importlib
 import json
 import asyncio
-from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
 from matchminer_ai.training.synthetic.generate import Generator
-from matchminer_ai.training.cohort_format import training_rows, validate_cohort_rows, complete_cohort_criteria, file_stamp
+from matchminer_ai.training.cohort_format import (training_rows, validate_cohort_rows, complete_cohort_criteria, representation_for)
 from test_training_synthetic_generation import Tokenizer, args_for
 
 extract = importlib.import_module('matchminer_ai.training.trials.extract_ctgov_cohorts')
@@ -247,35 +246,6 @@ def cohort_rows(trial, count=2):
         cancer_treatment_trial='yes', multiple_cohorts='yes' if count > 1 else 'no', split='train') for i in range(count)]
 
 
-def test_sampling_keeps_all_cohorts_and_excludes_dfci_overlap_and_incomplete_trials(tmp_path):
-    rows = sum((cohort_rows(f'NCT{i:08}') for i in range(1, 10)), [])
-    # An incomplete set and an invalid text must remove the entire trial.
-    rows.pop()
-    rows[-3]['cohort_eligibility_criteria'] = ''
-    inputs, output, dfci = tmp_path / 'input.csv', tmp_path / 'sample.csv', tmp_path / 'dfci.csv'
-    pd.DataFrame(rows).to_csv(inputs, index=False)
-    pd.DataFrame([
-        ('NCT00000001', '2024-01', '2025-01', 'CLOSED'),
-        ('NCT00000002', '2026-12', '2027-01', 'CLOSED'),
-        ('NCT00000003', '2024-01', '2024-12', 'CLOSED'),
-        ('NCT00000004', '2027-01', None, 'CLOSED'),
-        ('NCT00000005', None, None, 'CLOSED'),
-        ('NCT00000006', '2020-01', '2024-12', 'OPEN TO ACCRUAL'),
-        ('NCT00000006', '2027-01', '2028-01', 'CLOSED'),
-    ], columns=['nct_id', 'open_date', 'close_date', 'status']).to_csv(dfci, index=False)
-    first = sample.sample_trial_spaces(inputs, output, dfci, n_trials=3, chunksize=1)
-    assert set(first.nct_id) == {'NCT00000003', 'NCT00000004', 'NCT00000007'}
-    assert len(first) == 6 and first.cohort_index.tolist() == list(range(6))
-    second = sample.sample_trial_spaces(inputs, output, dfci, n_trials=3, chunksize=5)
-    pd.testing.assert_frame_equal(first, second)
-    receipt = json.loads(output.with_suffix('.sampling.json').read_text())
-    assert receipt['sampled_trials'] == 3 and receipt['sampled_cohorts'] == 6
-    assert receipt['all_cohorts_retained']
-    assert receipt['invalid_trials'] == ['NCT00000008', 'NCT00000009']
-    with pytest.raises(ValueError, match='need 5000'):
-        sample.sample_trial_spaces(inputs, output, dfci)
-
-
 @pytest.mark.parametrize('kind', ['positive', 'negative'])
 def test_native_cohorts_reach_synthetic_seed_prompts_without_inverting_common_inclusions(tmp_path, kind):
     frame = training_rows(pd.DataFrame(cohort_rows('NCT00000001')))
@@ -342,102 +312,31 @@ def test_prepared_synthetic_patient_metadata_retains_native_cohort_provenance(tm
     assert metadata.trial_boilerplate_text.eq('').all()
 
 
-def production_export(tmp_path):
-    run = tmp_path / 'production'
-    run.mkdir()
+def export_cohorts(tmp_path):
+    """Accepted cohorts of fabricated trials joined to their source rows, with complete criteria."""
     source_rows = [source(i) for i in range(1, 5)]
     for row in source_rows:
         row['trial_text'] = '\n'.join(row[k] for k in ('title', 'brief_summary', 'eligibility_criteria'))
-    pd.DataFrame(source_rows).to_parquet(run / 'inputs.parquet')
-    decisions, cohorts = {}, []
-    for src in source_rows:
+    cohorts = []
+    for src in source_rows[1:]:   # NCT00000001 is not a cancer treatment trial
         trial = src['nct_id']
-        if trial == 'NCT00000001':
-            decisions[trial] = {'cancer_treatment_trial': 'no'}
-            continue
         multiple = trial == 'NCT00000003'
-        decision = dict(cancer_treatment_trial='yes', multiple_cohorts='yes' if multiple else 'no')
-        if multiple:
-            decision.update(cohorts=['Untreated lung cancer.', 'Previously treated breast cancer.'],
-                            common_eligibility_criteria='Adults; no active infection.')
-        decisions[trial] = decision
+        specific = ['Untreated lung cancer.', 'Previously treated breast cancer.']
+        common = 'Adults; no active infection.' if multiple else None
         for i in range(2 if multiple else 1):
             cohorts.append(dict(trial_id=trial, cohort_trial_id=f'{trial}-cohort-{i}', cohort_number=i,
-                cancer_treatment_trial='yes', multiple_cohorts=decision['multiple_cohorts'],
-                cohort_specific_eligibility_criteria=decision['cohorts'][i] if multiple else None,
-                common_eligibility_criteria=decision.get('common_eligibility_criteria'),
-                cohort_eligibility_criteria=(f'Cohort-specific eligibility criteria:\n{decision["cohorts"][i]}\n\n'
-                    f'Common eligibility criteria:\n{decision["common_eligibility_criteria"]}') if multiple else src['eligibility_criteria'],
+                cohort_count=2 if multiple else 1, cancer_treatment_trial='yes',
+                multiple_cohorts='yes' if multiple else 'no',
+                cohort_specific_eligibility_criteria=specific[i] if multiple else None,
+                common_eligibility_criteria=common,
+                cohort_eligibility_criteria=(f'Cohort-specific eligibility criteria:\n{specific[i]}\n\n'
+                    f'Common eligibility criteria:\n{common}') if multiple else src['eligibility_criteria'],
                 cohort_criteria_source='llm' if multiple else 'eligibility_criteria'))
-    pd.DataFrame(cohorts).to_json(run / 'cohorts.jsonl', orient='records', lines=True)
-    (run / 'combined_outputs.json').write_text(json.dumps(decisions))
-    (run / 'status.json').write_text(json.dumps(dict(state='complete', errors=0, total=4, rejected=1, cohort_rows=4)))
-    (run / 'manifest.json').write_text(json.dumps(dict(run_identity='fixture-run')))
-    dfci = tmp_path / 'dfci.csv'
-    pd.DataFrame([dict(nct_id='NCT00000004', open_date='2026-01', close_date='2027-01', status='CLOSED')]).to_csv(dfci, index=False)
-    return run, dfci
-
-
-def test_sample_completed_production_export(tmp_path):
-    run, dfci = production_export(tmp_path)
-    output = tmp_path / 'sample.csv'
-    first = sample.sample_trial_spaces(None, output, dfci, extraction_dir=run, n_trials=2, chunksize=1)
-    assert set(first.nct_id) == {'NCT00000002', 'NCT00000003'}
-    assert len(first) == 3 and first.cancer_treatment_trial.eq('yes').all()
-    single = first.loc[first.multiple_cohorts.eq('no')].iloc[0]
-    assert single.cohort_eligibility_criteria == single.eligibility_criteria
-    assert single.trial_text != single.eligibility_criteria
-    for row in first.loc[first.multiple_cohorts.eq('yes')].itertuples():
-        assert row.cohort_specific_eligibility_criteria in row.cohort_eligibility_criteria
-        assert row.common_eligibility_criteria in row.cohort_eligibility_criteria
-    receipt = json.loads(output.with_suffix('.sampling.json').read_text())
-    assert receipt['source_trials'] == 4 and receipt['cancer_treatment_trials'] == 3
-    assert receipt['excluded_non_cancer_trials'] == ['NCT00000001']
-    assert receipt['excluded_dfci_trials'] == ['NCT00000004']
-    assert receipt['extraction_run_identity'] == 'fixture-run'
-    assert receipt['source_stamp']['cohorts.jsonl'] == file_stamp(run / 'cohorts.jsonl')
-    second = sample.sample_trial_spaces(None, output, dfci, extraction_dir=run, n_trials=2, chunksize=3)
-    pd.testing.assert_frame_equal(first, second)
-
-
-def test_production_import_rejects_missing_cohort_or_mixed_source_text(tmp_path):
-    from matchminer_ai.training.cohort_format import load_production_cohorts
-    run, _ = production_export(tmp_path)
-    cohorts = pd.read_json(run / 'cohorts.jsonl', lines=True)
-    cohorts.loc[~cohorts.cohort_trial_id.eq('NCT00000003-cohort-1')].to_json(run / 'cohorts.jsonl', orient='records', lines=True)
-    with pytest.raises(ValueError, match='Incomplete'):
-        load_production_cohorts(run)
-    cohorts.loc[cohorts.multiple_cohorts.eq('no'), 'cohort_eligibility_criteria'] = 'Different source'
-    cohorts.to_json(run / 'cohorts.jsonl', orient='records', lines=True)
-    with pytest.raises(ValueError, match='original eligibility_criteria'):
-        load_production_cohorts(run)
-
-
-def test_csv_sampler_explicitly_filters_cancer_and_rebuilds_combined_text(tmp_path):
-    run, dfci = production_export(tmp_path)
-    from matchminer_ai.training.cohort_format import load_production_cohorts
-    frame, _ = load_production_cohorts(run)
-    frame['cohort_eligibility_criteria'] = 'Stale combined text'
-    rejected = {name: None for name in frame}
-    rejected.update(nct_id='NCT00000001', trial_id='NCT00000001', cancer_treatment_trial='no')
-    frame = pd.concat([frame, pd.DataFrame([rejected])], ignore_index=True)
-    inputs, output = tmp_path / 'input.csv', tmp_path / 'sample.csv'
-    frame.to_csv(inputs, index=False)
-    result = sample.sample_trial_spaces(inputs, output, dfci, n_trials=2, chunksize=1)
-    assert len(result) == 3 and set(result.nct_id) == {'NCT00000002', 'NCT00000003'}
-    assert not result.cohort_eligibility_criteria.eq('Stale combined text').any()
-    assert result.loc[result.multiple_cohorts.eq('no'), 'cohort_eligibility_criteria'].iloc[0] == 'Adults with cancer.'
-    assert json.loads(output.with_suffix('.sampling.json').read_text())['excluded_non_cancer_trials'] == ['NCT00000001']
-
-
-def test_legacy_sample_also_honors_explicit_cancer_treatment_decisions(tmp_path):
-    from test_training_synthetic_generation import SPACE
-    inputs, output, dfci = tmp_path / 'old.csv', tmp_path / 'sample.csv', tmp_path / 'dfci.csv'
-    pd.DataFrame([dict(nct_id=f'NCT{i:08}', this_space=SPACE, cancer_treatment_trial=decision)
-                  for i, decision in enumerate(['no', 'yes', 'unknown'], 1)]).to_csv(inputs, index=False)
-    pd.DataFrame(columns=['nct_id', 'open_date', 'close_date', 'status']).to_csv(dfci, index=False)
-    result = sample.sample_trial_spaces(inputs, output, dfci, n_trials=1)
-    assert result.nct_id.tolist() == ['NCT00000002']
+    frame = pd.DataFrame(cohorts).merge(pd.DataFrame(source_rows), left_on='trial_id', right_on='nct_id',
+                                        validate='many_to_one')
+    frame = complete_cohort_criteria(frame.sort_values(['trial_id', 'cohort_number']).reset_index(drop=True))
+    frame['trial_representation'] = representation_for(frame)
+    return frame
 
 
 def test_single_cohort_requires_eligibility_not_title_summary_fallback():
@@ -469,10 +368,8 @@ def test_protocol_single_cohort_keeps_protocol_criteria_over_registry_text():
 
 def test_generation_calls_five_positive_and_five_negative_seeds_separately_per_cohort(tmp_path, monkeypatch):
     import matchminer_ai.training.synthetic.generate as generation
-    from matchminer_ai.training.cohort_format import load_production_cohorts
     from test_training_synthetic_generation import fake_session, SEEDS, expand_seed
-    run, _ = production_export(tmp_path)
-    frame, _ = load_production_cohorts(run)
+    frame = export_cohorts(tmp_path)
     frame = frame[frame.nct_id.isin(['NCT00000002', 'NCT00000003'])].reset_index(drop=True)
     frame['cohort_index'] = frame.index
     frame = training_rows(frame)
@@ -499,39 +396,6 @@ def test_generation_calls_five_positive_and_five_negative_seeds_separately_per_c
     histories = pd.concat([pd.read_parquet(p) for p in generation.checkpoint_paths(tmp_path / 'patient_events')])
     assert len(histories) == 30
     assert histories.groupby(['cohort_trial_id', 'patient_class']).size().eq(5).all()
-
-
-def test_named_production_export_preserves_names_through_sampling_and_the_corpus(tmp_path):
-    from matchminer_ai.training.trialspace.data import prepare, read_jsonl
-    from matchminer_ai.training.cohort_format import NAMED_SPLIT_REPRESENTATION, LEGACY_REPRESENTATION, load_production_cohorts
-    run, dfci = production_export(tmp_path)
-    historical, _ = load_production_cohorts(run)
-    assert training_rows(historical).trial_representation.eq(LEGACY_REPRESENTATION).all()
-    decisions = json.loads((run / 'combined_outputs.json').read_text())
-    decision = decisions['NCT00000003']
-    decision['cohorts'] = [dict(cohort_name=f'Arm {i + 1}', cohort_specific_eligibility_criteria=text)
-                           for i, text in enumerate(decision['cohorts'])]
-    (run / 'combined_outputs.json').write_text(json.dumps(decisions))
-    rows = pd.read_json(run / 'cohorts.jsonl', lines=True)
-    rows['cohort_name'] = [f'Arm {number + 1}' if multi == 'yes' else None
-                          for number, multi in zip(rows.cohort_number, rows.multiple_cohorts)]
-    rows.to_json(run / 'cohorts.jsonl', orient='records', lines=True)
-    output = tmp_path / 'sample.csv'
-    sampled = sample.sample_trial_spaces(None, output, dfci, extraction_dir=run, n_trials=2)
-    assert sampled.trial_representation.eq(NAMED_SPLIT_REPRESENTATION).all()
-    assert sampled.loc[sampled.multiple_cohorts.eq('yes'), 'cohort_name'].tolist() == ['Arm 1', 'Arm 2']
-    assert not sampled.cohort_eligibility_criteria.str.contains('Arm 1|Arm 2').any()
-    patients = tmp_path / 'patients.jsonl'
-    patients.write_text(json.dumps(dict(patient_id='synthetic', patient_summary='Cancer history.',
-                                       split=sampled.split.iloc[0])) + '\n')
-    prepare(patients, output, tmp_path / 'corpus')
-    corpus = read_jsonl(tmp_path / 'corpus/cohorts.jsonl')
-    assert [c['cohort_name'] for c in corpus if c['trial_id'] == 'NCT00000003'] == ['Arm 1', 'Arm 2']
-    assert all('Arm 1' not in c['text'] and 'Arm 2' not in c['text'] for c in corpus)
-    rows.loc[rows.multiple_cohorts.eq('yes'), 'cohort_name'] = 'Wrong name'
-    rows.to_json(run / 'cohorts.jsonl', orient='records', lines=True)
-    with pytest.raises(ValueError, match='name disagree'):
-        load_production_cohorts(run)
 
 
 def test_new_representation_requires_names_without_relabeling_historical_rows():
