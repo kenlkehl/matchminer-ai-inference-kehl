@@ -2854,10 +2854,24 @@ byte-based prompt budgets, because Gemini's tokenizer is not available:</p>
 <p>Byte accounting bounds the hosted prompt conservatively; it does not claim Gemini token counts. The selected endpoint
 must be authorized for the sensitivity of any clinical text sent to it.</p>
 <h3 id="claude-through-databricks">Claude through Databricks<a class="headerlink" href="#claude-through-databricks" title="Permanent link">&para;</a></h3>
-<p><code>provider: databricks_anthropic</code> sends structured requests to Claude through a Databricks AI Gateway's Anthropic
-Messages route, authenticated with a Databricks CLI profile (<code>databricks_profile</code>). Only structured requests support
-it; the <a href="../../api/workup-sql/#claude-through-a-databricks-ai-gateway">SQL workup agent</a> is the main user, and it
-sets the provider in its own section.</p>
+<p><code>provider: databricks_anthropic</code> sends requests to Claude through a Databricks AI Gateway's Anthropic Messages route,
+authenticated with a Databricks CLI profile (<code>databricks_profile</code>, else the site config's <code>databricks.profile</code>).
+<code>server_urls</code> is the gateway URL, <code>https://&lt;workspace&gt;/ai-gateway/anthropic</code>, and a section's <code>model_name</code> is the
+gateway's three-part endpoint name.</p>
+<ul>
+<li><strong>Where it works:</strong> structured requests, such as the
+  <a href="../../api/workup-sql/#claude-through-a-databricks-ai-gateway">SQL workup agent</a>, and the remote path that patient
+  summarization, the cohort steps and the LLM checks use.</li>
+<li><strong>Requests:</strong> each request streams through the Anthropic SDK, keeping only the token budget, the effort (the
+  section's <code>reasoning_effort</code>) and a response format. Claude manages its own sampling and thinking, so sampling and
+  <code>extra_body</code> fields are dropped.</li>
+<li><strong>Endpoint pool:</strong> requests use the direct transport (<code>max_concurrent_requests</code> per gateway URL); the adaptive
+  endpoint pool serves OpenAI-compatible servers only.</li>
+<li><strong>Tokenizer:</strong> patient summarization still needs a Hugging Face tokenizer for chunking (<code>tokenizer_name</code>, for
+  example the preset's Nemotron); Claude counts tokens somewhat differently.</li>
+<li><strong>Monitoring:</strong> with <code>MMAI_GATEWAY_REQUEST_LOG</code> set to a file, every request appends one line of metadata (times,
+  HTTP status, stop reason, served model, token counts; never content), for watching rate limits.</li>
+</ul>
 <h2 id="llm-sections">LLM sections<a class="headerlink" href="#llm-sections" title="Permanent link">&para;</a></h2>
 <p>These sections each configure one LLM task: <code>trial</code>, <code>patient</code>, <code>document_extraction</code>, <code>patient_extraction</code>,
 <code>workup_query_compile</code>, <code>workup_sql_agent</code>, <code>protocol_cohort_extraction</code>, <code>synthetic_protocol_generation</code>,

@@ -2112,7 +2112,8 @@ manages the GPUs and the server, which does not have to be vLLM.</p>
 <li><code>openai</code> (default): any OpenAI-compatible endpoint, with the key from <code>OPENAI_API_KEY</code>.</li>
 <li><code>google_agent_platform</code>: Google Agent Platform endpoints, with refreshable Google Application Default Credentials
   for the project in <code>remote.google_project_id</code>. vLLM-only <code>extra_body</code> fields are left out.</li>
-<li><code>databricks_anthropic</code> serves only structured requests, such as the SQL workup agent, not the matching steps.</li>
+<li><code>databricks_anthropic</code>: Claude through a Databricks AI Gateway, with Databricks CLI login tokens; see the
+  <a href="../../reference/configuration/#remote">configuration reference</a>.</li>
 </ul>
 </li>
 </ul>

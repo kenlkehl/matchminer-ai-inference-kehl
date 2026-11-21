@@ -2004,7 +2004,7 @@ authorized, with LLM endpoints approved for it (the site config's <code>endpoint
 </tr>
 <tr>
 <td><code>evaluation.dual_judge</code></td>
-<td>Two frontier LLM judges (Claude on Vertex AI, GPT on Azure) grade cohort extraction, patient summaries and the decision questions; the user adjudicates disagreements in a loopback-only app.</td>
+<td>Two frontier LLM judges (Claude on Vertex AI or a Databricks AI Gateway, GPT on Azure) grade cohort extraction, patient summaries and the decision questions; the user adjudicates disagreements in a loopback-only app.</td>
 </tr>
 <tr>
 <td><code>evaluation.cohort_lineitems</code></td>
@@ -2027,7 +2027,7 @@ cohorts are extracted with the training run's frozen programs, so they match tra
 Results go to <code>metrics.json</code> and <code>report.md</code>; progress to <code>run_status.json</code> and <code>logs/</code>.</p>
 <h2 id="dual-judge">Dual judge<a class="headerlink" href="#dual-judge" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.build_items<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w"> </span>...<span class="w">    </span><span class="c1"># where the data is</span>
-python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.judge_worker<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w"> </span>--judge<span class="w"> </span>vertex
+python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.judge_worker<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w"> </span>--judge<span class="w"> </span>vertex<span class="w">       </span><span class="c1"># or --judge databricks</span>
 python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.judge_worker<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w"> </span>--judge<span class="w"> </span>azure
 python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.compare<span class="w"> </span>--run-dir<span class="w"> </span>RUN
 python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation.dual_judge.adjudicate<span class="w"> </span>--run-dir<span class="w"> </span>RUN<span class="w">         </span><span class="c1"># http://127.0.0.1:8791</span>
@@ -2035,7 +2035,9 @@ python<span class="w"> </span>-m<span class="w"> </span>matchminer_ai.evaluation
 </code></pre></div>
 <p>The judge, comparison, adjudication and metrics modules need only the package and the standard library (plus
 <code>anthropic[vertex]</code> for the Vertex judge), so they can run on another machine that can read and write the run
-directory. The Vertex project is <code>--project</code>, <code>ANTHROPIC_VERTEX_PROJECT_ID</code> or the site config's <code>vertex.project</code>;
+directory. The Vertex project is <code>--project</code>, <code>ANTHROPIC_VERTEX_PROJECT_ID</code> or the site config's <code>vertex.project</code>.
+The <code>databricks</code> judge sends the same requests to Claude Opus through a Databricks AI Gateway: the site config's
+<code>databricks.host</code> and <code>databricks.profile</code>, and <code>--model</code> or <code>databricks.endpoints.opus</code> for the endpoint name.
 Azure uses <code>AZURE_OPENAI_ENDPOINT</code> and <code>AZURE_OPENAI_DEPLOYMENT</code>. <code>judge_worker --dry-run</code> prices the remaining
 requests without sending any, and <code>--max-usd</code> caps a judge's spending. The judge prompts are <code>prompts/judge.*.txt</code>.</p>
 <p>The adjudication app serves PHI: it binds to 127.0.0.1 only, refuses other Host headers and logs nothing about
